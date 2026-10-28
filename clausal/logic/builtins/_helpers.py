@@ -680,16 +680,40 @@ def _number_scale(x) -> int:
     return -x.as_tuple().exponent if isinstance(x, _Decimal) else 0
 
 
+#: The spine of a list keys flat: one slot per element, then ONE slot for
+#: what the spine ends in -- ``[]`` for a proper list, the tail ``T`` of
+#: ``[E1, ..., En|T]``.  Slot against slot is what walking the two spines
+#: compares (ISO 7.2.1, every cell is ``'.'/2``): two elements by their
+#: keys; an element against an end is the cell ``'.'(E, ...)`` against
+#: ``T``, which ``T``'s band, arity and name alone decide (a variable,
+#: number or atom is before every compound, ``f(a, b)`` after ``'.'/2``),
+#: so the end slot is ``(-1, key(T))`` when ``T`` comes before a cell and
+#: ``(99, key(T))`` after; two ends by their keys.  Element keys start with
+#: a band int from 0 to 6, between the two.  Before, a proper list was its
+#: element keys alone and an improper one a nested ``(head, rest)`` pair,
+#: so ``[a, b]`` against ``[a|c]`` compared ``b`` with ``c`` (``<``, where
+#: ``[b]`` against ``c`` is ``>``) and ``[a|T]`` came after ``[a]``.
+_ORD_LIST_END = (-1, (_ORD_ATOM, "[]"))
+_ORD_CONS_HEAD = (_ORD_COMPOUND, 2, _ORD_CONS_NAME_KEY, _CF_POSITIONAL)
+
+
+def _list_end_slot(tail_key: tuple) -> tuple:
+    """The end slot (see above) of a spine ending in the term keyed *tail_key*."""
+    return (-1 if tail_key[:4] < _ORD_CONS_HEAD else 99, tail_key)
+
+
 def _cons_key(element_keys: tuple) -> tuple:
-    """The standard-order key of the ``'.'/2`` compound with these elements."""
-    return (_ORD_COMPOUND, 2, _ORD_CONS_NAME_KEY, _CF_POSITIONAL, element_keys)
+    """The standard-order key of the proper list with these elements."""
+    return (_ORD_COMPOUND, 2, _ORD_CONS_NAME_KEY, _CF_POSITIONAL,
+            element_keys + (_ORD_LIST_END,))
 
 
 def _cons_chain_key(term) -> tuple:
     """The key of the cons cell ``'.'(H, T)`` -- an IMPROPER list
     ``[H1, ..., Hn|Tail]`` as its cells -- built along the tail spine by a
-    loop: the same nested key as keying the cell as a compound, which
-    recursed once per cell and overflowed at about 500 cells (compare/3,
+    loop: the flat spine key (:data:`_ORD_LIST_END`), where keying each
+    cell as a compound recursed once per cell and overflowed at about 500
+    cells (compare/3,
     sort/2, msort/2 on a hole-built improper list).  A spine that comes
     back to a cell or a SegList already on it (a cyclic list, whether the
     cycle closes through a hole or through a cell bound to itself) raises
@@ -716,12 +740,22 @@ def _cons_chain_key(term) -> tuple:
             keep.append(t)
             from clausal.logic.runtime._seg_helpers import walk_seg  # noqa: PLC0415
             t = walk_seg(t)
+        if type(t) is SegList:
+            # a partial list in the tail: its elements continue the spine
+            from clausal.logic.runtime._seg_helpers import partial_list_cells  # noqa: PLC0415
+            cells = partial_list_cells(t)
+            if cells is not None:
+                t = cells
         if not (type(t) is tuple and len(t) == 3 and t[0] == "."):
             break
-    key = _term_key(t)
-    for h in reversed(heads):
-        key = (_ORD_COMPOUND, 2, (0, "."), _CF_POSITIONAL, (_term_key(h), key))
-    return key
+    tail_key = _term_key(t)
+    if tail_key[:4] == _ORD_CONS_HEAD:
+        # the spine goes on as a proper list (a cell whose tail is a list)
+        elements = tail_key[4]
+    else:
+        elements = (_list_end_slot(tail_key),)
+    return (_ORD_COMPOUND, 2, _ORD_CONS_NAME_KEY, _CF_POSITIONAL,
+            tuple(_term_key(h) for h in heads) + elements)
 
 
 class _OpaqueOrder:
@@ -896,6 +930,13 @@ def _term_key(term: Any) -> tuple:
         walked = walk_seg(term)
         if not isinstance(walked, (SegList, SegString, SegBytes)):
             return _term_key(walked)
+        # A partial list ``[B|A]`` is the compound ``'.'(B, A)`` (ISO
+        # 6.3.5), keyed as its cells: it ranked after every term in the
+        # opaque band, so ``compare(<, [B|A], [1|A])`` gave ``>``.
+        from clausal.logic.runtime._seg_helpers import partial_list_cells  # noqa: PLC0415
+        cells = partial_list_cells(walked)
+        if cells is not None:
+            return _cons_chain_key(cells)
     return (_ORD_OTHER, _OpaqueOrder(term))
 
 
@@ -942,14 +983,12 @@ def term_key(term: Any) -> tuple:
 #
 # For an acyclic term it decides exactly as the keys do -- band, arity,
 # name, then the arguments left to right, the first difference deciding --
-# including the one corner where that takes care: a proper list keys as
-# the flat tuple of its element keys, a cons chain ``[a, b|foo]`` as the
-# nested pair ``(key(a), key('.'(b, foo)))``, so a proper list against a
-# cons cell is a sequence of n elements against the sequence (head, tail)
-# -- the element at position 2 against the REST of the chain as a
-# compound -- and the shorter sequence, when equal so far, is first.  One
-# order for both paths, so the sorts (keys) and compare/3's fallback agree
-# and the order stays transitive across mixed triples
+# including lists: a proper list and an improper one both key as the flat
+# spine (:data:`_ORD_LIST_END`), and a proper list against a cons cell is
+# walked here cell by cell, head then rest, which is the same order (ISO
+# 7.2.1: every cell is ``'.'/2``).  One order for both paths, so the sorts
+# (keys) and compare/3's fallback agree and the order stays transitive
+# across mixed triples
 # (tests/test_term_compare_order.py).
 
 _LEN = object()    # a stack marker: decide two lists' lengths after their common prefix
@@ -988,7 +1027,9 @@ def _compound_view(t):
         walked = walk_seg(t)
         if not isinstance(walked, (SegList, SegString, SegBytes)):
             return _compound_view(walked)
-        return t
+        from clausal.logic.runtime._seg_helpers import partial_list_cells  # noqa: PLC0415
+        cells = partial_list_cells(walked)
+        return t if cells is None else cells
     if (type(t) is tuple and t and not (type(t[0]) is str and t[0] != TUPLE_TAG)
             and t[0] != TUPLE_TAG):
         return list(t)
@@ -1030,15 +1071,19 @@ def term_compare(a, b) -> int:
             continue
         seen.add(key)
         keep.append((ox, oy, x, y))
-        if isinstance(x, list) or isinstance(y, list):
-            # Two lists element by element; a list against a cons cell as
-            # its n elements against (head, tail); then the lengths.
-            seq_x = x if isinstance(x, list) else [x[1], x[2]]
-            seq_y = y if isinstance(y, list) else [y[1], y[2]]
-            n = min(len(seq_x), len(seq_y))
-            stack.append((_LEN, len(seq_x), len(seq_y)))
+        if isinstance(x, list) and isinstance(y, list):
+            # Two lists element by element, then the lengths.
+            n = min(len(x), len(y))
+            stack.append((_LEN, len(x), len(y)))
             for i in range(n - 1, -1, -1):
-                stack.append((seq_x[i], seq_y[i]))
+                stack.append((x[i], y[i]))
+        elif isinstance(x, list) or isinstance(y, list):
+            # A list against a cons cell, cell by cell: the heads, then the
+            # rests (``[a, b]`` against ``[a|c]`` is ``[b]`` against ``c``).
+            hx, rx = (x[0], x[1:]) if isinstance(x, list) else (x[1], x[2])
+            hy, ry = (y[0], y[1:]) if isinstance(y, list) else (y[1], y[2])
+            stack.append((rx, ry))
+            stack.append((hx, hy))
         elif is_term_instance(x):
             names = term_field_names(x)
             for name in reversed(names):

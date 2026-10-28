@@ -28,7 +28,7 @@ from clausal.logic.builtins._helpers import (
     NIL_SPELLING, _functor_name, _arity, _nth_arg, _args_list, _is_empty_list,
     _check_nonneg_int_arg,
 )
-from clausal.logic.runtime._seg_helpers import walk_seg
+from clausal.logic.runtime._seg_helpers import walk_seg, walk_seg_term
 
 
 # ── Python fallbacks for _copy_term / _collect_vars ───────────────────────────
@@ -492,7 +492,7 @@ def _functor__3(term, name, arity, trail, k):
         # surfaces here as a still-Seg* shape; ``_functor_name``
         # returns None for that and we fall through to silent
         # failure, matching the existing "unknown shape" convention.
-        term_val = walk_seg(term_val)
+        term_val = walk_seg_term(term_val)
         f_val = _functor_name(term_val)
         a_val = _arity(term_val)
         if f_val is None or a_val is None:
@@ -526,13 +526,13 @@ def _arg__3(n, term, arg_out, trail, k):
         raise LogicException(instantiation_error("arg/3"))
     _check_nonneg_int_arg(n_val, "arg/3")
     from clausal.logic.builtins.type_checks import _is_atomic_term  # noqa: PLC0415
-    if _is_atomic_term(walk_seg(term_val)):
+    if _is_atomic_term(walk_seg_term(term_val)):
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, type_error)
         raise LogicException(type_error("compound", term_val, "arg/3"))
     # SegList/SegString never appear at the Clausal surface — walk
     # to ground form first (user decision 2026-06-13).
-    term_val = walk_seg(term_val)
+    term_val = walk_seg_term(term_val)
     try:
         arg_val = _nth_arg(term_val, n_val)
     except IndexError:
@@ -562,7 +562,7 @@ def _univ__2(term, lst, trail, k):
         # Decomposition. SegList/SegString never appear at the
         # Clausal surface — walk to ground form first (user decision
         # 2026-06-13).
-        term_val = walk_seg(term_val)
+        term_val = walk_seg_term(term_val)
         f_val = _functor_name(term_val)
         if f_val is None:
             return

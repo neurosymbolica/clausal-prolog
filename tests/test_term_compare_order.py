@@ -46,10 +46,12 @@ def test_the_fallback_agrees_with_the_key_on_every_acyclic_pair():
 
 def test_the_reviewed_triple_is_transitive():
     a, b, x = ["a", "b"], (".", "a", "foo"), _cyclic_list("a")
-    assert term_compare(a, b) == -1          # b against foo: atoms
-    assert term_compare(a, x) == -1          # b against the cycle's cell: atom < compound
+    # ISO 7.2.1 walks the two spines cell by cell (Trealla agrees; Scryer
+    # orders a list tail differently, see docs/iso_prolog_compatibility_report.md)
+    assert term_compare(a, b) == 1           # the cell [b] against the atom foo
+    assert term_compare(a, x) == 1           # [b] against the cycle's cell [a|...]: b > a
     assert term_compare(b, x) == -1          # foo against the cell
-    assert term_compare(x, a) == 1 and term_compare(x, b) == 1
+    assert term_compare(x, a) == -1 and term_compare(x, b) == 1
 
 
 def test_transitive_over_random_mixed_triples():

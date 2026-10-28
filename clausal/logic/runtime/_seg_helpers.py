@@ -101,8 +101,64 @@ def walk_seg(x: Any) -> Any:
     the string of its spelling become indistinguishable."""
     from clausal.terms import SegList, SegString, SegBytes
     if isinstance(x, (SegList, SegString, SegBytes)):
-        return x.__walk__()
+        try:
+            return x.__walk__()
+        except RecursionError:
+            if not isinstance(x, SegList):
+                raise
+            # An element that leads back to this list (``X = [a|T], T =
+            # [X|T]``) or is too deep to walk: the elements left as they
+            # are, read through their bindings by the caller, as
+            # ``functor/3``, ``arg/3`` and ``=..`` read any argument.
+            return walk_seg_shallow(x)
     return x
+
+
+def partial_list_cells(x: Any) -> Any:
+    """The cons cells ``'.'(E1, '.'(E2, ... T))`` of a partial list -- a
+    ``SegList`` that still walks to a ``SegList``: its elements, then ONE
+    unbound hole -- or None for any other shape (a hole before an element,
+    ``[*A, x]``, has no cons spelling).  ``[B|A]`` is the compound
+    ``'.'(B, A)`` (ISO 6.3.5), and this is the term ``functor/3``,
+    ``arg/3``, ``=..`` and the standard order read it as."""
+    from clausal.terms import SegList, ConcreteSeg, VarSeg
+    if not isinstance(x, SegList):
+        return None
+    segs = x.segments
+    if (len(segs) != 2 or not isinstance(segs[0], ConcreteSeg)
+            or not isinstance(segs[1], VarSeg) or not segs[0].elements):
+        return None
+    out = segs[1].var
+    for e in reversed(segs[0].elements):
+        out = (".", e, out)
+    return out
+
+
+def walk_seg_term(x: Any) -> Any:
+    """:func:`walk_seg`, and a partial list as its cons cells
+    (:func:`partial_list_cells`): the term a decomposition funnel
+    (``functor/3``, ``arg/3``, ``=..``) reads."""
+    from clausal.terms import SegList
+    w = walk_seg(x)
+    if isinstance(w, SegList):
+        cells = partial_list_cells(w)
+        if cells is not None:
+            return cells
+    return w
+
+
+def walk_seg_shallow(x: Any) -> Any:
+    """:func:`walk_seg` with a ``SegList``'s elements not walked: its holes
+    resolved (a cyclic hole as the cons cells of one lap), the elements as
+    they are.  A list of chars still promotes to the string it is."""
+    from clausal.terms import SegList
+    from clausal.logic.variables import deref
+    if not isinstance(x, SegList):
+        return walk_seg(x)
+    w = x._walk_raw(deep=False)
+    if isinstance(w, list):
+        return maybe_promote_to_str([deref(e) for e in w])
+    return w
 
 
 def maybe_promote_to_bytes(result: Any) -> Any:

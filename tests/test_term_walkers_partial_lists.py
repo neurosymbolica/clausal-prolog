@@ -84,7 +84,12 @@ WANT = {
     "w07": [], "w08": [[1, 2]], "w09": [2], "w10": [], "w11": ["x"],
     "w12": ["x"], "w22": [2], "w24": [1], "w25": [], "w26": [2],
     "w28": [], "w29": [], "w30": ["x"], "w32": [2], "w33": ["x"],
-    "w41": ["x"], "w42": [], "w44": ["x"], "w45": [[3], [1, 2]], "w46": [3],
+    # w45: the groups in the standard order of the witness Y, ISO 7.2.1:
+    # [a|T] before [a,T] ('.'(a,T) against '.'(a,'.'(T,[])): a variable
+    # before a compound), as Trealla answers.  Scryer gives [[3],[1,2]]: it
+    # orders a list against a list with another tail otherwise
+    # (docs/iso_prolog_compatibility_report.md, tests/iso/test_fuzz_findings_scryer.py).
+    "w41": ["x"], "w42": [], "w44": ["x"], "w45": [[1, 2], [3]], "w46": [3],
     "d15": [], "d16": ["x"], "d17": [], "d18": [], "d19": [], "d07": ["x"],
     "d08": [], "d21": ["x"], "d22": ["x"], "d09": [], "d10": [], "d12": ["x"],
     "d13": ["x"], "d14": [], "d15b": [], "d16b": [], "d17b": [], "d18b": [],
