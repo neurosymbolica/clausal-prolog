@@ -54,3 +54,24 @@ def test_a_scryer_dialect_file_reads_clpz_operators():
         found = (t.lookup_prefix(name) if spec[0] == "f"
                  else t.lookup_infix(name))
         assert found is not None and found.specifier == spec, name
+
+
+def test_the_scryer_dialect_writes_with_the_builtin_table_only():
+    # A file holding in(a, b) as data that does not load library(clpz)
+    # must read back, in Scryer and in Trealla: a library's operators are
+    # canonical on output; div, rdiv and prefix + (built into both) are not.
+    from clausal.tools.prolog_dialect import Dialect
+    from clausal.tools.clausal_to_prolog import emit_term
+    from clausal.tools.prolog_ast import PCompound, PAtom, PVar
+    d = Dialect.scryer()
+    assert _ops(d.writer_table()) == _scryer("bare")
+    w = d.writer_table()
+    assert emit_term(PCompound("in", (PAtom("mother"), PAtom("p"))), w) \
+        == "in(mother, p)"
+    assert emit_term(PCompound("div", (PVar("A"), PVar("B"))), w) == "A div B"
+
+
+def test_other_dialects_write_with_their_read_table():
+    from clausal.tools.prolog_dialect import Dialect
+    d = Dialect.iso()
+    assert d.writer_table() is d.operator_table

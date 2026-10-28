@@ -3855,7 +3855,7 @@ class _ClausalToProlog:
         """
         pairs = [(self._convert_expr(k), self._convert_expr(v))
                  for k, v in zip(keys, values)]
-        pairs.sort(key=lambda kv: emit_term(kv[0], self.dialect.operator_table))
+        pairs.sort(key=lambda kv: emit_term(kv[0], self.dialect.writer_table()))
         return tuple(PCompound("attribute", (k, v)) for k, v in pairs)
 
     def _convert_is_rhs_splat(self, left_node, dict_node: python_ast.Dict):
@@ -4812,7 +4812,7 @@ def clausal_source_to_prolog(source: str, *,
                                            module_signatures=module_signatures,
                                            meta_modes=meta_modes,
                                            module_specs=module_specs)
-    return emit_module(pmodule, dialect.operator_table)
+    return emit_module(pmodule, dialect.writer_table())
 
 
 # ── CLI ──────────────────────────────────────────────────────────────

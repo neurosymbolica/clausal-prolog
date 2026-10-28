@@ -15,10 +15,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   and `rdiv`, and of clpz's operators it had only the six `#` comparisons,
   without `in`, `ins`, `..`, `#` and the reified connectives (`#\`,
   `#/\`, `#\/`, `#==>`, `#<==`, `#<==>`). A `.pl` file read in that dialect
-  now parses them, and the `.seam`-to-Prolog exporter writes them as
-  operators: `[A, B] ins 0 .. 3` and `Q is 17 div 5`, where it wrote
-  `ins([A, B], ..(0, 3))` and `div(17, 5)`; Scryer and Trealla consult the
-  new output with the same answers. Scryer's internal
+  now parses them. Writing is separate (`Dialect.write_operator_table`,
+  `Dialect.writer_table()`): the `.seam`-to-Prolog exporter writes only
+  operators built into Scryer and Trealla, so `div` is now an operator
+  (`Q is 17 div 5`, was `div(17, 5)`) while a library's stay canonical
+  (`in(mother, p)`), because a file that holds one as data and does not
+  load the library must read back. Scryer's internal
   `non_counted_backtracking` (700 fx) is left out. Pinned against Scryer's
   `current_op/3` in `tests/test_operator_tables_vs_scryer.py`.
 

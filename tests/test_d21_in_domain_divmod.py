@@ -156,20 +156,22 @@ def _body(src, dialect=None):
 
 def test_a_list_literal_becomes_ins():
     out = _body("p(A, B) <- (in_domain([A, B], 0, 3))\n")
-    assert "[A, B] ins 0 .. 3" in out    # clpz's operators
+    # clpz's operators are written canonically: a reader without the
+    # library has no `ins` operator
+    assert "ins([A, B], ..(0, 3))" in out
     assert "ins([A, B], 0, 3)" not in out
 
 
 def test_an_integer_literal_becomes_in():
-    assert "5 in 1 .. 9" in _body("p() <- (in_domain(5, 1, 9))\n")
+    assert "in(5, ..(1, 9))" in _body("p() <- (in_domain(5, 1, 9))\n")
 
 
 def test_a_variable_gets_the_type_dispatch():
     out = _body("p(V) <- (in_domain(V, 1, 9))\n")
     # The dispatch is the clause's whole body here, so it carries no outer
     # brackets (`;` binds looser than `,` but tighter than `:-`).
-    assert ("(var(V) ; integer(V)), V in 1 .. 9 ; "
-            "nonvar(V), (V == [] ; V = [_|_], V ins 1 .. 9)") in out
+    assert ("(var(V) ; integer(V)), in(V, ..(1, 9)) ; "
+            "nonvar(V), (V == [] ; V = [_|_], ins(V, ..(1, 9)))") in out
 
 
 def test_divmod_expands_to_floor_division():

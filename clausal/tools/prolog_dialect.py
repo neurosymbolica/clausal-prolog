@@ -13,6 +13,13 @@ class Dialect:
     """Dialect-specific configuration for Prolog emission/parsing."""
     name: str                                  # "iso", "swi", "scryer"
     operator_table: OperatorTable = field(repr=False)
+    #: The table emitted text is WRITTEN with, when it differs from the one
+    #: it is read with (:attr:`operator_table`; ``None`` means the same).
+    #: Writing may use only operators every reader of the file has: an
+    #: operator a library defines (clpz's ``in``) is canonical on output, so
+    #: a file that holds ``in(a, b)`` as data and does not load the library
+    #: still reads back (measured on Scryer and Trealla, 2026-10-28).
+    write_operator_table: OperatorTable | None = field(default=None, repr=False)
     library_map: dict[str, str] = field(default_factory=dict)
     clpfd_module: str = "clpz"                 # Scryer/Trealla; swi() overrides "clpfd"
     #: Does emitting a CLP arithmetic goal (`#=`) require importing
@@ -66,6 +73,12 @@ class Dialect:
     #: "rational" for the roster is a deliberate change that needs its own
     #: export-bytes measurement.
     decimal_repr: str = "float"
+
+    def writer_table(self) -> OperatorTable:
+        """The operator table to write emitted text with."""
+        if self.write_operator_table is not None:
+            return self.write_operator_table
+        return self.operator_table
 
     @classmethod
     def iso(cls) -> Dialect:
@@ -132,6 +145,7 @@ class Dialect:
         return cls(
             name="scryer",
             operator_table=OperatorTable.scryer_default(),
+            write_operator_table=OperatorTable.scryer_builtin_default(),
             library_map={
                 "clausal.logic.clpfd": "library(clpz)",
                 "clausal.logic.clpb": "library(clpb)",
