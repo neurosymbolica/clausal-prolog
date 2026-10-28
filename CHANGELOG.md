@@ -287,18 +287,18 @@ trees, Scryer's syntax-error terms, the stream and `read_term` builtins and
 
 ### Added
 
-- **Quads** (2026-10-24): on the native front end, a `?- Query.` in a `.pl`
-  or `.clausal` file and the answer descriptions after it (`X = 1 ; X = 2.`,
-  `type_error(atom, 1).`, `..., ad_infinitum.`, pending `dif(X, a)`) no longer
-  refuse the load: the loader skips them (Neumerkel; Trealla #1063). The
-  skip is exactly: the query, then each following clause-shaped item that is
-  an answer description, up to the first that is not (a fact of that shape
-  written right after a query is dropped); a query that is a directive's goal
-  (`?- dynamic(f/1).`) is skipped with a warning. `label ?- Query.` and
-  `X ~~ '14.2000'` are read only in that context; the program's operator
-  table is unchanged. `clausal --quads FILE` runs each quad as a test
-  (`clausal/quad_runner.py`, `tests/test_quads.py`), following Trealla's
-  `library/quads.pl`. The translator front end still refuses a query.
+- **An interactive ISO `?-` top-level** (2026-10-24, operator ruling): bare
+  `clausal` and `clausal --toplevel FILE` read queries up to `.`, print
+  answers as `-g` does (sharing, cycles, strings, operators, `dif/2` and
+  CLP(FD) residuals in plain form, long lists elided), compute the next
+  solution only on `;` (also `f`, `#N`, `a`, `w`, `p`, `h`, Enter), print
+  errors as one line, return to `?-` on Ctrl-C, keep history in
+  `~/.clausal_history`, and run `consult/1`, `[File]` and `halt/0,1`. Bare
+  `clausal` used to open the Python/seam REPL, which is now `clausal
+  --python`. A query may use `!`, `->` and `*->` against a `.pl` file or with
+  `--prolog`; against a `.clausal` file or no file they are refused.
+  `-g` answers now print `dif/2` and CLP(FD) constraints (domains and
+  relations between variables) instead of `true.`. Pinned in `tests/test_toplevel.py` (a pseudo-terminal).
 
 - **`sort/4`, `predsort/3`, `print/1`, `atom_string/2`, `term_to_atom/2`
   and `atom_to_term/3`** (2026-10-24), on `.pl` and `.clausal`; each
