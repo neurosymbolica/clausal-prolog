@@ -1,12 +1,13 @@
 """After a search ends, the query's variables are unbound and reusable.
 
-An answer marked FINAL lets a frame skip pulling its child again (the
-child would only fail), so the child never undoes its own bindings: the
-frame, or the driver, must.  Every shape below used to leave the last
-answer's binding on the caller's variable after exhaustion, so a Python
-caller reusing the variable lost answers: a catch/3 body (its try is not
-followed by an undo), a conjunction ending in catch/3, a single-clause
-index bucket (no trail mark), and the query itself.
+An answer marked FINAL is reported as the last, but the drivers still pull
+the search to its end, so every goal's own backtracking undoes its
+bindings, and what a finished search deliberately leaves (an attribute set
+by put_attr/3) stays, as on a run without FINAL.  These shapes once left
+the last answer's binding on the caller's variable after exhaustion, so a
+Python caller reusing the variable lost answers: a catch/3 body, a
+conjunction ending in catch/3, a single-clause index bucket, and the query
+itself.
 
 Each shape runs through ``solve``, ``solve_with_last`` and ``call``, on
 the C trampoline and on the Python twin (a child process with the C
