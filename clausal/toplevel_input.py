@@ -21,30 +21,47 @@ class KeyWatcher:
     body runs.  A lone Esc interrupts the main thread (SIGINT, so a
     ``KeyboardInterrupt`` where the search is); anything else (an escape
     sequence such as an arrow key included) is appended to :attr:`typeahead`.
-    """
 
-    POLL = 0.05
+    The thread sleeps in ``select`` on *fd* and on a private pipe that
+    ``__exit__`` writes to, so leaving the block does not wait out a poll
+    interval.  An Esc is decided under a lock against the end of the block:
+    it either interrupts (and the interrupt is delivered before ``__exit__``
+    returns, never after it) or is kept as typeahead for the next prompt.
+    """
 
     def __init__(self, fd: int):
         self.fd = fd
         self.typeahead = bytearray()
-        self._stop = threading.Event()
+        self.interrupted = False
+        self._lock = threading.Lock()
+        self._stopped = False
+        self._wake_r = self._wake_w = -1
         self._thread: threading.Thread | None = None
 
     def __enter__(self) -> "KeyWatcher":
         if threading.current_thread() is not threading.main_thread():
             return self                     # nothing to interrupt from here
-        self._stop.clear()
+        self._wake_r, self._wake_w = os.pipe()
         self._thread = threading.Thread(target=self._watch, daemon=True,
                                         name="clausal-key-watcher")
         self._thread.start()
         return self
 
     def __exit__(self, *exc) -> None:
-        self._stop.set()
-        if self._thread is not None:
-            self._thread.join()
-            self._thread = None
+        if self._thread is None:
+            return
+        with self._lock:
+            self._stopped = True
+        os.write(self._wake_w, b"x")
+        self._thread.join()
+        self._thread = None
+        os.close(self._wake_r)
+        os.close(self._wake_w)
+        if self.interrupted:
+            # The SIGINT is already pending in this process: let it be
+            # delivered here, inside the block's exit, not at some later line.
+            for _ in range(1000):
+                pass
 
     def _more(self) -> bool:
         try:
@@ -53,13 +70,13 @@ class KeyWatcher:
             return False
 
     def _watch(self) -> None:
-        while not self._stop.is_set():
+        while True:
             try:
-                ready, _, _ = select.select([self.fd], [], [], self.POLL)
+                ready, _, _ = select.select([self.fd, self._wake_r], [], [])
             except (OSError, ValueError):
                 return
-            if not ready:
-                continue
+            if self._wake_r in ready:
+                return
             try:
                 data = os.read(self.fd, 1)
                 if data and data[0] == ESC and self._more():
@@ -68,7 +85,11 @@ class KeyWatcher:
                 return
             if not data:
                 return
-            if data == bytes([ESC]) and not self._stop.is_set():
-                os.kill(os.getpid(), signal.SIGINT)
-                return
-            self.typeahead += data
+            with self._lock:
+                if data == bytes([ESC]) and not self._stopped:
+                    self.interrupted = True
+                    os.kill(os.getpid(), signal.SIGINT)
+                    return
+                self.typeahead += data
+                if self._stopped:
+                    return

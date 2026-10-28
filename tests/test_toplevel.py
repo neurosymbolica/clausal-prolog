@@ -911,3 +911,23 @@ def test_a_constraint_on_a_hidden_variable_is_shown(tmp_path):
 def test_fresh_variables_are_named_a_b_c(tl):
     s = tl()
     s.query("X = f(_, _, Y).", "   X = f(_A,_B,Y).")
+
+
+def test_user_does_not_change_the_cut_rule_of_a_clausal_session(tmp_path):
+    (tmp_path / "m.clausal").write_text(
+        ":- module(m, [a/1]).\na(1).\n:- end_module(m).\n")
+    s = Pty(tmp_path, "m.clausal", "--toplevel")
+    try:
+        s.expect("?- ")
+        s.query("true, !.", "syntax_error(cut_free)")
+        s.send("[user].\n")
+        s.expect("|: ")
+        s.send("end_of_file.\n")
+        s.expect("   true.")
+        s.send("true, !.\n")
+        deadline = time.time() + 10
+        while s.text.count("syntax_error(cut_free)") < 2 and time.time() < deadline:
+            s._read(0.2)
+        assert s.text.count("syntax_error(cut_free)") == 2, s.text
+    finally:
+        s.close()

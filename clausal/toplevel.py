@@ -519,7 +519,11 @@ class TopLevel:
             path = os.path.join(d, "user" + PROLOG_SUFFIX)
             with open(path, "w", encoding="utf-8") as f:
                 f.writelines(lines)
-            self.consult_path(path)
+            keep = self.path          # the cut rule follows the session's FILE
+            try:
+                self.consult_path(path)
+            finally:
+                self.path = keep
 
     def consult(self, name) -> None:
         """Load *name* (``.clausal`` / ``.pl``, suffix optional) and make it
