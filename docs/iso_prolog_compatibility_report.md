@@ -191,6 +191,15 @@ Inside an arithmetic **constraint** (CLP(ℤ)'s `#=` family) `/` is exact and
 a zero divisor makes the constraint fail, as in Scryer's clpz. See
 [Constraints](constraints.md).
 
+CLP(ℤ) **propagation** matches Scryer's clpz through every operator (`+ - *
+// div mod rem ^ min max abs`, unary `-`) under every relation, whichever
+variable is bound or narrowed first: a generated matrix of 2036 rows
+(`tests/iso/test_clpz_propagation_matrix_scryer.py`) agrees with Scryer or
+narrows further and stays sound on each row. One difference is open: a
+float operand of the `#` family is CLP(ℝ) in Clausal and a
+`domain_error(clpz_expression, F)` in Scryer
+(`todo/clp-domain-spans-reals-while-clpz-is-integers-2026-09-09.md`).
+
 ### Comparison and standard order
 
 | Goal | Result |
