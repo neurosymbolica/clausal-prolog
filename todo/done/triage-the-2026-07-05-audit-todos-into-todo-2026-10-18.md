@@ -95,7 +95,7 @@ it had none). Under the default CLP(Q) solver unless stated;
 | fix-A08-ortools-floordiv-mod-translation.md | open (code unchanged; ortools not installed, tests skip; A08-D001) | todo/cpsat-adapter-floordiv-and-mod-differ-from-python-2026-07-05.md |
 | fix-A08-z3-floordiv-mod-translation.md | open (3 XFAIL; A08-D001) | todo/z3-adapter-translates-floordiv-and-mod-with-smt-semantics-2026-07-05.md |
 | investigate-A08-clpq-bound-enforcement.md | open on legacy (F002 now passes, F006 XFAIL); fixed under holzbaur | todo/legacy-clpq-bb-inf-cannot-branch-on-an-eliminated-variable-2026-07-05.md |
-| investigate-A08-clpq-strict-inequalities.md | open on legacy (cycle + entailed XFAIL, aliasing fixed); fixed under holzbaur | todo/legacy-clpq-strict-inequality-is-a-passive-disequality-2026-07-05.md |
+| investigate-A08-clpq-strict-inequalities.md | open on legacy (cycle + entailed XFAIL, aliasing fixed); fixed under holzbaur | todo/done/legacy-clpq-strict-inequality-is-a-passive-disequality-2026-07-05.md |
 | investigate-A08-solver-store-sync-hooks.md | open (2 XFAIL; A08-D002) | todo/z3-and-ortools-variables-ignore-clausal-bindings-2026-07-05.md |
 | investigate-A12-tabling-answer-constraints.md | open (2 + 2 XFAIL; plan in the file) | todo/tabled-answers-drop-their-constraints-on-replay-2026-07-05.md |
 | investigate-A08-clpq-prolog-oracle.md | RESOLVED: the Scryer clpq oracle runs (216 passed) | todo/done/investigate-A08-clpq-prolog-oracle.md |

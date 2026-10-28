@@ -1,5 +1,7 @@
 # CLP(Q): a strict bound closed by an inequality is not caught
 
+**Status: FIXED 2026-10-28 (commit 3b690b9e).** The legacy simplex keeps each bound's strictness and reads a strict bound as a delta-rational (Dutertre and de Moura), so feasibility decides strictness on every post, with no LP: both stores below fail, `{X > 0, X =< 2}, bb_inf([X], X, I)` gives `I = 1`, and a 200-variable `<` chain posts in 0.04 s and labels in 5.7 s (21 s before). Pinned in tests/test_clpq_legacy_strict_bounds.py (`test_a_closed_strict_bound_fails`, `test_bb_inf_respects_a_strict_bound`, the 24-order `test_a_sum_of_nonnegatives_below_zero_fails_in_every_order`, and a seeded differential against the port) and tests/test_clpq_box_bounded_optimum.py::test_a_strict_inequality_the_store_closes_fails[bound_last] (xfail removed). Still passive, and so still caught only at the next binding: a true `=\=` that inequalities alone close (`{X =\= Y, X =< Y, Y =< X}`).
+
 A strict `<` is stored as `=<` plus a disequality (`X - Y =\= 0`).  The
 disequality is checked in three ways:
 

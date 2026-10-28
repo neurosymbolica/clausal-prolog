@@ -18,7 +18,7 @@ Found by a review fuzz (2026-10-11) that mixed var-var unifications into
 from this bug.  It reproduces on 9bb5a6d3 too.
 
 Cost notes from the same review, for the strict-bound entailment check
-(todo/clpq-strict-bounds-closed-by-inequalities-2026-10-11.md):
+(todo/done/clpq-strict-bounds-closed-by-inequalities-2026-10-11.md):
 - Dense strict sets cost the most.  With all-pairs `X_i < X_j` over
   `in_q` bounds, binding the variables one at a time takes 3.5 s for 20
   variables (2,299 LPs) and 114 s for 40.

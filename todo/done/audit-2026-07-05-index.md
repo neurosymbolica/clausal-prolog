@@ -262,7 +262,7 @@ to delete; the clusters above are the collapse points.
 | `investigate-A07-parked-design-decisions.md` | investigate (Opus) | correctness (design-gated) | A07-F003 / A07-F004 | A07 clpb-sat | split 2026-10-20: each decision ruled or moved to its own todo (see the file's status line) |
 | `todo/legacy-clpq-bb-inf-cannot-branch-on-an-eliminated-variable-2026-07-05.md` | investigate (Opus) | correctness | A08-F002 / A08-F006 | A08 clpqr-z3 | open; moved to todo/ 2026-10-20 |
 | `investigate-A08-clpq-prolog-oracle.md` | investigate (Opus) | infrastructure | — | A08 clpqr-z3 | done 2026-10-20 |
-| `todo/legacy-clpq-strict-inequality-is-a-passive-disequality-2026-07-05.md` | investigate (Opus) | correctness; design | A08-F004 / A08-F008 | A08 clpqr-z3 | open; moved to todo/ 2026-10-20 |
+| `todo/done/legacy-clpq-strict-inequality-is-a-passive-disequality-2026-07-05.md` | investigate (Opus) | correctness; design | A08-F004 / A08-F008 | A08 clpqr-z3 | open; moved to todo/ 2026-10-20 |
 | `investigate-A08-parked-design-decisions.md` | investigate (Opus) | design (unconfirmed impact) | A08-F018 | A08 clpqr-z3 | split 2026-10-20: each decision ruled or moved to its own todo (see the file's status line) |
 | `todo/z3-and-ortools-variables-ignore-clausal-bindings-2026-07-05.md` | investigate (Opus) | correctness | A08-F013 | A08 clpqr-z3 | open; moved to todo/ 2026-10-20 |
 | `investigate-A09-copy-term-attrs.md` | investigate (Opus) | correctness (design-gated) | A09-F010 | A09 builtins | done 2026-10-20 |
