@@ -256,6 +256,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (2026-10-28): `X in 1\/3, fd_dom(X, D)` gives `D = 1\/3`, as Scryer
   does (it was `1..1\/3..3`).  A single interval stays `3..3`.
 
+- **CLP(Z) `min`/`max` no longer lose solutions' pruning** (2026-10-28):
+  their propagator narrowed an operand to a domain computed before it
+  narrowed the result, and narrowing the result runs the other
+  propagators at once, so a domain they had just narrowed was widened back.
+  A reported search with a reified implication found 228 solutions, among
+  them `[1,5,0]`, which violates it; Scryer finds 214.  The new
+  propagators intersect with the current domain before every narrowing
+  (as does clpz's exact division `/`).  Pinned in
+  `tests/iso/test_clpz_reported_rows_scryer.py`, with the `//` backward
+  propagation reported with it (`X in 0..20, Q #= X//4, Q #>= 3` gives
+  `X in 12..20`); the matrix has solution-count rows for the class.
+
 ## 1.2.0 (2026-10-25)
 
 A minor release (operator ruling 2026-10-25): the interactive ISO `?-`

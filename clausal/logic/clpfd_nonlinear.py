@@ -236,9 +236,15 @@ class NonlinearConstraint:
                 return False
             nz, na, nb = res
             changed = False
+            ed = cf._expr_domain
             for v, old, new in ((z, zd, nz), (a, ad, na), (b, bd, nb)):
                 v = deref(v)
                 if new != old and is_var(v):
+                    # narrowing one variable propagates at once (a binding
+                    # runs the hooks), so another one may already be
+                    # narrower than what was computed for it: intersect
+                    # with its domain NOW, never widen it back
+                    new = _inter(new, ed(v, trail))
                     if not cf._narrow_if_changed(v, new, trail, queue):
                         return False
                     changed = True

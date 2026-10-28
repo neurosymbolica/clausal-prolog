@@ -4720,60 +4720,6 @@ class AbsConstraint(Constraint):
         return True
 
 
-class MinMaxConstraint(Constraint):
-    """``Z = min(A, B)`` (``is_max`` False) or ``Z = max(A, B)`` (True):
-    bounds propagation; once one operand is certainly the smaller (the
-    larger), Z has exactly its domain."""
-    __slots__ = ('z', 'a', 'b', 'is_max')
-
-    def __init__(self, z, a, b, is_max: bool):
-        self.z = z
-        self.a = a
-        self.b = b
-        self.is_max = is_max
-        super().__init__((z, a, b))
-
-    def propagate(self, trail: Trail, queue: deque) -> bool:
-        z, a, b = deref(self.z), deref(self.a), deref(self.b)
-        zd, ad, bd = (_expr_domain(z, trail), _expr_domain(a, trail),
-                      _expr_domain(b, trail))
-        if self.is_max:
-            # max(A, B) = -min(-A, -B): propagate the negated problem
-            zd, ad, bd = _domain_negate(zd), _domain_negate(ad), _domain_negate(bd)
-        if not (zd and ad and bd):
-            return False
-        # Z = min(A, B)
-        alo, ahi = domain_min(ad), domain_max(ad)
-        blo, bhi = domain_min(bd), domain_max(bd)
-        if ahi < blo:
-            img = ad
-        elif bhi < alo:
-            img = bd
-        else:
-            img = _domain_union([ad, bd])
-            img = domain_intersection(
-                img, domain_from_range(min(alo, blo), min(ahi, bhi)))
-        nz = domain_intersection(zd, img)
-        if not nz:
-            return False
-        zlo = domain_min(nz)
-        above = domain_from_range(zlo, _POS_INF)
-        na = domain_intersection(ad, above)
-        nb = domain_intersection(bd, above)
-        if not na or not nb:
-            return False
-        # Z must be the value of one of them
-        if not domain_intersection(nz, _domain_union([na, nb])):
-            return False
-        if self.is_max:
-            nz, na, nb = _domain_negate(nz), _domain_negate(na), _domain_negate(nb)
-        for v, nd in ((z, nz), (a, na), (b, nb)):
-            v = deref(v)
-            if is_var(v) and not _narrow_if_changed(v, nd, trail, queue):
-                return False
-        return True
-
-
 #: operator-node / cell keys that stay in the integers
 _FD_INT_KEYS = frozenset({
     ("+", 2), ("-", 2), ("*", 2), ("-", 1), ("+", 1),
@@ -5395,8 +5341,11 @@ class ExactDivConstraint(Constraint):
             # A = Z * B: A lies between the corner products
             corners = [_safe_mult(p, q) for p in (domain_min(zd), domain_max(zd))
                        for q in (blo, bhi)]
-            na = domain_intersection(ad, domain_from_range(min(corners),
-                                                           max(corners)))
+            # A's domain read again: narrowing Z may have narrowed it
+            na = domain_intersection(_expr_domain(deref(self.a), trail),
+                                     domain_from_range(min(corners),
+                                                       max(corners)))
+            a = deref(self.a)
             if not na:
                 return False
             if is_var(a) and not _narrow_if_changed(a, na, trail, queue):

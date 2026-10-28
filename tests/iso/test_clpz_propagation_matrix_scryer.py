@@ -8,7 +8,10 @@ with the expression on either side; domains on the variables (negative,
 zero, holes, ``inf``/``sup``, bignums near 2^70); each variable bound or
 narrowed BEFORE or AFTER the post, in every order; nested pairs of
 operators; reification (``#<==>``, ``#==>``, ``#\\/`` with B bound early
-and late); and hand-picked edges (division by zero, ``0^-1``, the
+and late); each operator beside a reified constraint over the same
+variables, all bound in a random order; solution counts of an operator
+beside a nested reified implication, labelled in a random order; and
+hand-picked edges (division by zero, ``0^-1``, the
 ``R*T #= 14, T = 7`` late binding).  Each row runs the same ISO text in
 both engines and compares success, failure or the error term, and every
 variable's ``fd_dom/2``.
@@ -91,7 +94,8 @@ def test_matrix_size():
     relation on both sides, the binding orders, nesting, reification and
     the edges."""
     fams = {c.family.split(":")[0] for c in CASES}
-    assert fams == {"op", "bind2", "order", "nested", "reif", "edge"}
+    assert fams == {"op", "bind2", "order", "nested", "reif", "interplay",
+                    "count", "edge"}
     ops = {c.family.split(":")[1] for c in CASES if c.family.startswith("op:")}
     assert ops == set(M.BINARY) | set(M.UNARY)
     rels = {c.family.split(":")[2] for c in CASES if c.family.startswith("op:")}

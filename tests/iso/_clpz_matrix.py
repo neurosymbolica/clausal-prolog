@@ -204,7 +204,64 @@ def generate(scale=1, seed=20261028):
             body.insert(at, f"B = {bval}")
         cases.append(Case(f"reif:{form}", vs, body))
 
-    # 5. Hand-picked edges: division by zero, inf/sup, bignums, the known
+    # 5. Interplay: an operator's propagator next to a reified constraint
+    #    over the same variables, all of them then bound in a random order
+    #    (the answer is exact: success or failure).  A propagator that
+    #    narrows from stale domains -- widening a variable another one had
+    #    just narrowed while it bound its result -- loses the reified
+    #    constraint's pruning in one binding order only.
+    for op in BINARY + UNARY:
+        vs = ["X", "Y", "Z"] if op in BINARY else ["X", "Z"]
+        e = expr_text(op, "X", "Y")
+        for _ in range(8 * scale):
+            rel = rng.choice(RELATIONS)
+            r1, r2, r3 = (rng.choice(RELATIONS) for _ in range(3))
+            reif = (f"((X {r1} Z + {rng.choice([-1, 0, 1])}) #==> "
+                    f"({vs[-1]} {r2} {rng.choice([0, 1, 2])})) #==> "
+                    f"(X {r3} {rng.choice([0, 1, 2, 3])})")
+            doms = [f"X in {rng.choice(['0..5', '-3..3', '1..6'])}",
+                    f"Z in {rng.choice(['0..9', '-4..4', '0..16'])}"]
+            if op in BINARY:
+                doms.append(f"Y in {rng.choice(['0..3', '1..4', '-2..5'])}"
+                            if op != "^" else "Y in 0..3")
+            vals = [f"{v} = {rng.choice([-1, 0, 1, 2, 3, 4, 5])}" for v in vs]
+            rng.shuffle(vals)
+            body = doms + [f"Z {rel} {e}", reif] + vals
+            cases.append(Case(f"interplay:{op}", vs, body))
+
+    # 6. Counting: an operator's constraint and a nested reified
+    #    implication over the same three variables (the shape of a reported
+    #    soundness defect), labelled in a random order; the answer is the
+    #    number of distinct solutions.
+    rels = RELATIONS
+    for op in BINARY + UNARY:
+        for _ in range(6 * scale):
+            a, b, c, d, e, f, g, h = (rng.choice([-2, -1, 1, 2, 3]) for _ in range(8))
+            con = f"{expr_text(op, 'X1', 'X2')} {rng.choice(rels)} X3"
+            reif = (f"(({a}*X3 + X2 #< X1 + {c}) #==> ({b}*X3 #\\= {d})) #==> "
+                    f"(({e}*X2 #>= {f}) #<==> ({g}*X2 #< {h}))")
+            order = ["X1", "X2", "X3"]
+            rng.shuffle(order)
+            x2 = "0..3" if op == "^" else rng.choice(["-2..5", "0..6"])
+            body = [f"findall([X1,X2,X3], (X1 in 1..6, X2 in {x2}, X3 in 0..5, "
+                    f"{con}, {reif}, label([{','.join(order)}])), L)",
+                    "sort(L, S)", "length(S, N)"]
+            cases.append(Case(f"count:{op}", ["N"], body))
+
+    #    ... and the reported implication itself beside each operator,
+    #    labelled in every order
+    reported = ("((-2*X3 + X2 #< X1 + -1) #==> (3*X3 #\\= 4)) #==> "
+                "((-2*X2 #>= 6) #<==> (-1*X2 #< -4))")
+    for op in BINARY + UNARY:
+        con = f"{expr_text(op, 'X1', 'X2')} #> X3"
+        x2 = "0..3" if op == "^" else "-2..6"
+        for order in itertools.permutations(["X1", "X2", "X3"]):
+            body = [f"findall([X1,X2,X3], (X1 in 1..6, X2 in {x2}, X3 in 0..5, "
+                    f"{con}, {reported}, label([{','.join(order)}])), L)",
+                    "sort(L, S)", "length(S, N)"]
+            cases.append(Case(f"count:{op}", ["N"], body))
+
+    # 7. Hand-picked edges: division by zero, inf/sup, bignums, the known
     #    late-binding product.
     edges = [
         (["R", "T"], ["R*T #= 14", "T = 7"]),
