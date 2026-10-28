@@ -89,3 +89,32 @@ Options:
 Recommendation: (a) for `.pl` and `.clausal` alike is the cleanest reading
 of ruling 2026-10-24, since `{}/1` already covers CLP(R)/CLP(Q) on every
 surface; (b) if the documented `#=`-over-reals of `.clausal` must stay.
+
+## Ruling 2026-10-28, and why it is not landed yet
+
+Operator ruling (2026-10-28, relayed): option (a), "INTEGER-ONLY everywhere,
+matching Scryer. A float operand in #=, #\=, #<, #=<, #>, #>= (and in their
+reified forms) raises error(domain_error(clpz_expression, F), Context) with
+Scryer's context, on BOTH .pl and .clausal. CLP(R)/CLP(Q) are reached only
+via {}/1."
+
+Implemented on branch `wip/clpz-integer-only-2026-10-28` (commit 571697a7,
+pinned by tests/iso/test_clpz_float_operands_scryer.py against Scryer), but
+held back: the ruling assumes `{}/1` reaches CLP(R), and in Clausal it does
+not.
+
+- `{}/1` is CLP(Q): `{X = 5.0}` gives `X = 5` (the float read as an exact
+  rational), and a non-linear `{X*X = 2.0}` raises a Python
+  `TypeError('CLP(Q) requires linear constraints')`.  Scryer's
+  `library(clpr)` `{X = 5.0}` gives `X = 5.0`.
+- An `in_real` variable under the `#` family with integer operands does not
+  propagate: `in_real(X, 0.0, 2.0), X*X #= 2` leaves X in 0.0..2.0 and
+  `in_real(X), 2*X #= 7` leaves X unbounded (the same on 285bdb8e).
+
+So with the float operand refused, Clausal Prolog has no working route to
+CLP(R), and the CLP(R) examples (docs/clpr.md, docs/constraints.md's CLP(R)
+section, tests/fixtures/docs/clpr_examples.clausal,
+tests/fixtures/docs/constraints_sig_tests.clausal) have nothing to be
+rewritten to.  One of these has to come first: `{}/1` over the reals (as
+Scryer's `library(clpr)`: a float in `{}` dispatches to CLP(R)), or the `#`
+family propagating over `in_real` variables with integer operands.
