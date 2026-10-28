@@ -459,7 +459,11 @@ def _partial_list_parts(t):
     if isinstance(t, SegList):
         if not all(isinstance(g, (ConcreteSeg, VarSeg)) for g in t._segments):
             return None        # not a SegList this module builds (__unify__ too)
-        w = t._walk_raw()
+        # The elements as they are: the caller pairs and unifies them (and
+        # reads each through its binding).  Walking them recursed without
+        # end into an element that leads back to the list (``B = [A|B]``
+        # with ``A = B``).
+        w = t._walk_raw(deep=False)
         if isinstance(w, list):
             return w, None
         if not isinstance(w, SegList):
@@ -1319,7 +1323,15 @@ class SegList:
         return NotImplemented
 
     def __eq__(self, other):
-        w = self._walk_once()
+        # A number or an atom other than ``[]`` is never a list.  The
+        # unifier asks this of a scalar against a partial list, and the walk
+        # below walked every element: one leading back to this list (``B =
+        # [B|T], dif(1, B)``) recursed until the stack ran out.
+        if type(other) in (int, float, bool, Fraction):
+            return NotImplemented       # as the arms below answer a number
+        if type(other) is str and not _is_nil(other):
+            return False
+        w = self._walk_once(deep=False)
         if w is not None and not isinstance(w, (list, SegList)):
             # An improper or cyclic list (D50).  ``w == other`` compared the
             # cons cells by Python equality, which met the cyclic tails as
@@ -4479,6 +4491,25 @@ def _wq_is_postfix_form(t, ops) -> bool:
             and ops.lookup_infix(name) is None)
 
 
+def _wq_walk(t):
+    """What a ``Seg*`` walks to, for the writer: ``__walk__`` with the
+    elements left as they are (the writer reads each through its binding
+    itself, under its cycle guard).  ``__walk__`` walks every element, and
+    an element that leads back to this list (``B = g([B|A])``) recursed
+    until the stack ran out.  A list of chars still reads as the string it
+    is, as ``__walk__`` promotes it."""
+    if isinstance(t, SegList):
+        try:
+            w = t._walk_raw(deep=False)
+        except _CyclicPartialList:
+            return t.__walk__()
+        if isinstance(w, list):
+            from .logic.runtime._seg_helpers import maybe_promote_to_str
+            return maybe_promote_to_str([deref(e) for e in w])
+        return w
+    return t.__walk__()
+
+
 def _wq_spine_returns_to(w, seg) -> bool:
     """Whether the cons spine of *w* (a SegList's walk) leads back to the
     SegList *seg* itself -- the walk of a cyclic partial list, whose cells
@@ -4642,7 +4673,7 @@ def _wq_term(t: Any, prec: int, operand: bool = False) -> str:
     if isinstance(t, list) or (type(t) is tuple and not t):
         return _wq_list(list(t), None)
     if isinstance(t, (SegList, SegString)):
-        walked = t.__walk__()
+        walked = _wq_walk(t)
         if not isinstance(walked, (SegList, SegString)):
             return _wq(walked, prec, operand)
         if isinstance(walked, SegList):
@@ -4694,7 +4725,7 @@ def _wq_term(t: Any, prec: int, operand: bool = False) -> str:
                     tail = _WQ_ELLIPSIS
                     break
                 spine.add(id(tail))
-                w = tail.__walk__()
+                w = _wq_walk(tail)
                 if _wq_spine_returns_to(w, tail):
                     tail = _WQ_ELLIPSIS
                     break
