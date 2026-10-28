@@ -151,7 +151,7 @@ print(run(P("a"), "foo"))
 L = Var(); print(run(chars("ab"), P("a", tail=L), (L, ["b"])))
 L = Var(); print(run(P("a", tail=L), P("a", tail=L)))
 print(run(P("a", "b"), ["a"]))
-L = Var(); print(run(P("a", tail=L), P("a", "b", tail=L)))   # occurs check
+L = Var(); print(run(P("a", tail=L), P("a", "b", tail=L)))   # a cycle
 t = Trail(); L = Var(); print(C.dif(["a", "b"], P("a", tail=L), t),
                               unify(L, ["b"], t))
 L = Var(); print(run(b"ab", P(97, tail=L), (L, [98])))         # codes
@@ -185,7 +185,9 @@ def test_the_python_twin_agrees_with_c():
         "[[True, True, \"('$chars', 'b')\"], [False, False, '_']]",
         "[[True]]",
         "[[False]]",
-        "[[False]]",          # occurs-checked: L = [b|L] has no answer
+        # L = [b|L] is a cycle, as in Scryer: T = true with it, T = false
+        # with the dif (Scryer: [true-[b|...],false-_])
+        "[[True], [False]]",
         "True False",
         "[[True, True, '[98]'], [False, False, '_']]",
         "[[True, True, \"['c']\"], [False, False, '_']]",
