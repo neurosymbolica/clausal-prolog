@@ -7,6 +7,21 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+## 1.3.0 (2026-10-29)
+
+A minor release. The engine reports when an answer is the last
+(`solve_with_last`, `call_with_last`), and the `?-` top-level ends such an
+answer with its full stop, as Scryer's does. Pending `freeze/2` and
+`when/2` goals print as goals, and `frozen/2` is new. `clausal --quads`
+runs the quads in a file. The top-level gains colour schemes, interrupt
+by key press, Tab completion and `[user].`. CLP(Z) propagation was checked
+against Scryer's for every operator in every direction, and 89 cases where
+it was weaker are fixed. The default (legacy) CLP(Q) solver decides
+strict inequalities on every post, which fixes stores it wrongly accepted.
+Partial lists, cycles, `dif/2` and the standard order were fixed against
+a differential fuzzer run against Scryer.
+Answers that print residual constraints may read differently; see Changed.
+
 ### Added
 
 - **`solve_with_last` / `call_with_last`: knowing an answer is the last**
