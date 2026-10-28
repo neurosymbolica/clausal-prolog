@@ -785,15 +785,35 @@ def test_c_clears_the_rows_a_long_answer_wrapped_onto(tl):
     assert re.search(r"\x1b\[\d+A\x1b\[J", s.raw), s.raw[-300:]
 
 
-def test_a_key_press_interrupts_a_running_search(tl):
+def test_esc_interrupts_a_running_search(tl):
     s = tl()
     s.send("loop.\n")
     time.sleep(2)
-    s.send("x")                      # any key, as Ctrl-C would
+    s.send("\x1b")
     s.expect("% Execution Aborted")
     s.expect("?- ")
     s.query("X = 1.", "   X = 1.")
     assert "Traceback" not in s.text
+
+
+def test_other_keys_do_not_interrupt_a_search_and_are_not_lost(tl):
+    s = tl()
+    s.send("loop.\n")
+    time.sleep(2)
+    s.send("x")                      # typeahead, not an interrupt
+    time.sleep(0.5)
+    assert "Aborted" not in s.text
+    s.send("\x03")                  # Ctrl-C ends the search
+    s.expect("% Execution Aborted")
+    s.expect("?- x")                 # the typed key is in the next line
+
+
+def test_a_pasted_script_of_queries_runs_in_order(tl):
+    s = tl()
+    s.send("X = 1.\nY = 2.\nZ = 3.\n")
+    s.expect("   Z = 3.")
+    t = s.text
+    assert t.index("X = 1.") < t.index("Y = 2.") < t.index("Z = 3.")
 
 
 def test_a_key_pressed_after_the_search_ended_is_not_lost(tl):
@@ -828,3 +848,31 @@ def test_user_ends_at_ctrl_d(tl):
     s.send("\x04")
     s.expect("   true.")
     s.query("zebra(X).", "   X = stripes")
+
+
+def test_tab_completes_a_builtin_name(tl):
+    s = tl()
+    s.send("atom_len\t")
+    s.expect("atom_length(")
+    s.send("abc, N).\n")
+    s.expect("N = 3")
+
+
+def test_tab_completes_a_program_predicate(tl):
+    s = tl()
+    s.send("side\t")
+    s.expect("side(")
+
+
+def test_tab_completes_a_library_name(tl):
+    s = tl()
+    s.send("use_module(library(dc\t")
+    s.expect("dcgs")
+
+
+def test_tab_completes_a_zero_arity_name_without_a_bracket(tl):
+    s = tl()
+    s.send("halt\t")
+    time.sleep(0.5)
+    s.send(".\n")
+    assert s.finish() == 0

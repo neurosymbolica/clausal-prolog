@@ -27,6 +27,7 @@ import os
 import sys
 
 from clausal import toplevel_colour
+from clausal.toplevel_complete import DELIMS, Completer
 from clausal.toplevel_input import KeyWatcher
 from clausal._suffixes import CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX
 
@@ -267,6 +268,23 @@ class Halt(Exception):
         self.status = status
 
 
+class _Watching:
+    """``with`` body: a KeyWatcher whose typeahead goes to the top-level."""
+
+    def __init__(self, top):
+        self.top = top
+        self.watcher = KeyWatcher(top.stdin.fileno())
+
+    def __enter__(self):
+        self.watcher.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        self.watcher.__exit__(*exc)
+        self.top._typeahead += self.watcher.typeahead
+        self.watcher.typeahead.clear()
+
+
 class TopLevel:
     def __init__(self, module, path: str | None = None,
                  stdin=None, stdout=None, prolog: bool = False):
@@ -282,7 +300,7 @@ class TopLevel:
         self._asking = False
         self._prefill = ""
         self._bound = False
-        self._watcher = None
+        self._typeahead = bytearray()   # keys typed while a query ran
         self.colour = toplevel_colour.scheme_named(
             os.environ.get("CLAUSAL_COLOUR", "off"))
         self.elide = True
@@ -364,6 +382,17 @@ class TopLevel:
             text = text + line if text.strip() else line
 
     def _read_line(self, prompt: str) -> str | None:
+        if self.interactive and b"\n" in self._typeahead.replace(b"\r", b"\n"):
+            # a line typed while the last query ran: read it as typed
+            raw = bytes(self._typeahead).replace(b"\r", b"\n")
+            line, _, rest = raw.partition(b"\n")
+            self._typeahead = bytearray(rest)
+            text = line.decode("utf-8", "replace")
+            self._write(prompt + text + "\n")
+            return text + "\n"
+        if self._typeahead and self.interactive:
+            self._prefill = self._prefill + self._typeahead.decode("utf-8", "replace")
+            self._typeahead.clear()
         if self.interactive and self.stdin is sys.stdin:
             self._start_editing()
             try:
@@ -389,6 +418,11 @@ class TopLevel:
             return
         if not self._bound:
             self._bound = True
+            readline.set_completer(Completer(self))
+            readline.set_completer_delims(DELIMS)
+            readline.parse_and_bind("bind ^I rl_complete"
+                                    if "libedit" in (readline.__doc__ or "")
+                                    else "tab: complete")
             if "libedit" in (readline.__doc__ or ""):
                 # libedit (macOS's Python) takes other binding syntax and
                 # may not run these macros: the colour key at ?- needs GNU
@@ -416,19 +450,18 @@ class TopLevel:
             pass
 
     def _watching(self):
-        """While the search for an answer runs, a key interrupts it (only on
-        a terminal; the byte is kept for ``_key`` if the search had ended)."""
+        """While the search for an answer runs, a lone Esc interrupts it and
+        other keys are kept as typeahead (only on a terminal)."""
         import contextlib  # noqa: PLC0415
         if not self.interactive or self._keys is None:
             return contextlib.nullcontext()
-        self._watcher = KeyWatcher(self.stdin.fileno())
-        return self._watcher
+        return _Watching(self)
 
     def _key(self) -> str:
-        left = getattr(self._watcher, "leftover", b"") if self._watcher else b""
-        if left:
-            self._watcher.leftover = b""
-            return left.decode("utf-8", "replace")
+        if self._typeahead:
+            b = self._typeahead[:1]
+            del self._typeahead[:1]
+            return bytes(b).decode("utf-8", "replace")
         try:
             return self._keys.read()
         except KeyboardInterrupt:
