@@ -22,8 +22,12 @@ def test_default_enabled_optimisations_all_three(monkeypatch):
     monkeypatch.delenv("CLAUSAL_DISABLE_OPT", raising=False)
     from clausal.logic.compiler.compile_ctx import CompilationContext
     ctx = CompilationContext(db=None, var_context={}, trail_name="trail")
+    # final_yield (compiler/final_yields.py) marks the answers a compiled
+    # predicate knows are its last; on by default, as the others are, and
+    # CLAUSAL_DISABLE_OPT=final_yield turns it off like any of them.
     assert ctx.enabled_optimisations == frozenset(
-        {"tro", "destructive_reuse", "call_site", "continuation_tco", "const_set"}
+        {"tro", "destructive_reuse", "call_site", "continuation_tco", "const_set",
+         "final_yield"}
     )
 
 

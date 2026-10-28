@@ -463,17 +463,19 @@ signal (`solve_with_last` / `call_with_last`: "this answer is the last"):
   producer's `fail` chain below its target set it (`final_holds`, C and
   Python twins), and downgrades it to `None` otherwise.  A step resumed by
   a catch/3 handler, and a solution step with woken goals, are plain.
-- The root drivers (`solve._drive_trampoline`, `_tramp_call`) report
-  retirement and undo a retired root's bindings themselves.
+- `solve._drive_trampoline` reports a retired root as the last answer and
+  then pulls the root to its end anyway (as `_tramp_call` does), so what an
+  exhausted search leaves on the trail is unchanged (put_attr/3's
+  attribute stays, as before).  Undoing to a mark instead removed residue
+  that callers rely on.  Only `solutions()` and `trampoline()` stop at a
+  retired root.
 
-- The hop saving is taken only by the root drivers.  A compiled frame
+- The hop saving is not taken in compiled code.  A compiled frame
   that broke out of its loop over a child after the child's FINAL answer
   (tried 2026-10-24, then removed) left the child suspended: generator
   frame and StepGenerator refer to each other, so it became cyclic garbage
   (q_bench ~8% slower over a few repetitions from the extra collections),
-  and its bindings had to be undone by the frame or driver around it.  The
-  drivers (`solve`, `call`, `_tramp_call`) undo to their mark whenever a
-  search ends.
+  and its bindings had to be undone by the frame or driver around it.
 
 Open coverage gaps are in
 `todo/final-answer-not-known-through-catch-ite-else-and-cleanup-2026-10-24.md`.

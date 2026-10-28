@@ -32,8 +32,8 @@ hears DONE).  Breaking out instead saved that pull but left the child
 suspended: its generator frame and its ``StepGenerator`` refer to each
 other, so it lived on as cyclic garbage until a collection (q_bench ran
 ~8% slower over a few repetitions from the extra collections), and its
-bindings had to be undone by someone else.  Only the root drivers stop at a
-FINAL, and they close the root and undo its bindings themselves.
+bindings had to be undone by someone else.  The drivers report a FINAL
+(``solve_with_last``) and still pull the search to its end.
 """
 
 from __future__ import annotations

@@ -7,6 +7,7 @@ import pytest
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.logic.cells import chars, chars_text, is_chars
+from clausal.logic.trampoline import FINAL  # noqa: E402 -- a solution known to be the last
 
 from clausal.modules.py.hash import (
     hash, hash_bytes, _hash_3, _hash_bytes_3,
@@ -48,7 +49,7 @@ def trampoline_solutions(pred, *args):
     for parent, value in gen:
         if value is DONE:
             break
-        solutions.append(value)
+        solutions.append(None if value is FINAL else value)  # FINAL: a solution, the last
     return solutions, trail
 
 

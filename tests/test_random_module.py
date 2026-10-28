@@ -13,6 +13,7 @@ from clausal.modules.py.random import (
     _random_seed_1, _maybe_0, _maybe_1, _rng,
 )
 from clausal.logic.trampoline import DONE
+from clausal.logic.trampoline import FINAL  # noqa: E402 -- a solution known to be the last
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -44,7 +45,7 @@ def trampoline_solutions(pred, *args):
     for parent, value in gen:
         if value is DONE:
             break
-        solutions.append(value)
+        solutions.append(None if value is FINAL else value)  # FINAL: a solution, the last
     return solutions, trail
 
 
@@ -326,7 +327,7 @@ class TestMaybe:
         for parent, value in gen:
             if value is DONE:
                 break
-            results.append(value)
+            results.append(None if value is FINAL else value)  # FINAL: a solution, the last
         # Just check it runs without error (result depends on seed)
 
         # Arity 1 — always succeed
@@ -336,5 +337,5 @@ class TestMaybe:
         for parent, value in gen:
             if value is DONE:
                 break
-            results.append(value)
+            results.append(None if value is FINAL else value)  # FINAL: a solution, the last
         assert len(results) == 1

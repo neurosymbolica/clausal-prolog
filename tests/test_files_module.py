@@ -28,6 +28,7 @@ from clausal.modules.py.files import (
     _temp_file_1, _temp_directory_1,
 )
 from clausal.logic.trampoline import DONE
+from clausal.logic.trampoline import FINAL  # noqa: E402 -- a solution known to be the last
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -59,7 +60,7 @@ def trampoline_solutions(pred, *args):
     for parent, value in gen:
         if value is DONE:
             break
-        solutions.append(value)
+        solutions.append(None if value is FINAL else value)  # FINAL: a solution, the last
     return solutions, trail
 
 

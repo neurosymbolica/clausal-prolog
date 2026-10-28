@@ -33,6 +33,7 @@ from clausal.terms import (
     Call, LoadName,
     Add, )
 from tests._suffix import SEAM
+from clausal.logic.trampoline import FINAL  # noqa: E402 -- a solution known to be the last
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -83,7 +84,7 @@ def _run_dispatch(fn, *args_and_trail):
         if gen is None:
             if value is DONE:
                 return
-            yield value
+            yield None if value is FINAL else value  # FINAL: a solution, the last
             gen, value = root.send(None)
         else:
             gen, value = gen.send(value)

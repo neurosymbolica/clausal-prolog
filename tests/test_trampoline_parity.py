@@ -102,10 +102,13 @@ def test_solutions_final_retires_the_root(impl):
 
 
 def test_solutions_final_without_snapshot_appends_no_sentinel(impl):
-    # Review Minor-1: FINAL is a sentinel, not a payload — without a
-    # snapshot callback there is nothing to record for it. A regression
+    # Review Minor-1: FINAL is a sentinel, not a payload — a regression
     # that appended the raw FINAL value would leak the sentinel object
-    # into caller-visible results.
+    # into caller-visible results.  It IS a solution, though: without a
+    # snapshot it is recorded as None, the value a plain solution step
+    # (``yield (proceed, None)``) carries, so a caller counting solutions
+    # counts it.  (Recording nothing made every semidet builtin driven
+    # through solutions() look like it failed, once builtins emitted FINAL.)
     pulls = []
 
     def fn(this, proceed, fail, catcher):
@@ -117,7 +120,8 @@ def test_solutions_final_without_snapshot_appends_no_sentinel(impl):
         yield (fail, impl.DONE)
 
     got = impl.solutions(root(impl, fn))
-    assert got == [1]  # solution 1 only; FINAL contributes nothing
+    assert got == [1, None]  # solution 1, then FINAL's solution, as None
+    assert all(v is not impl.FINAL for v in got)
     assert pulls == ["first", "second"]
 
 
@@ -385,7 +389,7 @@ def test_final_at_root_is_a_solution_then_retirement_for_duy(impl):
 def test_solutions_retirement_is_visible_to_a_later_duy_pull(impl):
     pulls = []
     sg = root(impl, final_then_explode_fn(impl, pulls))
-    assert impl.solutions(sg) == ["sol"]         # FINAL itself: no payload
+    assert impl.solutions(sg) == ["sol", None]   # FINAL: a solution, as None
     assert impl._drive_until_yield(sg) is None   # solutions marked it retired
     assert pulls == ["first", "final"]
 
@@ -420,7 +424,7 @@ def test_trampoline_on_a_retired_root_is_a_protocol_error(impl):
     # root through it is a loud, unroutable engine anomaly.
     pulls = []
     sg = root(impl, final_then_explode_fn(impl, pulls))
-    assert impl.solutions(sg) == ["sol"]
+    assert impl.solutions(sg) == ["sol", None]
     with pytest.raises(RuntimeError) as ei:
         impl.trampoline(sg)
     assert getattr(ei.value, "__clausal_engine_protocol__", False)

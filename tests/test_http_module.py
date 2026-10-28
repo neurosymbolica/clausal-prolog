@@ -10,6 +10,7 @@ from clausal.logic.cells import chars, chars_text
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.terms import DictTerm
+from clausal.logic.trampoline import FINAL  # noqa: E402 -- a solution known to be the last
 
 from clausal.modules.py.http import (
     get, post, request, json_get, json_post,
@@ -51,7 +52,7 @@ def trampoline_solutions(pred, *args):
     for parent, value in gen:
         if value is DONE:
             break
-        solutions.append(value)
+        solutions.append(None if value is FINAL else value)  # FINAL: a solution, the last
     return solutions, trail
 
 

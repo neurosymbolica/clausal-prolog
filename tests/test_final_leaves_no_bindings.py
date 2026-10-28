@@ -141,3 +141,21 @@ def test_variables_are_unbound_after_exhaustion_and_reusable(which, tmp_path):
     bad = {k: v for k, v in got.items()
            if v != [_WANT[k.split("/")[0]], True, _WANT[k.split("/")[0]]]}
     assert not bad, bad
+
+
+def test_an_exhausted_search_leaves_what_its_goals_leave():
+    """Reporting a last answer changes nothing about what a search leaves
+    on the trail once it is exhausted: the driver pulls the search to its
+    end as before, and the goals' own backtracking decides.  put_attr/3,
+    which leaves its attribute behind (a Python caller sets up an attributed
+    variable this way), still does, as on the base."""
+    import clausal
+    from clausal.logic.atoms import mint
+    from clausal.logic.variables import Trail, Var
+    m = clausal.Module("final_residue")
+    v, t = Var(), Trail()
+    assert len(list(clausal.call("put_attr", v, mint("k"), 7, module=m,
+                                 trail=t))) == 1
+    got = [1 for _ in clausal.call("get_attr", v, mint("k"), Var(),
+                                   module=m, trail=t)]
+    assert got == [1]

@@ -1083,20 +1083,20 @@ solutions_func(PyObject *Py_UNUSED(module), PyObject *args, PyObject *kwargs)
         if (value == g_FINAL) {
             /* Producer is retiring with its last solution: deliver
              * it and stop — no further pull from the (now-retired)
-             * root.  FINAL is a sentinel, not a payload, so when
-             * snapshot is None there is no raw value to record.
-             * (The drive core already marked the root retired.) */
+             * root.  FINAL is a sentinel, not a payload: without a
+             * snapshot the solution is recorded as None, the value a
+             * plain solution step carries.  (The drive core already
+             * marked the root retired.) */
             Py_DECREF(value);
-            if (snapshot_fn != Py_None) {
-                PyObject *snap = PyObject_CallNoArgs(snapshot_fn);
-                if (!snap) { Py_DECREF(results); return NULL; }
-                if (PyList_Append(results, snap) < 0) {
-                    Py_DECREF(snap);
-                    Py_DECREF(results);
-                    return NULL;
-                }
+            PyObject *snap = snapshot_fn != Py_None
+                ? PyObject_CallNoArgs(snapshot_fn) : Py_NewRef(Py_None);
+            if (!snap) { Py_DECREF(results); return NULL; }
+            if (PyList_Append(results, snap) < 0) {
                 Py_DECREF(snap);
+                Py_DECREF(results);
+                return NULL;
             }
+            Py_DECREF(snap);
             return results;
         }
 

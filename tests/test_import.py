@@ -22,6 +22,7 @@ import pytest
 import clausal.import_hook
 from clausal.import_hook import _load_module
 from clausal.logic.trampoline import StepGenerator, DONE
+from clausal.logic.trampoline import FINAL  # noqa: E402 -- a solution known to be the last
 
 
 def _run_dispatch(dispatch, *args):
@@ -36,7 +37,7 @@ def _run_dispatch(dispatch, *args):
         if gen is None:
             if value is DONE:
                 return results
-            results.append(value)
+            results.append(None if value is FINAL else value)  # FINAL: a solution, the last
             gen, value = sg.send(None)
         else:
             gen, value = gen.send(value)

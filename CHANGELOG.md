@@ -48,15 +48,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   engine does not prove last is asked about as before, and a next request
   that finds none prints `false.`. Pinned in `tests/test_toplevel.py`.
 
-- **A search whose last answer is known is not resumed after it**
-  (2026-10-24). `solve`, `call` and the engine's inner drives stop at an
-  answer known to be the search's last instead of asking once more only to
-  hear it fail. Answers, their order and side effects are unchanged (an
-  answer is marked last only when nothing but undoing bindings would
-  follow it), and a search that ends undoes what it bound: the query's
-  variables are unbound after the iterator is exhausted, and can be
-  reused. The generated code differs (`tests/golden/*.codegen.txt`
-  regenerated).
+- **Compiled predicates mark the answers they know are their last**
+  (2026-10-24). This is what `solve_with_last` reports; no answer, order,
+  side effect or binding left after a search changes (the search is still
+  pulled to its end after a last answer). The generated code differs
+  (`tests/golden/*.codegen.txt` regenerated).
 
 ## 1.2.0 (2026-10-25)
 

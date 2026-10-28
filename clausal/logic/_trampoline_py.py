@@ -490,11 +490,11 @@ def solutions(root: StepGenerator, snapshot: Callable | None = None) -> list:
         if value is FINAL:
             # Producer is retiring with its last solution: deliver
             # it and stop — no further pull from the (now-retired)
-            # root.  ``FINAL`` is a sentinel, not a payload, so
-            # when *snapshot* is None there's no raw value to
-            # record.  (The core already marked the root retired.)
-            if snapshot is not None:
-                results.append(snapshot())
+            # root.  ``FINAL`` is a sentinel, not a payload: without
+            # *snapshot* the solution is recorded as None, the value a
+            # plain solution step carries (C≡Py: solutions_func).  (The
+            # core already marked the root retired.)
+            results.append(snapshot() if snapshot is not None else None)
             return results
         results.append(snapshot() if snapshot is not None else value)
 

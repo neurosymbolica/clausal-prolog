@@ -27,6 +27,7 @@ from clausal.modules.py.datetime import (
 from clausal.logic.trampoline import DONE
 from clausal.modules.py.datetime import _dt_to_term as _T
 from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
+from clausal.logic.trampoline import FINAL  # noqa: E402 -- a solution known to be the last
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -48,7 +49,7 @@ def trampoline_solutions(pred, *args):
     for parent, value in gen:
         if value is DONE:
             break
-        solutions.append(value)
+        solutions.append(None if value is FINAL else value)  # FINAL: a solution, the last
     return solutions, trail
 
 

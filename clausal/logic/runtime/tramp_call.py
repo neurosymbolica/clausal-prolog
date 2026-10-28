@@ -33,14 +33,11 @@ def _tramp_call(dispatch_fn, args, trail):
     whose own ``try`` covers this loop.
     """
     sg = StepGenerator(dispatch_fn, None, None, None, *args, trail)
-    mark = trail.mark()
     while _drive_until_yield(sg):
+        # A FINAL retired the root: pull it to its end anyway, so its
+        # frames backtrack out (and undo) as on any exhaustion.
+        sg.retired = False
         yield None
-    # Undo what the drive bound, as a simple-mode generator does after its
-    # last answer: a root retired by a FINAL is not resumed, and a frame
-    # that skips re-pulling a child after its FINAL answer leaves that
-    # answer's bindings for an enclosing mark.
-    trail.undo(mark)
 
 
 def _naf_has_solution(sg) -> bool:

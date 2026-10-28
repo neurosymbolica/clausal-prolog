@@ -16,6 +16,7 @@ from clausal.logic.database import Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.terms import Call, LoadName, Quantity
+from clausal.logic.trampoline import FINAL  # noqa: E402 -- a solution known to be the last
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -957,7 +958,7 @@ class TestSequence:
         for parent, value in gen:
             if value is DONE:
                 break
-            results.append(value)
+            results.append(None if value is FINAL else value)  # FINAL: a solution, the last
         assert len(results) == 1
 
     def test_match_with_rest(self):
@@ -987,7 +988,7 @@ class TestSequence:
         for parent, value in gen:
             if value is DONE:
                 break
-            results.append(value)
+            results.append(None if value is FINAL else value)  # FINAL: a solution, the last
         assert len(results) == 0
 
     def test_empty_sequence(self):
@@ -1001,7 +1002,7 @@ class TestSequence:
         for parent, value in gen:
             if value is DONE:
                 break
-            results.append(value)
+            results.append(None if value is FINAL else value)  # FINAL: a solution, the last
         assert len(results) == 1
 
     def test_too_short_fails(self):
@@ -1015,7 +1016,7 @@ class TestSequence:
         for parent, value in gen:
             if value is DONE:
                 break
-            results.append(value)
+            results.append(None if value is FINAL else value)  # FINAL: a solution, the last
         assert len(results) == 0
 
 
