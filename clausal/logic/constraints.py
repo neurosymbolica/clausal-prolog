@@ -11,6 +11,7 @@ fails (violated).
 
 from __future__ import annotations
 
+import threading as _threading
 from typing import Any
 
 from clausal.logic.variables import (
@@ -311,6 +312,16 @@ def dif(x: Any, y: Any, trail: Trail) -> bool:
 # ── Attribute hook ───────────────────────────────────────────────────────────
 
 
+#: The pairs whose trial unify is running on this thread, innermost last
+#: (the C twin's ``dif_trial_pairs``).  The trial binds the pair's own
+#: variables, so their dif hooks run inside it and meet the pair with its
+#: two sides made one: the hypothesis under test, not a violation.
+#: Answering "violated" there failed the trial, and the hook dropped the
+#: pair as entailed (a copied ``dif(_A, E)`` bound to a plain variable lost
+#: the constraint).  A nested hook skips a pair on this stack.
+_TRIAL = _threading.local()
+
+
 def _dif_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
     """Called when an AttVar with dif constraints is unified.
 
@@ -320,13 +331,22 @@ def _dif_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
     Returns True if all constraints survive; False if any is violated.
     """
     constraints = attr_value
+    stack = getattr(_TRIAL, "pairs", None)
+    if stack is None:
+        stack = _TRIAL.pairs = []
     for pair in constraints:
+        if stack and any(p is pair for p in stack):
+            continue            # this pair's own trial, further out
         x, y = pair
         x = deref(x)
         y = deref(y)
 
         mark = trail.mark()
-        unified = _structural_unify(x, y, trail)
+        stack.append(pair)
+        try:
+            unified = _structural_unify(x, y, trail)
+        finally:
+            stack.pop()
 
         if not unified:
             trail.undo(mark)

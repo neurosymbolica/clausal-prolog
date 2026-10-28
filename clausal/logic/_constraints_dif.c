@@ -21,6 +21,7 @@
 /* Import the C API from _variables */
 #define VARIABLES_CAPI_CONSUMER
 #include "variables/_variables_capi.h"
+#include "variables/_ft_compat.h"
 
 /* The depth past which collect_walk stops descending and answers
  * COLLECT_DEEP_CODE, which unwinds to its depth-0 entry (collect_root);
@@ -847,6 +848,27 @@ py_dif(PyObject *Py_UNUSED(module), PyObject *args)
 
 /* ── _dif_hook ───────────────────────────────────────────────────────── */
 
+/* The pairs whose trial unify is running on this thread, innermost last.
+ * The trial binds the pair's own variables, so their dif hooks run inside
+ * it and meet the pair again with its two sides made one: that is the
+ * hypothesis under test, not a violation, and answering "violated" there
+ * made the trial fail and the hook drop the pair as entailed (a copied
+ * dif(_A, E) bound to a plain variable lost the constraint).  A nested
+ * hook skips a pair on this stack (Python twin: constraints._TRIAL_PAIRS).
+ * Past DIF_TRIAL_MAX nested trials a pair is tried unmarked, as before. */
+#define DIF_TRIAL_MAX 64
+static CLAUSAL_THREAD_LOCAL PyObject *dif_trial_pairs[DIF_TRIAL_MAX];
+static CLAUSAL_THREAD_LOCAL int dif_trial_depth = 0;
+
+static int
+dif_pair_under_trial(PyObject *pair)
+{
+    for (int i = dif_trial_depth - 1; i >= 0; i--)
+        if (dif_trial_pairs[i] == pair)
+            return 1;
+    return 0;
+}
+
 /*
  * _dif_hook(attr_value, bound_to, trail) → bool
  */
@@ -878,12 +900,20 @@ py_dif_hook(PyObject *Py_UNUSED(module), PyObject *args)
         PyObject *px = PyTuple_GET_ITEM(pair, 0);
         PyObject *py = PyTuple_GET_ITEM(pair, 1);
 
+        if (dif_trial_depth && dif_pair_under_trial(pair))
+            continue;           /* this pair's own trial, further out */
+
         PyObject *dx = VarAPI->deref(px);  /* borrowed */
         PyObject *dy = VarAPI->deref(py);  /* borrowed */
 
         Py_ssize_t mark = VarAPI->trail_mark(trail);
 
+        int pushed = dif_trial_depth < DIF_TRIAL_MAX;
+        if (pushed)
+            dif_trial_pairs[dif_trial_depth++] = pair;
         int unified = structural_unify_oc_root(dx, dy, trail, 0);
+        if (pushed)
+            dif_trial_depth--;
         if (unified < 0) return NULL;
 
         if (!unified) {
