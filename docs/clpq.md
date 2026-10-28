@@ -255,10 +255,10 @@ are `<=`, `>=`, `<`, `>`, `==`, `!=`: `entailed(X <= 5)`.
 
 A strict relation or a disequality in the store counts, on both solvers: after
 `{X < 5}`, both `entailed(X < 5)` and `entailed(X =\= 5)` hold, and after
-`{X < Y, Y =< Z}`, `entailed(X < Z)` holds. Under the default solver such a
-strict relation, or `=\=`, whose bound the store reaches exactly costs up to
-two more LPs per stored disequality: on a store with many constraints and
-disequalities that call can take two to three times as long.
+`{X < Y, Y =< Z}`, `entailed(X < Z)` holds. Under the default solver a
+strict relation, or `=\=`, whose bound the store attains exactly costs up to
+two more LPs per stored disequality (`=\=`): on a store with many constraints
+and disequalities that call can take two to three times as long.
 
 As in SICStus, an unbound argument raises `instantiation_error` and a term that
 is no relation (`entailed(foo)`, or `entailed(X \= 2)` in Clausal Prolog) raises
@@ -439,6 +439,7 @@ CLP(Q) uses a fundamentally different solver from CLP(R). Where CLP(R) narrows i
 |---|---|---|
 | **Equality** `Σ aᵢXᵢ = c` | Gaussian elimination | `{X + Y = 10}` |
 | **Inequality** `Σ aᵢXᵢ <= c` | Revised simplex with slack variables | `{2*X + Y =< 16}` |
+| **Strict inequality** `Σ aᵢXᵢ < c` | The same simplex, the bound strict (delta-rationals, below) | `{X < Y}` |
 | **Disequality** `X ≠ Y` | Passive check (fires when both ground) | `{X =\= 5}` |
 
 All constraints must be **linear** — each term is a constant times a variable, with no products of variables. `{3*X + 5*Y =< 10}` is linear. `{X * Y = 10}` over two rational variables is not, and raises a Python `TypeError` (`CLP(Q) requires linear constraints`) under the default solver; `CLAUSAL_CLPQ=holzbaur` delays it, as SICStus does, and so the functions clp(Q,R) knows inside `{}` — `abs/1`, `sin/1`, `cos/1`, `tan/1`, `min/2`, `max/2`, `pow/2`, `exp/2` and `^/2` — which the `.pl` front end passes through (`{sin(cos(X)) = 1/2}` answers under the port; `pow/2` and `exp/2` are read as `^`). `entailed/1` of a non-linear relation answers false on both solvers.
@@ -646,9 +647,10 @@ Tableau
 ├── rows:        {basic_var_id: {non_basic_var_id: coeff, ...}}
 ├── rhs:         {basic_var_id: constant}
 ├── lo, hi:      {var_id: Fraction | None}  (bounds)
-├── assign:      {var_id: Fraction}         (current assignment)
+├── slo, shi:    {var_id, ...}              (the strict ones: X > lo, X < hi)
+├── assign:      {var_id: Fraction | DQ}    (current assignment)
 ├── parametric:  {var_id: ({var_id: coeff}, constant)}  (Gaussian-eliminated vars)
-├── diseqs:      [(var_id, var_id), ...]    (passive disequalities)
+├── diseqs:      [('linear', {var_id: coeff}, constant), ...]  (passive =\=)
 └── _var_map:    {var_id: Var}              (back-reference to logic variables)
 ```
 
@@ -658,6 +660,7 @@ Tableau
 - Non-basic variables have no row. They sit at one of their bounds.
 - Parametric variables were eliminated by equalities. They have an entry in `parametric` and no row.
 - `assign[v]` always reflects the current solution point. For basic vars it's computed from the row; for non-basic vars it equals their current bound value.
+- A strict bound is read as a *delta-rational* (Dutertre and de Moura): `X < 3` is the bound `3 - d`, `X > 0` is `0 + d`, for a symbolic infinitesimal `d > 0`. The assignment takes values `c + k·d`, compared lexicographically, so the simplex decides strictness on every post: `{X < Y, Y < X}` and `{X >= 0, Y >= 0, S = X + Y, S < 0}` fail as they are posted, in any order. `sup/2` and `inf/2` read `c` (the bound, attained or not); `maximize/2` and `minimize/2` fail when the optimum keeps a `d` part (not attained); `bb_inf/3` treats such a value as fractional (`{X > 0, X =< 2}` gives `I = 1`).
 
 ---
 

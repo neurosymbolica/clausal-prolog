@@ -104,9 +104,6 @@ class TestClpqSoundness:
         x = Var()
         assert not in_q(x, 10, 0, t)
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F004: strict < is <= + passive diseq; "
-                              "cycle X<Y, Y<X accepted")
     def test_strict_cycle_fails(self):
         t = Trail()
         x, y = Var(), Var()

@@ -206,11 +206,9 @@ def test_an_eliminated_variable_keeps_its_bounds():
 
 
 @pytest.mark.parametrize("order", [
-    "bind_last", "bind_first",
-    # Task 14, legacy-only answer: the port fails it, as Scryer's clpq does
-    # ({X < Y, X >= 3, Y =< 3} has no answer), so the xfail is legacy's.
-    pytest.param("bound_last", marks=[] if HOLZBAUR else pytest.mark.xfail(
-        strict=True, reason="todo/clpq-strict-bounds-closed-by-inequalities")),
+    # {X < Y, X >= 3, Y =< 3} has no answer (Scryer's clpq, the port, and
+    # legacy since its strict bounds moved into the simplex, 2026-10-28).
+    "bind_last", "bind_first", "bound_last",
 ])
 def test_a_strict_inequality_the_store_closes_fails(order):
     # X < Y with Y =< 3 and X = 3 leaves Y only in [3, 3] through a row,

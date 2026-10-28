@@ -8,7 +8,8 @@ variable is detected.
 
 Algorithm based on Holzbaur (1992, 1994):
 - Gaussian elimination for the equality subsystem
-- Revised simplex with Bland's rule for inequalities
+- Revised simplex with Bland's rule for inequalities; a strict bound is a
+  bound over delta-rationals (``DQ``), so the simplex decides strictness
 - Passive disequalities checked when both sides become ground
 
 Trail safety: the Tableau is snapshot-copied (via ``trail.record()``) before
@@ -43,6 +44,106 @@ from clausal.logic.clpq.arithmetic import is_number
 Q_KEY = "clpq"
 ZERO = Fraction(0)
 ONE = Fraction(1)
+
+
+# ── Delta-rationals: strict bounds inside the simplex ───────────────────────
+
+
+class DQ:
+    """A delta-rational ``c + k*d`` for a symbolic positive infinitesimal
+    ``d`` (Dutertre and de Moura, CAV 2006), with ``k != 0``: a value with
+    no ``d`` part is a plain ``Fraction`` (:func:`_dq`).
+
+    A strict bound ``x < c`` is the bound ``x =< c - d``, and ``x > c`` is
+    ``x >= c + d``; the simplex's assignment takes values of this kind, and
+    two compare lexicographically.  A store is satisfiable with its strict
+    bounds exactly when the simplex finds such an assignment, so a strict
+    bound closed by others (``{X < Y, Y < X}``) fails at the post that
+    closes it.  Only scalar products occur (``Fraction * DQ``).
+    """
+    __slots__ = ('c', 'k')
+
+    def __init__(self, c: Fraction, k: Fraction) -> None:
+        self.c = c
+        self.k = k
+
+    def __add__(self, o):
+        if type(o) is DQ:
+            return _dq(self.c + o.c, self.k + o.k)
+        return DQ(self.c + o, self.k)
+
+    __radd__ = __add__
+
+    def __sub__(self, o):
+        if type(o) is DQ:
+            return _dq(self.c - o.c, self.k - o.k)
+        return DQ(self.c - o, self.k)
+
+    def __rsub__(self, o):
+        return DQ(o - self.c, -self.k)
+
+    def __mul__(self, o):
+        if type(o) is DQ:
+            raise TypeError("clpq: a product of two delta-rationals")
+        return _dq(self.c * o, self.k * o)
+
+    __rmul__ = __mul__
+
+    def __truediv__(self, o):
+        if type(o) is DQ:
+            raise TypeError("clpq: a quotient of two delta-rationals")
+        return DQ(self.c / o, self.k / o)
+
+    def __neg__(self):
+        return DQ(-self.c, -self.k)
+
+    def __abs__(self):
+        return -self if self < ZERO else self
+
+    def _key(self, o):
+        if type(o) is DQ:
+            return o.c, o.k
+        return o, ZERO
+
+    def __eq__(self, o):
+        c, k = self._key(o)
+        return self.c == c and self.k == k
+
+    def __ne__(self, o):
+        return not self.__eq__(o)
+
+    def __lt__(self, o):
+        c, k = self._key(o)
+        return self.c < c or (self.c == c and self.k < k)
+
+    def __le__(self, o):
+        c, k = self._key(o)
+        return self.c < c or (self.c == c and self.k <= k)
+
+    def __gt__(self, o):
+        c, k = self._key(o)
+        return self.c > c or (self.c == c and self.k > k)
+
+    def __ge__(self, o):
+        c, k = self._key(o)
+        return self.c > c or (self.c == c and self.k >= k)
+
+    def __hash__(self):
+        return hash((self.c, self.k))
+
+    def __repr__(self):
+        return f"DQ({self.c}, {self.k})"
+
+
+def _dq(c: Fraction, k: Fraction):
+    """``c + k*d``: a Fraction when ``k`` is 0."""
+    return c if k == ZERO else DQ(c, k)
+
+
+def _real(x):
+    """The rational part of a value: a supremum or infimum read from a
+    delta-rational optimum (the closure's)."""
+    return x.c if type(x) is DQ else x
 
 # ── Lazy term imports ────────────────────────────────────────────────────────
 
@@ -113,18 +214,23 @@ class Tableau:
         Constant term for each basic variable.
     lo, hi : dict[int, Fraction | None]
         Lower / upper bounds for every variable (basic and non-basic).
-    assign : dict[int, Fraction]
-        Current assignment.  Non-basic vars sit at one of their bounds;
+    slo, shi : set[int]
+        The variables whose lower / upper bound is strict (``x > lo``,
+        ``x < hi``).  The simplex reads a strict bound as the
+        delta-rational ``lo + d`` / ``hi - d`` (:class:`DQ`).
+    assign : dict[int, Fraction | DQ]
+        Current assignment, a delta-rational where strict bounds put one.
+        Non-basic vars sit at one of their bounds (or anywhere when free);
         basic vars are computed from their row.
     parametric : dict[int, tuple[dict[int, Fraction], Fraction]]
         Variables eliminated by equality constraints.
         ``parametric[x] = ({j: coeff_j, …}, constant)`` means
         ``x = Σ coeff_j·var_j + constant``.
     diseqs : list[tuple[str, dict[int, Fraction], Fraction]]
-        Passive disequalities ``(tag, coeffs, constant)``, meaning
-        ``Σ coeffs[v]*v =\\= constant``; *tag* is ``'strict'`` for the
-        strict half of ``<`` (the expression is also ``=<`` the constant),
-        else ``'linear'``.  See :meth:`_check_diseqs`.
+        Passive disequalities ``(tag, coeffs, constant)`` from ``=\\=``,
+        meaning ``Σ coeffs[v]*v =\\= constant``; *tag* is ``'linear'``.
+        See :meth:`_check_diseqs`.  (A strict ``<`` is a strict bound, not
+        a disequality.)
     _var_map : dict[int, Var]
         Maps tableau variable IDs → original ``Var`` objects.
     """
@@ -134,7 +240,9 @@ class Tableau:
         self.rhs: dict[int, Fraction] = {}
         self.lo: dict[int, Fraction | None] = {}
         self.hi: dict[int, Fraction | None] = {}
-        self.assign: dict[int, Fraction] = {}
+        self.slo: set[int] = set()
+        self.shi: set[int] = set()
+        self.assign: dict[int, Fraction | DQ] = {}
         self.parametric: dict[int, tuple[dict[int, Fraction], Fraction]] = {}
         self.diseqs: list[tuple[str, dict[int, Fraction], Fraction]] = []
         self._next_slack: int = 0
@@ -149,6 +257,8 @@ class Tableau:
         t.rhs = dict(self.rhs)
         t.lo = dict(self.lo)
         t.hi = dict(self.hi)
+        t.slo = set(self.slo)
+        t.shi = set(self.shi)
         t.assign = dict(self.assign)
         t.parametric = {k: (dict(c), v) for k, (c, v) in self.parametric.items()}
         t.diseqs = list(self.diseqs)
@@ -168,13 +278,11 @@ class Tableau:
         """Register a Var in the tableau.  Returns the tableau variable ID."""
         vid = var._id
         self._var_map[vid] = var
-        old_lo = self.lo.get(vid)
-        old_hi = self.hi.get(vid)
-        new_lo = lo if old_lo is None else (_max_none(old_lo, lo))
-        new_hi = hi if old_hi is None else (_min_none(old_hi, hi))
-        self.lo[vid] = new_lo
-        self.hi[vid] = new_hi
+        self.lo.setdefault(vid, None)
+        self.hi.setdefault(vid, None)
+        self._tighten(vid, lo, False, hi, False)
         if vid not in self.assign:
+            new_lo, new_hi = self._lo_eff(vid), self._hi_eff(vid)
             if new_lo is not None:
                 self.assign[vid] = new_lo
             elif new_hi is not None:
@@ -182,6 +290,60 @@ class Tableau:
             else:
                 self.assign[vid] = ZERO
         return vid
+
+    # ── Bounds as the simplex reads them ─────────────────────────────────
+
+    def _lo_eff(self, vid: int):
+        """vid's lower bound as the simplex reads it: ``lo + d`` when
+        strict, None when unbounded."""
+        lo = self.lo.get(vid)
+        if lo is not None and vid in self.slo:
+            return DQ(lo, ONE)
+        return lo
+
+    def _hi_eff(self, vid: int):
+        """vid's upper bound as the simplex reads it: ``hi - d`` when
+        strict, None when unbounded."""
+        hi = self.hi.get(vid)
+        if hi is not None and vid in self.shi:
+            return DQ(hi, -ONE)
+        return hi
+
+    def _tighten(self, vid: int, lo: Fraction | None, lo_strict: bool,
+                 hi: Fraction | None, hi_strict: bool) -> bool:
+        """Narrow vid's bounds to the given ones, keeping strictness (of
+        two bounds at one value the strict one is tighter).  False, and
+        nothing changed, when no value is left; the simplex is not run."""
+        new_lo, new_slo = self.lo.get(vid), vid in self.slo
+        if lo is not None and (new_lo is None or lo > new_lo or (
+                lo == new_lo and lo_strict and not new_slo)):
+            new_lo, new_slo = lo, lo_strict
+        new_hi, new_shi = self.hi.get(vid), vid in self.shi
+        if hi is not None and (new_hi is None or hi < new_hi or (
+                hi == new_hi and hi_strict and not new_shi)):
+            new_hi, new_shi = hi, hi_strict
+        if new_lo is not None and new_hi is not None and (
+                new_lo > new_hi
+                or (new_lo == new_hi and (new_slo or new_shi))):
+            return False
+        self.lo[vid] = new_lo
+        self.hi[vid] = new_hi
+        if new_slo:
+            self.slo.add(vid)
+        else:
+            self.slo.discard(vid)
+        if new_shi:
+            self.shi.add(vid)
+        else:
+            self.shi.discard(vid)
+        return True
+
+    def _set_point(self, vid: int, value: Fraction) -> None:
+        """vid's bounds become the point *value*."""
+        self.lo[vid] = value
+        self.hi[vid] = value
+        self.slo.discard(vid)
+        self.shi.discard(vid)
 
     # ── Internal substitution helpers ────────────────────────────────────
 
@@ -235,14 +397,12 @@ class Tableau:
     # ── Bounds ───────────────────────────────────────────────────────────
 
     def set_bound(self, vid: int, lo: Fraction | None,
-                  hi: Fraction | None) -> bool:
-        """Tighten bounds on a variable.  Returns False if infeasible."""
-        new_lo = _max_none(self.lo.get(vid), lo)
-        new_hi = _min_none(self.hi.get(vid), hi)
-        if new_lo is not None and new_hi is not None and new_lo > new_hi:
+                  hi: Fraction | None, lo_strict: bool = False,
+                  hi_strict: bool = False) -> bool:
+        """Tighten bounds on a variable (strict ones with *lo_strict* /
+        *hi_strict*).  Returns False if infeasible."""
+        if not self._tighten(vid, lo, lo_strict, hi, hi_strict):
             return False
-        self.lo[vid] = new_lo
-        self.hi[vid] = new_hi
         if vid not in self.rows:
             return self._update_nonbasic(vid)
         return self._check_basic(vid)
@@ -257,12 +417,8 @@ class Tableau:
         ``{X + Y/2 = -4}, in_q(Y, 1, 2)`` left ``sup(X)`` unbounded."""
         if vid not in self.parametric:
             return self.set_bound(vid, lo, hi)
-        new_lo = _max_none(self.lo.get(vid), lo)
-        new_hi = _min_none(self.hi.get(vid), hi)
-        if new_lo is not None and new_hi is not None and new_lo > new_hi:
+        if not self._tighten(vid, lo, False, hi, False):
             return False
-        self.lo[vid] = new_lo
-        self.hi[vid] = new_hi
         if hi is not None and not self.add_inequality({vid: ONE}, hi, '<='):
             return False
         if lo is not None and not self.add_inequality({vid: ONE}, lo, '>='):
@@ -273,8 +429,8 @@ class Tableau:
     def _update_nonbasic(self, vid: int) -> bool:
         """Snap a non-basic variable to its nearest bound if violated."""
         val = self.assign.get(vid, ZERO)
-        lo = self.lo.get(vid)
-        hi = self.hi.get(vid)
+        lo = self._lo_eff(vid)
+        hi = self._hi_eff(vid)
         new_val = val
         if lo is not None and val < lo:
             new_val = lo
@@ -296,8 +452,8 @@ class Tableau:
         if vid not in self.rows:
             return True
         val = self.assign.get(vid, ZERO)
-        lo = self.lo.get(vid)
-        hi = self.hi.get(vid)
+        lo = self._lo_eff(vid)
+        hi = self._hi_eff(vid)
         if (lo is not None and val < lo) or (hi is not None and val > hi):
             return self._restore_feasibility()
         return True
@@ -329,9 +485,11 @@ class Tableau:
         self.parametric[pivot] = (param_coeffs, param_const)
 
         # Substitute into all rows
+        touched = []
         for bv in list(self.rows):
             row = self.rows[bv]
             if pivot in row:
+                touched.append(bv)
                 factor = row.pop(pivot)
                 for v, c in param_coeffs.items():
                     row[v] = row.get(v, ZERO) + factor * c
@@ -364,7 +522,7 @@ class Tableau:
         # recomputed; and its bounds now constrain the expression it was
         # replaced by.  Dropping them let {1 =< X, X =< 5, X = Y + 1} take
         # Y = -10 (X = -9).
-        for bv in self.rows:
+        for bv in touched:
             v = self.rhs[bv]
             for rv, rc in self.rows[bv].items():
                 v += rc * self.assign.get(rv, ZERO)
@@ -372,9 +530,11 @@ class Tableau:
         plo, phi = self.lo.get(pivot), self.hi.get(pivot)
         if not self._restore_feasibility():
             return False
-        if phi is not None and not self.add_inequality({pivot: ONE}, phi, '<='):
+        if phi is not None and not self.add_inequality(
+                {pivot: ONE}, phi, '<' if pivot in self.shi else '<='):
             return False
-        if plo is not None and not self.add_inequality({pivot: ONE}, plo, '>='):
+        if plo is not None and not self.add_inequality(
+                {pivot: ONE}, plo, '>' if pivot in self.slo else '>='):
             return False
 
         # Check if any parametric variables are now fully determined
@@ -383,8 +543,7 @@ class Tableau:
         self._propagate_determined()
 
         # An equality (a binding, X = Y, or a posted one) can force a
-        # disequality (the strict half of X < Y): X < Y, Y =< 3, X = 3
-        # bound Y = 3 and succeeded.
+        # disequality: {X =\\= Y, Y =< 3}, X = 3, {Y >= 3}.
         return self._check_diseqs(entail=True)
 
     def _propagate_determined(self) -> None:
@@ -417,8 +576,7 @@ class Tableau:
                     val += dep_coeff * dep_val
                 else:
                     if fixed(vid) != val:
-                        self.lo[vid] = val
-                        self.hi[vid] = val
+                        self._set_point(vid, val)
                         self.assign[vid] = val
                         changed = True
 
@@ -426,34 +584,37 @@ class Tableau:
 
     def add_inequality(self, coeffs: dict[int, Fraction],
                        constant: Fraction, rel: str) -> bool:
-        """Add: Σ coeffs[i]·Xi {<=, >=} constant.
+        """Add: Σ coeffs[i]·Xi {<=, <, >=, >} constant.
 
         For single-variable inequalities, tightens bounds directly.
-        For multi-variable, introduces a slack variable.
+        For multi-variable, introduces a slack variable.  A strict one is
+        a strict bound (on the variable or the slack): feasibility then
+        decides it, with no disequality.
         """
-        if rel == '>=':
+        if rel in ('>=', '>'):
             return self.add_inequality(
-                {v: -c for v, c in coeffs.items()}, -constant, '<=')
-        return self._add_le(coeffs, constant)
+                {v: -c for v, c in coeffs.items()}, -constant,
+                '<' if rel == '>' else '<=')
+        return self._add_le(coeffs, constant, rel == '<')
 
     def _add_le(self, coeffs: dict[int, Fraction],
-                constant: Fraction) -> bool:
-        """``add_inequality`` for ``<=``, without the disequality check."""
+                constant: Fraction, strict: bool = False) -> bool:
+        """``add_inequality`` for ``<=`` (``<`` when *strict*)."""
         coeffs, constant = self._substitute_parametric(coeffs, constant)
         coeffs, constant = self._substitute_basic(coeffs, constant)
 
         if not coeffs:
-            return ZERO <= constant
+            return ZERO < constant if strict else ZERO <= constant
 
         # Single-variable optimization: c*X <= k → X <= k/c (if c > 0)
         if len(coeffs) == 1:
             vid, coeff = next(iter(coeffs.items()))
             if coeff > ZERO:
-                return self.set_bound(vid, None, constant / coeff)
-            elif coeff < ZERO:
-                return self.set_bound(vid, constant / coeff, None)
+                return self.set_bound(vid, None, constant / coeff,
+                                      hi_strict=strict)
             else:
-                return ZERO <= constant
+                return self.set_bound(vid, constant / coeff, None,
+                                      lo_strict=strict)
 
         # Multi-variable: add slack
         # Σ coeffs·Xi <= constant → slack + Σ coeffs·Xi = constant
@@ -465,15 +626,57 @@ class Tableau:
         self.rhs[slack] = constant
         self.lo[slack] = ZERO
         self.hi[slack] = None
+        if strict:
+            self.slo.add(slack)
 
         val = constant
         for v, c in coeffs.items():
             val -= c * self.assign.get(v, ZERO)
         self.assign[slack] = val
 
-        if val < ZERO:
+        lo = self._lo_eff(slack)
+        if val < lo:
+            if self._shift_nonbasic_for(slack, lo - val):
+                return True
             return self._restore_feasibility()
         return True
+
+    def _shift_nonbasic_for(self, bv: int, need) -> bool:
+        """Raise basic *bv* by *need* by moving one non-basic variable of
+        its row, when that keeps the variable and every basic variable it
+        moves within their bounds; False (nothing changed) when none can.
+
+        A strict bound's new slack sits at 0, short of its bound ``0 + d``
+        by ``d``: shifting a fresh variable (the Y of a new ``X < Y``)
+        costs no pivot, where the dual simplex pivoted on every post (a
+        200-variable ``<`` chain took 5 s to post, against 0.05 s)."""
+        row = self.rows[bv]
+        for v in sorted(row):
+            if v in self.rows:
+                continue
+            step = need / row[v]
+            new = self.assign.get(v, ZERO) + step
+            lo, hi = self._lo_eff(v), self._hi_eff(v)
+            if (lo is not None and new < lo) or (hi is not None and new > hi):
+                continue
+            moved = []
+            for b2, row2 in self.rows.items():
+                c = row2.get(v)
+                if c is None or b2 == bv:
+                    continue
+                nb = self.assign[b2] + c * step
+                blo, bhi = self._lo_eff(b2), self._hi_eff(b2)
+                if (blo is not None and nb < blo) or (
+                        bhi is not None and nb > bhi):
+                    break
+                moved.append((b2, nb))
+            else:
+                self.assign[v] = new
+                self.assign[bv] = self.assign[bv] + row[v] * step
+                for b2, nb in moved:
+                    self.assign[b2] = nb
+                return True
+        return False
 
     # ── Pivot ────────────────────────────────────────────────────────────
 
@@ -499,11 +702,13 @@ class Tableau:
         new_rhs = -self.rhs[leaving] / pcoeff
 
         # Substitute into all other rows
+        touched = [entering]
         for bv in list(self.rows):
             if bv == leaving:
                 continue
             brow = self.rows[bv]
             if entering in brow:
+                touched.append(bv)
                 factor = brow.pop(entering)
                 for v, c in new_row.items():
                     brow[v] = brow.get(v, ZERO) + factor * c
@@ -518,12 +723,14 @@ class Tableau:
         if leaving_bound is not None:
             self.assign[leaving] = leaving_bound
         else:
-            lo = self.lo.get(leaving)
+            lo = self._lo_eff(leaving)
             self.assign[leaving] = lo if lo is not None else ZERO
 
-        # Recompute all basic variable assignments from their rows
+        # Recompute the basic variable assignments that moved: those whose
+        # row now names the leaving variable (it had the entering one).
+        # The others' rows and values are unchanged.
         # Convention: B = rhs + Σ row[v]*v
-        for bv in self.rows:
+        for bv in touched:
             val = self.rhs[bv]
             for v, c in self.rows[bv].items():
                 val += c * self.assign.get(v, ZERO)
@@ -556,8 +763,8 @@ class Tableau:
             leaving = None
             for bv in sorted(self.rows):
                 val = self.assign.get(bv, ZERO)
-                blo = self.lo.get(bv)
-                bhi = self.hi.get(bv)
+                blo = self._lo_eff(bv)
+                bhi = self._hi_eff(bv)
                 if (blo is not None and val < blo) or (bhi is not None and val > bhi):
                     leaving = bv
                     break
@@ -567,8 +774,8 @@ class Tableau:
 
             row = self.rows[leaving]
             val = self.assign[leaving]
-            lo = self.lo.get(leaving)
-            hi = self.hi.get(leaving)
+            lo = self._lo_eff(leaving)
+            hi = self._hi_eff(leaving)
 
             below = lo is not None and val < lo
 
@@ -587,12 +794,12 @@ class Tableau:
                 v_val = self.assign.get(v, ZERO)
                 rise = (c > ZERO) == below          # v must increase?
                 if rise:
-                    v_hi = self.hi.get(v)
+                    v_hi = self._hi_eff(v)
                     if v_hi is None or v_val < v_hi:
                         entering = v
                         break
                 else:
-                    v_lo = self.lo.get(v)
+                    v_lo = self._lo_eff(v)
                     if v_lo is None or v_val > v_lo:
                         entering = v
                         break
@@ -612,8 +819,11 @@ class Tableau:
                  direction: str) -> Fraction | None:
         """Phase II simplex: maximize or minimize.
 
-        Returns optimal value, or None if unbounded.
-        Updates ``self.assign`` to the optimal point.
+        Returns the optimal value, or None if unbounded.  Updates
+        ``self.assign`` to the optimal point.  Over strict bounds the value
+        is a delta-rational: ``c - k*d`` (a maximum, ``k > 0``) means the
+        supremum ``c`` is not attained (:func:`_real` reads ``c``); a
+        Fraction is attained.
         """
         obj, obj_k = self._substitute_parametric(dict(objective), ZERO)
         obj, obj_k = self._substitute_basic(obj, obj_k)
@@ -638,12 +848,12 @@ class Tableau:
                 c = obj[v]
                 a = self.assign.get(v, ZERO)
                 if c > ZERO:
-                    hi = self.hi.get(v)
+                    hi = self._hi_eff(v)
                     if hi is None or a < hi:
                         entering, step = v, 1
                         break
                 elif c < ZERO:
-                    lo = self.lo.get(v)
+                    lo = self._lo_eff(v)
                     if lo is None or a > lo:
                         entering, step = v, -1
                         break
@@ -677,11 +887,11 @@ class Tableau:
                 bval = self.assign.get(bv, ZERO)
                 ratio = None
                 if coeff < ZERO:
-                    blo = self.lo.get(bv)
+                    blo = self._lo_eff(bv)
                     if blo is not None:
                         ratio = (bval - blo) / (-coeff)
                 else:  # coeff > 0
-                    bhi = self.hi.get(bv)
+                    bhi = self._hi_eff(bv)
                     if bhi is not None:
                         ratio = (bhi - bval) / coeff
                 if ratio is None:
@@ -695,7 +905,8 @@ class Tableau:
             # before any basic var does — a bound flip.  It stays non-basic
             # and keeps its objective coefficient (A08-F001: without this
             # check x rose past x <= 5 in a degenerate maximum).
-            e_bound = self.hi.get(entering) if step > 0 else self.lo.get(entering)
+            e_bound = (self._hi_eff(entering) if step > 0
+                       else self._lo_eff(entering))
             entering_ratio = abs(e_bound - self.assign.get(entering, ZERO)) \
                 if e_bound is not None else None
             if entering_ratio is not None and (min_ratio is None
@@ -715,10 +926,10 @@ class Tableau:
             bv_coeff = self.rows[leaving][entering] * step
             if bv_coeff < ZERO:
                 # B decreased → hit lower bound
-                lv_bound = self.lo.get(leaving, ZERO)
+                lv_bound = self._lo_eff(leaving)
             else:
                 # B increased → hit upper bound
-                lv_bound = self.hi.get(leaving)
+                lv_bound = self._hi_eff(leaving)
 
             # Update objective coefficients after pivot.
             # Row convention: entering = new_rhs + Σ new_row[v]*v (after pivot).
@@ -768,15 +979,14 @@ class Tableau:
         # fast path of add_inequality via set_bound, which never refreshes the
         # QVar attr).  Overwriting them unconditionally silently destroyed
         # them, so in_q(X,0,100); q_le(X,5); X is 50 succeeded (A08-F001).
-        cur_lo = self.lo.get(vid)
-        cur_hi = self.hi.get(vid)
+        cur_lo = self._lo_eff(vid)
+        cur_hi = self._hi_eff(vid)
         if cur_lo is not None and value < cur_lo:
             return False
         if cur_hi is not None and value > cur_hi:
             return False
 
-        self.lo[vid] = value
-        self.hi[vid] = value
+        self._set_point(vid, value)
 
         if vid in self.rows:
             return self.add_equality({vid: ONE}, value)
@@ -808,46 +1018,36 @@ class Tableau:
     def _check_diseqs(self, entail: bool = False) -> bool:
         """Fail if any disequality is violated.
 
-        Disequalities are stored as ``(tag, coeffs, constant)``, *tag*
-        ``'linear'`` or ``'strict'`` (from ``<``, so the expression is
-        already =< the constant),
-        meaning ``Σ coeffs[v]*v != constant``.  One fails when every
-        variable in it is fixed to values that make it equal.
+        Disequalities (from ``=\\=``) are stored as ``(tag, coeffs,
+        constant)``, meaning ``Σ coeffs[v]*v != constant``.  One fails
+        when every variable in it is fixed to values that make it equal.
 
         With *entail* (after a binding or an equality) each is also checked
         by entailment: it fails when the store's minimum and maximum of the
-        expression are both the constant, which finds X < Y, Y =< 3, X = 3
-        (Y forced to 3 through a row, not its own bounds).  The current
-        assignment is a feasible point, so an expression whose value there
-        differs from the constant cannot be forced and needs no LP.
-        Inequalities and new disequalities do not run it (two LPs per open
-        disequality on every post): a strict bound they close is caught at
-        the next binding (todo/clpq-strict-bounds-closed-by-inequalities).
+        expression are both the constant, which finds {X =\\= Y, Y =< 3},
+        X = 3, {Y >= 3} (Y forced to 3 through a row, not its own bounds).
+        The current assignment is a feasible point, so an expression whose
+        value there differs from the constant cannot be forced and needs
+        no LP.  Inequalities and new disequalities do not run it (two LPs
+        per open disequality on every post), so a disequality they close
+        is caught at the next binding.  A strict ``<`` is no disequality:
+        it is a strict bound, which the simplex decides on every post.
         """
         work = None
-        for entry in self.diseqs:
-            tag, coeffs, constant = entry
-            # Check if all variables are determined
-            all_fixed = True
-            val = ZERO
-            for vid, coeff in coeffs.items():
+        for _tag, coeffs, constant in self.diseqs:
+            # Determined: every variable fixed once the eliminated and the
+            # basic ones are replaced by their definitions (in the free
+            # variables, the store's coordinates), so {X + Y = 1},
+            # {X + Y =\= 1} fails.
+            rcoeffs, rconstant = self._substitute_basic(
+                *self._substitute_parametric(coeffs, constant))
+            for vid, coeff in rcoeffs.items():
                 vlo = self.lo.get(vid)
-                vhi = self.hi.get(vid)
-                if vlo is not None and vhi is not None and vlo == vhi:
-                    val += coeff * vlo
-                elif vid in self.parametric:
-                    # Check if parametric var is fully determined
-                    pc, pk = self.parametric[vid]
-                    if not pc:
-                        val += coeff * pk
-                    else:
-                        all_fixed = False
-                        break
-                else:
-                    all_fixed = False
+                if vlo is None or vlo != self.hi.get(vid):
                     break
-            if all_fixed:
-                if val == constant:
+                rconstant -= coeff * vlo
+            else:
+                if rconstant == ZERO:
                     return False  # disequality violated
                 continue
             if not entail:
@@ -855,16 +1055,14 @@ class Tableau:
             if sum(c * self._value(v) for v, c in coeffs.items()) != constant:
                 continue
             # Not every variable is fixed, but the store can still force
-            # the expression to the value: X < Y, Y =< 3, X = 3 leaves Y
-            # only in [3, 3] through a row, not its own bounds.
+            # the expression to the value: {X =\= Y, X =< Y, Y =< 3},
+            # X = 3 leaves Y only in [3, 3] through a row, not its own
+            # bounds.
             if work is None:
                 work = self.copy()
-            if tag != 'strict':
-                # A strict one's expression is already =< the constant,
-                # so its minimum alone decides.
-                hi = work.optimize(dict(coeffs), 'max')
-                if hi is None or hi != constant:
-                    continue
+            hi = work.optimize(dict(coeffs), 'max')
+            if hi is None or hi != constant:
+                continue
             lo = work.optimize(dict(coeffs), 'min')
             if lo is not None and lo == constant:
                 return False
@@ -904,6 +1102,38 @@ class Tableau:
             if lo is not None and lo == dconstant:
                 return True
         return False
+
+    def concrete_delta(self) -> Fraction:
+        """A rational value for the infinitesimal ``d`` at which the
+        current assignment satisfies every bound (strict ones strictly)
+        and every disequality whose value moves with ``d``
+        (Dutertre and de Moura's choice of delta)."""
+        delta = ONE
+        for vid, a in self.assign.items():
+            if vid in self.parametric:
+                continue    # its bounds are rows' (its value may be stale)
+            for x, y in ((self._lo_eff(vid), a), (a, self._hi_eff(vid))):
+                if x is None or y is None:
+                    continue
+                c1, k1 = (x.c, x.k) if type(x) is DQ else (x, ZERO)
+                c2, k2 = (y.c, y.k) if type(y) is DQ else (y, ZERO)
+                if c1 < c2 and k1 > k2:
+                    delta = min(delta, (c2 - c1) / (k1 - k2))
+        # A disequality's value c + k*d meets its constant at one d at
+        # most: halving avoids each, so len(diseqs) halvings suffice.
+        bad = set()
+        for _tag, coeffs, constant in self.diseqs:
+            v = sum((c * self._value(u) for u, c in coeffs.items()), ZERO)
+            if type(v) is DQ:
+                bad.add((constant - v.c) / v.k)
+        while delta in bad:
+            delta /= 2
+        return delta
+
+    def concrete_value(self, vid: int, delta: Fraction) -> Fraction:
+        """vid's value at the current assignment, ``d`` read as *delta*."""
+        v = self._value(vid)
+        return v.c + v.k * delta if type(v) is DQ else v
 
     # ── Implied bindings ─────────────────────────────────────────────────
 
@@ -1293,8 +1523,8 @@ def _post_q_domain(target: Any, lo: Fraction | None,
 
     put_attr(target, Q_KEY, new_state, trail)
     # A bound can close the store's own bound on a variable to a point
-    # ({X > 0}, in_q(X, -1, 0)): bind it, as q_le does, so the binding
-    # checks the disequalities (here the strict half X =\= 0).  Only the
+    # ({X >= 0}, in_q(X, -1, 0)): bind it, as q_le does, so the binding
+    # checks the disequalities.  Only the
     # target's bounds moved, unless it was eliminated: then the new rows
     # can fix others.
     if eliminated:
@@ -1594,13 +1824,7 @@ def q_eq(l: Any, r: Any, trail: Trail) -> bool:
 
 
 def q_ne(l: Any, r: Any, trail: Trail) -> bool:
-    """Post l != r as a passive disequality."""
-    return _post_ne(l, r, trail, 'linear')
-
-
-def _post_ne(l: Any, r: Any, trail: Trail, tag: str) -> bool:
-    """Post l != r as a passive disequality, tagged *tag*: ``'strict'`` when
-    ``l =< r`` is already posted (the strict half of ``l < r``).
+    """Post l != r as a passive disequality.
 
     The disequality is stored in the Tableau and checked whenever a
     variable becomes ground.  If both sides are already ground at
@@ -1634,16 +1858,25 @@ def _post_ne(l: Any, r: Any, trail: Trail, tag: str) -> bool:
     _snapshot_tableau(trail)
     # Store as (coefficients, constant) — the disequality is:
     # Σ coeffs[v]*v != constant
-    tableau.diseqs.append((tag, coeffs, constant))
+    tableau.diseqs.append(('linear', coeffs, constant))
     return tableau._check_diseqs()
 
 
 def q_le(l: Any, r: Any, trail: Trail) -> bool:
     """Post l <= r as a rational inequality constraint."""
+    return _post_le(l, r, trail, "(=<)/2", False)
+
+
+def _post_le(l: Any, r: Any, trail: Trail, context: str,
+             strict: bool) -> bool:
+    """Post ``l =< r``, or ``l < r`` when *strict*: a bound, strict or not,
+    in the simplex (:class:`DQ`)."""
     l, r = deref(l), deref(r)
-    l, r = _cells_as_nodes(l, r, "(=<)/2")   # ruling R9 A1
-    l, r = _units_strip(l, r, "(=<)/2", trail)
+    l, r = _cells_as_nodes(l, r, context)   # ruling R9 A1
+    l, r = _units_strip(l, r, context, trail)
     if _is_ground_q(l) and _is_ground_q(r):
+        if strict:
+            return _exact_number(l) < _exact_number(r)
         return _exact_number(l) <= _exact_number(r)
     _ensure_q_for_expr(l, trail)
     _ensure_q_for_expr(r, trail)
@@ -1661,23 +1894,20 @@ def q_le(l: Any, r: Any, trail: Trail) -> bool:
     coeffs = {v: c for v, c in merged.items() if c != ZERO}
     constant = rv - lv
     if not coeffs:
-        return constant >= ZERO
+        return constant > ZERO if strict else constant >= ZERO
     tableau = _get_tableau(trail)
     _snapshot_tableau(trail)
-    if not tableau.add_inequality(coeffs, constant, '<='):
+    if not tableau.add_inequality(coeffs, constant, '<' if strict else '<='):
         return False
     return tableau.check_implied_bindings(trail)
 
 
 def q_lt(l: Any, r: Any, trail: Trail) -> bool:
-    """Post l < r.  Equivalent to l <= r AND l != r."""
-    # The side channel once, under the operator the user wrote; the two
-    # posts below then find bare numbers and shadows only and pass through.
-    l, r = _cells_as_nodes(deref(l), deref(r), "(<)/2")
-    l, r = _units_strip(l, r, "(<)/2", trail)
-    if not q_le(l, r, trail):
-        return False
-    return _post_ne(l, r, trail, 'strict')
+    """Post l < r: a strict bound in the simplex, which every later post
+    checks (it was ``l =< r`` plus a passive ``l =\\= r``, so a strict
+    bound closed by inequalities alone, ``{X < Y, Y < X}``, was
+    accepted)."""
+    return _post_le(l, r, trail, "(<)/2", True)
 
 
 def q_gt(l: Any, r: Any, trail: Trail) -> bool:
@@ -1718,7 +1948,8 @@ def sup(expr: Any, result_var: Any, trail: Trail) -> bool:
     opt = tab_copy.optimize(coeffs, 'max')
     if opt is None:
         return False  # unbounded
-    return unify(result_var, _units_result(opt + const, dims), trail)
+    # The supremum, attained or not (a strict bound's value).
+    return unify(result_var, _units_result(_real(opt) + const, dims), trail)
 
 
 def inf(expr: Any, result_var: Any, trail: Trail) -> bool:
@@ -1742,7 +1973,8 @@ def inf(expr: Any, result_var: Any, trail: Trail) -> bool:
     opt = tab_copy.optimize(coeffs, 'min')
     if opt is None:
         return False  # unbounded
-    return unify(result_var, _units_result(opt + const, dims), trail)
+    # The infimum, attained or not (a strict bound's value).
+    return unify(result_var, _units_result(_real(opt) + const, dims), trail)
 
 
 def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
@@ -1807,29 +2039,30 @@ def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
         tab_copy = tableau.copy()
         return tab_copy.optimize(coeffs, 'min')
 
-    # The store is a closed polyhedron P (the tableau) less the hyperplanes
-    # of its disequalities, a strict ``<`` among them (stored as ``=<``
-    # plus ``=\=``).  Removing finitely many hyperplanes changes neither
-    # the supremum nor the infimum of l - r, so the non-strict relations
-    # read P alone.  A strict relation, or ``=\=``, whose bound P only
-    # reaches on the face l - r = 0 still holds when the disequalities
-    # remove that whole face: tableau.face_removed.
+    # The store is a polyhedron P (the tableau, its strict bounds open)
+    # less the hyperplanes of its disequalities.  The optimum of l - r over
+    # P is a delta-rational: ``s - k*d`` (k > 0) is a supremum s that P
+    # does not attain.  Removing finitely many hyperplanes changes neither
+    # the supremum nor the infimum, so the non-strict relations read P
+    # alone.  A strict relation, or ``=\=``, whose bound P attains only on
+    # the face l - r = 0 still holds when the disequalities remove that
+    # whole face: tableau.face_removed.
     if constraint_type in ('=<', '<='):
         # l <= r ⟺ l - r <= 0 ⟺ sup(l - r) <= 0
         s = _sup_of_diff()
-        return s is not None and s + offset <= ZERO
+        return s is not None and _real(s) + offset <= ZERO
     elif constraint_type in ('>=', '=>'):
         # l >= r ⟺ l - r >= 0 ⟺ inf(l - r) >= 0
         i = _inf_of_diff()
-        return i is not None and i + offset >= ZERO
+        return i is not None and _real(i) + offset >= ZERO
     elif constraint_type == '<':
         s = _sup_of_diff()
-        if s is None or s + offset > ZERO:
+        if s is None or _real(s) + offset > ZERO:
             return False
         return s + offset < ZERO or tableau.face_removed(coeffs, -offset)
     elif constraint_type == '>':
         i = _inf_of_diff()
-        if i is None or i + offset < ZERO:
+        if i is None or _real(i) + offset < ZERO:
             return False
         return i + offset > ZERO or tableau.face_removed(coeffs, -offset)
     elif constraint_type in ('=', '=:='):
@@ -1837,7 +2070,7 @@ def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
         s = _sup_of_diff()
         i = _inf_of_diff()
         return (s is not None and i is not None
-                and s + offset == ZERO and i + offset == ZERO)
+                and _real(s) + offset == ZERO and _real(i) + offset == ZERO)
     elif constraint_type in ('\\=', '=\\='):
         # l != r ⟺ NOT(l = r) ⟺ inf(l-r) > 0 OR sup(l-r) < 0, or the
         # disequalities remove the face l - r = 0.  One side unbounded
@@ -1863,23 +2096,22 @@ def _bind_optimal(tableau: Tableau, trail: Trail) -> bool:
 
     Called after ``optimize`` to commit the optimal point.  Variables
     that are already bound are skipped.  Parametric variables are
-    evaluated from their definitions.
+    evaluated from their definitions.  A delta-rational value is read at
+    a rational ``d`` small enough for every strict bound
+    (:meth:`Tableau.concrete_delta`): the optimum stays the same, since
+    an optimum that moves with ``d`` is not attained and was refused.
     """
+    delta = tableau.concrete_delta()
+    values = {}
+    for vid, var in list(tableau._var_map.items()):
+        if vid in tableau.parametric or vid in tableau.assign:
+            values[vid] = tableau.concrete_value(vid, delta)
     for vid, var in list(tableau._var_map.items()):
         var = deref(var)
-        if not is_var(var):
+        if not is_var(var) or vid not in values:
             continue
-        # Compute the variable's value at the optimal point
-        if vid in tableau.parametric:
-            pc, pk = tableau.parametric[vid]
-            val = pk
-            for pv, pcoeff in pc.items():
-                val += pcoeff * tableau.assign.get(pv, ZERO)
-        else:
-            val = tableau.assign.get(vid)
-        if val is not None:
-            if not unify(var, present_number(val), trail):
-                return False
+        if not unify(var, present_number(values[vid]), trail):
+            return False
     return True
 
 
@@ -1902,8 +2134,8 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
     tableau = _get_tableau(trail)
     _snapshot_tableau(trail)
     opt = tableau.optimize(coeffs, 'max')
-    if opt is None:
-        return False
+    if opt is None or type(opt) is DQ:
+        return False    # unbounded, or a supremum not attained
     if not _bind_optimal(tableau, trail):
         return False
     return unify(result_var, _units_result(opt + const, dims), trail)
@@ -1928,8 +2160,8 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
     tableau = _get_tableau(trail)
     _snapshot_tableau(trail)
     opt = tableau.optimize(coeffs, 'min')
-    if opt is None:
-        return False
+    if opt is None or type(opt) is DQ:
+        return False    # unbounded, or an infimum not attained
     if not _bind_optimal(tableau, trail):
         return False
     return unify(result_var, _units_result(opt + const, dims), trail)
@@ -1947,8 +2179,8 @@ def dump_q(target_vars: list, trail: Trail, name_of=None, *,
     Fourier-Motzkin elimination.
 
     Each returned string is of the form ``"{2*X + Y =< 16}"``, ``"{X = 5}"``,
-    ``"{X < 3}"`` (a bound and a disequality on the same expression) or
-    ``"{X =\\= 2}"``.  A disequality is shown only when every variable it
+    ``"{X < 3}"`` (a strict bound, or a bound and a disequality on the
+    same expression) or ``"{X =\\= 2}"``.  A disequality is shown only when every variable it
     mentions is a target: it cannot be projected through an eliminated one.
 
     *name_of* names a target variable (default: ``str``).  *toplevel*
@@ -1990,9 +2222,9 @@ def _projected_constraints(target_ids: set, trail: Trail) -> list:
         projected = constraints
     constraints = projected
 
-    # Disequalities (q_ne, and the strict half of q_lt) over targets only.
-    # A bound on the same expression and value makes the pair one strict
-    # constraint: X =< 3 and X =\= 3 are X < 3.
+    # Disequalities (q_ne) over targets only.  A bound on the same
+    # expression and value makes the pair one strict constraint: X =< 3
+    # and X =\= 3 are X < 3.
     for _tag, coeffs, constant in tableau.diseqs:
         if not coeffs or not set(coeffs) <= target_ids:
             continue
@@ -2098,9 +2330,11 @@ def _collect_constraints(tableau: Tableau, target_ids: set[int],
             constraints.append(({vid: ONE}, '=', lo))
             continue
         if lo is not None:
-            constraints.append(({vid: -ONE}, '=<', -lo))
+            constraints.append(({vid: -ONE},
+                                '<' if vid in tableau.slo else '=<', -lo))
         if hi is not None:
-            constraints.append(({vid: ONE}, '=<', hi))
+            constraints.append(({vid: ONE},
+                                '<' if vid in tableau.shi else '=<', hi))
 
     return constraints
 
@@ -2200,7 +2434,8 @@ def _fm_substitute(cons, i, v):
 
 
 def _fm_combine(cons, v, max_sources):
-    """Fourier-Motzkin step on *v*; None past ``_FM_LIMIT``."""
+    """Fourier-Motzkin step on *v*; None past ``_FM_LIMIT``.  A combination
+    is strict (``<``) when either source is."""
     upper, lower, keep = [], [], []
     for coeffs, rel, rhs, h in cons:
         c = coeffs.get(v, ZERO)
@@ -2208,12 +2443,13 @@ def _fm_combine(cons, v, max_sources):
             keep.append((coeffs, rel, rhs, h))
             continue
         rest = {u: -k / c for u, k in coeffs.items() if u != v}
-        (upper if c > ZERO else lower).append((rest, rhs / c, h))
+        (upper if c > ZERO else lower).append((rest, rhs / c, h,
+                                               rel == '<'))
     if len(upper) * len(lower) > _FM_PAIRS:
         return None
     best: dict = {}
-    for lo_c, lo_r, lo_h in lower:
-        for hi_c, hi_r, hi_h in upper:
+    for lo_c, lo_r, lo_h, lo_s in lower:
+        for hi_c, hi_r, hi_h, hi_s in upper:
             h = lo_h | hi_h
             if len(h) > max_sources:
                 continue                     # Chernikov: redundant
@@ -2228,10 +2464,12 @@ def _fm_combine(cons, v, max_sources):
             scale = abs(first)
             key = tuple(sorted((u, k / scale) for u, k in combined.items()))
             rhs = (hi_r - lo_r) / scale
-            if key not in best or rhs < best[key][0]:
-                best[key] = (rhs, h)
-    for key, (rhs, h) in best.items():
-        keep.append((dict(key), '=<', rhs, h))
+            strict = lo_s or hi_s
+            if key not in best or rhs < best[key][0] or (
+                    rhs == best[key][0] and strict and not best[key][1]):
+                best[key] = (rhs, strict, h)
+    for key, (rhs, strict, h) in best.items():
+        keep.append((dict(key), '<' if strict else '=<', rhs, h))
     if len(keep) > _FM_LIMIT:
         return None
     return keep
@@ -2330,6 +2568,7 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
     best_val, best_tab = _bb_solve(tableau, obj_coeffs, obj_const, int_ids)
     if best_val is None:
         return False
+    best_val = _real(best_val)
     # Install the optimal tableau and bind variables
     _snapshot_tableau(trail)
     tid = id(trail)
@@ -2370,35 +2609,39 @@ def _bb_solve(tableau: Tableau, obj_coeffs: dict[int, Fraction],
     if best_so_far is not None and obj_val >= best_so_far:
         return best_so_far, best_tab
 
-    # Check integrality
+    # Check integrality.  A value with a delta part (a strict bound holds
+    # it just off c) is not integral, though c may be: {X > 0} puts X at
+    # 0 + d, so X =< 0 and X >= 1 are the branches.
     most_frac_vid = None
-    most_frac_dist = ZERO
+    most_frac_dist = None
+    floor_val = None
     for vid in int_ids:
-        val = tab.assign.get(vid, ZERO)
-        if vid in tab.parametric:
-            pc, pk = tab.parametric[vid]
-            val = pk
-            for pv, pcoeff in pc.items():
-                val += pcoeff * tab.assign.get(pv, ZERO)
-        if val.denominator != 1:
-            frac_part = val - Fraction(math.floor(val))
+        val = tab._value(vid)
+        if type(val) is DQ:
+            c = val.c
+            if c.denominator == 1:
+                vfloor = c - ONE if val.k < ZERO else c
+                dist = ZERO
+            else:
+                vfloor = Fraction(math.floor(c))
+                frac_part = c - vfloor
+                dist = min(frac_part, ONE - frac_part)
+        elif val.denominator != 1:
+            vfloor = Fraction(math.floor(val))
+            frac_part = val - vfloor
             dist = min(frac_part, ONE - frac_part)
-            if dist > most_frac_dist:
-                most_frac_dist = dist
-                most_frac_vid = vid
+        else:
+            continue
+        if most_frac_dist is None or dist > most_frac_dist:
+            most_frac_dist = dist
+            most_frac_vid = vid
+            floor_val = vfloor
 
     if most_frac_vid is None:
         # All integer vars are integral — feasible integer solution
         return obj_val, tab
 
     # Branch on most fractional variable
-    val = tab.assign.get(most_frac_vid, ZERO)
-    if most_frac_vid in tab.parametric:
-        pc, pk = tab.parametric[most_frac_vid]
-        val = pk
-        for pv, pcoeff in pc.items():
-            val += pcoeff * tab.assign.get(pv, ZERO)
-    floor_val = Fraction(math.floor(val))
     ceil_val = floor_val + ONE
 
     best = best_so_far
