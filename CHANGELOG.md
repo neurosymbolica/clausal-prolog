@@ -44,6 +44,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (`clausal/toplevel_colour.py`, `tests/test_toplevel_colour.py`, pty tests in
   `tests/test_toplevel.py`).
 
+- **Top-level: Esc interrupts a search, Tab completes, `[user].`,
+  `CLAUSAL_PAGE`, readable names** (2026-10-28): a lone Esc interrupts a
+  running query and other keys typed meanwhile are kept as typeahead; Tab
+  completes predicate and library names; `[user].` enters clauses; with
+  `CLAUSAL_PAGE=N` the top-level shows N answers before asking; unbound
+  variables print as `_A`, `_B`, ... instead of `_123`; and the answer
+  shows `dif/2`, CLP(FD) and `freeze/2` constraints on variables no answer
+  variable reaches, as `call_residue_vars/2` finds them (a new
+  `Trail.attvars_since(mark)`), so an unsatisfiable `X #> Y, X #< Y` no
+  longer answers `true.` (`clausal/toplevel_input.py`,
+  `clausal/toplevel_complete.py`).
+
 ### Changed
 
 - **The `?-` top-level ends an answer it knows is the last with `.`**

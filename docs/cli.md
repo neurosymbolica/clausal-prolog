@@ -93,6 +93,19 @@ variable name in a colour taken from a hash of the name, so a variable has the
 same colour wherever it appears, in this answer and in every later one. A
 pipe is never coloured.
 
+Keys and input while a query runs: a lone Esc interrupts a search (Ctrl-C
+does too; `% Execution Aborted`), and any other key typed meanwhile is kept
+for the next prompt, so a pasted script of queries runs in order. Tab
+completes predicate names (the program's, then the builtins; a name that takes
+arguments gets its `(`) and, inside `library(`, library names. `[user].`
+reads clauses behind a `|: ` prompt up to Ctrl-D or `end_of_file.` and
+consults them. `CLAUSAL_PAGE=5` shows five answers before asking (the default
+is one); the `;` of the next answer is written as soon as its search starts.
+Unbound variables that are not the query's print as `_A`, `_B`, ... in order
+of appearance, and a `dif/2`, CLP(FD) or `freeze/2` constraint on a variable
+that no answer variable reaches (`f :- X #> Y, X #< Y.`) is shown, as
+`call_residue_vars/2` would find it: `_A #< _B, _B #< _A.`, not `true.`
+
 A query may use `!`, `->` and `*->` (in goal position, not as data) when the
 loaded file is a `.pl` file, or with `--prolog`; against a `.clausal` file, or
 with no file, they are refused, as `.clausal` source refuses them. The
