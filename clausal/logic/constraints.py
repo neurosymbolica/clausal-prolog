@@ -110,7 +110,14 @@ def structural_eq(left: Any, right: Any) -> bool:
         return type(left) is str and left == "undefined"
 
     # General case: structurally equal iff unifiable with zero bindings.
-    return reify_eq(left, right, Trail()) is True
+    # The scratch trail defers woken goals: a binding the trial makes wakes
+    # a freeze/2 or when/2 goal on the variable, and a trail that does not
+    # defer runs it at once -- ``freeze(X, write(a)), X == f(Y)`` printed
+    # ``a``.  Queued here, they are dropped with the trail.  (Any binding
+    # makes the answer "not identical", so no hook changes it.)
+    scratch = Trail()
+    scratch.defer = True
+    return reify_eq(left, right, scratch) is True
 
 
 def structural_neq(left: Any, right: Any) -> bool:

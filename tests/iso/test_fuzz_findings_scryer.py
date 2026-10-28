@@ -12,6 +12,11 @@ non-conformity is a bug).
   ``X = [a|T], T = [X|T]``) overflowed the stack in ``writeq/1``,
   ``=..``, ``functor/3``, ``arg/3``, ``dif/2`` and ``=/2``: the walk of
   the list walked each element, and the element led back to the list.
+* ``[X|C] = [A,B|C]`` failed: a partial list against a longer one ending
+  in the same tail was refused as cyclic, from before the engine had
+  rational trees (Scryer: ``C = [B|C]``).
+* ``==/2`` and ``\\==/2`` tried their unification on a trail that ran the
+  goals it woke: ``freeze(D, write(t1)), f(A,D) \\== f(A,g(B))`` printed.
 * ``dif/2``'s wake-up hook tried its pair with the pair's own variables'
   dif hooks running, which met the pair with its two sides made one and
   said "violated", so the try failed and the pair was dropped as if it
@@ -45,6 +50,8 @@ from tests import _oracles
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 SCRYER_PRELUDE = (":- use_module(library(dif)).\n"
+                  ":- use_module(library(freeze)).\n"
+                  ":- use_module(library(when)).\n"
                   ":- use_module(library(lists)).\n")
 
 PROGRAM = "w(X) :- write(X), nl.\n"
@@ -89,6 +96,14 @@ ROWS = [
     ("B = [B|E], dif(1,B), w(ok), fail ; true", ["ok", "true."]),
     ("B = [[B|E]|g(A)], dif(1,[B|E]), w(ok), fail ; true", ["ok", "true."]),
     ("dif(A,g(B)), A = B, B = [A|B], w(ok), fail ; true", ["ok", "true."]),
+    # a partial list against a longer one with the same tail: a cycle
+    ("[X|C] = [A,B|C], C = [P,Q|R], w(ok), fail ; true", ["ok", "true."]),
+    ("[X|C] = [A,B|C], C = [P,Q|R], P == B, Q == B, R == C, w(ok), fail ;"
+     " true", ["ok", "true."]),
+    ("findall(1, [[A|A]|C] = [A,B|C], L)", ["L = [1]."]),
+    # ==/2 and \==/2 decide without waking a delayed goal
+    ("freeze(D,w(t1)), f(A,D) \\== f(A,g(B)), fail ; true", ["true."]),
+    ("when(nonvar(B),w(t1)), f(f(A,A),C) == f(B,1) ; true", ["true."]),
     # -- the dif/2 residuals an answer shows
     ("dif(C,[a|B]), C = 1", ["C = 1."]),
     ("dif(C,f(a,B)), C = 1", ["C = 1."]),

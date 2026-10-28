@@ -192,6 +192,21 @@ surface described in [docs/public-api.md](docs/public-api.md).
   operator atom argument is written as an argument, `dif(A,=)` (it was
   `dif(A,(=))`). The rows are in `tests/iso/test_fuzz_findings_scryer.py`.
 
+- **`[X|C] = [A,B|C]` succeeds, with `C = [B|C]`** (2026-10-28, operator
+  ruling 2026-10-24). A partial list against a longer one that ends in the
+  same tail was refused as cyclic, a rule from before the engine had
+  rational trees; `=/2` has no occurs check (ISO 7.3.2), and Scryer
+  answers `C = [B|C]`. The tail is now bound to the cyclic list, as
+  `C = [B|C]` binds it. (A hole that the other list holds before its end,
+  `[1, *A, 2]` in the seam, still fails: no term has it.)
+
+- **`==/2` and `\==/2` no longer run a delayed goal** (2026-10-28,
+  operator ruling 2026-10-24). They try a unification on a scratch trail to
+  see whether it binds anything, and a binding woke the `freeze/2` or
+  `when/2` goal on the variable and ran it there:
+  `freeze(D, write(t1)), f(A,D) \== f(A,g(B))` printed `t1`. The scratch
+  trail now defers what it wakes, and drops it.
+
 ## 1.2.0 (2026-10-25)
 
 A minor release (operator ruling 2026-10-25): the interactive ISO `?-`

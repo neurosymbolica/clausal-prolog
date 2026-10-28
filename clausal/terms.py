@@ -601,10 +601,15 @@ def _unify_open_seglists(a, b, trail):
     for one, other in ((ra, rb), (rb, ra)):
         if len(one) == 1 and one[0][0]:
             hole = deref(one[0][1])
-            # ``[*A]`` against ``[1, *A]`` would make A cyclic; ISO without
-            # the occurs check builds a rational tree, which no walk here can
-            # finish, so it fails instead.
-            if any(h and deref(v) is hole for h, v in other) and len(other) > 1:
+            # ``[*A]`` against ``[1, *A]``: ISO without the occurs check
+            # makes A the cyclic list ``A = [1|A]`` (``[X|C] = [A, B|C]``
+            # gives ``C = [B|C]``, as in Scryer), the hole bound to a list
+            # that ends in it -- the term ``A = [1|A]`` builds, which every
+            # walk reads as one lap.  It failed here, from before the
+            # engine had rational trees.  The hole anywhere else
+            # (``[1, *A, 2]``, a seam spelling) has no term: that fails.
+            if len(other) > 1 and any(h and deref(v) is hole
+                                      for h, v in other[:-1]):
                 return False
             return unify(one[0][1], _seglist_from_tokens(other), trail)
         if not one:
