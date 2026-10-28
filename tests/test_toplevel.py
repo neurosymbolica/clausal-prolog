@@ -783,3 +783,48 @@ def test_c_clears_the_rows_a_long_answer_wrapped_onto(tl):
         s._read(0.2)
     # the answer is longer than a row (80 columns): the redraw moves up
     assert re.search(r"\x1b\[\d+A\x1b\[J", s.raw), s.raw[-300:]
+
+
+def test_a_key_press_interrupts_a_running_search(tl):
+    s = tl()
+    s.send("loop.\n")
+    time.sleep(2)
+    s.send("x")                      # any key, as Ctrl-C would
+    s.expect("% Execution Aborted")
+    s.expect("?- ")
+    s.query("X = 1.", "   X = 1.")
+    assert "Traceback" not in s.text
+
+
+def test_a_key_pressed_after_the_search_ended_is_not_lost(tl):
+    s = tl()
+    s.send("p(X).\n")
+    s.expect("   X = 1")
+    time.sleep(0.5)
+    s.send(";")                      # the watcher must not eat the next key
+    s.expect(";  X = 2")
+
+
+def test_user_enters_clauses_at_a_prompt(tl):
+    s = tl()
+    s.send("[user].\n")
+    s.expect("|: ")
+    s.send("fruit(apple).\n")
+    s.expect("|: ")
+    s.send("fruit(pear).\n")
+    s.send("end_of_file.\n")
+    s.expect("   true.")
+    s.send("fruit(X).\n")
+    s.expect("   X = apple")
+    s.send(";")
+    s.expect(";  X = pear")
+
+
+def test_user_ends_at_ctrl_d(tl):
+    s = tl()
+    s.send("[user].\n")
+    s.expect("|: ")
+    s.send("zebra(stripes).\n")
+    s.send("\x04")
+    s.expect("   true.")
+    s.query("zebra(X).", "   X = stripes")

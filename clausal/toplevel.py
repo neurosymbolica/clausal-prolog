@@ -27,10 +27,12 @@ import os
 import sys
 
 from clausal import toplevel_colour
+from clausal.toplevel_input import KeyWatcher
 from clausal._suffixes import CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX
 
 PROMPT = "?- "
 CONTINUATION = "|    "
+USER_PROMPT = "|: "
 INDENT = "   "
 #: What the colour key types into the line (read_query takes it out).
 COLOUR_MARK = "\x1f"
@@ -280,6 +282,7 @@ class TopLevel:
         self._asking = False
         self._prefill = ""
         self._bound = False
+        self._watcher = None
         self.colour = toplevel_colour.scheme_named(
             os.environ.get("CLAUSAL_COLOUR", "off"))
         self.elide = True
@@ -412,7 +415,20 @@ class TopLevel:
         except ImportError:
             pass
 
+    def _watching(self):
+        """While the search for an answer runs, a key interrupts it (only on
+        a terminal; the byte is kept for ``_key`` if the search had ended)."""
+        import contextlib  # noqa: PLC0415
+        if not self.interactive or self._keys is None:
+            return contextlib.nullcontext()
+        self._watcher = KeyWatcher(self.stdin.fileno())
+        return self._watcher
+
     def _key(self) -> str:
+        left = getattr(self._watcher, "leftover", b"") if self._watcher else b""
+        if left:
+            self._watcher.leftover = b""
+            return left.decode("utf-8", "replace")
         try:
             return self._keys.read()
         except KeyboardInterrupt:
@@ -444,9 +460,29 @@ class TopLevel:
         if files is None:
             return False
         for f in (files if type(files) is list else [files]):
-            self.consult(_deref_walk(f))
+            f = _deref_walk(f)
+            if f == "user":
+                self.consult_user()
+            else:
+                self.consult(f)
         self._write(INDENT + "true.\n")
         return True
+
+    def consult_user(self) -> None:
+        """``[user].``: clauses typed behind a ``|: `` prompt, up to Ctrl-D
+        or a line ``end_of_file.``, consulted as if they were a file."""
+        import tempfile  # noqa: PLC0415
+        lines = []
+        while True:
+            line = self._read_line(USER_PROMPT)
+            if line is None or line.strip() == "end_of_file.":
+                break
+            lines.append(line)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "user" + PROLOG_SUFFIX)
+            with open(path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+            self.consult_path(path)
 
     def consult(self, name) -> None:
         """Load *name* (``.clausal`` / ``.pl``, suffix optional) and make it
@@ -467,6 +503,11 @@ class TopLevel:
             raise LogicException(("error",
                                   ("existence_error", "source_sink", name),
                                   context))
+        self.consult_path(path)
+
+    def consult_path(self, path: str) -> None:
+        """Load the file at *path* and make it the module queries run in."""
+        from clausal.testing import load_clausal_module  # noqa: PLC0415
         module = load_clausal_module(path)      # a load error is the caller's
         self.module = module
         self.path = path
@@ -543,7 +584,8 @@ class TopLevel:
         eager = False
         while True:
             try:
-                trail, last = next(it)
+                with self._watching():
+                    trail, last = next(it)
             except StopIteration:
                 self._write((";  " if n else INDENT) + "false.\n")
                 return
