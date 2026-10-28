@@ -925,6 +925,19 @@ def test_a_constraint_on_a_hidden_variable_is_shown(tmp_path):
         s.close()
 
 
+def test_a_coroutine_on_a_hidden_variable_is_shown(tmp_path):
+    # a hidden variable's freeze/2 and when/2 goals print as goals too
+    (tmp_path / "f.pl").write_text(
+        "f :- freeze(_, write(x)).\ng :- when(nonvar(_), true).\n")
+    s = Pty(tmp_path, "f.pl", "--toplevel")
+    try:
+        s.expect("?- ")
+        s.query("f.", "   freeze(_A,write(x))")     # not `true.`
+        s.query("g.", "   when(nonvar(_A),true)")
+    finally:
+        s.close()
+
+
 def test_fresh_variables_are_named_a_b_c(tl):
     s = tl()
     s.query("X = f(_, _, Y).", "   X = f(_A,_B,Y).")
