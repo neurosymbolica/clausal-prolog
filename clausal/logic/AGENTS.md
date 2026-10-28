@@ -59,6 +59,7 @@ repo-root `tests/`. Up: [../AGENTS.md](../AGENTS.md)
 |---|---|---|
 | `constraints.py` | `dif/2` | `_constraints_dif.c` |
 | `clpfd.py` | CLP(Z) solver | `_clpfd_core.c` (domains), `_clpfd_propagate.c` (propagation); both include `_clpfd_domain_ops.h` |
+| `clpfd_nonlinear.py` | CLP(Z) propagators for `*` of two unknowns, `//`, `div`, `mod`, `rem`, `^`, `min`, `max` (lifted out of a comparison by `clpfd._lift_cells`) | |
 | `clpz_surface.py` | Scryer-named `in/2`, `ins/2`, `labeling/2`, reified connectives over `clpfd` | |
 | `clpb.py` | CLP(B) via BDDs | `_clpb_core.c` |
 | `clpq/` / `clpr.py` | CLP(Q): `legacy.py` (exact simplex, the default) or the clp(q,r) 1.3.3 port behind `holzbaur.py` (`CLAUSAL_CLPQ=holzbaur`) / CLP(R) (intervals) | `clpr`: `_clpr_core.c` |

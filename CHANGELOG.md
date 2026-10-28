@@ -221,6 +221,41 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `freeze(D, write(t1)), f(A,D) \== f(A,g(B))` printed `t1`. The scratch
   trail now defers what it wakes, and drops it.
 
+- **CLP(Z) propagates through the non-linear operators in every
+  direction** (2026-10-28, operator ruling 2026-10-24: a non-conformity is
+  a bug; Scryer's clpz is the reference).  A comparison over `*` of two
+  unknowns, `//`, `div`, `mod`, `rem`, `^`, `min` or `max` was checked over
+  the expression tree and narrowed only a bare-variable side: `R*T #= 14,
+  T = 7` left R unbound (Scryer: `R = 2`), `X #= Y mod 3` left X in
+  `inf..sup` (`0..2`), `5 #= 13 // Y` never touched Y, and `X #= Y // 3,
+  X = 2` left Y unconstrained (`6..8`).  Each such sub-expression is now a
+  fresh variable with its own propagator (`clausal/logic/clpfd_nonlinear.py`),
+  bounds in every direction, a divisor's 0 removed, domain consistent on
+  small operands; inside a reified comparison the total ones (a product, a
+  division by a non-zero constant) are lifted too.  A generated matrix of
+  2036 rows (every operator under every relation, early and late binding in
+  every order, nesting, reification, bignums, division by zero) agrees with
+  Scryer or is narrower and sound on every row
+  (`tests/iso/test_clpz_propagation_matrix_scryer.py`); on 285bdb8e 89 rows
+  were weaker than Scryer and 34 wrote `fd_dom/2` differently.  Pinned without the oracle in
+  `tests/test_clpz_nonlinear_propagation.py`.
+
+- **A linear CLP(Z) disequality prunes once all but one variable are
+  known** (2026-10-28).  `X #\= Y + 1, Y = 2` kept 3 in X's domain and `3
+  #\= Y + 1` never touched Y: the disequality over a tree pruned only when
+  the whole tree was ground.  8-queens with `Q #\= Q1 + D` posts finds all
+  92 solutions about 3x faster for the earlier pruning.
+
+- **A two-variable CLP(Z) sum keeps domain holes** (2026-10-28): `X - Y #=
+  0` with `Y in 1\/3\/5` gives `X in 1\/3\/5` (it was `1..5`), as clpz's
+  `pplus` does, in the C propagator and its Python twin alike; and a linear
+  equation with a coefficient beyond int64 (`Z #= X * Y, Y = -2^70`) posts
+  a scalar product rather than a check over the tree.
+
+- **`fd_dom/2` writes a one-value piece of a union as the integer**
+  (2026-10-28): `X in 1\/3, fd_dom(X, D)` gives `D = 1\/3`, as Scryer
+  does (it was `1..1\/3..3`).  A single interval stays `3..3`.
+
 ## 1.2.0 (2026-10-25)
 
 A minor release (operator ruling 2026-10-25): the interactive ISO `?-`

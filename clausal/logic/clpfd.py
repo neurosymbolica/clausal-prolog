@@ -5075,12 +5075,13 @@ class LinearNeConstraint(Constraint):
     comparison over the expression TREE it replaces pruned only once the
     whole tree was ground: ``X #\\= Y + 1, Y = 2`` left 3 in X's domain,
     and ``3 #\\= Y + 1`` never touched Y."""
-    __slots__ = ('coeffs', 'lvars', 'k')
+    __slots__ = ('coeffs', 'lvars', 'k', 'lhs', 'rhs')
 
-    def __init__(self, coeffs, vars_, k):
+    def __init__(self, coeffs, vars_, k, lhs=None, rhs=None):
         self.coeffs = tuple(coeffs)
         self.lvars = tuple(vars_)
         self.k = k
+        self.lhs, self.rhs = lhs, rhs     # as posted, for the residual goal
         super().__init__(self.lvars)
 
     def propagate(self, trail: Trail, queue: deque) -> bool:
@@ -5134,14 +5135,22 @@ def _post_linear_ne(l, r, trail):
     for v in coeffs:
         _ensure_fd(v, trail)
     return _post_constraint(
-        LinearNeConstraint(tuple(coeffs.values()), tuple(coeffs), k), trail)
+        LinearNeConstraint(tuple(coeffs.values()), tuple(coeffs), k, l, r),
+        trail)
 
 
-def _lifting_nonlinear_cells(post, is_eq=False, is_ne=False):
+def _lifting_nonlinear_cells(post, context, is_eq=False, is_ne=False):
     def wrapped(l, r, trail, *args, **kwargs):
         dl, dr = deref(l), deref(r)
         if not (type(dl) is int or is_var(dl)) or not (type(dr) is int or is_var(dr)):
-            # only a compound side can hold a cell
+            # only a compound side can hold a cell.  The units side channel
+            # first (the post would run it), so a lifted product of two
+            # lengths is an area, not a dimensionless number
+            if not kwargs.get("_units_done") and _units_flag_active():
+                stripped = _units_strip(l, r, context, trail)
+                if stripped is not None:
+                    l, r = stripped
+                kwargs["_units_done"] = True
             okl, liftl = _fd_int_term(l, True)
             if okl:
                 okr, liftr = _fd_int_term(r, True)
@@ -5395,10 +5404,10 @@ class ExactDivConstraint(Constraint):
         return True
 
 
-fd_eq = _lifting_nonlinear_cells(fd_eq, is_eq=True)
-fd_ne = _lifting_nonlinear_cells(fd_ne, is_ne=True)
-fd_lt = _lifting_nonlinear_cells(fd_lt)
-fd_le = _lifting_nonlinear_cells(fd_le)
+fd_eq = _lifting_nonlinear_cells(fd_eq, "(==)/2", is_eq=True)
+fd_ne = _lifting_nonlinear_cells(fd_ne, "(!=)/2", is_ne=True)
+fd_lt = _lifting_nonlinear_cells(fd_lt, "(<)/2")
+fd_le = _lifting_nonlinear_cells(fd_le, "(=<)/2")
 
 
 # ── Ruling Q14 (2026-09-28): no value means no solutions ─────────────────────

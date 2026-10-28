@@ -333,8 +333,29 @@ def _fd_constraint_text(c, spell) -> str:
         return ("scalar_product([" + ",".join(spell(v) for v in c.coeffs)
                 + "],[" + ",".join(spell(v) for v in c.sum_vars)
                 + f"],#=,{spell(c.total)})")
+    if kind in _NONLINEAR:
+        op = _NONLINEAR[kind]
+        a, b = spell(c.a), spell(c.b)
+        rhs = f"{op}({a},{b})" if op in ("min", "max") else f"{a}{op}{b}"
+        return f"{spell(c.z)} #= {rhs}"
+    if kind == "LinearNeConstraint" and c.lhs is not None:
+        return f"{spell(c.lhs)} #\\= {spell(c.rhs)}"
+    if kind == "LinearNeConstraint":
+        parts = []
+        for k, v in zip(c.coeffs, c.lvars):
+            term = spell(v) if abs(k) == 1 else f"{abs(k)}*{spell(v)}"
+            parts.append(("-" if k < 0 else "+") + term)
+        lhs = "".join(parts).lstrip("+")
+        return f"{lhs} #\\= {spell(c.k)}"
     return (f"pending({kind.removesuffix('Constraint').lower()},["
             + ",".join(spell(v) for v in getattr(c, "vars", ())) + "])")
+
+
+#: clpfd_nonlinear's propagators, as the operator each one is
+_NONLINEAR = {"TimesConstraint": "*", "TruncDivConstraint": "//",
+              "FloorDivConstraint": " div ", "ModConstraint": " mod ",
+              "RemConstraint": " rem ", "PowConstraint": "^",
+              "MinConstraint": "min", "MaxConstraint": "max"}
 
 
 def _fd_dif_residuals(variables, spell) -> list[str]:

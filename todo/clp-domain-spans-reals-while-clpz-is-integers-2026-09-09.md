@@ -1,5 +1,7 @@
 # Clausal's CLP spans ℝ∪ℤ; clpz is ℤ-only — the `#` family diverges twice
 
+**Status: PARTLY RESOLVED (2026-10-28).** §2 and the minor point are fixed (2026-09-30, the `#` family's own operand check, `clpfd.clpz_refuse_non_numeric`): on the `.pl` and seam surfaces alike `'#='(1, foo)`, `'#\\='(1, foo)`, `'#<'(1, foo)` and `'#='(X, foo)` all raise `domain_error(clpz_expression, foo)` with the comparison's own indicator (`(#=)/2`, ...), never `(==)/2`; Scryer's context is its library's internal `unknown(foo)-1`, a recorded convention difference. Pinned in tests/iso/test_iso_compare_errors.py and tests/iso/test_iso_alignment_arg_clpz_number_chars.py. §1 (floats) is still open and needs a ruling -- see "Status 2026-10-28" at the end.
+
 Found 2026-09-09 while landing the ISO canonical comparison builtins
 (`feat/iso-compare-builtins-2026-09-09`). Both divergences are PINNED as
 `OPEN_iso_divergence` tests in `tests/iso/`, so they are checked facts, not
@@ -45,3 +47,45 @@ migration cost attached today.
 
 Minor, whichever way it goes: the `(==)/2` error context is wrong for a
 `'#='` call. See [[is-and-eq-are-swapped-relative-to-iso-2026-09-09]].
+
+
+## Status 2026-10-28: §1 (floats) needs a ruling
+
+Re-measured against Scryer (`/workspace/scryer-prolog-clpq`, `library(clpz)`):
+every float operand of the `#` family is `domain_error(clpz_expression, F)`
+in Scryer -- `'#='(1, 1.0)`, `'#\\='(1, 1.0)`, `'#<'(1, 2.0)`, `X #> 1.0`,
+`X #= Y + 1.0`, `1.0 #= X`, `X #\\= 1.5`, `X in 1..3, X #= 2.0`.  Clausal:
+`'#='(1, 1.0)`, `'#<'(1, 2.0)`, `X #> 1.0, X = 3`, `1.0 #= X` and
+`X #\\= 1.5` SUCCEED (CLP(R) dispatch), `'#\\='(1, 1.0)` and
+`X #= 1.5, X = 1` FAIL, `X #= Y + 1.0` raises the right formal with an
+unbound context, and a reified `B #<==> (X #= 1.0)` already raises
+Scryer's formal.
+
+Not changed here, because making the `#` family integer-only is not a local
+fix: it is DOCUMENTED that `#=` dispatches to CLP(R) on a float and to
+CLP(Q) on a rational (docs/clpq.md, "Dispatch table": "`X #= 5.0` (no
+declaration) | CLP(R): float literal triggers R dispatch"), and Clausal
+Prolog programs use it (tests/fixtures/docs/clpr_examples.clausal,
+tests/fixtures/docs/constraints_sig_tests.clausal: `X * X #= 2.0`).  There
+is no surface distinction at the builtin: `.pl` and `.clausal` reach the
+same `#=`.
+
+Options:
+
+- (a) The `#` family is integer-only everywhere (Scryer exactly): a float
+  or rational operand raises `domain_error(clpz_expression, F)`; CLP(R)
+  and CLP(Q) are reached only through `{}/1` (as in Scryer/SICStus) and the
+  seam's `==`.  Breaking for `.clausal` programs and docs that post reals
+  with `#=`.
+- (b) Integer-only on the ISO `.pl` surface only: the native front end binds
+  `#=`/... to a strict variant (or the loaded `library(clpz)` does), the
+  `.clausal` surface keeps the documented CLP(R)/CLP(Q) dispatch.
+  Conforming where conformity is measured, at the price of one name with
+  two behaviours across surfaces.
+- (c) Keep it broader than clpz everywhere, and only make the two odd
+  answers consistent (`'#\\='(1, 1.0)` and `X #= 1.5, X = 1` should then
+  succeed/fail as CLP(R) says, `X #= Y + 1.0` should name `(#=)/2`).
+
+Recommendation: (a) for `.pl` and `.clausal` alike is the cleanest reading
+of ruling 2026-10-24, since `{}/1` already covers CLP(R)/CLP(Q) on every
+surface; (b) if the documented `#=`-over-reals of `.clausal` must stay.

@@ -281,6 +281,8 @@ test("eager division") :-
 
     Inequality operators (`#<`, `#>`, `#=<`, `#>=`, `#\=`) for `sum_` and `scalar_product` introduce an intermediate total variable, post the equality constraint on it, then chain the appropriate binary relational constraint.
 
+    A non-linear sub-expression of a comparison -- `*` of two unknowns, `//`, `div`, `mod`, `rem`, `^`, `min`, `max`, `abs` -- is lifted into a fresh variable with a propagator of its own (`clausal/logic/clpfd_nonlinear.py`), as clpz does, and the comparison is posted over it. Each propagator narrows in every direction (the result from the operands, each operand from the result and the other operand), removes 0 from a divisor, and is domain consistent while the operands are small: `R*T #= 14, T = 7` gives `R = 2`, `X #= Y mod 3` gives `X in 0..2`. A linear disequality removes its one excluded value as soon as all but one variable are known (`X #\= Y + 1, Y = 2` removes 3 from X), and a sum left with two unit-coefficient variables keeps their holes (`X - Y #= 0` with `Y in 1\/3\/5` gives `X in 1\/3\/5`).
+
 ??? abstract "Propagation (AC-3)"
 
     Constraints are propagated via an AC-3 fixpoint loop. when a propagator narrows a domain:
