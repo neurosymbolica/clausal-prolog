@@ -38,6 +38,8 @@ static PyObject *fn_lt_propagate_bignum = NULL;
 static PyObject *fn_le_propagate_bignum = NULL;
 static PyObject *fn_sum_propagate_bignum = NULL;
 static PyObject *fn_scalar_propagate_bignum = NULL;
+static PyObject *fn_scalar_unit_pair = NULL;  /* clpfd._scalar_unit_pair */
+static PyObject *fn_post_linear_eq = NULL;    /* clpfd._post_linear_eq */
 /* Exact-int domain_remove reference impl — used by alldiff_propagate for a
  * ground member at the INT64_MIN/MAX sentinel or beyond int64 (A06-F007). */
 static PyObject *fn_py_domain_remove = NULL;
@@ -1821,6 +1823,10 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
     int cmax_pos_inf = 0, cmin_neg_inf = 0;
     double abs_bound = 0;  /* Σ|finite contribution| — see DOUBLE_ABS_SUM_LIMIT */
     int needs_bignum = 0;
+    /* For the two-free-unit-variables pass (_scalar_unit_pair): how many
+     * operands are not yet a single value, whether one of those has a
+     * coefficient other than +-1, and whether one has a hole. */
+    int n_free = 0, free_nonunit = 0, free_holes = 0;
     for (Py_ssize_t i = 0; i < nv; i++) {
         PyObject *v = PyTuple_GET_ITEM(self->sum_vars, i);
         PyObject *co = PyTuple_GET_ITEM(self->coeffs, i);
@@ -1842,6 +1848,11 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
 
         int64_t lo, hi;
         if (domain_min_i64(d, &lo) < 0 || domain_max_i64(d, &hi) < 0) { Py_DECREF(d); return -1; }
+        if (lo != hi) {
+            n_free++;
+            if (c_val != 1 && c_val != -1) free_nonunit = 1;
+            if (PyTuple_GET_SIZE(d) > 1) free_holes = 1;
+        }
         Py_DECREF(d);
 
         double lo_f = (lo == INT64_MIN) ? -HUGE_VAL : (double)lo;
@@ -1987,6 +1998,15 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
         if (ok <= 0) return ok;
     }
 
+    /* Two unit-coefficient operands left, one with a hole, a known total:
+     * domain consistency (each the other negated and shifted), as the
+     * Python twin does; the helper re-reads the domains. */
+    if (n_free == 2 && !free_nonunit && free_holes && total_lo == total_hi) {
+        PyObject *result = PyObject_CallFunctionObjArgs(
+            fn_scalar_unit_pair,
+            self->coeffs, self->sum_vars, self->total, trail, queue, NULL);
+        return result_to_int(result);
+    }
     return 1;
 }
 
@@ -2766,22 +2786,23 @@ py_fd_eq(PyObject *self, PyObject *args)
             }
         }
 
-        if (overflow) {
-            /* Coefficients exceed int64 — fall through to EqConstraint */
-            Py_DECREF(merged); Py_DECREF(lc); Py_DECREF(rc);
-            goto use_simple_eq;
-        }
-
         /* value = r_const - l_const (with overflow check) */
         int ov_lc = 0, ov_rc = 0;
-        long long lc_val = PyLong_AsLongLongAndOverflow(l_const_obj, &ov_lc);
-        long long rc_val = PyLong_AsLongLongAndOverflow(r_const_obj, &ov_rc);
-        Py_DECREF(lc); Py_DECREF(rc);
-        if (ov_lc || ov_rc) {
-            /* Constants exceed int64 — fall through to EqConstraint */
+        long long lc_val = overflow ? 0 : PyLong_AsLongLongAndOverflow(l_const_obj, &ov_lc);
+        long long rc_val = overflow ? 0 : PyLong_AsLongLongAndOverflow(r_const_obj, &ov_rc);
+        if (overflow || ov_lc || ov_rc) {
+            /* Coefficients or constants exceed int64: the Python twin's
+             * scalar product (bignum-safe), not a check over the tree --
+             * ``Z #= X * Y`` with Y bound to -2^70 must still narrow X. */
             Py_DECREF(merged);
-            goto use_simple_eq;
+            PyErr_Clear();
+            PyObject *res = PyObject_CallFunctionObjArgs(
+                fn_post_linear_eq, lc, rc, trail, NULL);
+            Py_DECREF(lc); Py_DECREF(rc);
+            Py_DECREF(rl); Py_DECREF(rr);
+            return res;
         }
+        Py_DECREF(lc); Py_DECREF(rc);
         if (PyErr_Occurred()) {
             Py_DECREF(merged); Py_DECREF(rl); Py_DECREF(rr);
             return NULL;
@@ -2849,7 +2870,6 @@ py_fd_eq(PyObject *self, PyObject *args)
     Py_XDECREF(rc);
     } /* end if (try_linearise) */
 
-use_simple_eq:
 
     /* _both_ground check */
     {
@@ -3407,6 +3427,8 @@ PyInit__clpfd_propagate(void)
     fn_le_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_le_propagate_bignum");
     fn_sum_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_sum_propagate_bignum");
     fn_scalar_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_scalar_propagate_bignum");
+    fn_scalar_unit_pair = PyObject_GetAttrString(clpfd_mod, "_scalar_unit_pair");
+    fn_post_linear_eq = PyObject_GetAttrString(clpfd_mod, "_post_linear_eq");
     fn_py_domain_remove = PyObject_GetAttrString(clpfd_mod, "_py_domain_remove");
     fn_narrow_by_real = PyObject_GetAttrString(clpfd_mod, "_narrow_by_real");
     fn_fd_reject_truth_atom = PyObject_GetAttrString(clpfd_mod, "_fd_reject_truth_atom");
@@ -3418,6 +3440,7 @@ PyInit__clpfd_propagate(void)
         !fn_eq_propagate_bignum || !fn_ne_propagate_bignum ||
         !fn_lt_propagate_bignum || !fn_le_propagate_bignum ||
         !fn_sum_propagate_bignum || !fn_scalar_propagate_bignum ||
+        !fn_scalar_unit_pair || !fn_post_linear_eq ||
         !fn_py_domain_remove || !fn_narrow_by_real || !fn_fd_reject_truth_atom)
         return NULL;
 

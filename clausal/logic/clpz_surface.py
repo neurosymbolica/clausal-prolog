@@ -757,13 +757,16 @@ def _lift_functional(l, r, trail):
     posts), or None when posting one failed.  Sound under reification: the
     function is total, so Z = abs(A) holds whether the comparison does or
     not."""
-    ok_l, lift_l = _fd._fd_int_term(l)
-    ok_r, lift_r = _fd._fd_int_term(r)
+    # a non-linear operator is lifted too where it is total (a product, a
+    # division by a non-zero constant, a power with a constant exponent):
+    # ``B #==> (X #> Y mod 2)`` decides B from X's domain alone
+    ok_l, lift_l = _fd._fd_int_term(l, "total")
+    ok_r, lift_r = _fd._fd_int_term(r, "total")
     if not (ok_l and ok_r and (lift_l or lift_r)):
         return l, r
     aux: list = []
-    l = _fd._lift_cells(l, aux)
-    r = _fd._lift_cells(r, aux)
+    l = _fd._lift_cells(l, aux, "total")
+    r = _fd._lift_cells(r, aux, "total")
     for _z, key, args in aux:
         # Posted OUTSIDE the reification, so it must hold for every value of
         # its arguments: a partial function (rem by 0) or a partial operand

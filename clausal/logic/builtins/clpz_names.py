@@ -132,10 +132,15 @@ def _bound_term(b):
 
 def _domain_term(dom):
     """Scryer's domain term: ``1..4 \\/ 6..9`` (left-associated), ``3..3``,
-    ``inf..sup``."""
+    ``inf..sup``; inside a union a one-value piece is the integer itself
+    (``1 \\/ 3..4 \\/ 6``), as Scryer writes it."""
     term = None
+    union = len(dom) > 1
     for lo, hi in dom:
-        piece = ("..", _bound_term(lo), _bound_term(hi))
+        if union and lo == hi:
+            piece = _bound_term(lo)
+        else:
+            piece = ("..", _bound_term(lo), _bound_term(hi))
         term = piece if term is None else ("\\/", term, piece)
     return term
 

@@ -34,13 +34,13 @@ e5(E) :- catch(global_cardinality([_,_], [1-1,1-1]), error(E, _), true).
 def test_global_cardinality_keys_restrict_the_elements(native, ans):
     mod = native.load("l3_clpz_review_gcc", GCC)
     p = lambda a, b: ("-", a, b)  # noqa: E731
-    r = lambda a, b: ("..", a, b)  # noqa: E731
     assert ans(mod, "g1") == [[1]]
     assert ans(mod, "g2") == [[]]
     assert ans(mod, "g3") == [[]]
     assert ans(mod, "g4") == [[p(1, 1), p(2, 0)]]
     assert ans(mod, "g5") == [[[1, 2], [2, 1]]]
-    assert ans(mod, "g6") == [[("\\/", r(1, 1), r(3, 3))]]
+    # a one-value piece of a union is the integer (Scryer: 1\/3)
+    assert ans(mod, "g6") == [[("\\/", 1, 3)]]
     assert ans(mod, "g7") == [[]]
     assert ans(mod, "g8") == [[]]
     assert ans(mod, "e1") == [("type_error", "integer", "a")]

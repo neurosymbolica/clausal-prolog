@@ -689,6 +689,60 @@ def _sum_propagate_bignum(sum_vars, total, trail, queue) -> bool:
     return True
 
 
+def _scalar_unit_pair(coeffs, sum_vars, total, trail, queue) -> bool:
+    """Domain consistency for ``c1*X + c2*Y = T`` with c1, c2 in {1, -1}
+    and T known -- what a scalar product is once all but two of its
+    variables are bound: each variable's domain is the other's, negated
+    and shifted (clpz's ``pplus``), so ``X - Y #= 0`` with Y in 1\\/3\\/5
+    leaves X in 1\\/3\\/5, where bounds alone kept 1..5.  The bounds pass
+    has run first; this is called (by the C and Python propagators alike)
+    only when some operand has a hole.  False on a wipeout."""
+    t = _expr_domain(deref(total), trail)
+    tv = domain_singleton(t) if t else None
+    if tv is None:
+        return bool(t)
+    free = []
+    for c, v in zip(coeffs, sum_vars):
+        v = deref(v)
+        if is_var(v):
+            free.append((c, v))
+        else:
+            tv -= c * v
+    if len(free) != 2 or any(c not in (1, -1) for c, _v in free):
+        return True
+    (c1, x), (c2, y) = free
+    if x is y:
+        return True
+    for (ca, a), (cb, b) in (((c1, x), (c2, y)), ((c2, y), (c1, x))):
+        a, b = deref(a), deref(b)
+        if not is_var(a):
+            continue
+        bd = _expr_domain(b, trail)
+        # a = ca * (tv - cb * b)
+        img = bd if ca * cb == -1 else _domain_negate(bd)
+        shift = ca * tv
+        img = tuple((lo + shift, hi + shift) for lo, hi in img)
+        nd = domain_intersection(_expr_domain(a, trail), img)
+        if not nd or not _narrow_if_changed(a, nd, trail, queue):
+            return False
+    return True
+
+
+def _scalar_holes(coeffs, sum_vars, trail) -> bool:
+    """Two unit-coefficient variables left, one with a hole (the case
+    :func:`_scalar_unit_pair` adds to the bounds pass)."""
+    n, holes = 0, False
+    for c, v in zip(coeffs, sum_vars):
+        v = deref(v)
+        if is_var(v):
+            n += 1
+            if n > 2 or c not in (1, -1):
+                return False
+            if len(_expr_domain(v, trail)) > 1:
+                holes = True
+    return n == 2 and holes
+
+
 def _scalar_propagate_bignum(coeffs, sum_vars, total, trail, queue) -> bool:
     """Equivalent of ScalarProductConstraint.propagate with bignum-safe ops.
 
@@ -762,6 +816,8 @@ def _scalar_propagate_bignum(coeffs, sum_vars, total, trail, queue) -> bool:
         if not _narrow_if_changed(v, new_d, trail, queue):
             return False
 
+    if _scalar_holes(coeffs, sum_vars, trail):
+        return _scalar_unit_pair(coeffs, sum_vars, total, trail, queue)
     return True
 
 
@@ -1105,6 +1161,9 @@ class ScalarProductConstraint(Constraint):
             if not _narrow_if_changed(v, new_d, trail, queue):
                 return False
 
+        if _scalar_holes(self.coeffs, self.sum_vars, trail):
+            return _scalar_unit_pair(self.coeffs, self.sum_vars, self.total,
+                                     trail, queue)
         return True
 
 
@@ -2505,21 +2564,7 @@ def fd_eq(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
         lc = _linearise(l)
         rc = _linearise(r)
         if lc is not None and rc is not None:
-            l_coeffs, l_const = lc
-            r_coeffs, r_const = rc
-            # l == r  →  (l_coeffs - r_coeffs)·vars = r_const - l_const
-            merged = dict(l_coeffs)
-            for v, c in r_coeffs.items():
-                merged[v] = merged.get(v, 0) - c
-            coeffs_dict = {v: c for v, c in merged.items() if c != 0}
-            value = r_const - l_const
-            if not coeffs_dict:
-                return l_const == r_const  # purely constant: no vars
-            vars_tuple = tuple(coeffs_dict.keys())
-            coeffs_tuple = tuple(coeffs_dict[v] for v in vars_tuple)
-            for v in vars_tuple:
-                _ensure_fd(v, trail)
-            return _post_constraint(ScalarProductConstraint(coeffs_tuple, vars_tuple, value), trail)
+            return _post_linear_eq(lc, rc, trail)
         # Non-linear: fall through to EqConstraint
     if _both_ground(l, r):
         l, r = _walk_compound(l), _walk_compound(r)
@@ -2532,6 +2577,27 @@ def fd_eq(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
         _ensure_fd(r, trail)
     constraint = EqConstraint(l, r)
     return _post_constraint(constraint, trail)
+
+
+def _post_linear_eq(lc, rc, trail: Trail) -> bool:
+    """Post ``l == r`` from their linearisations (``(coeffs, constant)``
+    each) as a scalar product -- the Python twin's route, and the C one's
+    when a coefficient or a constant is beyond int64."""
+    l_coeffs, l_const = lc
+    r_coeffs, r_const = rc
+    # l == r  →  (l_coeffs - r_coeffs)·vars = r_const - l_const
+    merged = dict(l_coeffs)
+    for v, c in r_coeffs.items():
+        merged[v] = merged.get(v, 0) - c
+    coeffs_dict = {v: c for v, c in merged.items() if c != 0}
+    value = r_const - l_const
+    if not coeffs_dict:
+        return l_const == r_const  # purely constant: no vars
+    vars_tuple = tuple(coeffs_dict.keys())
+    coeffs_tuple = tuple(coeffs_dict[v] for v in vars_tuple)
+    for v in vars_tuple:
+        _ensure_fd(v, trail)
+    return _post_constraint(ScalarProductConstraint(coeffs_tuple, vars_tuple, value), trail)
 
 
 def fd_ne(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
@@ -4810,9 +4876,64 @@ class FunctionalConstraint(Constraint):
 _Q_KEY = _REAL_KEY = None
 
 
-def _fd_int_term(x) -> tuple[bool, bool]:
+#: The non-linear operators a plain (not reified) post lifts into their own
+#: propagators (``clpfd_nonlinear``); ``*`` only when both factors hold a
+#: variable.  Partial ones (a divisor may be 0) prune for good, so a
+#: reified comparison keeps them in its tree (see clpz_surface).
+_NONLINEAR_KEYS = frozenset({("//", 2), ("div", 2), ("mod", 2), ("^", 2),
+                             ("$python_floordiv", 2), ("$python_mod", 2)})
+
+
+def _has_var(x) -> bool:
+    """*x* (an arithmetic term: nodes, cells, numbers) holds an unbound
+    variable."""
+    stack = [x]
+    while stack:
+        x = deref(stack.pop())
+        if is_var(x):
+            return True
+        t = type(x)
+        if t is int:
+            continue
+        key = _NODE_KEYS.get(t)
+        if key is not None:
+            if key[1] == 1:
+                stack.append(x.operand)
+            else:
+                stack.append(x.left)
+                stack.append(x.right)
+            continue
+        if t is tuple:
+            ka = _cell_key_args(x)
+            if ka is not None:
+                stack.extend(ka[1])
+    return False
+
+
+def _nonlinear_at(key, args, mode=True) -> bool:
+    """A node/cell with *key* over *args* is lifted by a plain post
+    (*mode* True), or -- *mode* ``"total"``, inside a reified comparison --
+    only when it is a total function there (a product; a division by a
+    non-zero constant; a power with a non-negative constant exponent)."""
+    if key == ("*", 2):
+        return _has_var(args[0]) and _has_var(args[1])
+    if key not in _NONLINEAR_KEYS:
+        return False
+    if mode != "total":
+        return True
+    if not (_has_var(args[0]) or _has_var(args[1])):
+        return False
+    d = deref(args[1])
+    if type(d) is not int:
+        return False
+    return d >= 0 if key == ("^", 2) else d != 0
+
+
+def _fd_int_term(x, nonlinear: bool = False) -> tuple[bool, bool]:
     """(*x* is an all-integer arithmetic term?, it holds an abs/min/max
-    cell?).  Iterative: a deep sum must not hit the recursion limit here."""
+    cell -- or, with *nonlinear*, a non-linear operator (``_nonlinear_at``)
+    -- to lift?).  Iterative: a deep sum must not hit the recursion limit
+    here."""
     global _Q_KEY, _REAL_KEY
     if _Q_KEY is None:
         from clausal.logic.clpq import Q_KEY  # noqa: PLC0415
@@ -4839,6 +4960,8 @@ def _fd_int_term(x) -> tuple[bool, bool]:
             if key[1] == 1:
                 stack.append(x.operand)
             else:
+                if nonlinear and not lifted:
+                    lifted = _nonlinear_at(key, (x.left, x.right), nonlinear)
                 stack.append(x.left)
                 stack.append(x.right)
             continue
@@ -4847,15 +4970,17 @@ def _fd_int_term(x) -> tuple[bool, bool]:
         ka = _cell_key_args(x)
         if ka is None or ka[0] not in _FD_INT_KEYS:
             return False, False
-        lifted = lifted or ka[0] in _LIFTED_KEYS
+        lifted = (lifted or ka[0] in _LIFTED_KEYS
+                  or (nonlinear and _nonlinear_at(ka[0], ka[1], nonlinear)))
         stack.extend(ka[1])
     return True, lifted
 
 
-def _lift_cells(x, aux: list):
-    """*x* with each abs/min/max cell replaced by a fresh Var; ``(Var, key,
-    args)`` for each is appended to *aux* (a ground one too: its propagator
-    binds the Var to the value)."""
+def _lift_cells(x, aux: list, nonlinear: bool = False):
+    """*x* with each abs/min/max cell -- and, with *nonlinear*, each
+    non-linear operator node or cell (``_nonlinear_at``) -- replaced by a
+    fresh Var; ``(Var, key, args)`` for each is appended to *aux* (a ground
+    one too: its propagator binds the Var to the value)."""
     x = deref(x)
     t = type(x)
     if t is int or is_var(x):
@@ -4863,16 +4988,54 @@ def _lift_cells(x, aux: list):
     key = _NODE_KEYS.get(t)
     if key is not None:
         if key[1] == 1:
-            return _replace(x, operand=_lift_cells(x.operand, aux))
-        return _replace(x, left=_lift_cells(x.left, aux),
-                        right=_lift_cells(x.right, aux))
+            return _replace(x, operand=_lift_cells(x.operand, aux, nonlinear))
+        left = _lift_cells(x.left, aux, nonlinear)
+        right = _lift_cells(x.right, aux, nonlinear)
+        if nonlinear and _nonlinear_at(key, (left, right), nonlinear):
+            return _lifted_var(aux, key, (left, right))
+        return _replace(x, left=left, right=right)
     key, args = _cell_key_args(x)
-    args = tuple(_lift_cells(a, aux) for a in args)
+    args = tuple(_lift_cells(a, aux, nonlinear) for a in args)
     if key in _LIFTED_KEYS:
         z = Var()
         aux.append((z, key, args))
         return z
+    if nonlinear and _nonlinear_at(key, args, nonlinear):
+        return _lifted_var(aux, key, args)
     return (key[0],) + args
+
+
+def _lifted_var(aux: list, key, args):
+    """A fresh Var for the non-linear ``key(args)``, appended to *aux* --
+    or the one already there for the same operator over the same variables
+    (``*`` in either order), so ``R*T - T*R`` cancels as ``R - R`` does
+    and a repeated product is one propagator."""
+    a, b = deref(args[0]), deref(args[1])
+    if (is_var(a) or type(a) is int) and (is_var(b) or type(b) is int):
+        kind = _NONLINEAR_KINDS.get(key)
+
+        def same(u, v):
+            return u is v or (type(u) is int and type(v) is int and u == v)
+        for z, k, prev in aux:
+            if len(prev) != 2 or _NONLINEAR_KINDS.get(k) != kind:
+                continue
+            p, q = deref(prev[0]), deref(prev[1])
+            if same(p, a) and same(q, b):
+                return z
+            if kind == "times" and same(p, b) and same(q, a):
+                return z
+    z = Var()
+    aux.append((z, key, args))
+    return z
+
+
+#: ``{lifted key: clpfd_nonlinear kind}``
+_NONLINEAR_KINDS = {
+    ("*", 2): "times", ("//", 2): "tdiv", ("div", 2): "fdiv",
+    ("$python_floordiv", 2): "fdiv", ("mod", 2): "mod",
+    ("$python_mod", 2): "mod", ("rem", 2): "rem", ("^", 2): "pow",
+    ("min", 2): "min", ("max", 2): "max",
+}
 
 
 def _operand_var(a, trail):
@@ -4893,10 +5056,12 @@ def _post_lifted(aux, trail) -> bool:
             if o is False:
                 return False
             ops.append(o)
+        kind = _NONLINEAR_KINDS.get(key)
         if key == ("abs", 1):
             c = AbsConstraint(z, ops[0])
-        elif key in (("min", 2), ("max", 2)):
-            c = MinMaxConstraint(z, ops[0], ops[1], key == ("max", 2))
+        elif kind is not None:
+            from clausal.logic.clpfd_nonlinear import constraint_class  # noqa: PLC0415
+            c = constraint_class(kind)(z, ops[0], ops[1])
         else:
             c = FunctionalConstraint(z, _EVALUABLE[key], ops)
         if not _post_constraint(c, trail):
@@ -4904,20 +5069,108 @@ def _post_lifted(aux, trail) -> bool:
     return True
 
 
-def _lifting_nonlinear_cells(post):
+class LinearNeConstraint(Constraint):
+    """``Σ c_i * V_i != k``: once all but one V_i are known, that one
+    loses its single excluded value (clpz's ``scalar_product_neq``).  The
+    comparison over the expression TREE it replaces pruned only once the
+    whole tree was ground: ``X #\\= Y + 1, Y = 2`` left 3 in X's domain,
+    and ``3 #\\= Y + 1`` never touched Y."""
+    __slots__ = ('coeffs', 'lvars', 'k')
+
+    def __init__(self, coeffs, vars_, k):
+        self.coeffs = tuple(coeffs)
+        self.lvars = tuple(vars_)
+        self.k = k
+        super().__init__(self.lvars)
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        rest = self.k
+        free = None
+        for c, v in zip(self.coeffs, self.lvars):
+            v = deref(v)
+            if is_var(v):
+                if free is not None:
+                    if v is free[1]:
+                        free = (free[0] + c, v)
+                        continue
+                    return True          # two unknowns: nothing to remove
+                free = (c, v)
+            else:
+                rest -= c * v
+        if free is None:
+            return rest != 0
+        c, v = free
+        if c == 0:
+            return rest != 0
+        if rest % c:
+            return True
+        val = rest // c
+        d = _expr_domain(v, trail)
+        if not domain_contains(d, val):
+            return True
+        nd = domain_remove(d, val)
+        return bool(nd) and _narrow_if_changed(v, nd, trail, queue)
+
+
+def _post_linear_ne(l, r, trail):
+    """``l != r`` over linear trees as a :class:`LinearNeConstraint`, or
+    None when a side is not a linear all-integer tree."""
+    l, r = _cells_as_nodes(deref(l), deref(r))
+    lc = _linearise(l)
+    if lc is None:
+        return None
+    rc = _linearise(r)
+    if rc is None:
+        return None
+    coeffs: dict = {}
+    for terms, sign in ((lc[0], 1), (rc[0], -1)):
+        for v, c in terms.items():
+            v = deref(v)
+            coeffs[v] = coeffs.get(v, 0) + sign * c
+    coeffs = {v: c for v, c in coeffs.items() if c}
+    k = rc[1] - lc[1]
+    if not coeffs:
+        return k != 0
+    for v in coeffs:
+        _ensure_fd(v, trail)
+    return _post_constraint(
+        LinearNeConstraint(tuple(coeffs.values()), tuple(coeffs), k), trail)
+
+
+def _lifting_nonlinear_cells(post, is_eq=False, is_ne=False):
     def wrapped(l, r, trail, *args, **kwargs):
         dl, dr = deref(l), deref(r)
         if not (type(dl) is int or is_var(dl)) or not (type(dr) is int or is_var(dr)):
             # only a compound side can hold a cell
-            okl, liftl = _fd_int_term(l)
+            okl, liftl = _fd_int_term(l, True)
             if okl:
-                okr, liftr = _fd_int_term(r)
+                okr, liftr = _fd_int_term(r, True)
                 if okr and (liftl or liftr):
                     aux: list = []
-                    l = _lift_cells(l, aux)
-                    r = _lift_cells(r, aux)
+                    l = _lift_cells(l, aux, True)
+                    r = _lift_cells(r, aux, True)
+                    if is_eq and aux:
+                        # ``Z #= X op Y``: the propagator's result is Z
+                        # itself, not a fresh variable equated to it
+                        dl, dr = deref(l), deref(r)
+                        last = aux[-1][0]
+                        if dr is last and (type(dl) is int or is_var(dl)) \
+                                and not any(dl is z for z, _k, _a in aux):
+                            aux[-1] = (dl, aux[-1][1], aux[-1][2])
+                            return _post_lifted(aux, trail)
+                        if dl is last and (type(dr) is int or is_var(dr)) \
+                                and not any(dr is z for z, _k, _a in aux):
+                            aux[-1] = (dr, aux[-1][1], aux[-1][2])
+                            return _post_lifted(aux, trail)
                     if not _post_lifted(aux, trail):
                         return False
+                if is_ne and okr:
+                    dl, dr = deref(l), deref(r)
+                    if not (type(dl) is int or is_var(dl)) or \
+                            not (type(dr) is int or is_var(dr)):
+                        res = _post_linear_ne(l, r, trail)
+                        if res is not None:
+                            return res
         return post(l, r, trail, *args, **kwargs)
     wrapped.__name__ = post.__name__
     wrapped.__doc__ = post.__doc__
@@ -5142,8 +5395,8 @@ class ExactDivConstraint(Constraint):
         return True
 
 
-fd_eq = _lifting_nonlinear_cells(fd_eq)
-fd_ne = _lifting_nonlinear_cells(fd_ne)
+fd_eq = _lifting_nonlinear_cells(fd_eq, is_eq=True)
+fd_ne = _lifting_nonlinear_cells(fd_ne, is_ne=True)
 fd_lt = _lifting_nonlinear_cells(fd_lt)
 fd_le = _lifting_nonlinear_cells(fd_le)
 

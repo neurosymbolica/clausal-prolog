@@ -12,7 +12,8 @@ Every row fails on 81dcd42b except the UNCHANGED pins of the fallback.
 The expected domains are Scryer's (/workspace/scryer-prolog-clpq), except
 the rows marked TIGHTER: there Scryer answers a weaker but equally sound
 bound (``7*R #>= 1000000`` is R in 142857..sup in Scryer, but 7*142857 =
-999999), and the fdiv/fmod pins, where Scryer is tighter.
+999999), and the fdiv/fmod rows, Scryer's since the non-linear propagators
+(2026-10-28).
 """
 from __future__ import annotations
 
@@ -105,14 +106,14 @@ WANT = {
     "zeroin": (None, _d(INF, SUP)),           # T may be 0: R unconstrained
     "reif": (None, _d(INF, 1)),
     "reif0": (None, _d(2, 10)),
-    # a // or mod node is not linearised: posted as before (81dcd42b's
-    # answer, and weaker than Scryer's 0..7 / 0..4 -- not in this fix)
-    "fdiv": (None, _d(0, 100)),
-    "fmod": (None, _d(0, 100)),
+    # a // or mod node is lifted into its own propagator (2026-10-28,
+    # clpfd_nonlinear): Scryer's 0..7 / 0..4 (it was 0..100 before)
+    "fdiv": (None, _d(0, 7)),
+    "fmod": (None, _d(0, 4)),
 }
 
 #: rows that already passed on 81dcd42b (pins of the unchanged fallback)
-UNCHANGED = {"zeroin", "fdiv", "fmod"}
+UNCHANGED = {"zeroin"}
 
 
 @pytest.fixture(scope="module")
