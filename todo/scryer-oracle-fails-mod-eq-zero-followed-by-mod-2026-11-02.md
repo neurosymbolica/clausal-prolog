@@ -55,6 +55,21 @@ earlier note here said "swapped order is fine". That was a coincidence of
   `src/lib/clpr.pl`, `src/tests/clpq/` and `src/tests/clpr/`, and apply a
   28-line `tests/scryer/src_tests.rs` hunk, which applies cleanly to head.
 
+## Two Scryer builds; no upstream PR for now (operator, 2026-11-02)
+
+- The clpq build stays as the CLP(Q|R) oracle and the default for every
+  test (`tests/_oracles.SCRYER`).
+- A plain upstream build (no clpq), pinned to a Codeberg commit, sits beside
+  it as `tests/_oracles.SCRYER_UPSTREAM`. It is for checking upstream
+  behaviour and fixes. No test uses it as an oracle until upstream clears the
+  two regressions above.
+- No PR of our clpq/clpr port to Scryer for now. The blocker is the
+  licence: the 1.3.3 sources carry an OFAI copyright notice and no licence
+  grant (see `clausal/logic/clpq/PROVENANCE.md`). Scryer is BSD-3, and our
+  acceptance of that risk does not carry over to upstream. So there is no
+  licence outreach, no reading of SWI-Prolog's clpqr, and no Codeberg
+  account until the operator reopens it.
+
 ## Do
 
 - Until the oracle carries `d57b6a88`, treat a Clausal-vs-Scryer disagreement
