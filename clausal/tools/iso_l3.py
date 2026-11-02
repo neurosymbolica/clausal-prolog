@@ -89,11 +89,15 @@ class LoweringRefused(Exception):
     caret at the fault and hand the term on (operator ruling 2026-10-24).
     """
 
-    def __init__(self, message: str, span=None, *, term=None, position=None):
+    def __init__(self, message: str, span=None, *, term=None, position=None,
+                 cause=None):
         super().__init__(message)
         self.span = span
         self.term = term
         self.position = position
+        #: The ``SyntaxError`` of another module a directive loaded, when
+        #: that load is what failed: its errors are that file's own.
+        self.cause = cause
 
     @property
     def errors(self) -> list:
@@ -1689,10 +1693,11 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
 
     errors: list = []   # strict: every refusal, raised after the last item
 
-    def refuse(msg: str, span, *, term=None, position=None) -> None:
+    def refuse(msg: str, span, *, term=None, position=None,
+               cause=None) -> None:
         if strict:
             errors.append(LoweringRefused(where(span) + msg, span, term=term,
-                                          position=position))
+                                          position=position, cause=cause))
         stats["refused"] += 1
         stats["refusals"].append(where(span) + msg)
 
@@ -1776,6 +1781,13 @@ def _lower_all(items, refuse, ctx, uses, body, stats, source, positions,
                 lowered = ctx.lower(it.term, it.spans, span)
             except DirectiveRefused as e:
                 refuse(f"directive: {e}", e.span or span)
+                continue
+            except SyntaxError as e:
+                # A module the directive loads (a use_module target's
+                # package, to read its module/2 list) failed to load: its
+                # errors, collected like this file's own.
+                refuse(f"directive: a module it loads failed: "
+                       f"{e.msg.splitlines()[0]}", span, cause=e)
                 continue
             body.extend(lowered)
             stats["lowered"] += 1

@@ -1192,6 +1192,14 @@ class PrologSyntaxError(SyntaxError):
         self.term = term
 
 
+def _without_cannot_import(err) -> str:
+    """One error's message without its ``Cannot import <file>: `` prefix:
+    a line of a many-error message."""
+    msg = err.msg
+    prefix = f"Cannot import {err.filename}: "
+    return msg[len(prefix):] if msg.startswith(prefix) else msg
+
+
 def _refusal_syntax_error(e, path, pl_source):
     """One :class:`~clausal.tools.iso_l3.LoweringRefused` -> the
     ``SyntaxError`` an import raises for it, at its ``.pl`` line (its
@@ -1280,18 +1288,38 @@ class NativePrologLoader(PrologLoader):
             # Every refusal in the file (operator ruling 2026-11-02): one
             # SyntaxError each, in source order, as ``.errors``; the raised
             # one points at the first and its message lists them all.
-            errors = [_refusal_syntax_error(x, path, pl_source)
-                      for x in e.errors]
+            # A module a directive loaded that failed brings its own errors
+            # (at their own file:line); alone, it is raised as it was.
+            causes = [x.cause for x in e.errors
+                      if isinstance(x.cause, SyntaxError)]
+            if len(e.errors) == 1 and causes:
+                raise causes[0]
+            errors = []
+            for x in e.errors:
+                if isinstance(x.cause, SyntaxError):
+                    errors.extend(getattr(x.cause, "errors", None)
+                                  or [x.cause])
+                else:
+                    errors.append(_refusal_syntax_error(x, path, pl_source))
+            # Several directives can load the same failing module: its
+            # errors are listed once.
+            seen: set = set()
+            errors = [x for x in errors
+                      if (k := (x.filename, x.lineno, x.offset, x.msg))
+                      not in seen and not seen.add(k)]
             if len(errors) == 1:
                 raise errors[0] from e
             first = errors[0]
             details = (first.filename, first.lineno, first.offset, first.text)
             if first.end_lineno is not None:
                 details += (first.end_lineno, first.end_offset)
-            raised = type(first)(f"Cannot import {path}: {e}", details,
-                                 **({"term": first.term}
-                                    if isinstance(first, PrologSyntaxError)
-                                    else {}))
+            lines = [_without_cannot_import(x) for x in errors]
+            raised = type(first)(
+                "\n".join([f"Cannot import {path}: {len(errors)} errors",
+                           *lines]),
+                details,
+                **({"term": first.term}
+                   if isinstance(first, PrologSyntaxError) else {}))
             raised.errors = errors
             raise raised from e
         self.l3_stats = low.stats

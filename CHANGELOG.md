@@ -17,7 +17,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   followed by one `file:line:` line per error in source order, and its new
   `.errors` attribute lists one `SyntaxError` per error: a
   `PrologSyntaxError` with its caret and ISO `.term` for a syntax error.
-  `.errors` is `[itself]` when there is one error. In `iso_l3`, several
+  `.errors` is `[itself]` when there is one error. A module that a
+  `use_module` directive loads while the file is read (to find a
+  `module/2` list) and that fails to load contributes its own errors, at
+  its own `file:line`, once however many directives load it; when it is
+  the only problem, its error is raised as before. In `iso_l3`, several
   refusals raise `LoweringRefusedMany` (a `LoweringRefused`; `.errors`
   lists them). The test runner's `<load>` result names them all.
 

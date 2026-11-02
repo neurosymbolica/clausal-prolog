@@ -97,3 +97,51 @@ def test_the_runner_names_every_error(tmp_path):
     [load] = res.results
     assert load.name == "<load>" and not load.passed
     assert [x.lineno for x in load.error.errors] == [2, 4, 6]
+
+
+def _broken_package(tmp_path, monkeypatch, top_extra):
+    """A package whose ``__init__`` loads a module with two errors, and a
+    top file whose ``use_module`` imports that package to find its target
+    (the import a module/2 list read needs)."""
+    pkg = tmp_path / "allerr_pkg"
+    pkg.mkdir()
+    (pkg / "__init__.clausal").write_text(":- use_module(allerr_pkg/broken).\n")
+    (pkg / "broken.clausal").write_text(
+        ":- module(broken, [q/1]).\nq(1).\np(X) :- X = .\n"
+        "r(X) :- !, X = 2.\n:- end_module(broken).\n")
+    (pkg / "good.clausal").write_text(
+        ":- module(good, [g/1]).\ng(1).\n:- end_module(good).\n")
+    top = tmp_path / "top.clausal"
+    top.write_text(":- use_module(allerr_pkg/good).\na(1).\n" + top_extra
+                   + ":- use_module(allerr_pkg/good).\n")   # loads it again
+    monkeypatch.syspath_prepend(str(tmp_path))
+    import sys  # noqa: PLC0415
+    for name in [n for n in sys.modules if n.startswith("allerr_pkg")]:
+        monkeypatch.delitem(sys.modules, name)
+    return top
+
+
+def test_a_module_that_fails_to_load_is_collected_with_its_errors(
+        tmp_path, monkeypatch):
+    top = _broken_package(tmp_path, monkeypatch, "b(X) :- !, X = 1.\n")
+    with pytest.raises(SyntaxError) as info:
+        _load(str(top))
+    e = info.value
+    where = [(x.filename.rsplit("/", 1)[-1], x.lineno) for x in e.errors]
+    # The dependency's own errors, where the first directive is, once,
+    # then this file's.
+    assert where == [("broken.clausal", 3), ("broken.clausal", 4),
+                     ("top.clausal", 3)]
+    assert e.errors[0].term is not None
+    assert e.msg.splitlines()[1:] == [
+        x.msg.split(": ", 1)[1] for x in e.errors]
+
+
+def test_a_module_that_fails_to_load_alone_raises_its_own_error(
+        tmp_path, monkeypatch):
+    top = _broken_package(tmp_path, monkeypatch, "")
+    with pytest.raises(SyntaxError) as info:
+        _load(str(top))
+    e = info.value
+    assert e.filename.endswith("broken.clausal") and e.lineno == 3
+    assert [x.lineno for x in e.errors] == [3, 4]
