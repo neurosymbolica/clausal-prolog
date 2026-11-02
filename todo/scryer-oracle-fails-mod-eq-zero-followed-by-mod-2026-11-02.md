@@ -63,12 +63,8 @@ earlier note here said "swapped order is fine". That was a coincidence of
   it as `tests/_oracles.SCRYER_UPSTREAM`. It is for checking upstream
   behaviour and fixes. No test uses it as an oracle until upstream clears the
   two regressions above.
-- No PR of our clpq/clpr port to Scryer for now. The blocker is the
-  licence: the 1.3.3 sources carry an OFAI copyright notice and no licence
-  grant (see `clausal/logic/clpq/PROVENANCE.md`). Scryer is BSD-3, and our
-  acceptance of that risk does not carry over to upstream. So there is no
-  licence outreach, no reading of SWI-Prolog's clpqr, and no Codeberg
-  account until the operator reopens it.
+- No PR of our clpq/clpr port to Scryer for now; the operator decides if
+  that changes.
 - Nothing goes upstream from automated tooling. Bug reports are drafted
   here, and the operator files them himself (see below).
 
