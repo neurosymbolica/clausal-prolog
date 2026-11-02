@@ -29,6 +29,32 @@ holding the expression's value. Every later goal then sees the wrong value.
 earlier note here said "swapped order is fine". That was a coincidence of
 `mod 100`: `(2024 mod 100) mod 4` happens to be 0.
 
+## Don't move the oracle to d57b6a88 or later yet (checked 2026-11-02)
+
+- d57b6a88 brings a regression of its own, still present at Codeberg head
+  581ac2e5. A comparison over an expression that follows a goal binding one of
+  its variables now throws:
+
+  ```prolog
+  q(1).
+  p(A) :- q(E), A - 0 < E.
+  % ?- p(0).  error(type_error(evaluable,list/0),(is)/2)   (true expected)
+  ```
+
+  The oracle (v0.10.0-137) and d57b6a88's parent 08e0d359 both answer
+  `true`. In our clpr.pl it breaks `arith_eval(A =< B)`, so
+  `{X >= 3}, {X = 3}`, `minimize/1` and `maximize/1` fail. The library's own
+  tests fail 9 cases: 2 in test_clpr, 7 in test_examples_clpr. CLP(Q) is
+  unaffected. We haven't found an upstream report of it.
+- Codeberg has had a reader regression since 5901e15d (2026-10-10), upstream
+  Codeberg #3490: `X = '“'` is a syntax error. Every build carrying
+  d57b6a88 has it.
+- So applying d57b6a88 alone would also bring the new regression. Keep the
+  current oracle until Codeberg head passes both repros and the clpq/clpr
+  tests. Carrying our additions over is mechanical: copy `src/lib/clpq.pl`,
+  `src/lib/clpr.pl`, `src/tests/clpq/` and `src/tests/clpr/`, and apply a
+  28-line `tests/scryer/src_tests.rs` hunk, which applies cleanly to head.
+
 ## Do
 
 - Until the oracle carries `d57b6a88`, treat a Clausal-vs-Scryer disagreement
