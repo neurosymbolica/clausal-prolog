@@ -25,10 +25,21 @@ surface described in [docs/public-api.md](docs/public-api.md).
   refusals raise `LoweringRefusedMany` (a `LoweringRefused`; `.errors`
   lists them). The test runner's `<load>` result names them all, without
   the `(file, line N)` suffix of `str(SyntaxError)`, which names the first
-  error but reads as the last line's.
+  error but reads as the last line's. A `.seam` file is unchanged: it still
+  stops at its first error.
 
 ### Fixed
 
+- **The installed package ships Clausal Prolog examples, and its maps link
+  to the online docs.** `clausal/examples/` now holds a `.clausal` version of
+  every example next to the `.seam` one. Before, the wheel shipped no
+  `.clausal` file at all, so a reader saw only the seam. The `AGENTS.md`
+  maps in the package linked docs pages by relative path (`../docs/...`),
+  which don't exist in an installed tree; they now link
+  `https://clausal.pl/<page>/`, and repository files link GitHub.
+  `tools/wheel_smoke.py` now runs every shipped example's tests and fails
+  on a relative link that leaves the package. It runs every check and names
+  each failure, instead of stopping at the first.
 - **The tooling's operator tables match Scryer's** (2026-10-28). The ISO
   table lacked `div` (400 yfx, ISO Cor.2). The `scryer` dialect (Scryer
   with library(clpz) loaded) lacked Scryer's built-in `+` (fy 200), `div`
