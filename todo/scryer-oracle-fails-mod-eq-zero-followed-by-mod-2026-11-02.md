@@ -69,6 +69,10 @@ earlier note here said "swapped order is fine". That was a coincidence of
   acceptance of that risk does not carry over to upstream. So there is no
   licence outreach, no reading of SWI-Prolog's clpqr, and no Codeberg
   account until the operator reopens it.
+- The operator also expects Codeberg to be hostile to AI-generated
+  contributions, ports included. We haven't checked Codeberg's or Scryer's
+  policy text. So we send Codeberg and the Scryer maintainers nothing,
+  including a report of the d57b6a88 arithmetic regression.
 
 ## Do
 
