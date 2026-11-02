@@ -27,7 +27,7 @@ from clausal.logic.variables import Var, walk
 from clausal.terms import term_str
 from tests._suffix import SEAM as SEAM_EXT
 
-SCRYER = "/workspace/scryer-prolog-clpq/target/release/scryer-prolog"
+from tests._oracles import SCRYER
 
 _N = itertools.count()
 

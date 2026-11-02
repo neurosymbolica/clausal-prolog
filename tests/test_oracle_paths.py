@@ -23,6 +23,32 @@ def test_no_test_hardcodes_the_wip_scryer_path():
         + "\n  ".join(hits))
 
 
+_BUILDS = ("/workspace/scryer-prolog-clpq" + "/target",
+           "/workspace/scryer-prolog-upstream" + "/target")
+
+
+def test_no_test_hardcodes_an_oracle_build_path():
+    """The two builds are named once, in tests/_oracles.py, so CLAUSAL_SCRYER
+    and CLAUSAL_SCRYER_UPSTREAM reach every test.  Docstrings and comments
+    may still mention a path; a string in code may not."""
+    import ast
+    files = [p for p in _TESTS.rglob("*.py") if p.name != "_oracles.py"]
+    assert len(files) > 100, f"guard scanned only {len(files)} files under {_TESTS}"
+    hits = []
+    for p in files:
+        tree = ast.parse(p.read_text(errors="replace"))
+        docstrings = {id(node.value) for node in ast.walk(tree)
+                      if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)}
+        hits += [f"{p.relative_to(_TESTS)}:{node.lineno}"
+                 for node in ast.walk(tree)
+                 if isinstance(node, ast.Constant) and isinstance(node.value, str)
+                 and id(node) not in docstrings
+                 and any(build in node.value for build in _BUILDS)]
+    assert not hits, (
+        "hardcoded Scryer build path; import SCRYER or SCRYER_UPSTREAM from "
+        "tests._oracles instead:\n  " + "\n  ".join(hits))
+
+
 # ── Scryer is never driven through its stdin toplevel ─────────────────────────
 #
 # The clean build HANGS when its interactive toplevel reads a pipe, /dev/null

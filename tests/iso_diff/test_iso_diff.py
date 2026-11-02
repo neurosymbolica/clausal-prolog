@@ -27,9 +27,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 #: The oracle: upstream Scryer plus a commit that only adds library(clpq)
 #: (not the /workspace/scryer-prolog working tree, which carries WIP).
-SCRYER = os.environ.get(
-    "CLAUSAL_SCRYER",
-    "/workspace/scryer-prolog-clpq/target/release/scryer-prolog")
+from tests._oracles import SCRYER
 AREAS = ["atoms", "terms", "sorting", "between", "arith", "except", "allsol",
          "lists"]
 

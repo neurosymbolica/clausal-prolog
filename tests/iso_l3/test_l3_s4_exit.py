@@ -30,7 +30,7 @@ import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 S4 = os.path.join(HERE, "s4")
-SCRYER = "/workspace/scryer-prolog-clpq/target/release/scryer-prolog"
+from tests._oracles import SCRYER
 ENV = "CLAUSAL_PL_FRONTEND"
 
 #: Scryer's answers, measured with the oracle binary above (2026-09-30).

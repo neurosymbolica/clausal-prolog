@@ -23,7 +23,7 @@ import pytest
 from clausal.tools import iso_l3 as L3
 from tests._suffix import SEAM
 
-SCRYER = "/workspace/scryer-prolog-clpq/target/release/scryer-prolog"
+from tests._oracles import SCRYER
 
 EXPORTS_OP = ":- module(s5m, [p/1, op(700, xfx, ===>)]).\np(a ===> b).\n"
 TOPLEVEL_OP = ":- module(s5m2, [p/1]).\n:- op(700, xfx, ===>).\np(a ===> b).\n"

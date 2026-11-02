@@ -19,7 +19,7 @@ import subprocess
 import pytest
 from tests._suffix import SEAM
 
-SCRYER = "/workspace/scryer-prolog-clpq/target/release/scryer-prolog"
+from tests._oracles import SCRYER
 
 SRC = """\
 :- use_module(library(clpz)).
