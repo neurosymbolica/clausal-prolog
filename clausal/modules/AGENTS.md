@@ -44,6 +44,6 @@ Up: [../AGENTS.md](../AGENTS.md)
 
 ## Docs
 
-[../../docs/units.md](../../docs/units.md), [../../docs/currency.md](../../docs/currency.md),
-[../../docs/graphs.md](../../docs/graphs.md), [../../docs/reflection.md](../../docs/reflection.md),
-[../../docs/python_integration.md](../../docs/python_integration.md), [../../docs/import.md](../../docs/import.md).
+[../../docs/units.md](https://clausal.pl/units/), [../../docs/currency.md](https://clausal.pl/currency/),
+[../../docs/graphs.md](https://clausal.pl/graphs/), [../../docs/reflection.md](https://clausal.pl/reflection/),
+[../../docs/python_integration.md](https://clausal.pl/python_integration/), [../../docs/import.md](https://clausal.pl/import/).

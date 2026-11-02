@@ -52,7 +52,7 @@ not exported.
 - Regenerate facades: `python -m clausal.tools.gen_library_facades` (writes `../../library/<name>.seam` and `../../_py_facades.py`). If the name is a Scryer library name (`clausal.library.SCRYER_LIBRARIES`), the facade is `library(py_<name>)`.
 - Optional bare-name alias for seam imports: `_IMPORT_ALIASES` in `clausal/templating/term_rewriting.py`.
 - Tests: `tests/test_<name>_module.py` (e.g. `test_json_module.py`, `test_crypto_modules.py`, `test_date_time.py`, `test_regex.py`); facade/import behavior in `tests/iso_l3/test_l3_library_facades.py` and `tests/iso_l3/test_l3_py_module_imports.py`.
-- User docs: `docs/<topic>.md` (e.g. [json](../../../docs/json.md), [date_time](../../../docs/date_time.md), [regex](../../../docs/regex.md), [crypto](../../../docs/crypto.md)).
+- User docs: `docs/<topic>.md` (e.g. [json](https://clausal.pl/json/), [date_time](https://clausal.pl/date_time/), [regex](https://clausal.pl/regex/), [crypto](https://clausal.pl/crypto/)).
 
 ## Gotchas
 

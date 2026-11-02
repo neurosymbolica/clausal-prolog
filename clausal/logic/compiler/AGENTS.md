@@ -42,7 +42,7 @@ Runtime helpers that generated code calls (list unification, star lists,
 - A new control construct: `control_constructs.py` plus its case in
   `terms_to_goalop.py`.
 - Indexing/performance: `arg_index.py`; see
-  [indexing.md](../../../docs/indexing.md).
+  [indexing.md](https://clausal.pl/indexing/).
 - To see generated code: the `*_ast` entry points return the `FunctionDef`.
 
 ## Gotchas
@@ -54,5 +54,5 @@ Runtime helpers that generated code calls (list unification, star lists,
 - `compiler/predicate.py` (compilation) is not `../predicate.py` (the
   predicate-row / handle model).
 
-Docs: [compiler.md](../../../docs/compiler.md) ·
-[reified_ite.md](../../../docs/reified_ite.md)
+Docs: [compiler.md](https://clausal.pl/compiler/) ·
+[reified_ite.md](https://clausal.pl/reified_ite/)

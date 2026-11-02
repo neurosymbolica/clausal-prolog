@@ -49,4 +49,4 @@ python -m clausal.tools.gen_library_facades --census  # module -> library(...) t
 
 ## Docs
 
-[../../docs/clausal_prolog.md](../../docs/clausal_prolog.md), [../../docs/importing_prolog.md](../../docs/importing_prolog.md), [../../docs/for_prolog_programmers.md](../../docs/for_prolog_programmers.md).
+[../../docs/clausal_prolog.md](https://clausal.pl/clausal_prolog/), [../../docs/importing_prolog.md](https://clausal.pl/importing_prolog/), [../../docs/for_prolog_programmers.md](https://clausal.pl/for_prolog_programmers/).

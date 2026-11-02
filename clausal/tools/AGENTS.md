@@ -80,8 +80,8 @@ Up: [../AGENTS.md](../AGENTS.md)
 
 ## Docs
 
-[../../docs/clausal_prolog.md](../../docs/clausal_prolog.md),
-[../../docs/importing_prolog.md](../../docs/importing_prolog.md),
-[../../docs/prolog_translation.md](../../docs/prolog_translation.md),
-plans: [../../implementation_plans/native-iso-reader-step2-2026-09-29.md](../../implementation_plans/native-iso-reader-step2-2026-09-29.md),
-[../../implementation_plans/toklex-token-formalism-design.md](../../implementation_plans/toklex-token-formalism-design.md).
+[../../docs/clausal_prolog.md](https://clausal.pl/clausal_prolog/),
+[../../docs/importing_prolog.md](https://clausal.pl/importing_prolog/),
+[../../docs/prolog_translation.md](https://clausal.pl/prolog_translation/),
+plans: [../../implementation_plans/native-iso-reader-step2-2026-09-29.md](https://github.com/neurosymbolica/clausal-prolog/blob/main/implementation_plans/native-iso-reader-step2-2026-09-29.md),
+[../../implementation_plans/toklex-token-formalism-design.md](https://github.com/neurosymbolica/clausal-prolog/blob/main/implementation_plans/toklex-token-formalism-design.md).

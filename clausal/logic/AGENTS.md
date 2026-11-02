@@ -108,18 +108,18 @@ tests every platform's wheels without publishing; use it after touching C.
 - `runtime/` must not import `clausal.logic.compiler`
   (`tests/test_runtime_compiler_boundary.py`).
 - `Trail` objects are per-thread (enforced); see the threading contract in
-  `variables/__init__.py` and [free_threading.md](../../docs/free_threading.md).
+  `variables/__init__.py` and [free_threading.md](https://clausal.pl/free_threading/).
 - Many cycles are broken with function-local imports (`# noqa: PLC0415`); keep
   new imports local when the module graph is cyclic.
 
 ## Docs
 
-[architecture.md](../../docs/architecture.md) ·
-[compiler.md](../../docs/compiler.md) · [tabling.md](../../docs/tabling.md) ·
-[wfs.md](../../docs/wfs.md) · [constraints.md](../../docs/constraints.md) ·
-[clpb.md](../../docs/clpb.md) · [clpq.md](../../docs/clpq.md) ·
-[clpr.md](../../docs/clpr.md) · [z3.md](../../docs/z3.md) ·
-[exceptions.md](../../docs/exceptions.md) ·
-[coroutining.md](../../docs/coroutining.md) ·
-[specialization.md](../../docs/specialization.md) ·
-[term_expansion.md](../../docs/term_expansion.md)
+[architecture.md](https://clausal.pl/architecture/) ·
+[compiler.md](https://clausal.pl/compiler/) · [tabling.md](https://clausal.pl/tabling/) ·
+[wfs.md](https://clausal.pl/wfs/) · [constraints.md](https://clausal.pl/constraints/) ·
+[clpb.md](https://clausal.pl/clpb/) · [clpq.md](https://clausal.pl/clpq/) ·
+[clpr.md](https://clausal.pl/clpr/) · [z3.md](https://clausal.pl/z3/) ·
+[exceptions.md](https://clausal.pl/exceptions/) ·
+[coroutining.md](https://clausal.pl/coroutining/) ·
+[specialization.md](https://clausal.pl/specialization/) ·
+[term_expansion.md](https://clausal.pl/term_expansion/)

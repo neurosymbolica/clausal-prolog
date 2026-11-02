@@ -62,9 +62,9 @@ Inside `term_rewriting.py` (find these with `grep -n "^class \|^def "`):
 - Tests: `tests/test_desugar.py`, `tests/test_quote_map.py`,
   `tests/test_template_compiler.py`. About 50 other test files import
   `term_rewriting` (`grep -rl term_rewriting tests`).
-- Docs: [syntax](../../docs/syntax.md), [import](../../docs/import.md),
-  [compiler](../../docs/compiler.md), [dcg](../../docs/dcg.md),
-  [caching](../../docs/caching.md).
+- Docs: [syntax](https://clausal.pl/syntax/), [import](https://clausal.pl/import/),
+  [compiler](https://clausal.pl/compiler/), [dcg](https://clausal.pl/dcg/),
+  [caching](https://clausal.pl/caching/).
 
 ## Gotchas
 

@@ -1,6 +1,6 @@
 # clausal/ — the Python package: loaders, CLI, test runner, and the subpackage map
 
-Up: [../AGENTS.md](../AGENTS.md)
+Up: [the repository AGENTS.md](https://github.com/neurosymbolica/clausal-prolog/blob/main/AGENTS.md)
 
 `clausal` is the whole engine. `import clausal` installs a lightweight
 `sys.meta_path` stub (`_lazy_hook.py`). The real import hook (`import_hook.py`)
@@ -24,10 +24,10 @@ Python errors into actionable ones.
 | [library/](library/AGENTS.md) | The `.seam` facades that a `.clausal` file imports as `library(<name>)`. |
 | [templating/](templating/AGENTS.md) | The seam compiler: `EmbedTransformer`/`TermTransformer` in `term_rewriting.py`, plus `desugar`, `quote_map`, and `@{}` templates. |
 | `pythonic_ast/` | "simple_ast": the dataclass node vocabulary (`nodes.py`: `Predicate`, `LoadName`, directive items, ...) that the seam compiler emits and the logic compiler consumes. `conversion_from_python_ast.py` simplifies a CPython `ast`; `node_class.py`/`transform.py` handle traversal. Edits invalidate the bytecode cache (see below). |
-| `fmt/` | `clausal-fmt`, the comment-preserving SEAM formatter: `comments.py` (capture), `transform.py` (the replace contract), `emit.py` (house style), `verify.py`, `repair_prompt.py`. It refuses `.pl`/`.clausal` files. Tests: `tests/fmt/`. Docs: [style](../docs/style.md). |
+| `fmt/` | `clausal-fmt`, the comment-preserving SEAM formatter: `comments.py` (capture), `transform.py` (the replace contract), `emit.py` (house style), `verify.py`, `repair_prompt.py`. It refuses `.pl`/`.clausal` files. Tests: `tests/fmt/`. Docs: [style](https://clausal.pl/style/). |
 | `rewrite/` | `clausal-rewrite`: rewrite rules written as seam predicates (`rules/*.seam`, matched against `reflection` terms). `driver.py` splices the results back and formats through `fmt/`. A leading `_` on a rule file keeps it out of the default set (`_broken_head_fold_control.seam` is a test asset). Tests: `tests/rewrite/`. |
 | `stdlib/` | Engine-shipped seam libraries: `reif.seam` (Scryer's library(reif)), `kleene.seam` (three-valued K3 connectives), `clpz.seam`/`clpz_sum.seam` (Scryer's `label/1`, `sum/3` for a `library(clpz)` import). `tools/iso_l3_directives.py` maps `use_module` names onto them. |
-| `examples/` | Self-contained `.seam` demo programs (nqueens, sudoku, metainterpreters, DCGs, ...). Docs: [examples](../docs/examples.md). |
+| `examples/` | Self-contained demo programs (nqueens, sudoku, metainterpreters, DCGs, ...), each in Clausal Prolog (`.clausal`, the public surface) and in the seam (`.seam`); each file's `test/1` clauses run with `clausal --test`. Docs: [examples](https://clausal.pl/examples/). |
 
 None of fmt/, rewrite/, pythonic_ast/, stdlib/ or examples/ has its own AGENTS.md:
 their files are few and their module docstrings serve as the map.
@@ -36,27 +36,27 @@ their files are few and their module docstrings serve as the map.
 
 | Module | Role |
 |---|---|
-| `__init__.py` | Public API (`solve`, `query`, `once`, `call`, `Var`, `to_python`, ...) and re-exports every builtin by name. See [public-api](../docs/public-api.md). |
+| `__init__.py` | Public API (`solve`, `query`, `once`, `call`, `Var`, `to_python`, ...) and re-exports every builtin by name. See [public-api](https://clausal.pl/public-api/). |
 | `_lazy_hook.py` | A stub finder that installs the real hook on first use. |
-| `import_hook.py` | Finders and loaders: `PredicateLoader` (seam), `PrologLoader` (`.pl` via the legacy translator, when `CLAUSAL_PL_FRONTEND=translator`), `NativePrologLoader` (`.clausal` always; `.pl` by default), `ModulesFinder`, the `.pyc` cache fingerprint, IPython wiring. See [import](../docs/import.md) and [caching](../docs/caching.md). |
+| `import_hook.py` | Finders and loaders: `PredicateLoader` (seam), `PrologLoader` (`.pl` via the legacy translator, when `CLAUSAL_PL_FRONTEND=translator`), `NativePrologLoader` (`.clausal` always; `.pl` by default), `ModulesFinder`, the `.pyc` cache fingerprint, IPython wiring. See [import](https://clausal.pl/import/) and [caching](https://clausal.pl/caching/). |
 | `_suffixes.py` | The ONE place file extensions are defined (`CLAUSAL_SUFFIXES`=`.seam`, `CLAUSAL_PROLOG_SUFFIXES`=`.clausal`, `.pl`). Use these names; never spell a suffix in code. |
 | `end_module.py` | `:- end_module(Name)` checks and `surface_of(path)` (which surface a file belongs to). |
-| `aio.py` | Asyncio driver (experimental): `adrive` runs any answer generator in a greenlet (`asolve`/`aonce`/`acall` are built on it); `await_only` switches to the event loop (or blocks on a private per-thread loop in a sync query); `async_predicate`; per-query tabling thread-local state, whose `owner` tags tables so another query can't see one half-built (`tabling._foreign`). Seam `--goal` in an `async def` lowers to `seam.aonce_bind`/`aeach`/`aeach_fresh` (`templating/term_rewriting.py`, `_async_scope`), and `++await` in a clause to `seam.await_only`. Predicates in `modules/py/asyncio.py`. See [asyncio](../docs/asyncio.md). |
+| `aio.py` | Asyncio driver (experimental): `adrive` runs any answer generator in a greenlet (`asolve`/`aonce`/`acall` are built on it); `await_only` switches to the event loop (or blocks on a private per-thread loop in a sync query); `async_predicate`; per-query tabling thread-local state, whose `owner` tags tables so another query can't see one half-built (`tabling._foreign`). Seam `--goal` in an `async def` lowers to `seam.aonce_bind`/`aeach`/`aeach_fresh` (`templating/term_rewriting.py`, `_async_scope`), and `++await` in a clause to `seam.await_only`. Predicates in `modules/py/asyncio.py`. See [asyncio](https://clausal.pl/asyncio/). |
 | `python_bridges.py` | Which `.seam` modules a `.clausal` importer may reach (engine-shipped, Python-free, or listed in `[tool.clausal] python_bridges`). |
 | `seam_audit.py` | Decides whether a `.seam` module is Python-free, by walking its final generated AST. |
 | `_py_facades.py` | GENERATED by `tools/gen_library_facades.py`. Do not edit; regenerate it. |
 | `_transition_constructs.py` | The keys of the counted "transition constructs" (`\+`, `once/1`, ...) that `tools/transition_census.py` ratchets. |
-| `cli.py`, `__main__.py` | The `clausal` command: `clausal FILE`, `-g GOAL`, `--test`, or the `?-` top-level (no FILE; `--python` for the Python REPL). See [cli](../docs/cli.md). |
+| `cli.py`, `__main__.py` | The `clausal` command: `clausal FILE`, `-g GOAL`, `--test`, or the `?-` top-level (no FILE; `--python` for the Python REPL). See [cli](https://clausal.pl/cli/). |
 | `toplevel.py` | The interactive ISO `?-` top-level: query reading, lazy stepping keys, answers via `cli._answer`. Tests: `tests/test_toplevel.py` (a pty). |
 | `toplevel_colour.py` | The top-level's colour schemes (`SCHEMES`: off, variables-by-hash); the key that cycles them is in `toplevel.py`. |
-| `testing.py` | The test runner for `test/1`/`test/2` clauses (seam, `.clausal`, `.pl`), including the goal-level failure diagnostics. Run it with `python -m clausal.testing`. See [testing](../docs/testing.md). |
-| `reflection.py` | Reifies seam source into terms (`reify_source`, `reify_file`) and renders them back. It never executes the source. Used by `rewrite/`, `fmt/verify.py`, `testing.py`. See [reflection](../docs/reflection.md). |
+| `testing.py` | The test runner for `test/1`/`test/2` clauses (seam, `.clausal`, `.pl`), including the goal-level failure diagnostics. Run it with `python -m clausal.testing`. See [testing](https://clausal.pl/testing/). |
+| `reflection.py` | Reifies seam source into terms (`reify_source`, `reify_file`) and renders them back. It never executes the source. Used by `rewrite/`, `fmt/verify.py`, `testing.py`. See [reflection](https://clausal.pl/reflection/). |
 | `terms.py` | The term layer: value and functor types, `Quantity`, atom/string quoting. |
 | `codegen.py` | Turns AST statement lists into Python functions (used by `logic/compiler/predicate.py` and `templating/compiler.py`). |
 | `*_diagnostics.py` | Actionable errors: `syntax_` (source line and caret), `import_` (lists the module's exports), `predicate_` (lists candidates), `atom_` (an undeclared literal atom). |
 | `lint_warnings.py` | Load-time lint warning classes. It has no imports, so plain Python can raise them. |
 | `pl_data_imports.py` | A seam `-import_from` of a DATA name from a `.pl` module resolves to the atom. |
-| `repl.py`, `python_repl.py`, `_install_ipython.py` | The `Solutions` iterator; the `clausal-repl` console (ptpython or a plain console); the IPython startup-hook installer. See [ipython](../docs/ipython.md). |
+| `repl.py`, `python_repl.py`, `_install_ipython.py` | The `Solutions` iterator; the `clausal-repl` console (ptpython or a plain console); the IPython startup-hook installer. See [ipython](https://clausal.pl/ipython/). |
 | `regex.py` | A compatibility shim for `clausal.modules.py.re`. |
 
 Console scripts are declared in `../pyproject.toml` `[project.scripts]`.
@@ -70,8 +70,8 @@ Console scripts are declared in `../pyproject.toml` `[project.scripts]`.
 - New builtin or runtime behaviour: [logic/AGENTS.md](logic/AGENTS.md).
 - A wrapper around a Python library: [modules/AGENTS.md](modules/AGENTS.md) and
   [library/AGENTS.md](library/AGENTS.md) (then regenerate `_py_facades.py`).
-- System overview: [architecture](../docs/architecture.md),
-  [for_ai_agents](../docs/for_ai_agents.md).
+- System overview: [architecture](https://clausal.pl/architecture/),
+  [for_ai_agents](https://clausal.pl/for_ai_agents/).
 
 ## Gotchas
 

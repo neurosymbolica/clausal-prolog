@@ -65,7 +65,7 @@ Errors: `raise LogicException(type_error(...))` etc. from `../exceptions.py`
 name, register both (e.g. `lists.py` registers `memberchk/2` beside
 `in_check/2`); the `.pl` <-> seam name maps are in
 `clausal/tools/prolog_to_clausal.py` and `clausal/tools/prolog_dialect.py`.
-Then document it in [builtins.md](../../../docs/builtins.md) (its signature
+Then document it in [builtins.md](https://clausal.pl/builtins/) (its signature
 companion is `tests/fixtures/docs/builtins_sig_tests.seam`).
 
 ## Gotchas

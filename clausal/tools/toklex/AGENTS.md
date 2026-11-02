@@ -5,7 +5,7 @@ into a DFA and runs it. The public ISO tokenizer
 (`../prolog_tokenizer.py`) and the incremental `PrologReader`
 (`../prolog_reader.py`) both drive the lexer built from
 `specs/iso.toklex.pl`, so **lexical rules live in the spec file, not in Python**.
-Design: [../../../implementation_plans/toklex-token-formalism-design.md](../../../implementation_plans/toklex-token-formalism-design.md).
+Design: [../../../implementation_plans/toklex-token-formalism-design.md](https://github.com/neurosymbolica/clausal-prolog/blob/main/implementation_plans/toklex-token-formalism-design.md).
 
 Up: [../AGENTS.md](../AGENTS.md)
 
