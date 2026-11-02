@@ -7,6 +7,20 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Changed
+
+- **A `.clausal` or `.pl` file that fails to load reports every error,
+  not the first** (operator ruling 2026-11-02: like a compiler). The
+  native front end lowers the whole file before it refuses, and the
+  module still never loads with a clause missing. The `SyntaxError` an
+  import raises points at the first error, its message is `N errors`
+  followed by one `file:line:` line per error in source order, and its new
+  `.errors` attribute lists one `SyntaxError` per error: a
+  `PrologSyntaxError` with its caret and ISO `.term` for a syntax error.
+  `.errors` is `[itself]` when there is one error. In `iso_l3`, several
+  refusals raise `LoweringRefusedMany` (a `LoweringRefused`; `.errors`
+  lists them). The test runner's `<load>` result names them all.
+
 ### Fixed
 
 - **The tooling's operator tables match Scryer's** (2026-10-28). The ISO

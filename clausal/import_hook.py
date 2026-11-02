@@ -1192,6 +1192,34 @@ class PrologSyntaxError(SyntaxError):
         self.term = term
 
 
+def _refusal_syntax_error(e, path, pl_source):
+    """One :class:`~clausal.tools.iso_l3.LoweringRefused` -> the
+    ``SyntaxError`` an import raises for it, at its ``.pl`` line (its
+    ``.errors`` is itself): a :class:`PrologSyntaxError`, caret on the fault
+    and the ISO term attached, for a reader syntax error."""
+    from clausal.tools import iso_l3  # noqa: PLC0415
+    line = iso_l3.line_of(pl_source, e.span) or 0
+    # Split on "\n" only: _Positions numbers lines that way, and
+    # splitlines() also breaks on \f, \x85, \u2028 ...
+    lines = pl_source.split("\n")
+    if e.term is None:
+        text = lines[line - 1] if 0 < line <= len(lines) else ""
+        err = SyntaxError(f"Cannot import {path}: {e}", (path, line, 1, text))
+    else:
+        # A syntax error: the caret goes on the fault itself, which may be
+        # lines below the item's first line, and the ISO term travels with
+        # the exception.
+        col = 1
+        if e.position is not None:
+            line, col = e.position
+        text = lines[line - 1] if 0 < line <= len(lines) else ""
+        err = PrologSyntaxError(f"Cannot import {path}: {e}",
+                                (path, line, col, text, line, col + 1),
+                                term=e.term)
+    err.errors = [err]
+    return err
+
+
 class _NativeItems:
     """What ``_run_v2_pipeline`` reads off ``_last_transformer``: the module
     items.  The native front end has no transformer to hand over."""
@@ -1249,25 +1277,23 @@ class NativePrologLoader(PrologLoader):
                 directives_only=directives_only, source_path=path,
                 module_name=self._fullname)
         except iso_l3.LoweringRefused as e:
-            line = iso_l3.line_of(pl_source, e.span) or 0
-            # Split on "\n" only: _Positions numbers lines that way, and
-            # splitlines() also breaks on \f, \x85, \u2028 ...
-            lines = pl_source.split("\n")
-            if e.term is None:
-                text = lines[line - 1] if 0 < line <= len(lines) else ""
-                raise SyntaxError(f"Cannot import {path}: {e}",
-                                  (path, line, 1, text)) from e
-            # A syntax error: the caret goes on the fault itself, which
-            # may be lines below the item's first line, and the ISO term
-            # travels with the exception.
-            col = 1
-            if e.position is not None:
-                line, col = e.position
-            text = lines[line - 1] if 0 < line <= len(lines) else ""
-            raise PrologSyntaxError(
-                f"Cannot import {path}: {e}",
-                (path, line, col, text, line, col + 1),
-                term=e.term) from e
+            # Every refusal in the file (operator ruling 2026-11-02): one
+            # SyntaxError each, in source order, as ``.errors``; the raised
+            # one points at the first and its message lists them all.
+            errors = [_refusal_syntax_error(x, path, pl_source)
+                      for x in e.errors]
+            if len(errors) == 1:
+                raise errors[0] from e
+            first = errors[0]
+            details = (first.filename, first.lineno, first.offset, first.text)
+            if first.end_lineno is not None:
+                details += (first.end_lineno, first.end_offset)
+            raised = type(first)(f"Cannot import {path}: {e}", details,
+                                 **({"term": first.term}
+                                    if isinstance(first, PrologSyntaxError)
+                                    else {}))
+            raised.errors = errors
+            raise raised from e
         self.l3_stats = low.stats
         # The bytecode baked in other files' content (a use_module/1 export
         # list, a declared module name): the cache key covers this file

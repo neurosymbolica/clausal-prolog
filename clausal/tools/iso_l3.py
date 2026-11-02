@@ -95,6 +95,31 @@ class LoweringRefused(Exception):
         self.term = term
         self.position = position
 
+    @property
+    def errors(self) -> list:
+        """Every refusal this exception reports, in source order: itself."""
+        return [self]
+
+
+class LoweringRefusedMany(LoweringRefused):
+    """Every refusal in one file, in source order (operator ruling
+    2026-11-02: like a compiler, the loader does not stop at the first
+    error).  Its own span, term and position are the first refusal's, so a
+    consumer that reads one error reads the first; *errors* lists them all,
+    each a :class:`LoweringRefused`.  The message is ``N errors`` and then
+    one line per refusal."""
+
+    def __init__(self, errors: list):
+        first = errors[0]
+        super().__init__("\n".join([f"{len(errors)} errors",
+                                     *(str(e) for e in errors)]),
+                         first.span, term=first.term, position=first.position)
+        self._errors = list(errors)
+
+    @property
+    def errors(self) -> list:
+        return list(self._errors)
+
 
 # ── cut-free ruling ──────────────────────────────────────────────────────────
 
@@ -1611,12 +1636,14 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     item is read, so an ``op/3`` it applies to *op_table* (the reader's own
     table) governs the items after it, as in Scryer.
 
-    *strict* (the default) raises :class:`LoweringRefused` on the first item
-    it cannot lower -- an unknown or refused directive, a refused
-    control construct or grammar body, or a reader ``SyntaxIssue`` -- so a
-    module never imports with a clause missing.  ``strict=False`` is the explicit counting
-    mode for tooling that surveys many files: it skips and counts every
-    refusal in ``stats``.
+    *strict* (the default) raises when any item cannot be lowered -- an
+    unknown or refused directive, a refused control construct or grammar
+    body, or a reader ``SyntaxIssue`` -- so a module never imports with a
+    clause missing.  It lowers the whole file first and raises them all,
+    in source order (operator ruling 2026-11-02): one refusal is a
+    :class:`LoweringRefused`, several a :class:`LoweringRefusedMany`.
+    ``strict=False`` is the explicit counting mode for tooling that surveys
+    many files: it skips and counts every refusal in ``stats``.
 
     *directives_only* (the loader's cache-hit path) lowers the directives
     alone -- their module items are what that path needs -- and counts each
@@ -1660,12 +1687,45 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
             return f"{where_file}:{line}: "
         return f"at {span}: " if span else ""
 
+    errors: list = []   # strict: every refusal, raised after the last item
+
     def refuse(msg: str, span, *, term=None, position=None) -> None:
         if strict:
-            raise LoweringRefused(where(span) + msg, span, term=term,
-                                  position=position)
+            errors.append(LoweringRefused(where(span) + msg, span, term=term,
+                                          position=position))
         stats["refused"] += 1
         stats["refusals"].append(where(span) + msg)
+
+    try:
+        mod = _lower_all(items, refuse, ctx, uses, body, stats, source,
+                         positions, singletons, surface, where_file,
+                         directives_only)
+    except Exception as e:
+        # A crash after a refusal is most likely its consequence (a
+        # compiler's cascade): report what was found, the crash last.
+        if not errors:
+            raise
+        errors.append(e if isinstance(e, LoweringRefused) else LoweringRefused(
+            f"{where_file}: lowering stopped after the errors above: "
+            f"{type(e).__name__}: {e}"))
+    if errors:
+        if len(errors) == 1:
+            raise errors[0]
+        # Source order: an end-of-file check (no line) after the items.
+        inf = float("inf")
+        errors.sort(key=lambda e: (positions.line(e.span)
+                                   if e.span is not None else None) or inf)
+        raise LoweringRefusedMany(errors)
+    if _lowered is not None:
+        _lowered.append(ctx)
+    return mod, stats
+
+
+def _lower_all(items, refuse, ctx, uses, body, stats, source, positions,
+               singletons, surface, where_file, directives_only):
+    """:func:`lower_items`' loop and end-of-file checks; -> the module."""
+    from clausal.end_module import EndModuleError  # noqa: PLC0415
+    from clausal.tools.iso_l3_directives import DirectiveRefused  # noqa: PLC0415
 
     defined: set = set()    # (name, arity) of each procedure defined here
     heads: dict = {}        # predicate name -> its first clause's span
@@ -1780,9 +1840,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
         "functor_arities": len(ctx.auto_functors)}
     mod = ast.Module(body=body, type_ignores=[])
     ast.fix_missing_locations(mod)
-    if _lowered is not None:
-        _lowered.append(ctx)
-    return mod, stats
+    return mod
 
 
 class _Item:

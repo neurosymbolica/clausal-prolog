@@ -62,14 +62,14 @@
   },
   "clausal/tools/toklex/specs/clausal.toklex.pl": {
    "collect_error": null,
-   "error": "PrologSyntaxError: Cannot import <root>/clausal/tools/toklex/specs/clausal.toklex.pl: clausal.toklex.pl:97: syntax error (SyntaxIssue): Expected ')', got 'atom' ('then') at 97:22 (clausal.toklex.pl, line 97)",
+   "error": "PrologSyntaxError: Cannot import <root>/clausal/tools/toklex/specs/clausal.toklex.pl: 25 errors",
    "load": "refused",
    "preds": null,
    "tests": null
   },
   "clausal/tools/toklex/specs/iso.toklex.pl": {
    "collect_error": null,
-   "error": "PrologSyntaxError: Cannot import <root>/clausal/tools/toklex/specs/iso.toklex.pl: iso.toklex.pl:49: syntax error (SyntaxIssue): Expected ')', got 'atom' ('then') at 49:22 (iso.toklex.pl, line 49)",
+   "error": "PrologSyntaxError: Cannot import <root>/clausal/tools/toklex/specs/iso.toklex.pl: 24 errors",
    "load": "refused",
    "preds": null,
    "tests": null
@@ -362,7 +362,7 @@
   },
   "docs/importing_prolog.md#L718": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L718.pl: doc_importing_prolog_L718.pl:1: directive: use_module(small_sizes): no module small_sizes on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L718.pl, line 1)",
+   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L718.pl: 2 errors",
    "load": "refused",
    "preds": null,
    "tests": null
@@ -1016,7 +1016,7 @@
   },
   "docs/tutorial.md#L333": {
    "collect_error": null,
-   "error": "PrologSyntaxError: Cannot import <work>/docs/doc_tutorial_L333.pl: doc_tutorial_L333.pl:1: syntax error (SyntaxIssue): Expected '.', got 'atom' ('#>') at 1:18 (doc_tutorial_L333.pl, line 1)",
+   "error": "PrologSyntaxError: Cannot import <work>/docs/doc_tutorial_L333.pl: 2 errors",
    "load": "refused",
    "preds": null,
    "tests": null
@@ -1172,7 +1172,7 @@
   },
   "tests/_scryer_toplevel.pl": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <root>/tests/_scryer_toplevel.pl: _scryer_toplevel.pl:25: directive: use_module(library(charsio)): library(charsio) is not a library the native front end knows (built in: apply, between, dcgs, dif, error, freeze, iso_ext, lists, pairs, when; mapped: clpfd, clpq, clpz, lambda, reif, tabling; facades: library(L) for each L in clausal._py_facades.PY_FACADE_LIBS) (_scryer_toplevel.pl, line 25)",
+   "error": "SyntaxError: Cannot import <root>/tests/_scryer_toplevel.pl: 4 errors",
    "load": "refused",
    "preds": null,
    "tests": null
@@ -1594,7 +1594,7 @@
   },
   "tests/fuzz/_scryer_fz_top.pl": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <root>/tests/fuzz/_scryer_fz_top.pl: _scryer_fz_top.pl:17: directive: use_module(library(charsio)): library(charsio) is not a library the native front end knows (built in: apply, between, dcgs, dif, error, freeze, iso_ext, lists, pairs, when; mapped: clpfd, clpq, clpz, lambda, reif, tabling; facades: library(L) for each L in clausal._py_facades.PY_FACADE_LIBS) (_scryer_fz_top.pl, line 17)",
+   "error": "SyntaxError: Cannot import <root>/tests/fuzz/_scryer_fz_top.pl: 3 errors",
    "load": "refused",
    "preds": null,
    "tests": null
