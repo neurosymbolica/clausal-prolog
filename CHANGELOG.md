@@ -29,6 +29,19 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **CLP(Q)'s default solver refuses a non-linear constraint with an ISO
+  error, not a Python `TypeError`.** `{X * Y = 10}`, and `inf/2`, `sup/2`,
+  `minimize/1`, `maximize/1` and `bb_inf` on a non-linear objective, raise
+  `domain_error(linear_expression, Operand)`; an operand that is no
+  arithmetic expression raises `type_error(expression, Culprit)`, as
+  `entailed/1` and the `CLAUSAL_CLPQ=holzbaur` port do. The port still
+  delays a non-linear constraint. A program that caught `TypeError` here
+  catches the error term now.
+- **The CLP(Q) port's errors name a non-linear base by its expression.**
+  `bb_inf([sin(X)], X, I)` under `CLAUSAL_CLPQ=holzbaur` raised
+  `type_error(expression, NonlinearBase('sin', ...))`, a Python object in
+  the error term; it raises `type_error(expression, sin(_))`. Error
+  reporting only, the algorithm is 1.3.3's (DEVIATIONS.md D25).
 - **The tooling's operator tables match Scryer's** (2026-10-28). The ISO
   table lacked `div` (400 yfx, ISO Cor.2). The `scryer` dialect (Scryer
   with library(clpz) loaded) lacked Scryer's built-in `+` (fy 200), `div`

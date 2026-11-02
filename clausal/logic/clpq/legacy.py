@@ -36,7 +36,7 @@ from clausal.logic.variables import (
     register_attr_hook,
 )
 from clausal.logic.exceptions import (
-    LogicException, instantiation_error, type_error)
+    LogicException, domain_error, instantiation_error, type_error)
 from clausal.logic.clpq.arithmetic import is_number
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -1445,6 +1445,21 @@ def _expression_culprit(*exprs: Any) -> Any:
     return _NO_CULPRIT
 
 
+def _not_linear(context: str, *failed: Any) -> LogicException:
+    """The error for a constraint or objective the default solver cannot
+    linearise (*failed*: the operands that did not linearise).  A leaf that
+    is no arithmetic expression is nf.pl's ``type_error(expression,
+    Culprit)``, as ``entailed/1`` and the port raise; otherwise the operand
+    is non-linear, which this solver refuses with ``domain_error(
+    linear_expression, Operand)`` where the port delays it (docs/clpq.md).
+    Both used to be a Python TypeError."""
+    culprit = _expression_culprit(*failed)
+    if culprit is not _NO_CULPRIT:
+        return LogicException(type_error("expression", culprit, "normal_form/2"))
+    return LogicException(domain_error("linear_expression", deref(failed[0]),
+                                       context))
+
+
 def _nonlinear(*exprs: Any) -> bool:
     """True when one of *exprs* is non-linear: a product or a quotient of
     variables, or a function the linear form has no term for (``^``,
@@ -1806,7 +1821,7 @@ def q_eq(l: Any, r: Any, trail: Trail) -> bool:
     if lc is None or rc is None:
         if _zero_divisor(l, r):
             return False
-        raise TypeError("CLP(Q) requires linear constraints")
+        raise _not_linear("{}/1", *[e for e, c in ((l, lc), (r, rc)) if c is None])
     lk, lv = lc
     rk, rv = rc
     merged = dict(lk)
@@ -1842,7 +1857,7 @@ def q_ne(l: Any, r: Any, trail: Trail) -> bool:
     if lc is None or rc is None:
         if _zero_divisor(l, r):
             return False
-        raise TypeError("CLP(Q) requires linear constraints")
+        raise _not_linear("{}/1", *[e for e, c in ((l, lc), (r, rc)) if c is None])
     lk, lv = lc
     rk, rv = rc
     # Compute l - r: the disequality holds when this is != 0
@@ -1885,7 +1900,7 @@ def _post_le(l: Any, r: Any, trail: Trail, context: str,
     if lc is None or rc is None:
         if _zero_divisor(l, r):
             return False
-        raise TypeError("CLP(Q) requires linear constraints")
+        raise _not_linear(context, *[e for e, c in ((l, lc), (r, rc)) if c is None])
     lk, lv = lc
     rk, rv = rc
     merged = dict(lk)
@@ -1941,7 +1956,7 @@ def sup(expr: Any, result_var: Any, trail: Trail) -> bool:
     if lc is None:
         if _zero_divisor(expr):
             return False
-        raise TypeError("sup requires a linear expression")
+        raise _not_linear("sup/2", expr)
     coeffs, const = lc
     tableau = _get_tableau(trail)
     tab_copy = tableau.copy()
@@ -1966,7 +1981,7 @@ def inf(expr: Any, result_var: Any, trail: Trail) -> bool:
     if lc is None:
         if _zero_divisor(expr):
             return False
-        raise TypeError("inf requires a linear expression")
+        raise _not_linear("inf/2", expr)
     coeffs, const = lc
     tableau = _get_tableau(trail)
     tab_copy = tableau.copy()
@@ -2129,7 +2144,7 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
     if lc is None:
         if _zero_divisor(expr):
             return False
-        raise TypeError("maximize requires a linear expression")
+        raise _not_linear("maximize/1", expr)
     coeffs, const = lc
     tableau = _get_tableau(trail)
     _snapshot_tableau(trail)
@@ -2155,7 +2170,7 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
     if lc is None:
         if _zero_divisor(expr):
             return False
-        raise TypeError("minimize requires a linear expression")
+        raise _not_linear("minimize/1", expr)
     coeffs, const = lc
     tableau = _get_tableau(trail)
     _snapshot_tableau(trail)
@@ -2561,7 +2576,7 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
     if lc is None:
         if _zero_divisor(expr):
             return False
-        raise TypeError("bb_inf requires a linear expression")
+        raise _not_linear(context, expr)
     obj_coeffs, obj_const = lc
 
     tableau = _get_tableau(trail)
