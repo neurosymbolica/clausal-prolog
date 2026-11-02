@@ -23,7 +23,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   its own `file:line`, once however many directives load it; when it is
   the only problem, its error is raised as before. In `iso_l3`, several
   refusals raise `LoweringRefusedMany` (a `LoweringRefused`; `.errors`
-  lists them). The test runner's `<load>` result names them all.
+  lists them). The test runner's `<load>` result names them all, without
+  the `(file, line N)` suffix of `str(SyntaxError)`, which names the first
+  error but reads as the last line's.
 
 ### Fixed
 

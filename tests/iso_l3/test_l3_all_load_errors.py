@@ -145,3 +145,16 @@ def test_a_module_that_fails_to_load_alone_raises_its_own_error(
     e = info.value
     assert e.filename.endswith("broken.clausal") and e.lineno == 3
     assert [x.lineno for x in e.errors] == [3, 4]
+
+
+def test_the_runner_report_has_no_stray_first_error_location(tmp_path):
+    # SyntaxError's own str() ends with "(file, line N)" of the FIRST error,
+    # which reads as the last line's location; each line names its own.
+    from clausal.testing import _failure_lines, run_file
+    p = tmp_path / "multi.clausal"
+    p.write_text(THREE)
+    [load] = run_file(p).results
+    lines = _failure_lines("multi.clausal", load)
+    assert lines[0].endswith("3 errors")
+    assert lines[-1].strip().startswith("multi.clausal:6: ")
+    assert not lines[-1].rstrip().endswith("line 2)")

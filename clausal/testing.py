@@ -3219,6 +3219,16 @@ NEGATIVE_SUCCEEDED = ("test(..., fail) succeeded: its goal has a solution, "
                       "and a `fail` test passes only when it has none")
 
 
+def _error_text(error) -> str:
+    """*error* as the report shows it.  A load that failed with several
+    errors shows its message alone: each line names its own ``file:line``,
+    and ``SyntaxError``'s ``(file, line N)`` suffix -- the first error's --
+    would read as the last line's location."""
+    if isinstance(error, SyntaxError) and len(getattr(error, "errors", ())) > 1:
+        return error.msg
+    return str(error)
+
+
 def _failure_lines(rel: str, result: TestResult) -> list[str]:
     location = f"{rel}:{result.line}" if result.line else rel
     header = f"  {location} :: {result.name}"
@@ -3226,7 +3236,7 @@ def _failure_lines(rel: str, result: TestResult) -> list[str]:
     if result.error is None:
         detail, rest = "", []
     else:
-        detail, *rest = str(result.error).splitlines() or [""]
+        detail, *rest = _error_text(result.error).splitlines() or [""]
     if result.error is not None:
         header = lines[0] = f"{header} — {detail}"
     elif result.negative:
@@ -3538,7 +3548,7 @@ def main(args: list[str] | None = None) -> int:
                 if parsed.verbose:
                     msg = f"  FAIL  {rel}::{r.name}"
                     if r.error:
-                        msg += f"  ({r.error})"
+                        msg += f"  ({_error_text(r.error)})"
                     print(msg)
 
     # Summary
