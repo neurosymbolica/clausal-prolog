@@ -950,7 +950,8 @@ def _evaluate_step(term, work, values, path):
         work.append((_EVALUATE, arguments[1]))
         work.append((_EVALUATE, arguments[0]))
         return True
-    raise LogicException(type_error("expression", term, "normal_form/2"))  # clause 13
+    raise LogicException(type_error("expression", _as_culprit(term),
+                                    "normal_form/2"))       # clause 13
 
 
 def normal_form_number(number):
@@ -1760,7 +1761,8 @@ def _repair_skeleton(term, table):
     # 1.3.3's last clause reads the skeleton as an expression and raises
     # type_error(expression, ...) on its list argument
     # (test_a_zero_divisor_inside_a_repaired_quotient_raises).
-    raise LogicException(type_error("expression", term, "normal_form/2"))
+    raise LogicException(type_error("expression", _as_culprit(term),
+                                    "normal_form/2"))
 
 
 def normal_form_length(norm):
@@ -1772,6 +1774,17 @@ def normal_form_length(norm):
 #
 # A normal form as a term: compound cells (functor, arguments...), with
 # engine numbers (to_number) for the rationals.
+
+def _as_culprit(term):
+    """The term an error names for *term*.  A non-linear base reaches
+    normal_form/2 as itself when a caller hands one on (bb_inf([sin(X)], ...)
+    narrows the base sin(X) through inf/2); 1.3.3 names its internal
+    skeleton there, and the port names the expression the base stands for
+    (test_a_non_linear_base_in_an_error_is_its_expression)."""
+    if type(term) is NonlinearBase:
+        return normal_form_to_term([Monomial(ONE, [(term, 1)])])
+    return term
+
 
 def normal_form_to_term(norm):
     """nf.pl, normal_form_to_term/2 (nf2term/2).  1.3.3's

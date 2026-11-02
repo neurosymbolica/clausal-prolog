@@ -1546,3 +1546,16 @@ found are.  Timed at a load average of 9 to 11 on 8 cores:
   then `{Y >= T}`) raises `RecursionError` from clpfd's cell walk before
   the port is reached.  Legacy the same.  The cyclic case of the same walk
   under `inf/2`/`sup/2` is in D23.
+
+## D25: an error names a non-linear base by its expression
+
+Error reporting only; no change to any algorithm.  `bb_inf([sin(X)], X, I)`
+takes bb.pl's clause 3 (one base, coefficient 1), narrows the base `sin(X)`
+through `inf/2`, and `normal_form/2` refuses it with
+`type_error(expression, Culprit)`, at the same point and with the same
+error kind as 1.3.3.  1.3.3's culprit is its internal skeleton; the port
+named the Python object that holds the skeleton, which a Prolog program
+cannot read.  It now names the expression the base stands for, `sin(_)`
+(`_as_culprit` in `normal_form.py`, at clause 13 and at the repair path's
+last clause; `test_a_non_linear_base_in_an_error_is_its_expression`).
+The variable is the solver's own: the error undoes the caller's binding.
