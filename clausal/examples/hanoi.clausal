@@ -1,0 +1,41 @@
+:- module(hanoi, [hanoi/5]).
+
+:- use_module(library(clpz), [(#=)/2]).
+
+hanoi(0, _, _, _, []).
+
+hanoi(N, From, To, Via, Moves) :-
+    N > 0,
+    N1 #= N - 1,
+    hanoi(N1, From, Via, To, Moves1),
+    hanoi(N1, Via, To, From, Moves2),
+    append(Moves1, [[From, To]], Mid),
+    append(Mid, Moves2, Moves).
+
+% -- Tests ---------------------------------------------------------------------
+
+test("0 disks = no moves") :-
+    hanoi(0, left, right, center, []).
+
+test("1 disk") :-
+    hanoi(1, left, right, center, [[left, right]]).
+
+test("2 disks") :-
+    hanoi(2, left, right, center, [
+        [left, center],
+        [left, right],
+        [center, right]
+    ]).
+
+test("3 disks") :-
+    hanoi(3, left, right, center, [
+        [left, right],
+        [left, center],
+        [right, center],
+        [left, right],
+        [center, left],
+        [center, right],
+        [left, right]
+    ]).
+
+:- end_module(hanoi).

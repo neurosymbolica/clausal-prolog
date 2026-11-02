@@ -1,6 +1,6 @@
 # The source distribution: everything a build from it needs (the C
 # extensions' sources and headers) and everything the installed package
-# reads at run time (.seam library and stdlib modules, the toklex specs and
-# Prolog preludes, the census baseline).
+# reads at run time (.seam library and stdlib modules, the .clausal and
+# .seam examples, the toklex specs and Prolog preludes, the census baseline).
 include LICENSE README.md CHANGELOG.md
-recursive-include clausal *.c *.h *.seam *.pl *.json *.md
+recursive-include clausal *.c *.h *.seam *.clausal *.pl *.json *.md

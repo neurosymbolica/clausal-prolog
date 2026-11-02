@@ -68,7 +68,7 @@ include = ["clausal*"]
 # clausal/rewrite/rules, clausal/tools/toklex/specs, ...), hence the
 # recursive globs from the top package.
 [tool.setuptools.package-data]
-clausal = ["**/*.seam", "**/*.pl", "**/*.json"]
+clausal = ["**/*.seam", "**/*.clausal", "**/*.pl", "**/*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

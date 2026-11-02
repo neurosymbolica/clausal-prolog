@@ -1,0 +1,73 @@
+% Symbolic differentiation.
+%
+% Arithmetic operators (+, *, ^) are structural terms in clause heads and
+% predicate call arguments: they are matched/constructed, not evaluated.
+
+:- module(symbolic_diff, [diff/3]).
+
+:- use_module(library(clpz), [(#=)/2]).
+
+% diff(vx)/dVx = 1
+diff(0, 0, 0).
+
+diff(X, X, 1).
+
+% Constant number: diff(c)/dVx = 0
+diff(C, _, 0) :-
+    number(C).
+
+% Different variable: diff(vy)/dVx = 0
+% Variables are represented as atoms (vx, vy), so guard with atom/1.
+diff(Y, X, 0) :-
+    atom(Y),
+    dif(Y, X).
+
+% Sum: diff(a+b)/dVx = da/dVx + db/dVx
+diff(A + B, X, Da + Db) :-
+    diff(A, X, Da),
+    diff(B, X, Db).
+
+% Product (Leibniz rule): diff(a*b)/dVx = a*db + b*da
+diff(A * B, X, A * Db + B * Da) :-
+    diff(A, X, Da),
+    diff(B, X, Db).
+
+% Power rule: diff(e^n)/dVx = n * e^(n-1) * de/dVx
+diff(E ^ N, X, N * E ^ N1 * De) :-
+    number(N),
+    N1 #= N - 1,
+    diff(E, X, De).
+
+% -- Tests --------------------------------------------------------------------
+
+test("dx/dx = 1") :-
+    diff(vx, vx, 1).
+
+test("d(5)/dx = 0") :-
+    diff(5, vx, 0).
+
+test("d(3)/dy = 0") :-
+    diff(3, vy, 0).
+
+test("d(y)/dx = 0") :-
+    diff(vy, vx, 0).
+
+test("d(x+x)/dx") :-
+    diff(vx + vx, vx, 1 + 1).
+
+test("d(x+5)/dx") :-
+    diff(vx + 5, vx, 1 + 0).
+
+test("d(x*x)/dx") :-
+    diff(vx * vx, vx, vx * 1 + vx * 1).
+
+test("d(x^2)/dx") :-
+    diff(vx ^ 2, vx, 2 * vx ^ 1 * 1).
+
+test("d(x^3)/dx") :-
+    diff(vx ^ 3, vx, 3 * vx ^ 2 * 1).
+
+test("d(3*x)/dx") :-
+    diff(3 * vx, vx, 3 * 1 + vx * 0).
+
+:- end_module(symbolic_diff).

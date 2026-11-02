@@ -1,0 +1,156 @@
+:- module(higher_order, [doubles/2, all_positive/1, keep_positive/2, remove_negative/2, sum_list_fold/2, product_list/2, squares/2, keep_even/2, remove_even/2, negate_list/2, count_fold/2, max_fold/3]).
+
+:- use_module(library(lambda)).
+
+:- use_module(library(clpz), [(#=)/2]).
+
+% -- maplist/3: transform each element --------------------------------------
+
+% Double every element.
+doubles(Xs, Ys) :-
+    maplist(\ X ^ Y ^ (Y #= X * 2), Xs, Ys).
+
+% Square every element.
+squares(Xs, Ys) :-
+    maplist(\ X ^ Y ^ (Y #= X * X), Xs, Ys).
+
+% Negate every element.
+negate_list(Xs, Ys) :-
+    maplist(\ X ^ Y ^ (Y #= 0 - X), Xs, Ys).
+
+% -- maplist/2: check predicate on each element ------------------------------
+
+% Check all elements are positive.
+all_positive(Xs) :-
+    maplist(\ X ^ (X > 0), Xs).
+
+% -- include/3: keep matching elements ---------------------------------------
+
+% Keep positive elements.
+keep_positive(Xs, Ps) :-
+    include(\ X ^ (X > 0), Xs, Ps).
+
+% Keep even elements.
+keep_even(Xs, Es) :-
+    include(\ X ^ (X mod 2 #= 0), Xs, Es).
+
+% -- exclude/3: remove matching elements -------------------------------------
+
+% Remove negative elements (keep zero and positive).
+remove_negative(Xs, Rs) :-
+    exclude(\ X ^ (X < 0), Xs, Rs).
+
+% Remove even elements (keep odd).
+remove_even(Xs, Os) :-
+    exclude(\ X ^ (X mod 2 #= 0), Xs, Os).
+
+% -- foldl/4: left fold ------------------------------------------------------
+
+% Sum via fold.
+sum_list_fold(Xs, S) :-
+    foldl(\ E ^ A ^ R ^ (R #= A + E), Xs, 0, S).
+
+% Product via fold.
+product_list(Xs, P) :-
+    foldl(\ E ^ A ^ R ^ (R #= A * E), Xs, 1, P).
+
+% Count elements via fold.
+count_fold(Xs, N) :-
+    foldl(\ _ELEM_UNUSED ^ A ^ R ^ (R #= A + 1), Xs, 0, N).
+
+% Maximum via fold with initial value.
+max_fold(Xs, Init, M) :-
+    foldl(\ E ^ A ^ R ^ (E >= A, R = E ; A > E, R = A), Xs, Init, M).
+
+% -- Tests -------------------------------------------------------------------
+
+% maplist/3
+test("doubles [1,2,3]") :-
+    doubles([1, 2, 3], [2, 4, 6]).
+
+test("doubles empty") :-
+    doubles([], []).
+
+test("doubles negative") :-
+    doubles([-1, 0, 5], [-2, 0, 10]).
+
+test("squares [1,2,3,4]") :-
+    squares([1, 2, 3, 4], [1, 4, 9, 16]).
+
+test("negate [1,-2,3]") :-
+    negate_list([1, -2, 3], [-1, 2, -3]).
+
+test("negate empty") :-
+    negate_list([], []).
+
+% maplist/2
+test("all positive pass") :-
+    all_positive([1, 2, 3]).
+
+test("all positive fail") :-
+    \+ all_positive([1, -2, 3]).
+
+test("all positive empty") :-
+    all_positive([]).
+
+% include/3
+test("keep positive") :-
+    keep_positive([1, -2, 3, -4], [1, 3]).
+
+test("keep positive none") :-
+    keep_positive([-1, -2], []).
+
+test("keep positive all") :-
+    keep_positive([5, 10], [5, 10]).
+
+test("keep even") :-
+    keep_even([1, 2, 3, 4, 5, 6], [2, 4, 6]).
+
+test("keep even none") :-
+    keep_even([1, 3, 5], []).
+
+% exclude/3
+test("remove negative") :-
+    remove_negative([1, -2, 3, -4], [1, 3]).
+
+test("remove negative none present") :-
+    remove_negative([1, 2, 3], [1, 2, 3]).
+
+test("remove even") :-
+    remove_even([1, 2, 3, 4, 5], [1, 3, 5]).
+
+% foldl/4
+test("sum fold") :-
+    sum_list_fold([1, 2, 3], 6).
+
+test("sum fold empty") :-
+    sum_list_fold([], 0).
+
+test("sum fold single") :-
+    sum_list_fold([42], 42).
+
+test("product fold") :-
+    product_list([2, 3, 4], 24).
+
+test("product fold empty") :-
+    product_list([], 1).
+
+test("product fold with zero") :-
+    product_list([5, 0, 3], 0).
+
+test("count fold") :-
+    count_fold([10, 20, 30, 40], 4).
+
+test("count fold empty") :-
+    count_fold([], 0).
+
+test("max fold") :-
+    max_fold([3, 7, 2, 9, 1], 0, 9).
+
+test("max fold single") :-
+    max_fold([5], 0, 5).
+
+test("max fold init wins") :-
+    max_fold([1, 2], 100, 100).
+
+:- end_module(higher_order).

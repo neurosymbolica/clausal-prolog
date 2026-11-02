@@ -1,0 +1,121 @@
+% DCG State Threading
+%
+% DCGs are a general state-passing mechanism. The difference-list pair can
+% carry any state encoded as a single-element list [State]. Terminals read
+% state, pushback writes it back, and phrase/3 sets initial/final state.
+%
+% See also: metalevel.at/prolog/dcg
+
+:- module(dcg_state, [
+    state//1, state2//2, inc//0, double//0, count3//0, inc_then_double//0,
+    count_leaves//1, num_leaves/2, push//1, push_all//1, collect_items/2
+]).
+
+:- use_module(library(clpz), [(#=)/2]).
+
+% -- State helpers ------------------------------------------------------------
+%
+% These two nonterminals are the core of state-passing DCGs. Copy them
+% into any module that needs state threading.
+
+% state//1: Read current state (passthrough: state is not modified).
+state(S), [S] -->
+    [S].
+
+% state2//2: Read old state S0, replace with S.
+state2(S0, S), [S] -->
+    [S0].
+
+% -- Counter ------------------------------------------------------------------
+%
+% Increment a counter threaded through phrase/3:
+%   phrase(count3, [0], [N])  gives  N = 3
+
+inc -->
+    state(N0),
+    { N #= N0 + 1 },
+    state2(_, N).
+
+double -->
+    state(N0),
+    { N #= N0 * 2 },
+    state2(_, N).
+
+count3 -->
+    inc,
+    inc,
+    inc.
+
+inc_then_double -->
+    inc,
+    double.
+
+% -- Tree leaf counting -------------------------------------------------------
+%
+% Trees are represented as leaf or [Left, Right].
+%   num_leaves([leaf, leaf], N)  gives  N = 2
+%   num_leaves([leaf, [leaf, leaf]], N)  gives  N = 3
+
+count_leaves(leaf) -->
+    state(N0),
+    { N #= N0 + 1 },
+    state2(_, N).
+
+count_leaves([L, R]) -->
+    count_leaves(L),
+    count_leaves(R).
+
+num_leaves(T, N) :-
+    phrase(count_leaves(T), [0], [N]).
+
+% -- Accumulator --------------------------------------------------------------
+%
+% Collect items from a list into an accumulator via state threading.
+%   phrase(push_all([1, 2, 3]), [[]], Rest)  gives  Rest = [[3, 2, 1]]
+
+push(X) -->
+    state(Acc0),
+    { Acc = [X|Acc0] },
+    state2(_, Acc).
+
+push_all([]) -->
+    [].
+
+push_all([X|Xs]) -->
+    push(X),
+    push_all(Xs).
+
+collect_items(Xs, R) :-
+    phrase(push_all(Xs), [[]], [R]).
+
+% -- Tests --------------------------------------------------------------------
+
+test("count3 counts to 3") :-
+    phrase(count3, [0], [N]),
+    N == 3.
+
+test("inc_then_double from 5") :-
+    phrase(inc_then_double, [5], [N]),
+    N == 12.
+
+test("double alone") :-
+    phrase(double, [7], [N]),
+    N == 14.
+
+test("num_leaves of two leaves") :-
+    num_leaves([leaf, leaf], N),
+    N == 2.
+
+test("num_leaves of a nested tree") :-
+    num_leaves([leaf, [leaf, leaf]], N),
+    N == 3.
+
+test("collect_items reverses") :-
+    collect_items([1, 2, 3], R),
+    R == [3, 2, 1].
+
+test("collect_items empty") :-
+    collect_items([], R),
+    R == [].
+
+:- end_module(dcg_state).

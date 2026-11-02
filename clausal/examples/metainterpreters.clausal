@@ -1,0 +1,254 @@
+% Meta-interpreters for Clausal Prolog.
+%
+% Ported from Markus Triska's "A Couple of Meta-interpreters in Prolog"
+% (https://www.metalevel.at/acomip/).
+%
+% Object-level terms are represented as actual terms,
+% matching the approach on Triska's metalevel page.
+%
+% A clause is [Head, BodyGoals] where BodyGoals is a list of goals.
+% A program is a list of clauses.
+
+:- module(metainterpreters, [
+    solve/2, solve_count/3, solve_limit/3, solve_iterative_deepening/2,
+    solve_tree/3, match_clause/3
+]).
+
+:- use_module(library(clpz), [(#=)/2]).
+
+% -- Object Programs ----------------------------------------------------------
+
+% natnum(0).
+% natnum(s(X)) :- natnum(X).
+natnum_program(Program) :-
+    Program = [
+        [natnum(0), []],
+        [natnum(succ(X)), [natnum(X)]]
+    ].
+
+% edge(a,b). edge(b,c). edge(b,d).
+% path(X,Y) :- edge(X,Y).
+% path(X,Y) :- edge(X,Z), path(Z,Y).
+graph_program(Program) :-
+    Program = [
+        [edge(a, b), []],
+        [edge(b, c), []],
+        [edge(b, d), []],
+        [path(X, Y), [edge(X, Y)]],
+        [path(X, Y), [edge(X, Z), path(Z, Y)]]
+    ].
+
+% Cyclic graph: recursive clause listed FIRST so naive DFS loops.
+% edge(a,b). edge(b,a).
+% path(X,Y) :- edge(X,Z), path(Z,Y).   <- tried first, infinite loop
+% path(X,Y) :- edge(X,Y).
+cyclic_program(Program) :-
+    Program = [
+        [edge(a, b), []],
+        [edge(b, a), []],
+        [path(X, Y), [edge(X, Z), path(Z, Y)]],
+        [path(X, Y), [edge(X, Y)]]
+    ].
+
+% -- Helper: clause matching --------------------------------------------------
+
+% match_clause(Goal, FreshBody, Program)
+% Find a clause in Program whose head unifies with Goal.
+% Returns the body with fresh variables (via copy_term).
+match_clause(Goal, FreshBody, Program) :-
+    member(Clause, Program),
+    copy_term(Clause, [FreshHead, FreshBody]),
+    Goal = FreshHead.
+
+% -- 1. Vanilla Meta-Interpreter ----------------------------------------------
+%
+% List-based, tail-recursive (mi_list2 from the article).
+% Processes a goal list: for each goal, find a matching clause, prepend its
+% body to the remaining goals, and continue.
+
+solve([], _).
+
+solve([Goal|Goals], Program) :-
+    match_clause(Goal, Body, Program),
+    append(Body, Goals, AllGoals),
+    solve(AllGoals, Program).
+
+% -- 2. Inference-Counting Meta-Interpreter -----------------------------------
+%
+% solve_count(Goals, Program, Count): Count is the total number of
+% clause resolution steps performed.
+
+solve_count([], _, 0).
+
+solve_count([Goal|Goals], Program, Count) :-
+    match_clause(Goal, Body, Program),
+    append(Body, Goals, AllGoals),
+    solve_count(AllGoals, Program, SubCount),
+    Count #= SubCount + 1.
+
+% -- 3. Depth-Limited Meta-Interpreter ----------------------------------------
+%
+% solve_limit(Goals, Program, MaxDepth): fails if the number of resolution
+% steps exceeds MaxDepth. Each clause resolution consumes one unit of depth.
+
+solve_limit([], _, _).
+
+solve_limit([Goal|Goals], Program, Max) :-
+    Max > 0,
+    Max1 #= Max - 1,
+    match_clause(Goal, Body, Program),
+    append(Body, Goals, AllGoals),
+    solve_limit(AllGoals, Program, Max1).
+
+% -- 4. Iterative Deepening Meta-Interpreter ----------------------------------
+%
+% Tries increasing depth limits until a proof is found.
+% This is a complete search strategy: it will find a solution if one exists,
+% even for programs where naive DFS would loop.
+
+solve_iterative_deepening(Goals, Program) :-
+    between(0, 1000, Depth),
+    solve_limit(Goals, Program, Depth).
+
+% -- 5. Proof Tree Meta-Interpreter -------------------------------------------
+%
+% solve_tree(Goals, Program, Tree): Tree is a list of proof nodes.
+% Each node is [Goal, SubTree] where SubTree is the proof for the
+% clause body that was used to resolve Goal.
+
+solve_tree([], _, []).
+
+solve_tree([Goal|Goals], Program, [[Goal, BodyTree]|GoalsTree]) :-
+    match_clause(Goal, Body, Program),
+    solve_tree(Body, Program, BodyTree),
+    solve_tree(Goals, Program, GoalsTree).
+
+% -- Tests --------------------------------------------------------------------
+
+% Vanilla MI: natural numbers
+test("solve natnum(0)") :-
+    natnum_program(P),
+    solve([natnum(0)], P).
+
+test("solve natnum(s(0))") :-
+    natnum_program(P),
+    solve([natnum(succ(0))], P).
+
+test("solve natnum(s(s(0)))") :-
+    natnum_program(P),
+    solve([natnum(succ(succ(0)))], P).
+
+% Vanilla MI: graph reachability
+test("solve edge(a,b)") :-
+    graph_program(P),
+    solve([edge(a, b)], P).
+
+test("solve path(a,b) direct") :-
+    graph_program(P),
+    solve([path(a, b)], P).
+
+test("solve path(a,c) transitive") :-
+    graph_program(P),
+    solve([path(a, c)], P).
+
+test("solve path(a,d) transitive") :-
+    graph_program(P),
+    solve([path(a, d)], P).
+
+test("solve no path(c,a)") :-
+    graph_program(P),
+    \+ solve([path(c, a)], P).
+
+% Inference counting
+test("count natnum(0) = 1 step") :-
+    natnum_program(P),
+    solve_count([natnum(0)], P, 1).
+
+test("count natnum(s(0)) = 2 steps") :-
+    natnum_program(P),
+    solve_count([natnum(succ(0))], P, 2).
+
+test("count natnum(s(s(0))) = 3 steps") :-
+    natnum_program(P),
+    solve_count([natnum(succ(succ(0)))], P, 3).
+
+test("count edge(a,b) = 1 step") :-
+    graph_program(P),
+    solve_count([edge(a, b)], P, 1).
+
+test("count path(a,b) direct = 2 steps") :-
+    graph_program(P),
+    solve_count([path(a, b)], P, 2).
+
+test("count path(a,c) = 4 steps") :-
+    graph_program(P),
+    solve_count([path(a, c)], P, 4).
+
+% Depth-limited MI
+test("limit natnum(s(0)) depth 1 fails") :-
+    natnum_program(P),
+    \+ solve_limit([natnum(succ(0))], P, 1).
+
+test("limit natnum(s(0)) depth 2 succeeds") :-
+    natnum_program(P),
+    solve_limit([natnum(succ(0))], P, 2).
+
+test("limit natnum(s(s(0))) depth 2 fails") :-
+    natnum_program(P),
+    \+ solve_limit([natnum(succ(succ(0)))], P, 2).
+
+test("limit natnum(s(s(0))) depth 3 succeeds") :-
+    natnum_program(P),
+    solve_limit([natnum(succ(succ(0)))], P, 3).
+
+test("limit path(a,c) depth 3 fails") :-
+    graph_program(P),
+    \+ solve_limit([path(a, c)], P, 3).
+
+test("limit path(a,c) depth 4 succeeds") :-
+    graph_program(P),
+    solve_limit([path(a, c)], P, 4).
+
+% Iterative deepening: completes where naive DFS would loop.  It finds the
+% shallowest proof first, then keeps deepening (to depth 1000) for more, so
+% the tests ask for one proof with once/1.
+test("iterative deepening on cyclic graph") :-
+    cyclic_program(P),
+    once(solve_iterative_deepening([path(a, b)], P)).
+
+test("iterative deepening path(a,c) acyclic") :-
+    graph_program(P),
+    once(solve_iterative_deepening([path(a, c)], P)).
+
+% Proof tree MI
+test("tree natnum(0)") :-
+    natnum_program(P),
+    solve_tree([natnum(0)], P, Tree),
+    Tree = [[natnum(0), []]].
+
+test("tree natnum(s(0)) has nested proof") :-
+    natnum_program(P),
+    solve_tree([natnum(succ(0))], P, Tree),
+    Tree = [[natnum(succ(0)), [[natnum(0), []]]]].
+
+test("tree edge(a,b) is leaf") :-
+    graph_program(P),
+    solve_tree([edge(a, b)], P, Tree),
+    Tree = [[edge(a, b), []]].
+
+test("tree path(a,b) direct") :-
+    graph_program(P),
+    solve_tree([path(a, b)], P, Tree),
+    Tree = [[path(a, b), [[edge(a, b), []]]]].
+
+test("tree path(a,c) transitive") :-
+    graph_program(P),
+    solve_tree([path(a, c)], P, Tree),
+    Tree = [[path(a, c), [[edge(a, b), []], [path(b, c), [[edge(b, c), []]]]]]].
+
+test("tree natnum(s(s(0))) depth 2") :-
+    natnum_program(P),
+    solve_tree([natnum(succ(succ(0)))], P, Tree),
+    Tree = [[natnum(succ(succ(0))), [[natnum(succ(0)), [[natnum(0), []]]]]]].
+
+:- end_module(metainterpreters).

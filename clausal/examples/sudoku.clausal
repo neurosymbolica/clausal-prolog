@@ -1,0 +1,155 @@
+% Sudoku solver using CLP(Z) constraints.
+% Ported from Markus Triska's sudoku.pl (https://www.metalevel.at/sudoku/)
+% Public domain.
+
+:- module(sudoku, [transpose/2, blocks/3, sudoku/1, solve/1, problem/2]).
+
+:- use_module(library(clpz)).
+
+% -- transpose ----------------------------------------------------------------
+
+transpose([], []).
+
+transpose([[]|_], []).
+
+transpose(Matrix, [Heads|RestCols]) :-
+    extract_column(Matrix, Heads, Tails),
+    transpose(Tails, RestCols).
+
+% Extract the first element of each row.
+extract_column([], [], []).
+
+extract_column([[Head|Tail]|Rows], [Head|RestHeads], [Tail|RestTails]) :-
+    extract_column(Rows, RestHeads, RestTails).
+
+% -- 3x3 block constraints ----------------------------------------------------
+
+blocks([], [], []).
+
+blocks([N1, N2, N3|Ns1], [N4, N5, N6|Ns2], [N7, N8, N9|Ns3]) :-
+    all_different([N1, N2, N3, N4, N5, N6, N7, N8, N9]),
+    blocks(Ns1, Ns2, Ns3).
+
+% -- Constraint posting -------------------------------------------------------
+
+sudoku(Rows) :-
+    Rows = [R1, R2, R3, R4, R5, R6, R7, R8, R9],
+    flatten(Rows, Vs),
+    Vs ins 1..9,
+    maplist(all_different, Rows),
+    transpose(Rows, Columns),
+    maplist(all_different, Columns),
+    blocks(R1, R2, R3),
+    blocks(R4, R5, R6),
+    blocks(R7, R8, R9).
+
+% -- solve: post constraints + label ------------------------------------------
+
+solve(Rows) :-
+    sudoku(Rows),
+    flatten(Rows, Vs),
+    label(Vs).
+
+% -- Sample problems ----------------------------------------------------------
+
+problem(1, [
+    [1, _, _, 8, _, 4, _, _, _],
+    [_, 2, _, _, _, _, 4, 5, 6],
+    [_, _, 3, 2, _, 5, _, _, _],
+    [_, _, _, 4, _, _, 8, _, 5],
+    [7, 8, 9, _, 5, _, _, _, _],
+    [_, _, _, _, _, 6, 2, _, 3],
+    [8, _, 1, _, _, _, 7, _, _],
+    [_, _, _, 1, 2, 3, _, 8, _],
+    [2, _, 5, _, _, _, _, _, 9]
+]).
+
+problem(2, [
+    [_, _, 2, _, 3, _, 1, _, _],
+    [_, 4, _, _, _, _, _, 3, _],
+    [1, _, 5, _, _, _, _, 8, 2],
+    [_, _, _, 2, _, _, 6, 5, _],
+    [9, _, _, _, 8, 7, _, _, 3],
+    [_, _, _, _, 4, _, _, _, _],
+    [8, _, _, _, 7, _, _, _, 4],
+    [_, 9, 3, 1, _, _, _, 6, _],
+    [_, _, 7, _, 6, _, 5, _, _]
+]).
+
+problem(3, [
+    [1, _, _, _, _, _, _, _, _],
+    [_, _, 2, 7, 4, _, _, _, _],
+    [_, _, _, 5, _, _, _, _, 4],
+    [_, 3, _, _, _, _, _, _, _],
+    [7, 5, _, _, _, _, _, _, _],
+    [_, _, _, _, _, 9, 6, _, _],
+    [_, 4, _, _, _, 6, _, _, _],
+    [_, _, _, _, _, _, _, 7, 1],
+    [_, _, _, _, _, 1, _, 3, _]
+]).
+
+problem(4, [
+    [5, 3, _, _, 7, _, _, _, _],
+    [6, _, _, 1, 9, 5, _, _, _],
+    [_, 9, 8, _, _, _, _, 6, _],
+    [8, _, _, _, 6, _, _, _, 3],
+    [4, _, _, 8, _, 3, _, _, 1],
+    [7, _, _, _, 2, _, _, _, 6],
+    [_, 6, _, _, _, _, 2, 8, _],
+    [_, _, _, 4, 1, 9, _, _, _],
+    [_, _, _, _, 8, _, _, _, _]
+]).
+
+% -- Tests --------------------------------------------------------------------
+
+test("transpose empty rows") :-
+    transpose([[], []], []).
+
+test("transpose 2x3") :-
+    transpose([[1, 2, 3], [4, 5, 6]], Result),
+    Result = [[1, 4], [2, 5], [3, 6]].
+
+
+test("blocks base case") :-
+    blocks([], [], []).
+
+test("blocks one block") :-
+    blocks([1, 2, 3], [4, 5, 6], [7, 8, 9]).
+
+test("problem 1 has a solution") :-
+    problem(1, Rows),
+    solve(Rows).
+
+test("problem 1 full solution") :-
+    problem(1, Rows),
+    solve(Rows),
+    Rows = [[1, 5, 6, 8, 9, 4, 3, 2, 7], [9, 2, 8, 7, 3, 1, 4, 5, 6], [4, 7, 3, 2, 6, 5, 9, 1, 8], [3, 6, 2, 4, 1, 7, 8, 9, 5], [7, 8, 9, 3, 5, 2, 6, 4, 1], [5, 1, 4, 9, 8, 6, 2, 7, 3], [8, 3, 1, 5, 4, 9, 7, 6, 2], [6, 9, 7, 1, 2, 3, 5, 8, 4], [2, 4, 5, 6, 7, 8, 1, 3, 9]].
+
+test("problem 2 has a solution") :-
+    problem(2, Rows),
+    solve(Rows).
+
+test("problem 3 has a solution") :-
+    problem(3, Rows),
+    solve(Rows).
+
+test("problem 4 has exactly three solutions") :-
+    findall(Rows, (problem(4, Rows), solve(Rows)), Solutions),
+    length(Solutions, 3).
+
+test("problem 4 solution 1") :-
+    problem(4, Rows),
+    solve(Rows),
+    Rows = [[5, 3, 4, 6, 7, 8, 1, 9, 2], [6, 7, 2, 1, 9, 5, 3, 4, 8], [1, 9, 8, 3, 4, 2, 5, 6, 7], [8, 5, 9, 7, 6, 1, 4, 2, 3], [4, 2, 6, 8, 5, 3, 9, 7, 1], [7, 1, 3, 9, 2, 4, 8, 5, 6], [9, 6, 1, 5, 3, 7, 2, 8, 4], [2, 8, 7, 4, 1, 9, 6, 3, 5], [3, 4, 5, 2, 8, 6, 7, 1, 9]].
+
+test("problem 4 solution 2") :-
+    problem(4, Rows),
+    solve(Rows),
+    Rows = [[5, 3, 4, 6, 7, 8, 1, 9, 2], [6, 7, 2, 1, 9, 5, 3, 4, 8], [1, 9, 8, 3, 4, 2, 7, 6, 5], [8, 5, 9, 7, 6, 1, 4, 2, 3], [4, 2, 6, 8, 5, 3, 9, 7, 1], [7, 1, 3, 9, 2, 4, 8, 5, 6], [9, 6, 1, 5, 3, 7, 2, 8, 4], [2, 8, 5, 4, 1, 9, 6, 3, 7], [3, 4, 7, 2, 8, 6, 5, 1, 9]].
+
+test("problem 4 solution 3") :-
+    problem(4, Rows),
+    solve(Rows),
+    Rows = [[5, 3, 4, 6, 7, 8, 9, 1, 2], [6, 7, 2, 1, 9, 5, 3, 4, 8], [1, 9, 8, 3, 4, 2, 5, 6, 7], [8, 5, 9, 7, 6, 1, 4, 2, 3], [4, 2, 6, 8, 5, 3, 7, 9, 1], [7, 1, 3, 9, 2, 4, 8, 5, 6], [9, 6, 1, 5, 3, 7, 2, 8, 4], [2, 8, 7, 4, 1, 9, 6, 3, 5], [3, 4, 5, 2, 8, 6, 1, 7, 9]].
+
+:- end_module(sudoku).

@@ -1,0 +1,105 @@
+% Four-color map coloring for Australia.
+
+:- module(map_coloring, [colorable/1]).
+
+color(red).
+
+color(green).
+
+color(blue).
+
+color(yellow).
+
+adjacent(western_australia, northern_territory).
+
+adjacent(western_australia, south_australia).
+
+adjacent(northern_territory, south_australia).
+
+adjacent(northern_territory, queensland).
+
+adjacent(south_australia, queensland).
+
+adjacent(south_australia, new_south_wales).
+
+adjacent(south_australia, victoria).
+
+adjacent(queensland, new_south_wales).
+
+adjacent(new_south_wales, victoria).
+
+color_of(Region, C, Coloring) :-
+    member([Region, C], Coloring).
+
+colorable(Coloring) :-
+    color(WaColor),
+    color(NtColor),
+    color(SaColor),
+    color(QldColor),
+    color(NswColor),
+    color(VicColor),
+    color(TasColor),
+    Coloring = [
+        [western_australia, WaColor],
+        [northern_territory, NtColor],
+        [south_australia, SaColor],
+        [queensland, QldColor],
+        [new_south_wales, NswColor],
+        [victoria, VicColor],
+        [tasmania, TasColor]
+    ],
+    forall(
+        adjacent(RegionX, RegionY),
+        (
+            color_of(RegionX, ColorOfRegionX, Coloring),
+            color_of(RegionY, ColorOfRegionY, Coloring),
+            dif(ColorOfRegionX, ColorOfRegionY)
+        )
+    ).
+
+% -- Tests --------------------------------------------------------------------
+
+test("red is a color") :-
+    color(red).
+
+test("green is a color") :-
+    color(green).
+
+test("blue is a color") :-
+    color(blue).
+
+test("yellow is a color") :-
+    color(yellow).
+
+test("purple is not a color") :-
+    \+ color(purple).
+
+test("wa adjacent to nt") :-
+    adjacent(western_australia, northern_territory).
+
+test("wa adjacent to sa") :-
+    adjacent(western_australia, south_australia).
+
+test("nsw adjacent to vic") :-
+    adjacent(new_south_wales, victoria).
+
+test("a coloring exists") :-
+    colorable(_).
+
+test("coloring has 7 regions") :-
+    colorable(Coloring),
+    length(Coloring, 7).
+
+test("wa and nt get different colors") :-
+    colorable(Coloring),
+    member([western_australia, WaColor], Coloring),
+    member([northern_territory, NtColor], Coloring),
+    dif(WaColor, NtColor).
+
+test("sa and qld get different colors") :-
+    colorable(Coloring),
+    member([south_australia, SaColor], Coloring),
+    member([queensland, QldColor], Coloring),
+    dif(SaColor, QldColor).
+
+:- end_module(map_coloring).

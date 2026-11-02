@@ -1,0 +1,47 @@
+:- module(fibonacci, [fib/2]).
+
+:- use_module(library(clpz), [(#=)/2]).
+
+fib(0, 0).
+
+fib(1, 1).
+
+fib(N, F) :-
+    N > 1,
+    N1 #= N - 1,
+    N2 #= N - 2,
+    fib(N1, F1),
+    fib(N2, F2),
+    F #= F1 + F2.
+
+% -- Tests ---------------------------------------------------------------------
+
+test("fib(0) = 0") :-
+    fib(0, 0).
+
+test("fib(1) = 1") :-
+    fib(1, 1).
+
+test("fib(2) = 1") :-
+    fib(2, 1).
+
+test("fib(3) = 2") :-
+    fib(3, 2).
+
+test("fib(4) = 3") :-
+    fib(4, 3).
+
+test("fib(5) = 5") :-
+    fib(5, 5).
+
+test("fib(6) = 8") :-
+    fib(6, 8).
+
+test("fib(7) = 13") :-
+    fib(7, F),
+    F #= 13.
+
+test("fib(8) = 21") :-
+    fib(8, 21).
+
+:- end_module(fibonacci).

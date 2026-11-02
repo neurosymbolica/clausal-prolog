@@ -1,0 +1,136 @@
+% Meta-predicates: findall/3, setof/3, bagof/3 and forall/2.
+
+:- module(meta_predicates, [
+    squares/2, positives/2, unique_members/2, all_positive/1, sum_squares/2,
+    evens/2, pairs/3, all_members/2, bag_positives/2
+]).
+
+:- use_module(library(clpz), [(#=)/2]).
+
+% -- findall/3 ----------------------------------------------------------------
+
+% Square each element.
+squares(Ns, Squares) :-
+    findall(Sq, (member(X, Ns), Sq #= X * X), Squares).
+
+% Filter positive elements.
+positives(Ns, Pos) :-
+    findall(X, (member(X, Ns), X > 0), Pos).
+
+% Filter even elements via modulo.
+evens(Ns, Es) :-
+    findall(X, (member(X, Ns), X mod 2 #= 0), Es).
+
+% Cartesian product of two lists.
+pairs(Xs1, Xs2, Result) :-
+    findall([A, B], (member(A, Xs1), member(B, Xs2)), Result).
+
+% -- setof/3 ------------------------------------------------------------------
+
+% Deduplicate a list (the result is sorted).
+unique_members(Ns, Unique) :-
+    setof(X, member(X, Ns), Unique).
+
+% -- bagof/3 ------------------------------------------------------------------
+
+% Collect positive elements, fail if none.
+bag_positives(Ns, Pos) :-
+    bagof(X, (member(X, Ns), X > 0), Pos).
+
+% -- forall/2 -----------------------------------------------------------------
+
+% Check every element is positive.
+all_positive(Ns) :-
+    forall(member(X, Ns), X > 0).
+
+% Check every element of Sub1 is in Super1.
+all_members(Sub1, Super1) :-
+    forall(member(X, Sub1), member(X, Super1)).
+
+% -- Composed -----------------------------------------------------------------
+
+% Sum of squares via squares/2 + builtin sum_list/2.
+sum_squares(Ns, Total) :-
+    squares(Ns, Sqs),
+    sum_list(Sqs, Total).
+
+% -- Tests --------------------------------------------------------------------
+
+% findall
+test("squares [1,2,3]") :-
+    squares([1, 2, 3], [1, 4, 9]).
+
+test("squares empty") :-
+    squares([], []).
+
+test("squares negative") :-
+    squares([-2, 3], [4, 9]).
+
+test("positives mixed") :-
+    positives([-1, 2, -3, 4], [2, 4]).
+
+test("positives all negative") :-
+    positives([-1, -2], []).
+
+test("positives with zero") :-
+    positives([0, 1, -1], [1]).
+
+test("evens") :-
+    evens([1, 2, 3, 4, 5, 6], [2, 4, 6]).
+
+test("evens none") :-
+    evens([1, 3, 5], []).
+
+test("pairs cartesian") :-
+    pairs([a, b], [1, 2], [[a, 1], [a, 2], [b, 1], [b, 2]]).
+
+test("pairs empty first") :-
+    pairs([], [1, 2], []).
+
+test("pairs empty second") :-
+    pairs([a], [], []).
+
+% setof
+test("unique dedup") :-
+    unique_members([1, 2, 1, 3, 2], [1, 2, 3]).
+
+test("unique already unique") :-
+    unique_members([5, 10], [5, 10]).
+
+test("unique all same") :-
+    unique_members([7, 7, 7], [7]).
+
+% bagof
+test("bag positives") :-
+    bag_positives([-1, 2, -3, 4], [2, 4]).
+
+test("bag positives fails on none") :-
+    \+ bag_positives([-1, -2], _).
+
+% forall
+test("all positive pass") :-
+    all_positive([1, 2, 3]).
+
+test("all positive fail") :-
+    \+ all_positive([1, -2, 3]).
+
+test("all positive empty") :-
+    all_positive([]).
+
+test("all members subset") :-
+    all_members([1, 2], [1, 2, 3]).
+
+test("all members not subset") :-
+    \+ all_members([1, 4], [1, 2, 3]).
+
+test("all members empty sub") :-
+    all_members([], [1, 2]).
+
+% composed
+test("sum squares [1,2,3]") :-
+    sum_squares([1, 2, 3], 14).
+
+test("sum squares empty") :-
+    sum_squares([], 0).
+
+:- end_module(meta_predicates).

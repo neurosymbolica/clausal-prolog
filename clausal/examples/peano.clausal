@@ -1,0 +1,117 @@
+:- module(peano, [nat/1, peano_add/3, peano_mul/3, leq/2, peano_to_int/2, int_to_peano/2]).
+
+:- use_module(library(clpz), [(#=)/2]).
+
+% Natural numbers as nested lists: 0 = [], succ(N) = [N].
+
+nat([]).
+
+nat([N]) :-
+    nat(N).
+
+peano_add([], [], []).
+
+peano_add([], Y, Y).
+
+peano_add([X], Y, [Z]) :-
+    peano_add(X, Y, Z).
+
+peano_mul([], [], []).
+
+peano_mul([], _, []).
+
+peano_mul([X], Y, Z) :-
+    peano_mul(X, Y, Z1),
+    peano_add(Y, Z1, Z).
+
+leq([], []).
+
+leq([], _).
+
+leq([X], [Y]) :-
+    leq(X, Y).
+
+peano_to_int([], 0).
+
+peano_to_int([N], I) :-
+    peano_to_int(N, I1),
+    I #= I1 + 1.
+
+int_to_peano(0, []).
+
+int_to_peano(I, [N]) :-
+    I > 0,
+    I1 #= I - 1,
+    int_to_peano(I1, N).
+
+% -- Tests --------------------------------------------------------------------
+
+test("zero is nat") :-
+    nat([]).
+
+test("one is nat") :-
+    nat([[]]).
+
+test("two is nat") :-
+    nat([[[]]]).
+
+test("peano [] = 0") :-
+    peano_to_int([], 0).
+
+test("peano [[]] = 1") :-
+    peano_to_int([[]], 1).
+
+test("peano [[[]]] = 2") :-
+    peano_to_int([[[]]], 2).
+
+test("peano [[[[]]]] = 3") :-
+    peano_to_int([[[[]]]], 3).
+
+test("int 0 = []") :-
+    int_to_peano(0, []).
+
+test("int 1 = [[]]") :-
+    int_to_peano(1, [[]]).
+
+test("int 2 = [[[]]]") :-
+    int_to_peano(2, [[[]]]).
+
+test("0 + 0 = 0") :-
+    peano_add([], [], []).
+
+test("0 + 1 = 1") :-
+    peano_add([], [[]], [[]]).
+
+test("1 + 1 = 2") :-
+    peano_add([[]], [[]], [[[]]]).
+
+test("1 + 2 = 3") :-
+    int_to_peano(1, One),
+    int_to_peano(2, Two),
+    int_to_peano(3, Three),
+    peano_add(One, Two, Three).
+
+test("0 * 1 = 0") :-
+    peano_mul([], [[]], []).
+
+test("1 * 1 = 1") :-
+    peano_mul([[]], [[]], [[]]).
+
+test("2 * 2 = 4") :-
+    int_to_peano(2, Two),
+    int_to_peano(4, Four),
+    peano_mul(Two, Two, Four).
+
+test("0 <= 0") :-
+    leq([], []).
+
+test("0 <= 1") :-
+    leq([], [[]]).
+
+test("1 <= 2") :-
+    leq([[]], [[[]]]).
+
+test("not 2 <= 1") :-
+    \+ leq([[[]]], [[]]).
+
+:- end_module(peano).

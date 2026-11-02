@@ -1,0 +1,120 @@
+% Lambdas
+%
+% A lambda is a term of library(lambda): \X^Goal takes a parameter X, and
+% Free+\X^Goal also shares the variables of Free with the enclosing clause.
+% A lambda is applied with call/N.
+
+:- module(lambdas, [
+    apply_val/2, add_one/2, add_z/3, double_val/2, zero_arg/1, transform/2,
+    capture_two/4, apply_pred/2, all_colors/1
+]).
+
+:- use_module(library(lambda)).
+
+:- use_module(library(clpz), [(#=)/2]).
+
+% -- Basic lambdas ------------------------------------------------------------
+
+% Identity via call/2, the simplest lambda. Result is shared with the clause
+% through the Free+ prefix, so the binding made inside is visible outside.
+apply_val(Result, Val) :-
+    call(Result+\X^(Result = X), Val).
+
+% Arithmetic in lambda body.
+add_one(X, Y) :-
+    call(Y+\V^(Y #= V + 1), X).
+
+% Two-argument lambda.
+double_val(X, Y) :-
+    call(\A^B^(B #= A * 2), X, Y).
+
+% Zero-argument lambda.
+zero_arg(Result) :-
+    call(Result+\(Result = 42)).
+
+% -- Variable capture ---------------------------------------------------------
+
+% Capture one variable from enclosing clause.
+add_z(Z, X, Result) :-
+    call([Z, Result]+\V^(Result #= V + Z), X).
+
+% Capture two variables from enclosing clause.
+capture_two(A, B, X, Result) :-
+    call([A, B, Result]+\V^(Result #= V + A + B), X).
+
+% -- Conjunction body ---------------------------------------------------------
+
+% Lambda with multi-step conjunction: T #= V + 1, R #= T * 2
+transform(X, Y) :-
+    call(\V^R^(T #= V + 1, R #= T * 2), X, Y).
+
+% -- Predicate calls from lambdas ---------------------------------------------
+
+% helper predicate called from within a lambda.
+helper(X, Y) :-
+    Y #= X * 10.
+
+apply_pred(X, Y) :-
+    call(Y+\V^helper(V, Y), X).
+
+% -- Multi-solution via findall -----------------------------------------------
+
+color(red).
+
+color(green).
+
+color(blue).
+
+all_colors(Colors) :-
+    findall(C, color(C), Colors).
+
+% -- Tests --------------------------------------------------------------------
+
+% Basic
+test("apply_val 42") :-
+    apply_val(42, 42).
+
+test("apply_val string") :-
+    apply_val(hello, hello).
+
+test("add_one 5") :-
+    add_one(5, 6).
+
+test("add_one -1") :-
+    add_one(-1, 0).
+
+test("double_val 5") :-
+    double_val(5, 10).
+
+test("zero_arg 42") :-
+    zero_arg(42).
+
+% Capture
+test("add_z 3+10") :-
+    add_z(3, 10, 13).
+
+test("add_z 0+7") :-
+    add_z(0, 7, 7).
+
+test("capture_two 10+20+5") :-
+    capture_two(10, 20, 5, 35).
+
+% Conjunction
+test("transform 5 -> 12") :-
+    transform(5, 12).
+
+test("transform 0 -> 2") :-
+    transform(0, 2).
+
+% Predicate call
+test("apply_pred 3 -> 30") :-
+    apply_pred(3, 30).
+
+test("apply_pred 0 -> 0") :-
+    apply_pred(0, 0).
+
+% Multi-solution
+test("all_colors") :-
+    all_colors([red, green, blue]).
+
+:- end_module(lambdas).

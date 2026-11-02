@@ -1,0 +1,107 @@
+% N queens by generate and test: permute the columns, check the diagonals.
+
+:- module(nqueens, [queens/2]).
+
+:- use_module(library(clpz), [(#=)/2]).
+
+% -- queens/2: find a safe placement of N queens ------------------------------
+
+queens(N, Qs) :-
+    numlist(1, N, Cols),
+    permutation(Cols, Qs),
+    safe(Qs).
+
+% -- numlist/3: generate [Low..High] ------------------------------------------
+
+numlist(0, 0, []).
+
+numlist(Low, High, []) :-
+    Low > High.
+
+numlist(Low, High, [Low|Rest]) :-
+    Low =< High,
+    Next #= Low + 1,
+    numlist(Next, High, Rest).
+
+% -- safe/1: no two queens attack each other diagonally -----------------------
+
+safe([]).
+
+safe([Q|Qs]) :-
+    no_attack(Q, Qs, 1),
+    safe(Qs).
+
+% -- no_attack/3: queen Q doesn't attack any queen in Qs at distance D+ -------
+
+no_attack(0, [], 0).
+
+no_attack(_, [], _).
+
+no_attack(Q, [Q1|Qs], D) :-
+    Diff1 #= Q1 - Q,
+    Diff2 #= Q - Q1,
+    dif(Diff1, D),
+    dif(Diff2, D),
+    D1 #= D + 1,
+    no_attack(Q, Qs, D1).
+
+% -- Tests --------------------------------------------------------------------
+
+test("numlist 1 to 3") :-
+    numlist(1, 3, [1, 2, 3]).
+
+test("numlist 1 to 1") :-
+    numlist(1, 1, [1]).
+
+test("numlist empty when low > high") :-
+    numlist(5, 3, []).
+
+
+test("empty board is safe") :-
+    safe([]).
+
+test("single queen is safe") :-
+    safe([1]).
+
+test("[2,4,1,3] is safe") :-
+    safe([2, 4, 1, 3]).
+
+test("[1,2] is unsafe") :-
+    \+ safe([1, 2]).
+
+test("[1,3] is safe (no diagonal)") :-
+    safe([1, 3]).
+
+
+test("no queens, no attack") :-
+    no_attack(1, [], 1).
+
+test("1-queens") :-
+    queens(1, [1]).
+
+test("4-queens has a solution") :-
+    queens(4, _).
+
+% 4-queens solution 1:
+%
+%   . Q . .      row 1: queen in column 2
+%   . . . Q      row 2: queen in column 4
+%   Q . . .      row 3: queen in column 1
+%   . . Q .      row 4: queen in column 3
+%
+test("4-queens solution 1") :-
+    queens(4, Qs),
+    Qs = [2, 4, 1, 3].
+
+% 4-queens solution 2:
+%
+%   . . Q .      row 1: queen in column 3
+%   Q . . .      row 2: queen in column 1
+%   . . . Q      row 3: queen in column 4
+%   . Q . .      row 4: queen in column 2
+%
+test("4-queens solution 2") :-
+    queens(4, Qs),
+    Qs = [3, 1, 4, 2].
+
+:- end_module(nqueens).
