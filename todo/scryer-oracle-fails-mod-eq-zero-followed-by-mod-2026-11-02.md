@@ -1,35 +1,42 @@
-# The Scryer oracle fails `Y mod N =:= 0` followed directly by another `Y mod M` goal
+# The Scryer oracle: a first-goal arithmetic comparison overwrites a head variable
 
-**Filed:** 2026-11-02. **Status:** open (a Scryer defect; nothing to fix in
-Clausal, which answers correctly). Upstream report pending an operator OK.
+**Filed:** 2026-11-02. **Status:** open until the oracle build carries the fix.
+It's a Scryer defect, with nothing to fix in Clausal, which answers correctly.
+**Fixed upstream** in Codeberg commit `d57b6a8849e3403973890ee851e444f794df253e`
+("ensure reg allocation for arith ops are never shallow", 2026-10-22), which is
+on Codeberg `master` but not on the GitHub mirror. Upstream report: GitHub
+mthom/scryer-prolog#3454, so we filed nothing.
 
-## Repro (scryer-prolog-clpq build, `scryer-prolog -v` = v0.10.0-137-g9acba77a)
+## Repro
 
 ```prolog
+q(Y, Z) :- Y + 1 > 0, Z = Y.
 k(Y) :- Y mod 4 =:= 0, Y mod 7 =\= 0.
-% consulted, then:  ?- k(2024).   false   (true expected)
 ```
 
-It shows only inside a consulted clause; at the top level the same
-conjunction succeeds. It needs `Y mod N =:= 0` followed DIRECTLY by a goal
-that evaluates `Y mod M`:
+| build | `q(5, Z)` | `k(2024)` |
+|---|---|---|
+| oracle (scryer-prolog-clpq, v0.10.0-137-g9acba77a) | `Z = 6` | false |
+| GitHub master v0.10.0-354-gb7066b41 | `Z = 6` | false |
+| v0.10.0-357-g08e0d359 (parent of the fix) | `Z = 6` | false |
+| v0.10.0-358-gd57b6a88 (the fix) | `Z = 5` | true |
+| Codeberg master v0.10.0-369-g581ac2e5 | `Z = 5` | true |
 
-| clause body | Scryer on 2024 |
-|---|---|
-| `Y mod 4 =:= 0, Y mod 100 =\= 0` | false |
-| `Y mod 4 =:= 0, Y mod 100 > 0` | false |
-| `Y mod 4 =:= 0, B is Y mod 100, B =\= 0` | false |
-| `Y mod 100 =\= 0, Y mod 4 =:= 0` (swapped) | true |
-| `Y mod 4 =:= 0, true, Y mod 100 =\= 0` | true |
-| `A is Y mod 4, A =:= 0, Y mod 100 =\= 0` | true |
-| `Y mod 3 =:= 2, Y mod 7 =\= 0` (non-zero) | true |
-| `Y mod 4 =:= 0, Z is Y + 1, Z > 0` | true |
+When the first body goal is an arithmetic comparison whose left or right side
+is an expression over a head variable, the comparison leaves that variable
+holding the expression's value. Every later goal then sees the wrong value.
+`k(2024)` fails because its second goal computes `(2024 mod 4) mod 7`. An
+earlier note here said "swapped order is fine". That was a coincidence of
+`mod 100`: `(2024 mod 100) mod 4` happens to be 0.
 
 ## Do
 
-- Treat a Clausal-vs-Scryer disagreement of this shape (leap-year style
-  divisibility chains) as an oracle defect in the differential fuzzer and
-  the `*_scryer` oracle tests; don't "fix" Clausal toward it.
-- Workaround in Prolog meant to run on Scryer too: compute the remainder
-  with `is/2` first.
-- Re-check on a newer Scryer before reporting upstream.
+- Until the oracle carries `d57b6a88`, treat a Clausal-vs-Scryer disagreement
+  where a clause starts with an arithmetic comparison over an expression as an
+  oracle defect. This affects the differential fuzzer and the `*_scryer`
+  oracle tests. Don't "fix" Clausal toward it.
+- The patch is one file (`src/arithmetic.rs`) and applies cleanly to the
+  oracle's source tree. Alternatively, rebuild the oracle on Codeberg master.
+- Workaround in Prolog that must also run on an unpatched Scryer: put any
+  goal first, or compute the value with `is/2` first.
+- Close this when the oracle answers `q(5, Z)` with `Z = 5`.
