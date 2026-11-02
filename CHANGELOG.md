@@ -7,6 +7,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+## 1.4.0 (2026-11-03)
+
 ### Changed
 
 - **A `.clausal` or `.pl` file that fails to load reports every error,
