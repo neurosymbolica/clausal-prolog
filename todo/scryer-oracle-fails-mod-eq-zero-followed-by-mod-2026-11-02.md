@@ -74,6 +74,32 @@ earlier note here said "swapped order is fine". That was a coincidence of
   policy text. So we send Codeberg and the Scryer maintainers nothing,
   including a report of the d57b6a88 arithmetic regression.
 
+## Our CLP(Q|R) stays the local oracle (operator, 2026-11-02)
+
+- Our clpq/clpr on the oracle build stays the CLP(Q|R) oracle for local
+  tests. Bugs in upstream Scryer's own CLP libraries are ignored in our
+  tests, not worked around.
+- There's still no PR. Plain bug reports to upstream Scryer are wanted, but
+  only as drafts for the operator, who files them himself. So far: the
+  d57b6a88 regression (new), and a comment for the open Codeberg #2739 (cut
+  in an if-then-else condition).
+- The 13 logged port issues (the local Scryer bug log, L1-L13), by
+  origin, without SICStus to confirm:
+  - **Our port's defect:** L2 and L7 (delayed goals missing from dump/3),
+    L3 (float to rational), L4 (one unification binding two variables; clpz
+    and dif do this fine on upstream), L5 (float binding accepted), L12 (dif
+    wake-up lost; fine without clpq).
+  - **Likely inherited from Holzbaur 1.3.3:** L1 (dump/3 with an aliased
+    target); L6 (a binding leaves strict constraints unsatisfiable; the
+    faithful Python port does the same); L10 (arith.pl's roundq maps
+    (-1, -1/2] to +1; our ports round correctly); L11 (one global bb_inf
+    incumbent, shared with a nested bb_inf).
+  - **Unclear:** L8 (spurious bb_inf choice point), L9 (error context
+    slot), L13 (dif with aliasing raises type_error; our Clausal port makes
+    the same decision).
+  - L6, L10 and L11 are the candidates for bugs in the original code. None
+    is confirmed on SICStus.
+
 ## Do
 
 - Until the oracle carries `d57b6a88`, treat a Clausal-vs-Scryer disagreement
