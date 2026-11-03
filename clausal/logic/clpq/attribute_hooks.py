@@ -38,6 +38,8 @@ the same work list.
 itf3.pl's goal expansions (nf_ordering/3, decompose/4) are
 variable_ordering.compare_variable_order and the LinearForm fields.
 """
+from operator import itemgetter
+
 from clausal.logic.clpq.arithmetic import (
     compare, from_number, is_zero, to_number)
 from clausal.logic.clpq.attributes import (
@@ -324,6 +326,9 @@ def _stand_in_for_bound_members(components, state, trail):
     return result
 
 
+_first = itemgetter(0)
+
+
 def _rename_in_form(form, stand_ins):
     """*form* with each variable that has a stand-in replaced by it, in
     place: the stand-in has the same variable_order, so the terms stay
@@ -331,6 +336,8 @@ def _rename_in_form(form, stand_ins):
     if form is None:
         return None
     terms = form.terms
+    if stand_ins.keys().isdisjoint(map(id, map(_first, terms))):
+        return form                     # the common case, in one C loop
     renamed = None
     for i in range(len(terms)):
         stand_in = stand_ins.get(id(terms[i][0]))

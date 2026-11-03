@@ -21,9 +21,9 @@ vertex, each `neighbours` a sorted list without duplicates.  An edge is a
 `(from, to)` pair.
 """
 from clausal.logic.clpq.attributes import refuse_inside_attribute_hooks
-from clausal.logic.clpq.attributes import state_of
+from clausal.logic.clpq.attributes import CLPQ_KEY, state_of
 from clausal.logic.exceptions import LogicException, system_error
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import deref, get_attr, is_var, unify
 
 
 # ---------------------------------------------------------------- the order
@@ -42,6 +42,37 @@ def compare_order_values(order_a, order_b):
     if is_var(order_b):
         return 1
     return (order_a > order_b) - (order_a < order_b)
+
+
+def order_value_key(order):
+    """A key of the order value *order* that sorts as compare_order_values
+    does: (0, creation) for an unbound value, (1, the integer) for a bound
+    one; equal keys are equal values."""
+    order = deref(order)
+    if is_var(order):
+        return (0, order._id)
+    return (1, order)
+
+
+def order_key(variable):
+    """order_value_key of *variable*'s order value, or None where it has
+    none (where compare_variable_order returns None).  It reads the state
+    as state_of does, inlined: a merge calls it once a term."""
+    state = get_attr(variable, CLPQ_KEY)
+    if state is None:
+        return None
+    order = state.variable_order
+    if order is None:
+        return None
+    order = deref(order)
+    if is_var(order):
+        return (0, order._id)
+    return (1, order)
+
+
+def order_keys(terms):
+    """[order_key(X) for each (X, K) of *terms*]."""
+    return [order_key(variable) for variable, _ in terms]
 
 
 def compare_variable_order(variable_a, variable_b):

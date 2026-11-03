@@ -19,7 +19,7 @@ from clausal.logic.clpq.arithmetic import (
     make_rational, multiply, negate, sign, to_number)
 from clausal.logic.clpq.attributes import state_of
 from clausal.logic.clpq.variable_ordering import (
-    compare_order_values, compare_variable_order)
+    compare_variable_order, order_key, order_keys, order_value_key)
 from clausal.logic.variables import deref, is_var
 
 MINUS_ONE = (-1, 1)
@@ -149,9 +149,11 @@ def add_homogeneous_parts_scaled(terms_a, factor_a, terms_b, factor_b):
     return result
 
 
-def add_linear_forms_first_scaled(form_a, factor_a, form_b):
-    """store.pl, add_linear_f1/4: factor_a*form_a + form_b."""
-    terms = add_homogeneous_parts_first_scaled(form_a.terms, factor_a, form_b.terms)
+def add_linear_forms_first_scaled(form_a, factor_a, form_b, keys_a=None):
+    """store.pl, add_linear_f1/4: factor_a*form_a + form_b.  *keys_a* as
+    add_homogeneous_parts_first_scaled takes it."""
+    terms = add_homogeneous_parts_first_scaled(form_a.terms, factor_a,
+                                               form_b.terms, keys_a)
     if terms is None:
         return None
     constant = add(multiply(form_a.constant, factor_a), form_b.constant)
@@ -159,37 +161,52 @@ def add_linear_forms_first_scaled(form_a, factor_a, form_b):
     return LinearForm(constant, rest, terms)
 
 
-def add_homogeneous_parts_first_scaled(terms_a, factor_a, terms_b):
-    """store.pl, add_linear_f1h/4,6, unrolled into a two-way merge."""
+def add_homogeneous_parts_first_scaled(terms_a, factor_a, terms_b, keys_a=None):
+    """store.pl, add_linear_f1h/4,6, unrolled into a two-way merge.
+
+    The merge compares by order_key, looked up once for each term it
+    reaches, where nf_ordering/3 looks up both orders at each comparison;
+    the comparisons and their outcomes are the same.  *keys_a*, where
+    given, is order_keys(terms_a), so a back substitution looks up its
+    pivot row's orders once for every row it rewrites (DEVIATIONS.md D24,
+    Low 8; test_a_merge_looks_up_each_order_once)."""
     if not terms_a:                                     # add_linear_f1h/4
         return terms_b
+    if keys_a is None:
+        keys_a = order_keys(terms_a)
     result = []
+    append = result.append
+    length_a = len(terms_a)
+    length_b = len(terms_b)
     i = 0
     j = 0
-    while i < len(terms_a) and j < len(terms_b):
-        x, coefficient_x = terms_a[i]
-        y, coefficient_y = terms_b[j]
-        relation = compare_variable_order(x, y)
-        if relation is None:
+    if length_b:
+        key_b = order_key(terms_b[0][0])
+    while i < length_a and j < length_b:
+        key_a = keys_a[i]
+        if key_a is None or key_b is None:
             return None
-        if relation == 0:
-            coefficient = add(multiply(coefficient_x, factor_a), coefficient_y)
+        if key_a == key_b:
+            coefficient = add(multiply(terms_a[i][1], factor_a), terms_b[j][1])
             if not is_zero(coefficient):
-                result.append((x, coefficient))
+                append((terms_a[i][0], coefficient))
             i += 1
             j += 1
-        elif relation < 0:
-            result.append((x, multiply(coefficient_x, factor_a)))
+            if j < length_b:
+                key_b = order_key(terms_b[j][0])
+        elif key_a < key_b:
+            append((terms_a[i][0], multiply(terms_a[i][1], factor_a)))
             i += 1
         else:
-            result.append((y, coefficient_y))
+            append(terms_b[j])
             j += 1
-    while i < len(terms_a):                             # mult_hom on the rest of A
-        result.append((terms_a[i][0], multiply(terms_a[i][1], factor_a)))
+            if j < length_b:
+                key_b = order_key(terms_b[j][0])
+    while i < length_a:                                 # mult_hom on the rest of A
+        append((terms_a[i][0], multiply(terms_a[i][1], factor_a)))
         i += 1
-    while j < len(terms_b):                             # the rest of B, as it is
-        result.append(terms_b[j])
-        j += 1
+    if j < length_b:                                    # the rest of B, as it is
+        result.extend(terms_b[j:])
     return result
 
 
@@ -256,14 +273,17 @@ def multiply_homogeneous_part(terms, factor):
     return result
 
 
-def normal_form_substitute(variable, form_variable, form_x):
+def normal_form_substitute(variable, form_variable, form_x, keys=None):
     """store.pl, nf_substitute/4: replace *variable* in *form_x* by its
-    definition *form_variable*.  None where *variable* is not in *form_x*."""
+    definition *form_variable*.  None where *variable* is not in *form_x*.
+    *keys*, where given, is order_keys(form_variable.terms): a back
+    substitution passes the same definition to every row of the class."""
     deleted = delete_factor(variable, form_x)
     if deleted is None:
         return None
     form_w, coefficient = deleted
-    return add_linear_forms_first_scaled(form_variable, coefficient, form_w)
+    return add_linear_forms_first_scaled(form_variable, coefficient, form_w,
+                                         keys)
 
 
 def delete_factor(variable, form):
@@ -281,9 +301,11 @@ def delete_factor_homogeneous(variable, terms):
     *variable* by identity (test_delete_factor_removes_one_variable).  Returns (terms without it, its coefficient), or
     None."""
     variable = deref(variable)
-    for i in range(len(terms)):
-        if deref(terms[i][0]) is variable:
-            return terms[:i] + terms[i + 1:], terms[i][1]
+    i = 0
+    for term in terms:
+        if term[0] is variable or deref(term[0]) is variable:
+            return terms[:i] + terms[i + 1:], term[1]
+        i += 1
     return None
 
 
@@ -300,14 +322,14 @@ def normal_form_coefficient_homogeneous(terms, order):
     """store.pl, nf_coeff_hom/3: scan while the sought order is greater; stop
     at the first term not below it
     (test_coefficient_lookup_stops_once_past_the_variable)."""
+    sought = order_value_key(order)
     for variable, coefficient in terms:
-        state = state_of(variable)
-        if state is None or state.variable_order is None:
+        key = order_key(variable)
+        if key is None:
             return None
-        relation = compare_order_values(order, state.variable_order)
-        if relation == 0:
+        if key == sought:
             return coefficient
-        if relation < 0:
+        if sought < key:
             return None
     return None
 

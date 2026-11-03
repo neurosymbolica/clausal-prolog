@@ -1544,13 +1544,53 @@ found are.  Timed at a load average of 9 to 11 on 8 cores:
   a product literal.  nf.pl expands as the port does.  A power of a
   constant (`7^N`) is ordinary arithmetic, uncapped here as in `is/2`.
 - **Unifying constrained variables with constrained variables is slower
-  than legacy** (Low 8).  `X1 =< X2 =< ... =< Xn`, each `Yi >= 0`, then
-  `[X1, ..., Xn] = [Y1, ..., Yn]` (`secport/hookscale.py N`, mode
-  `varvar`; legacy `secport/hookscale_leg.py N`): n = 100 takes 1.17 s on
-  the port against 0.15 s on legacy, n = 200 12.25 s against 0.77 s.  A
-  measured regression against legacy.  The other shape is not: unifying
-  the chain with numbers, `[X1, ..., Xn] = [0, ..., n-1]` (mode `list`),
-  is FASTER on the port, n = 200 1.16 s against legacy 10.09 s.
+  than legacy** (Low 8), and the cost is 1.3.3's.  `X1 =< X2 =< ... =<
+  Xn`, each `Yi >= 0`, then `[X1, ..., Xn] = [Y1, ..., Yn]`
+  (`tests/clpq_port/test_unify_constrained_variables.py`).  First measured
+  with posting included (n = 100 1.17 s on the port against 0.15 s on
+  legacy, n = 200 12.25 s against 0.77 s).  The unification alone,
+  minimum of five runs (three at n = 400), load 4 to 9 on 8 cores:
+
+  | n | legacy | port before | port after | Scryer (1.3.3's text) |
+  |---|---|---|---|---|
+  | 50 | 0.007 s | 0.052 s | 0.045 s | 0.13 s, 1.2M inferences |
+  | 100 | 0.028 s | 0.31 s | 0.25 s | 0.79 s, 8.2M |
+  | 200 | 0.107 s | 2.92 s | 1.73 s | 5.17 s, 59M |
+  | 400 | 0.59 s | 25.1 s | 13.8 s | 43.8 s, 450M |
+
+  **The cubic growth is the algorithm.**  Each binding `Xi = Yi` posts
+  `Xi - Yi = 0`; the port makes 2n - 1 back substitutions in all (bv.pl
+  `backsubst/2`, `bs/3`), each walking the class's ~n rows, and rewrites
+  n(n - 1) rows by `nf_substitute/4` (a scan of the row for the pivoted
+  variable and a merge with the pivot row), each about n/3 terms long:
+  42,875, 338,250, 2,686,500 and 21,413,000 terms read at n = 50 to 400,
+  n^3/3.  Scryer running the same query on its copy of the 1.3.3 text
+  makes 21 to 23 inferences a term at every n, so it does the same rows;
+  the port is now 2.6 to 3.2 times faster than it.  Legacy's simplex is
+  another algorithm, about n^2 here.  Changing that is changing 1.3.3's
+  algorithm, so it is left.
+
+  **The port's overhead, removed** (implementation only, no answer
+  changes).  The merge of `add_linear_f1h/6` compared two terms by
+  `compare_variable_order`, which read both variables' states at every
+  comparison: 1.64 order lookups a term read at n = 40.  It now looks
+  each term's order up once (`variable_ordering.order_key`) and a back
+  substitution looks the pivot row's orders up once for all its rows
+  (`order_keys`): 1.16 lookups a term (the rest are `nf_coeff_of`'s scans
+  in `upper_bound`, 1.3.3's too).  The comparisons and their outcomes are
+  the same: an unbound order before a bound one, two unbound by creation,
+  two bound by value; a variable with no order still fails the merge
+  where it is compared.  The stand-in renaming of D3 (a binding's hook
+  renames the bound variable in every row of its component, work 1.3.3
+  does not do, because SICStus runs the hook before it binds) now tests a
+  row in one C-level `isdisjoint` before it copies it: 1.7 s of a 10 s
+  profile at n = 200 fell to 0.4 s.  What is left is that renaming,
+  linear in the component's terms per binding, under a quarter of a
+  back substitution's.  The test pins the rows rewritten (n(n - 1)), the
+  lookups a term (at most 1.3) and n = 100 under 3 s.
+  The other shape was never slow: unifying the chain with numbers,
+  `[X1, ..., Xn] = [0, ..., n-1]`, is FASTER on the port, n = 200 1.16 s
+  against legacy 10.09 s.
 - **Deep terms raise RecursionError in shared clpfd code** (Medium 7):
   a sum nested 100,000 deep (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`,
   then `{Y >= T}`) raises `RecursionError` from clpfd's cell walk before
