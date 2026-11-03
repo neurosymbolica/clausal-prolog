@@ -36,6 +36,13 @@
     "no_grandparent": "error: PredicateNotFoundError: Predicate grandparent/2 not found"
    }
   },
+  "benchmarks/clpq_chain_binding_trace/scryer_trace.pl": {
+   "collect_error": null,
+   "error": "SyntaxError: Cannot import <root>/benchmarks/clpq_chain_binding_trace/scryer_trace.pl: 2 errors",
+   "load": "refused",
+   "preds": null,
+   "tests": null
+  },
   "clausal/tools/prolog_preludes/clausal_constants_scryer.pl": {
    "collect_error": null,
    "error": null,
@@ -2865,6 +2872,7 @@
   "README.md#L100": "c48f4dec8c407748",
   "README.md#L177": "3a500e03a3c420eb",
   "README.md#L273": "c07d2fd5682cc0ce",
+  "benchmarks/clpq_chain_binding_trace/scryer_trace.pl": "89d021f54cf15d4f",
   "clausal/tools/prolog_preludes/clausal_constants_scryer.pl": "a66b8f63b2c54eff",
   "clausal/tools/prolog_preludes/clausal_constants_trealla.pl": "2c6654aacd571b8a",
   "clausal/tools/toklex/specs/clausal.toklex.pl": "04d67a9b0c9775ee",
