@@ -98,7 +98,10 @@ char_atom_obj(PyObject *ch1)
 static inline int
 is_char_atom_obj(PyObject *e)
 {
-    return PyUnicode_Check(e) && PyUnicode_GET_LENGTH(e) == 1;   /* STAGE 2: a char is the 1-char str */
+    /* STAGE 2: a char is the 1-char str -- an EXACT str, as
+     * ``atoms.is_char_atom`` says (``type(term) is str``): a str subclass is
+     * no char here either, so the C and Python twins build one term. */
+    return PyUnicode_CheckExact(e) && PyUnicode_GET_LENGTH(e) == 1;
 }
 
 /* The spelling of the char *e* — BORROWED reference, valid while *e* is.
@@ -431,8 +434,10 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
 {
     PyObject *target, *var_vals, *star_val, *after_vals, *trail;
 
-    if (!PyArg_ParseTuple(args, "OOOOO",
-                          &target, &var_vals, &star_val, &after_vals, &trail))
+    /* var_vals and after_vals are read as lists (PyList_GET_SIZE /
+     * PyList_GET_ITEM): anything else is a TypeError, never a misread. */
+    if (!PyArg_ParseTuple(args, "OO!OO!O", &target, &PyList_Type, &var_vals,
+                          &star_val, &PyList_Type, &after_vals, &trail))
         return NULL;
 
     /* deref(target) */
@@ -766,8 +771,10 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
 {
     PyObject *target, *var_vals, *star_val, *after_vals, *trail;
 
-    if (!PyArg_ParseTuple(args, "OOOOO",
-                          &target, &var_vals, &star_val, &after_vals, &trail))
+    /* var_vals and after_vals are read as lists (PyList_GET_SIZE /
+     * PyList_GET_ITEM): anything else is a TypeError, never a misread. */
+    if (!PyArg_ParseTuple(args, "OO!OO!O", &target, &PyList_Type, &var_vals,
+                          &star_val, &PyList_Type, &after_vals, &trail))
         return NULL;
 
     /* deref(target) */

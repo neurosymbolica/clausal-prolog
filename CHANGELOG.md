@@ -130,6 +130,22 @@ surface described in [docs/public-api.md](docs/public-api.md).
   pattern is unified with N fresh elements, giving every split in
   `append/3` order; with N unbound the lengths count up from the
   pattern's known elements (Scryer agrees on each case).
+- **The tabling key and the C term walkers no longer crash on hostile or
+  very deep terms.** A partial list nested as an element tens of thousands
+  deep, a term-instance field getter that tables a call, or Python code
+  that undoes the trail or clears a list while a walker reads it could
+  segfault the process. The key and `walk`, `ground/1`, `copy_term/2`,
+  `term_variables/2` and the answer snapshot now hold what they read and
+  share one depth budget across every walk that Python code starts, so a
+  term too deep for it is a `RecursionError` (ISO `resource_error(stack)`
+  in a program). A cyclic tabled argument is still `resource_error(stack)`.
+  A partial list closed by a non-empty `bytes` tail keys and walks as its
+  codes, where it raised `PartialTermError`. A tabled call or answer
+  holding an object that cannot be hashed or compared raises that object's
+  own exception, with a note naming the tabled predicate.
+  `_head_list_unify_output` called with a non-list now raises `TypeError`
+  instead of segfaulting. Its C twin no longer treats a `str` subclass as a
+  char, so it builds the same term as the Python twin.
 
 ## 1.4.0 (2026-11-03)
 

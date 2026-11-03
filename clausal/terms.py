@@ -977,6 +977,14 @@ class SegList:
                     continue
             elif _hole_is_nil(v):
                 continue                   # nothing, in any spelling
+            elif isinstance(v, bytes):
+                # A code list (``b"ab"`` is ``[97, 98]``): its codes.  It
+                # raised PartialTermError, so a partial list closed by a
+                # bytes tail could not be keyed or walked.
+                if tail is not _NO_TAIL:
+                    raise _not_a_list(culprit)
+                run.extend(v)
+                continue
             elif _is_improper_tail(v):
                 if tail is not _NO_TAIL:
                     raise _not_a_list(culprit)

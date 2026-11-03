@@ -718,7 +718,11 @@ class TableEntry:
             )
         ds = delay_set if delay_set is not None else frozenset()
         key = make_subgoal_key(answer, None)
-        idx = self._answer_index.get(key)
+        try:
+            idx = self._answer_index.get(key)
+        except Exception as exc:
+            _note_unkeyable(exc, *(self.pi or ("?", "?")), answer=True)
+            raise
         if idx is not None:
             conds = self.conditions[idx]
             if conds is _FAILED:
@@ -955,6 +959,25 @@ def _seg_key(term, norm=None):
         else:
             elems.append(norm(seg))
     return ("__partial__",) + tuple(elems)
+
+
+def _note_unkeyable(exc: BaseException, functor, arity, answer=False) -> None:
+    """Name the tabled call on an exception its table lookup raised.
+
+    The variant key keeps a leaf it does not know -- a Python object handed
+    in through the seam -- as itself, so looking the call up hashes and
+    compares that object: an unhashable one is ``TypeError: unhashable
+    type``, and a hostile ``__hash__``/``__eq__`` raises whatever it raises.
+    The exception stays the object's own (a ``++ValueError`` catcher still
+    matches it); the note says where it came from."""
+    if hasattr(exc, "add_note") and not hasattr(exc, "term"):
+        what = (f"recording an answer of the tabled predicate {functor}/{arity}"
+                if answer else
+                f"looking up the tabled call {functor}/{arity} in its table")
+        exc.add_note(
+            f"while {what}: an argument holds an object that cannot be "
+            f"hashed or compared; a tabled call's arguments and answers must "
+            f"hash and compare as terms do")
 
 
 def _make_subgoal_key_py(args, trail):
@@ -1377,7 +1400,11 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
             table_store = db.table_store
     key = make_subgoal_key(args, trail)
     store_key = (functor, arity, key)
-    entry = table_store.get(store_key)
+    try:
+        entry = table_store.get(store_key)
+    except Exception as exc:
+        _note_unkeyable(exc, functor, arity)
+        raise
     _refuse_if_foreign(entry, functor, arity)
 
     if entry is not None and entry.status == "complete":
@@ -1698,7 +1725,11 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
 
         key = make_subgoal_key(args, trail)
         store_key = (functor, arity, key)
-        entry = table_store.get(store_key)
+        try:
+            entry = table_store.get(store_key)
+        except Exception as exc:
+            _note_unkeyable(exc, functor, arity)
+            raise
         _refuse_if_foreign(entry, functor, arity)
 
         # ── COMPLETE: cache hit ──
@@ -1805,7 +1836,11 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
 
         key = make_subgoal_key(args, trail)
         store_key = (functor, arity, key)
-        entry = table_store.get(store_key)
+        try:
+            entry = table_store.get(store_key)
+        except Exception as exc:
+            _note_unkeyable(exc, functor, arity)
+            raise
         _refuse_if_foreign(entry, functor, arity)
 
         # ── COMPLETE: yield cached answers ──
