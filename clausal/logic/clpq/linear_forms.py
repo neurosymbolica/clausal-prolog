@@ -40,9 +40,10 @@ class LinearForm:
     """store.pl's `[Inhomogeneous, Rest | Terms]` (decompose/4 splits it).
 
     A form is never changed once made: every operation makes a new one.
-    `variable_ids` is the row's index, made by row_variable_ids the first
-    time the row is scanned and kept with the form, so a form the trail
-    puts back brings its own index back."""
+    `variable_ids` is the row's index (row_variable_ids): None before the
+    row is first scanned, False after, and the index from its second scan
+    on.  It is kept with the form, so a form the trail puts back brings
+    its own index back."""
     __slots__ = ("constant", "rest", "terms", "variable_ids")
 
     def __init__(self, constant, rest, terms):
@@ -331,10 +332,10 @@ def normal_form_substitute(variable, form_variable, form_x, keys=None):
 
 
 def row_variable_ids(form):
-    """*form*'s index: the ids of its terms' variables as they are, and as
-    they dereference now.  Made once, the first time it is asked for."""
+    """*form*'s index, made now if it has none: the ids of its terms'
+    variables as they are, and as they dereference now."""
     ids = form.variable_ids
-    if ids is None:
+    if ids is None or ids is False:
         variables = list(map(_first, form.terms))
         ids = set(map(id, variables))
         ids.update(map(id, map(deref, variables)))
@@ -354,10 +355,19 @@ def delete_factor(variable, form):
     (DEVIATIONS.md D3).  CHECK_ROW_INDEX checks every skip against the scan
     (test_the_check_mode_catches_a_stale_index)."""
     variable = deref(variable)
-    if is_var(variable) and id(variable) not in row_variable_ids(form):
-        if CHECK_ROW_INDEX:
-            _check_skip(variable, form)
-        return None
+    ids = form.variable_ids
+    if ids is None:
+        # The first scan of a row only marks it: most rows a substitution
+        # writes are rewritten again at their next read (a var-var
+        # binding), and an index costs about two scans to build.
+        form.variable_ids = False
+    elif is_var(variable):
+        if ids is False:
+            ids = row_variable_ids(form)
+        if id(variable) not in ids:
+            if CHECK_ROW_INDEX:
+                _check_skip(variable, form)
+            return None
     deleted = delete_factor_homogeneous(variable, form.terms)
     if deleted is None:
         return None

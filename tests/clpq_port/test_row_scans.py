@@ -24,7 +24,7 @@ from clausal.logic.clpq.arithmetic import ZERO
 from clausal.logic.clpq.attributes import SolverState, put_state
 from clausal.logic.clpq.linear_forms import (
     LinearForm, add_homogeneous_parts, add_homogeneous_parts_scaled,
-    delete_factor, delete_factor_homogeneous)
+    delete_factor, delete_factor_homogeneous, row_variable_ids)
 from clausal.logic.clpq.variable_ordering import compare_variable_order
 from clausal.logic.variables import Trail, Var, unify
 
@@ -208,14 +208,15 @@ def _row(t, n):
 
 
 def test_a_miss_reads_no_term_once_the_row_is_indexed(monkeypatch):
-    # The first scan of a row builds its index; after that a variable not
+    # The second scan of a row builds its index; after that a variable not
     # in the row is answered without dereferencing the row's terms (the
     # check mode scans, so it is off here).
     monkeypatch.setattr(linear_forms, "CHECK_ROW_INDEX", False)
     t = Trail()
     xs, form = _row(t, 50)
     absent = _constrained(1, t)[0]
-    assert delete_factor(absent, form) is None
+    assert delete_factor(absent, form) is None        # marks the row
+    assert delete_factor(absent, form) is None        # indexes it
     calls = [0]
     real = linear_forms.deref
 
@@ -230,6 +231,16 @@ def test_a_miss_reads_no_term_once_the_row_is_indexed(monkeypatch):
     rest, coefficient = delete_factor(xs[17], form)
     assert coefficient == (18, 1)
     assert rest.terms == form.terms[:17] + form.terms[18:]
+
+
+def test_a_row_is_indexed_at_its_second_scan_not_its_first():
+    t = Trail()
+    xs, form = _row(t, 4)
+    assert form.variable_ids is None
+    assert delete_factor(xs[0], form)[1] == (1, 1)
+    assert form.variable_ids is False
+    assert delete_factor(xs[0], form)[1] == (1, 1)
+    assert form.variable_ids == {id(x) for x in xs}
 
 
 def test_the_index_answers_as_the_scan_does():
@@ -250,7 +261,8 @@ def test_a_sought_variable_bound_to_a_number_is_scanned_as_before():
     # number by identity with the dereferenced terms, as 1.3.3's ==/2.
     t = Trail()
     xs, form = _row(t, 3)
-    assert delete_factor(Var(), form) is None          # index built
+    assert delete_factor(Var(), form) is None
+    row_variable_ids(form)                              # indexed
     five = 10 ** 30                                     # one object
     assert unify(xs[1], five, t)
     got = delete_factor(xs[1], form)
@@ -265,7 +277,8 @@ def test_a_variable_unbound_by_undo_is_found_through_the_index():
     mark = t.mark()
     assert unify(x, y, t)
     form = LinearForm(ZERO, ZERO, [(x, (1, 1)), (z, (2, 1))])
-    assert delete_factor(y, form)[1] == (1, 1)         # index built, X -> Y
+    assert delete_factor(y, form)[1] == (1, 1)
+    row_variable_ids(form)                              # indexed
     t.undo(mark)
     assert delete_factor(x, form)[1] == (1, 1)
     assert delete_factor(y, form) is None
@@ -276,7 +289,8 @@ def test_a_renamed_row_has_its_own_index():
     t = Trail()
     xs, form = _row(t, 5)
     stand_in = _constrained(1, t)[0]
-    assert delete_factor(stand_in, form) is None       # index built
+    assert delete_factor(stand_in, form) is None
+    row_variable_ids(form)                              # indexed
     renamed = _rename_in_form(form, {id(xs[2]): stand_in})
     assert renamed is not form
     assert delete_factor(stand_in, renamed)[1] == (3, 1)
@@ -296,7 +310,8 @@ def test_the_check_mode_catches_a_stale_index(monkeypatch):
     y = Var()
     w = Var()
     form = LinearForm(ZERO, ZERO, [(w, (1, 1))])
-    assert delete_factor(y, form) is None              # index built
+    assert delete_factor(y, form) is None
+    row_variable_ids(form)                              # indexed
     assert unify(w, y, t) and deref(w) is y
     with pytest.raises(AssertionError, match="row index"):
         delete_factor(y, form)
