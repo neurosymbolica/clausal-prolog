@@ -209,6 +209,12 @@ class BinOp(Node):
         trail.undo(mark)
         return False
 
+    def __occurs_check__(self, var):
+        """Called by C do_occurs_check: the operands, the parts ``__unify__``
+        binds -- so ``unify_with_occurs_check(Y, f(Y + 1))`` fails."""
+        from clausal.terms import _occurs_in_parts
+        return _occurs_in_parts(self, var, (self.left, self.right))
+
 
 class BoolOp(BinOp):
     """Base for boolean binary operators (And, Or)."""
@@ -240,6 +246,11 @@ class UnaryOp(Node):
         from clausal.terms import _hook_unifier
         unify = _hook_unifier(trail)   # occurs-checked under unify_with_occurs_check
         return unify(self.operand, other.operand, trail)
+
+    def __occurs_check__(self, var):
+        """Called by C do_occurs_check: the operand -- see ``BinOp``."""
+        from clausal.terms import _occurs_in_parts
+        return _occurs_in_parts(self, var, (self.operand,))
 
 
 
@@ -1171,6 +1182,12 @@ class Predicate(Node):
             return True
         trail.undo(mark)
         return False
+
+    def __occurs_check__(self, var):
+        """Called by C do_occurs_check: head and body, the parts
+        ``__unify__`` binds."""
+        from clausal.terms import _occurs_in_parts
+        return _occurs_in_parts(self, var, (self.head, self.body))
 
 
 # ── Module-level items (pipeline split) ──────────────────────────────────────

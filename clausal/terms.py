@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextvars as _contextvars
 import re as _re
+import threading as _threading
 import reprlib as _reprlib
 import dataclasses as _dataclasses
 from dataclasses import dataclass
@@ -348,6 +349,38 @@ def _hook_unifier(trail):
         return unify_with_occurs_check
     from .logic.variables import unify
     return unify
+
+
+_occurs_searching = _threading.local()
+
+
+def _occurs_in_parts(term, var, parts):
+    """The answer every ``__occurs_check__`` hook gives: does *var* occur in
+    any of *parts* (the hooked *term*'s sub-terms)?
+
+    A hook is called by the C occurs check and asks ``occurs_check`` again
+    for each part, which starts over at depth 0 -- below the C walker's
+    switch to its cycle-safe walk.  So a hooked term on a cycle (``X =
+    f(D)`` with ``D = {k: X}``, built by plain ``=``/2) was searched round
+    and round until RecursionError.  The pairs (term, var) being searched
+    on this thread are kept here: a term met again while it is being
+    searched for the same variable answers False, since the search already
+    under way covers every part of it."""
+    from .logic.variables import occurs_check
+    active = getattr(_occurs_searching, "active", None)
+    if active is None:
+        active = _occurs_searching.active = set()
+    key = (id(term), id(var))
+    if key in active:
+        return False
+    active.add(key)
+    try:
+        for part in parts:
+            if occurs_check(var, part):
+                return True
+        return False
+    finally:
+        active.discard(key)
 
 
 def _drive_seg_unify(walked, other, trail, concrete_len, apply_fn):
@@ -1071,15 +1104,10 @@ class SegList:
 
     def __occurs_check__(self, var) -> bool:
         """Called by C do_occurs_check. Recurse into all elements and var slots."""
-        from .logic.variables import occurs_check
-        for seg in self._segments:
-            if isinstance(seg, ConcreteSeg):
-                if any(occurs_check(var, e) for e in seg.elements):
-                    return True
-            else:
-                if occurs_check(var, seg.var):
-                    return True
-        return False
+        return _occurs_in_parts(self, var, [
+            part for seg in self._segments
+            for part in (seg.elements if isinstance(seg, ConcreteSeg)
+                         else (seg.var,))])
 
     def __unify__(self, other, trail, _guarded=None):
         """Called by C do_unify.  Against a list or text, unifies the holes
@@ -1851,11 +1879,8 @@ class SegString:
 
     def __occurs_check__(self, var) -> bool:
         """Called by C do_occurs_check."""
-        from .logic.variables import occurs_check
-        for seg in self._segments:
-            if isinstance(seg, VarSeg) and occurs_check(var, seg.var):
-                return True
-        return False
+        return _occurs_in_parts(self, var, [
+            seg.var for seg in self._segments if isinstance(seg, VarSeg)])
 
     def __unify__(self, other, trail):
         """Called by C do_unify.
@@ -2246,11 +2271,8 @@ class SegBytes:
 
     def __occurs_check__(self, var) -> bool:
         """Called by C do_occurs_check."""
-        from .logic.variables import occurs_check
-        for seg in self._segments:
-            if isinstance(seg, VarSeg) and occurs_check(var, seg.var):
-                return True
-        return False
+        return _occurs_in_parts(self, var, [
+            seg.var for seg in self._segments if isinstance(seg, VarSeg)])
 
     def __unify__(self, other, trail):
         unify = _hook_unifier(trail)
@@ -2575,8 +2597,7 @@ class DictTerm:
 
     def __occurs_check__(self, var):
         """Called by C do_occurs_check: check if var appears in any value."""
-        from .logic.variables import occurs_check
-        return any(occurs_check(var, v) for v in self._data.values())
+        return _occurs_in_parts(self, var, list(self._data.values()))
 
     def __unify__(self, other, trail):
         """Called by C do_unify: pairwise value unification.
@@ -3542,6 +3563,10 @@ class quantity:  # noqa: N801 -- see the naming note below
         if self._dims != other._dims:
             return False
         return _hook_unifier(trail)(self._value, other._value, trail)
+
+    def __occurs_check__(self, var) -> bool:
+        """Called by C do_occurs_check: the value is the part that unifies."""
+        return _occurs_in_parts(self, var, (self._value,))
 
 
 # ── Cons / list helpers ────────────────────────────────────────────────────────

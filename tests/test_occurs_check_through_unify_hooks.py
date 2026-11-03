@@ -22,7 +22,7 @@ from clausal.logic.variables import (
     Trail, Var, deref, unify, unify_with_occurs_check,
 )
 from clausal.pythonic_ast.nodes import Add, Negate, Predicate
-from clausal.terms import DictTerm, Quantity, SegListView
+from clausal.terms import ConcreteSeg, DictTerm, Quantity, SegList, SegListView
 
 
 def _dict_vs_dict():
@@ -143,3 +143,145 @@ def test_occurs_check_unify_through_the_hook_still_binds(make):
     assert unify_with_occurs_check(left, right, t) is True
     assert deref(x) == ("g", 1)
     assert t.unify_oc is False
+
+
+# The other direction: a variable bound to a term that holds it INSIDE a
+# hooked term.  The occurs check reaches the hooked term's parts only through
+# its ``__occurs_check__``; without one it saw an opaque leaf and let the
+# binding through.
+
+def _var_in_binop():
+    y = Var()
+    return y, ("f", Add(left=y, right=1))
+
+
+def _var_in_binop_right():
+    y = Var()
+    return y, Add(left=1, right=("g", y))
+
+
+def _var_in_unaryop():
+    y = Var()
+    return y, ("f", Negate(operand=y))
+
+
+def _var_in_predicate_head():
+    y = Var()
+    return y, ("f", Predicate(head=y, body="true"))
+
+
+def _var_in_predicate_body():
+    y = Var()
+    return y, Predicate(head="h", body=("g", y))
+
+
+def _var_in_quantity():
+    y = Var()
+    return y, ("f", Quantity(y, {}))
+
+
+def _var_in_dict():
+    y = Var()
+    return y, ("f", DictTerm({"k": y}))
+
+
+CONTAINED = [_var_in_binop, _var_in_binop_right, _var_in_unaryop,
+             _var_in_predicate_head, _var_in_predicate_body,
+             _var_in_quantity, _var_in_dict]
+
+
+@pytest.mark.parametrize("make", CONTAINED, ids=lambda f: f.__name__[1:])
+def test_occurs_check_sees_a_var_inside_a_hooked_term(make):
+    from clausal.logic.variables import occurs_check
+    t = Trail()
+    y, term = make()
+    assert occurs_check(y, term) is True
+    assert unify_with_occurs_check(y, term, t) is False
+    assert len(t) == 0 and deref(y) is y
+
+
+@pytest.mark.parametrize("make", CONTAINED, ids=lambda f: f.__name__[1:])
+def test_occurs_check_of_another_var_in_a_hooked_term(make):
+    from clausal.logic.variables import occurs_check
+    _, term = make()
+    z = Var()
+    assert occurs_check(z, term) is False
+    t = Trail()
+    assert unify_with_occurs_check(z, term, t) is True
+    assert deref(z) is term
+
+
+# A hooked term on a cycle (built by plain ``=``/2).  Each hook restarted the
+# occurs check from depth 0, below the C walker's cycle switch, so the check
+# went round the cycle until RecursionError.  A hooked term already being
+# searched for the same variable is not searched again.
+
+def _cyclic_dict():
+    x = Var()
+    d = DictTerm({"k": x})
+    assert unify(x, ("f", d), Trail())
+    return d
+
+
+def _cyclic_dict_direct():
+    x = Var()
+    d = DictTerm({"k": x})
+    assert unify(x, d, Trail())
+    return d
+
+
+def _cyclic_seglist():
+    a, b = Var(), Var()
+    s = SegList([ConcreteSeg([a])])
+    assert unify(b, ("f", s), Trail())
+    assert unify(a, b, Trail())
+    return s
+
+
+def _cyclic_binop():
+    x = Var()
+    n = Add(left=x, right=1)
+    assert unify(x, ("f", n), Trail())
+    return n
+
+
+def _cyclic_quantity():
+    x = Var()
+    q = Quantity(x, {})
+    assert unify(x, ("f", q), Trail())
+    return q
+
+
+@pytest.mark.parametrize("make", [_cyclic_dict, _cyclic_dict_direct,
+                                  _cyclic_seglist, _cyclic_binop,
+                                  _cyclic_quantity],
+                         ids=lambda f: f.__name__[1:])
+def test_occurs_check_through_a_cyclic_hooked_term_terminates(make):
+    from clausal.logic.variables import occurs_check
+    term = make()
+    z = Var()
+    assert occurs_check(z, term) is False
+    assert occurs_check(z, ("g", term, z)) is True
+    t = Trail()
+    assert unify_with_occurs_check(z, ("g", term), t) is True
+
+
+def test_occurs_check_finds_a_var_beside_a_cycle():
+    from clausal.logic.variables import occurs_check
+    x, z = Var(), Var()
+    d = DictTerm({"a": x, "b": z})
+    assert unify(x, ("f", d), Trail())
+    assert occurs_check(z, d) is True
+
+
+def test_python_occurs_check_of_a_deep_term_without_the_var():
+    # Past the C recursion's depth limit occurs_check answered its
+    # "too deep" code, which read as True.
+    from clausal.logic.variables import occurs_check
+    deep = 1
+    for _ in range(3000):
+        deep = ("f", deep)
+    z = Var()
+    assert occurs_check(z, deep) is False
+    assert occurs_check(z, ("f", deep, z)) is True
+    assert occurs_check(z, DictTerm({"k": deep})) is False

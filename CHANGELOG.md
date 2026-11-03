@@ -15,6 +15,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `X = g(X)`). Every `__unify__` hook now binds its parts with the
   occurs check while the outer unification has it, as the Seg* hooks
   already did; plain `=/2` is unchanged.
+- The occurs check now looks inside operator terms (`Y + 1`), clause
+  terms and quantities: `unify_with_occurs_check(Y, f(Y + 1))` bound
+  `Y` to a term holding it. A dict, partial list or other hooked term
+  on a cycle built by `=/2` no longer sends a later occurs check into
+  RecursionError, and `occurs_check/2` from Python no longer answers
+  True for a very deep term that does not hold the variable.
 
 ## 1.4.0 (2026-11-03)
 
