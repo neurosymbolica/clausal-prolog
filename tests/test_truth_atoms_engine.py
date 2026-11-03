@@ -87,7 +87,7 @@ def test_the_truth_atoms_key_in_the_atom_band():
         assert term_key(obj) == (_ORD_ATOM, spell) == term_key(spell)
     assert term_key(1)[0] == _ORD_NUM
     assert sorted([True, "z", 1, "a", False, 1.5, Undefined], key=term_key) == \
-        [1, 1.5, "a", False, True, Undefined, "z"]
+        [1.5, 1, "a", False, True, Undefined, "z"]    # every float first (ISO 7.2)
 
 
 # ── indexing ─────────────────────────────────────────────────────────────────

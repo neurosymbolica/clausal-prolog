@@ -41,9 +41,6 @@ KNOWN = {
     # [a|b] (a non-list tail) in a type_error(list, _) culprit comes out
     # as [a,b]
     "a68": "a", "x22": "a", "s25": "a",
-    # standard order: ISO 7.2 puts every float before every integer; Clausal
-    # compares numbers by value (float first on a tie)
-    "t43": "d", "t52": "d", "t67": "d", "s04": "d", "s11": "d",
     # the Scryer build: a list inside sort/2's list is a type_error, and
     # [a] @> [a, c] (both are Scryer defects)
     "t58": "o", "t71": "o", "s09": "o", "s12": "o", "s13": "o", "s28": "o",
