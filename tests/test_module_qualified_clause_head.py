@@ -13,7 +13,14 @@ Scryer (the oracle build, 2026-11-03), file ``a.pl``::
     ?- t(X).          X = 7.
     ?- a:baz(X).      X = 7.
 
-and a grammar rule ``c:g --> [a].`` in module ``c`` defines ``g//0``
+The directives taking predicate indicators read ``m:p/N`` the same way:
+Scryer accepts ``:- dynamic(dm:d/1).`` and ``:- discontiguous(dm:e/1).`` in
+module ``dm``.  (Its ``table/1`` refuses any qualified indicator,
+``domain_error(directive, (table)/1)``; it is accepted here, consistently
+with the heads.)  ``m:p/N`` reads as ``(m:p)/N``; ``m:(p/N)`` is accepted
+too.
+
+And a grammar rule ``c:g --> [a].`` in module ``c`` defines ``g//0``
 (``phrase(c:g, [a])`` succeeds).
 
 A head qualified with ANOTHER module (``b:qux(8).`` in ``a``, or ``m:foo``
@@ -33,6 +40,9 @@ from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
 
 _BODY = """\
+:- dynamic(NAME:d/1).
+:- discontiguous((edge/2, NAME:dis/1)).
+:- table([NAME:(path/2)]).
 NAME:foo(1).
 foo(2).
 NAME:foo(3).
@@ -43,6 +53,13 @@ q(X) :- deep(X).
 NAME:greeting --> [hello], NAME:name.
 name --> [world].
 greets(L) :- phrase(greeting, L).
+dis(1).
+add(X) :- assertz(d(X)).
+dis(2).
+edge(1, 2).
+edge(2, 1).
+path(X, Y) :- path(X, Z), edge(Z, Y).
+path(X, Y) :- edge(X, Y).
 """
 
 
@@ -60,7 +77,7 @@ def _load(tmp_path, monkeypatch, name, suffix, text):
 def mod(request, tmp_path, monkeypatch):
     suffix = request.param
     name = f"mqh_{suffix[1:]}"
-    text = (f":- module({name}, [foo/1, bar/1, t/1, q/1, greets/1]).\n"
+    text = (f":- module({name}, [foo/1, bar/1, t/1, q/1, greets/1, add/1, d/1, dis/1, path/2]).\n"
             + _BODY.replace("NAME", name))
     if suffix == ".clausal":
         text += f":- end_module({name}).\n"
@@ -96,3 +113,43 @@ def test_no_colon_2_is_defined(mod):
 
 def test_own_qualified_grammar_rule_head(mod):
     assert _answers(mod, "greets", 1) == [(["hello", "world"],)]
+
+
+
+def test_own_qualified_dynamic_directive(mod):
+    assert _answers(mod, "d", 1) == []
+    assert len(list(solve(("add", 5), mod))) == 1
+    assert _answers(mod, "d", 1) == [(5,)]
+
+
+def test_own_qualified_discontiguous_directive(mod):
+    assert mod.db.is_discontiguous("dis", 1)
+    assert mod.db.is_discontiguous("edge", 2)
+    assert _answers(mod, "dis", 1) == [(1,), (2,)]
+
+
+def test_own_qualified_dynamic_and_table_marks(mod):
+    assert mod.db.is_dynamic("d", 1)
+    assert mod.db.is_tabled("path", 2)
+
+
+def test_own_qualified_table_directive(mod):
+    # Left recursion over a cycle terminates only if path/2 is tabled.
+    assert sorted(_answers(mod, "path", 2)) == [(1, 1), (1, 2), (2, 1),
+                                                (2, 2)]
+
+
+def test_own_qualified_constants_table_indicator(tmp_path, monkeypatch):
+    name = "mqh_ct"
+    m = _load(tmp_path, monkeypatch, name, ".pl", f"""\
+        :- module({name}, [bands/3]).
+        :- use_module(european_union, [euro]).
+        :- constants_number_units({name}:bands/3, [[low, 1, 10]],
+                                  euro, number_at(3)).
+        """)
+    try:
+        db = m.__dict__["$module"]
+        [(band, n, _q)] = _answers(db, "bands", 3)
+        assert (band, n) == ("low", 1)
+    finally:
+        sys.modules.pop(name, None)

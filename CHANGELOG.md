@@ -13,7 +13,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   predicate** (`.pl` and `.clausal`): in a file whose `module/2` names `m`,
   `m:foo(1).` and `m:bar(X) :- ...` are clauses of `foo/1` and `bar/1`, as
   in Scryer; they loaded as clauses of `(:)/2`. A grammar rule
-  `m:g --> ...` there defines `g//0`; it was refused. A head qualified with any
+  `m:g --> ...` there defines `g//0`, and `dynamic/1`, `discontiguous/1`,
+  `table/1` and the `constants_number_*` tables take `m:p/N` (or
+  `m:(p/N)`) as `p/N`; both were refused. A head qualified with any
   other module is unchanged (still `(:)/2`, an open question in
   `todo/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md`).
 

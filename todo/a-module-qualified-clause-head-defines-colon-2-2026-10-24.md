@@ -5,7 +5,10 @@ Filed 2026-10-24, found in review of the ISO built-ins-are-static fix. OPEN.
 **Status: PARTLY FIXED 2026-11-03.** A head (clause or grammar rule)
 qualified with the file's OWN module -- the name its `module/2` gives --
 now defines the predicate in that module, as in Scryer (`iso_l3`'s
-`_strip_own_qualifier`). Pinned in `tests/test_module_qualified_clause_head.py`.
+`_strip_own_qualifier`); so does an own-qualified predicate indicator
+`m:p/N` in `dynamic/1`, `discontiguous/1`, `table/1` and the
+`constants_number_*` tables (`iso_l3_directives._strip_own_qualifier_pi`).
+Pinned in `tests/test_module_qualified_clause_head.py`.
 Still open, waiting on a ruling: every other qualifier (below).
 
 On the native front end (`.pl` and `.clausal`), a clause whose head is

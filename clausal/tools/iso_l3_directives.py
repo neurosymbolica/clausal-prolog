@@ -1368,6 +1368,7 @@ def _predspec(directive: str):
         what = f"{directive}(...)"
         pis = []
         for e, s in _sequence(args[0], spans[0]):
+            e, s = _strip_own_qualifier_pi(e, s, ctx.own_module)
             pi = _indicator(e)
             if pi is None:
                 raise _refused(f"{what}: {_show(e)} is not a predicate "
@@ -1695,6 +1696,8 @@ def _constant_table(directive: str):
         from clausal.tools.iso_l3 import (  # noqa: PLC0415
             LoweringRefused, _thunk, lower_clause)
         indicator, rows, unit, at = args
+        indicator, _sp = _strip_own_qualifier_pi(indicator, spans[0],
+                                                 ctx.own_module)
         what = f"{directive}({_show(indicator)}, ...)"
         example = (f"{directive}(snap_max/2, [[1, 29200], [2, 53600]], "
                    f"{'usd_cent' if is_money else 'metre'}, {column_kw}(2))")
@@ -2183,6 +2186,26 @@ def _module_has(module: str, name: str) -> bool:
 
 
 # ── cells -> the handler's Python-ast argument shapes ────────────────────────
+
+
+def _strip_own_qualifier_pi(e, sp, own: "str | None"):
+    """A predicate indicator qualified with the file's own module -- as
+    read, ``m:p/N`` is ``(m:p)/N``; ``m:(p/N)`` is the other spelling --
+    -> the plain ``p/N`` with its span subtree, as an ``m:`` clause head is
+    stripped (``iso_l3._strip_own_qualifier``).  Anything else comes back
+    as it is (another module's ``b:p/N`` stays unparsable here)."""
+    from clausal.tools.iso_l3 import _strip_own_qualifier  # noqa: PLC0415
+    if own is None:
+        return e, sp
+    if (type(e) is tuple and len(e) == 3 and e[0] in ("/", "//")):
+        name_sp, n_sp = _arg_spans(sp, 2)
+        name, name_sp2 = _strip_own_qualifier(e[1], name_sp, own)
+        if name is not e[1]:
+            top = _top(sp)
+            return (e[0], name, e[2]), (
+                (top, name_sp2, n_sp) if top is not None else None)
+        return e, sp
+    return _strip_own_qualifier(e, sp, own)
 
 
 def _indicator(e) -> "tuple[str, int] | None":
