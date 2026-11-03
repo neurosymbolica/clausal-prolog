@@ -23,7 +23,9 @@ unusual, or direct Python use of the runtime helpers.
    uses `8 * i` and the default object header. Use `ctypes.sizeof(ctypes.c_void_p)`, and skip on
    free-threaded builds.
 4. **Undo with pushes is O(entries x pushed),** because each step memmoves the pushed block.
-5. **`Trail_dealloc` keeps its own copy of the release switch.** Reuse `trail_entry_release`.
+5. **FIXED 2026-11-03 (12eb2af4: `Trail_dealloc` releases through `trail_entry_release`; pinned in
+   tests/test_trail_undo_reentrant.py::test_dropping_a_trail_releases_every_kind_of_entry_once).**
+   **`Trail_dealloc` keeps its own copy of the release switch.** Reuse `trail_entry_release`.
 6. **FIXED 2026-10-14 (the split binds with the occurs check while `trail.unify_oc` is set; see
    todo/done/unify-with-occurs-check-of-a-repeated-hole-overflows-2026-10-11.md).**
    **Bare `unify_with_occurs_check` on a multi-hole SegList builds a cyclic term.** For example,
