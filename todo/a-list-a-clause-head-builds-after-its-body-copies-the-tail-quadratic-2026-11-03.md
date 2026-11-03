@@ -115,7 +115,18 @@ spliced as they are, as a list star's always were, and whoever reads the
 list reads them through their bindings (a `findall/3` copy walks them then,
 so commit f60e3211's fix holds: tests/test_findall_partial_list_snapshot.py
 and tests/iso/test_findall_partial_list_scryer.py pass).  A ground result is
-still promoted to text by `maybe_promote_to_str`, as after the walk.
+still promoted to text, as after the walk -- through one dereference of
+each element (`maybe_promote_to_str_deref` in C, `_promote_through_deref`
+in Python), since the shallow read leaves a variable bound to a char in
+place.  Without that (f4248cbb as first committed, found by review),
+`mk2([X|R], X, R). mk(T, [a|T]). p(L) :- mk2(T, X, R), X = b, R = [],
+mk(T, L).` gave `L` as the list `[a, X]` where it had been the text
+`"ab"`: Prolog's `==`, `=` and `atom_chars/2` agreed, but `copy_term/2`,
+`findall/3` and `L = [_|T]` handed back `[a,b]` and `[b]` where they had
+handed back `"ab"` and `"b"`; fixed in the commit after it.  One shape
+difference remains, below the top level: an element `f(Y)` whose `Y` was
+bound after the build keeps `Y` as the bound variable inside `f/1`, where
+the walk made `f(1)` -- as a list star (`T = [f(Y)]`) always has.
 Pinned in tests/test_head_list_build_scaling.py (the calls a whole build
 makes grow x4 for x4 the length on every tail; the open tail was x13 before;
 answers, findall snapshots, chars, and the C and Python outputs agreeing on

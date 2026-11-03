@@ -347,6 +347,40 @@ maybe_promote_to_str(PyObject *result)
     return carrier;
 }
 
+/* maybe_promote_to_str_deref(result) -- maybe_promote_to_str reading each
+ * element through ONE dereference: a variable bound to a char counts as
+ * that char, and the text is joined from the dereferenced chars.  For the
+ * head output of a partial-list star, whose elements are spliced without
+ * a walk (so a char bound after its link was built is still a bound
+ * variable there).  Stops at the first element that is not a char, so a
+ * list of anything else costs one dereference.  Returns a new reference,
+ * or NULL on error.  Twin: list_unify._promote_through_deref. */
+static PyObject *
+maybe_promote_to_str_deref(PyObject *result)
+{
+    if (!PyList_Check(result) || PyList_GET_SIZE(result) == 0) {
+        Py_INCREF(result);
+        return result;
+    }
+    Py_ssize_t n = PyList_GET_SIZE(result);
+    PyObject *chars_list = PyList_New(n);
+    if (!chars_list) return NULL;
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *dv = call_deref(PyList_GET_ITEM(result, i));
+        if (!dv) { Py_DECREF(chars_list); return NULL; }
+        if (!is_char_atom_obj(dv)) {
+            Py_DECREF(dv);
+            Py_DECREF(chars_list);
+            Py_INCREF(result);
+            return result;
+        }
+        PyList_SET_ITEM(chars_list, i, dv);   /* steals dv */
+    }
+    PyObject *promoted = maybe_promote_to_str(chars_list);
+    Py_DECREF(chars_list);
+    return promoted;
+}
+
 /* maybe_promote_to_bytes(result) — codes-model parallel of
  * maybe_promote_to_str. If *result* is a non-empty list whose every element
  * is a ground int in [0, 255] (excluding bool), return the equivalent bytes;
@@ -923,7 +957,10 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
              * being spliced into the rebuilt SegList. */
             /* A SegList is read SHALLOWLY (_walk_raw(False)): its elements
              * are spliced as they are, as a list star's are, and read
-             * through their bindings by whoever reads the list.  The deep
+             * through their bindings by whoever reads the list; the
+             * promotion to text below reads each through one dereference
+             * (maybe_promote_to_str_deref), so a variable bound to a char
+             * is a char there, as it was after the walk.  The deep
              * __walk__ walked every element of the rest at every level of
              * a list a clause head builds after its body with an open
              * tail: N^2/2 walk calls.  A ground result is promoted below
@@ -999,8 +1036,10 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                     if (rc < 0) goto error;
                 }
                 /* F033: promote list-of-1-char-strs back to str under
-                 * the Liskov "strings-as-lists" rule. */
-                PyObject *promoted = maybe_promote_to_str(result);
+                 * the Liskov "strings-as-lists" rule -- through one
+                 * dereference of each element, since the shallow read
+                 * above left a variable bound to a char in place. */
+                PyObject *promoted = maybe_promote_to_str_deref(result);
                 if (!promoted) { Py_DECREF(d); Py_DECREF(result); return NULL; }
                 int ok = call_unify(d, promoted, trail);
                 Py_DECREF(promoted);

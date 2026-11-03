@@ -290,6 +290,22 @@ def _carrier_star_concat(before, s, after_vals):
     return (CHARS_TAG, text_concat(text_concat("".join(before), text), "".join(after)))
 
 
+def _promote_through_deref(result):
+    """``maybe_promote_to_str`` reading each element through ONE
+    dereference: a variable bound to a char counts as that char.  Stops at
+    the first element that is not a char.  C twin:
+    ``maybe_promote_to_str_deref`` in ``_list_unify.c``."""
+    if not result:
+        return result
+    derefed = []
+    for e in result:
+        e = deref(e)
+        if not is_char_atom(e):
+            return result
+        derefed.append(e)
+    return maybe_promote_to_str(derefed)
+
+
 def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
     """Output-mode list pattern unification: construct list from bound vars.
 
@@ -365,7 +381,10 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
             # (``_walk_raw(False)``), as the C twin does: its elements are
             # spliced as they are, as a list star's always were, and are
             # read through their bindings by whoever reads the list (a
-            # findall/3 copy walks them then; commit f60e3211).  The deep
+            # findall/3 copy walks them then; commit f60e3211).  The
+            # promotion to text reads each through one dereference
+            # (``_promote_through_deref``), so a variable bound to a char
+            # is a char there, as it was after the walk.  The deep
             # ``__walk__`` it used walked every element of the rest at
             # every level of a list built in a clause head after its body
             # (``mk(N, Z, [N|T]) :- ..., mk(N1, Z, T)`` with Z unbound):
@@ -384,8 +403,10 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
                 result.extend(deref(v) for v in after_vals)
                 # F033: promote list-of-1-char-strs back to str under the
                 # Liskov "strings-as-lists" rule (default output is list;
-                # str only when provable from the elements themselves).
-                return unify(d, maybe_promote_to_str(result), trail)
+                # str only when provable from the elements themselves) --
+                # through one dereference of each element, which the
+                # shallow read left in place.
+                return unify(d, _promote_through_deref(result), trail)
             elif not isinstance(walked, SegList):
                 # The star walks to an IMPROPER list (D50): it is the tail.
                 # A bare ``str`` here is an ATOM tail (``[*T]`` with

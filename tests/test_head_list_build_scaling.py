@@ -47,6 +47,15 @@ open_bind(L) :- mk(3, Z, L), Z = [x, y].
 open_chars(L) :- mkc(Z, L), Z = [].
 mkc(Z, [a, b|T]) :- mkc2(Z, T).
 mkc2(Z, [c|Z]).
+
+% A char bound AFTER the link holding it was built: the head-built list is
+% still text (the carrier), as before the shallow read.
+mk2([X|R], X, R).
+mkt(T, [a|T]).
+p(L) :- mk2(T, X, R), X = b, R = [], mkt(T, L).
+p_copy(C) :- p(L), copy_term(L, C).
+p_findall(R) :- findall(L, p(L), R).
+p_rest(T) :- p(L), L = [_|T].
 """
 
 SMALL, LARGE = 500, 2000          # x4
@@ -193,3 +202,57 @@ def test_the_c_output_and_its_python_twin_build_the_same_term(before):
             ok = fn(target, list(before), sv, [], tr)
             shown.append((bool(ok), term_writeq(deref(target))))
         assert shown[0] == shown[1], (name, shown)
+
+
+# ── A char bound after its link was built still makes text ─────────────────
+#
+# The shallow read splices the elements as they are; a VARIABLE bound to a
+# char is still a char to the promotion to text, as it was when the walk
+# replaced it by its value.  Prolog's ==, = and atom_chars/2 never saw the
+# difference; Python, copy_term/2, findall/3 and [H|T] did ("ab" against
+# [a, b]).
+
+def _is_text(t):
+    from clausal.terms import is_chars
+    return is_chars(deref(t))
+
+
+@pytest.mark.parametrize("goal", ["p", "p_copy", "p_rest"])
+def test_a_char_bound_after_the_build_still_makes_text(m, goal):
+    out = Var()
+    assert _one(m, (goal, out))
+    assert _is_text(out), (goal, deref(out))
+
+
+def test_findall_of_a_char_bound_after_the_build_copies_text(m):
+    out = Var()
+    assert _one(m, ("p_findall", out))
+    items = deref(out)
+    assert len(items) == 1 and _is_text(items[0]), items
+
+
+def test_the_text_reads_as_written(m):
+    out = Var()
+    assert _one(m, ("p", out))
+    assert _show(out) == '"ab"'
+    rest = Var()
+    assert _one(m, ("p_rest", rest))
+    assert _show(rest) == '"b"'
+
+
+@pytest.mark.parametrize("twin", ["c", "python"])
+def test_both_outputs_promote_a_star_holding_a_bound_char(twin):
+    from clausal.logic.runtime import _list_unify as c
+    from clausal.logic.runtime.list_unify import _head_list_unify_output_py
+    from clausal.logic.variables import Trail, unify
+    from clausal.terms import ConcreteSeg, SegList, VarSeg, char_atom
+    fn = (c._head_list_unify_output if twin == "c"
+          else _head_list_unify_output_py)
+    tr = Trail()
+    x, r = Var(), Var()
+    star = SegList([ConcreteSeg([x]), VarSeg(r)])     # [X|R], built first
+    assert unify(x, char_atom("b"), tr) and unify(r, [], tr)
+    sv, target = Var(), Var()
+    assert unify(sv, star, tr)
+    assert fn(target, [char_atom("a")], sv, [], tr)
+    assert _is_text(target), deref(target)
