@@ -7,6 +7,21 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+- **A file's own definition of a special form's name runs in its own
+  bodies** (2026-11-03; follows operator ruling 2026-10-24). A `.pl` or
+  `.clausal` file may define a special form that is no ISO built-in
+  (`forall/2`, `call_cleanup/2`, `setup_call_cleanup/3`, `call_nth/2`,
+  `count_all/2`, `freeze/2`, `when/2`, `findall/4`, `catch_error/2`,
+  `catch_recover/3`, `eval_/2`), by clauses or `dynamic/1`. Its own body
+  goals of that name, and `call/N` from it, ran the special form and
+  ignored the definition: `forall(X, _) :- X = mine.` then
+  `findall(X, forall(X, true), L)` raised `instantiation_error`; it now
+  gives `L = [mine]`, as Scryer does. The arguments are passed as written
+  (data, not goals). Other modules keep the special form, and so does a
+  seam module that defines the name. Scryer refuses a file that defines
+  `findall/4` (its own builtin); the engine's refusal stays ISO's set.
+  Pinned by `tests/iso/test_own_special_form_names_scryer.py`.
+
 ## 1.4.0 (2026-11-03)
 
 ### Changed

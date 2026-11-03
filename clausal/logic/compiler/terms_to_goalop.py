@@ -319,6 +319,103 @@ def whole_goal_cut_as_true(goal: Any, db: Any) -> "GoalOp | None":
     return None
 
 
+def _own_definition_shadows(db: Any, name: str, arity: int) -> bool:
+    """A special form's (or goal control's) name the module itself defines
+    (``call_body.own_definition_shadows``); asked only for those names."""
+    from clausal.logic.special_forms import (  # noqa: PLC0415
+        GOAL_CONTROLS, SPECIAL_FORMS,
+    )
+    key = (name, arity)
+    if key not in SPECIAL_FORMS and key not in GOAL_CONTROLS:
+        return False
+    from clausal.logic.builtins.call_body import (  # noqa: PLC0415
+        own_definition_shadows,
+    )
+    return own_definition_shadows(db, name, arity)
+
+
+def _sub_call(goal, func, call_args, call_kwargs, db) -> GoalOp:
+    """``Call(LoadName | LoadAttr)`` -> ``SubCall``: the call of a predicate
+    by its name (see the arm in :func:`_convert`)."""
+    if isinstance(func, nodes.LoadName):
+        fname = func.name
+    else:
+        fname = _dotted_name_from_loadattr(func)
+        if fname is None:
+            _not_yet(goal)
+    n_pos = len(call_args)
+    arity = n_pos + len(call_kwargs or [])
+    ordered_args: list = list(call_args)
+    if call_kwargs:
+        if db is None:
+            _not_yet(goal)
+        sig = db.signature_for(fname, arity)
+        if sig is None:
+            _not_yet(goal)
+        kw_dict = {
+            kw.name: kw.value for kw in call_kwargs
+            if isinstance(kw, nodes.Keyword)
+        }
+        for param_name in sig[n_pos:]:
+            if param_name not in kw_dict:
+                _not_yet(goal)
+            ordered_args.append(kw_dict[param_name])
+    if db is not None:
+        # -meta_predicate (operator ruling 2026-09-25, Scryer): an
+        # argument in a ``:``/integer position is qualified with THIS
+        # module at the call -- decided here, where the callee the
+        # name means in this module is known; done at run time by
+        # ``$meta_qualify`` (the value may be a variable bound to an
+        # already-qualified goal, which is left alone).
+        from clausal.logic.meta_predicate import (  # noqa: PLC0415
+            MetaArg, builtin_goal_positions, dotted_module_prefix,
+            is_qualifying_spec, meta_specs_for_call,
+        )
+        meta_specs = meta_specs_for_call(db, fname, arity)
+        # A BUILTIN meta-caller (call/N, aggregate_all/3, maplist &
+        # co.): only a dotted ``lib.p(...)`` argument is qualified
+        # (with lib); anything else is left exactly as written.
+        builtin_callee = False
+        if not meta_specs:
+            meta_specs = builtin_goal_positions(db, fname, arity)
+            builtin_callee = meta_specs is not None
+        if meta_specs:
+            # A DOTTED ``lib.p(...)`` / ``lib.p`` written in a
+            # qualifying position is the qualified goal ``lib:p(...)``
+            # (operator ruling 2026-09-25), as the same dotted call in
+            # goal position resolves in lib -- not a term (ruling (a)
+            # makes that the plain ``p`` cell) that ``$meta_qualify``
+            # would then qualify with THIS module.  Only a LoadAttr
+            # the author wrote: an ``-import_from`` rewrite of a bare
+            # name is a dotted LoadName and keeps caller qualification.
+            _ns = getattr(db, "module_dict", None)
+
+            def _dotted_goal_module(a):
+                node = a.func if isinstance(a, nodes.Call) else a
+                if not isinstance(node, nodes.LoadAttr):
+                    return None
+                dotted = _dotted_name_from_loadattr(node)
+                return (None if dotted is None
+                        else dotted_module_prefix(dotted, _ns))
+
+            # A lambda LITERAL in a GOAL (integer) position is a
+            # closure compiled in THIS module -- its body's names
+            # resolve here, as Scryer qualifies a yall lambda with
+            # its defining module -- so there is nothing to add.  A
+            # ``:`` position is module-sensitive DATA and is always
+            # qualified (the hoisting walk still compiles the lambda
+            # inside the marker).
+            ordered_args = [
+                a if (type(spec) is int and isinstance(a, nodes.Lambda))
+                else a if not is_qualifying_spec(spec)
+                else MetaArg(a, spec, _mod)
+                if (_mod := _dotted_goal_module(a)) is not None
+                else a if builtin_callee
+                else MetaArg(a, spec)
+                for spec, a in zip(meta_specs, ordered_args)]
+    return SubCall(fname=fname, arity=arity, args=ordered_args)
+
+
 def _convert(goal: Any, db: Any) -> GoalOp:
     """Convert one goal term to a :class:`GoalOp`, stamping its source
     position from the originating term.
@@ -426,6 +523,14 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
         # and Scryer.  It used to reach ``_not_yet`` below and fail the load
         # with "goal shape not yet supported (LoadName)".
         goal = nodes.Call(func=goal, args=[], kwargs=[])
+    if (isinstance(goal, nodes.Call) and isinstance(goal.func, nodes.LoadName)
+            and not goal.kwargs
+            and _own_definition_shadows(db, goal.func.name, len(goal.args))):
+        # The module DEFINES this special form's name (``forall(X, _) :-
+        # ...`` in a ``.pl`` or ``.clausal`` file; no ISO built-in, so the
+        # file may): the goal calls that definition, with its arguments as
+        # written, as in Scryer -- not the special form below.
+        return _sub_call(goal, goal.func, goal.args, goal.kwargs, db)
     match goal:
         # ``Or`` stays binary — nested ``Or(Or(a, b), c)`` must round-trip
         # to nested ``Alternate`` so the lowering emits the same nested
@@ -587,83 +692,7 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
         # unchanged.
         case nodes.Call(func=func, args=call_args, kwargs=call_kwargs) \
                 if isinstance(func, (nodes.LoadName, nodes.LoadAttr)):
-            if isinstance(func, nodes.LoadName):
-                fname = func.name
-            else:
-                fname = _dotted_name_from_loadattr(func)
-                if fname is None:
-                    _not_yet(goal)
-            n_pos = len(call_args)
-            arity = n_pos + len(call_kwargs or [])
-            ordered_args: list = list(call_args)
-            if call_kwargs:
-                if db is None:
-                    _not_yet(goal)
-                sig = db.signature_for(fname, arity)
-                if sig is None:
-                    _not_yet(goal)
-                kw_dict = {
-                    kw.name: kw.value for kw in call_kwargs
-                    if isinstance(kw, nodes.Keyword)
-                }
-                for param_name in sig[n_pos:]:
-                    if param_name not in kw_dict:
-                        _not_yet(goal)
-                    ordered_args.append(kw_dict[param_name])
-            if db is not None:
-                # -meta_predicate (operator ruling 2026-09-25, Scryer): an
-                # argument in a ``:``/integer position is qualified with THIS
-                # module at the call -- decided here, where the callee the
-                # name means in this module is known; done at run time by
-                # ``$meta_qualify`` (the value may be a variable bound to an
-                # already-qualified goal, which is left alone).
-                from clausal.logic.meta_predicate import (  # noqa: PLC0415
-                    MetaArg, builtin_goal_positions, dotted_module_prefix,
-                    is_qualifying_spec, meta_specs_for_call,
-                )
-                meta_specs = meta_specs_for_call(db, fname, arity)
-                # A BUILTIN meta-caller (call/N, aggregate_all/3, maplist &
-                # co.): only a dotted ``lib.p(...)`` argument is qualified
-                # (with lib); anything else is left exactly as written.
-                builtin_callee = False
-                if not meta_specs:
-                    meta_specs = builtin_goal_positions(db, fname, arity)
-                    builtin_callee = meta_specs is not None
-                if meta_specs:
-                    # A DOTTED ``lib.p(...)`` / ``lib.p`` written in a
-                    # qualifying position is the qualified goal ``lib:p(...)``
-                    # (operator ruling 2026-09-25), as the same dotted call in
-                    # goal position resolves in lib -- not a term (ruling (a)
-                    # makes that the plain ``p`` cell) that ``$meta_qualify``
-                    # would then qualify with THIS module.  Only a LoadAttr
-                    # the author wrote: an ``-import_from`` rewrite of a bare
-                    # name is a dotted LoadName and keeps caller qualification.
-                    _ns = getattr(db, "module_dict", None)
-
-                    def _dotted_goal_module(a):
-                        node = a.func if isinstance(a, nodes.Call) else a
-                        if not isinstance(node, nodes.LoadAttr):
-                            return None
-                        dotted = _dotted_name_from_loadattr(node)
-                        return (None if dotted is None
-                                else dotted_module_prefix(dotted, _ns))
-
-                    # A lambda LITERAL in a GOAL (integer) position is a
-                    # closure compiled in THIS module -- its body's names
-                    # resolve here, as Scryer qualifies a yall lambda with
-                    # its defining module -- so there is nothing to add.  A
-                    # ``:`` position is module-sensitive DATA and is always
-                    # qualified (the hoisting walk still compiles the lambda
-                    # inside the marker).
-                    ordered_args = [
-                        a if (type(spec) is int and isinstance(a, nodes.Lambda))
-                        else a if not is_qualifying_spec(spec)
-                        else MetaArg(a, spec, _mod)
-                        if (_mod := _dotted_goal_module(a)) is not None
-                        else a if builtin_callee
-                        else MetaArg(a, spec)
-                        for spec, a in zip(meta_specs, ordered_args)]
-            return SubCall(fname=fname, arity=arity, args=ordered_args)
+            return _sub_call(goal, func, call_args, call_kwargs, db)
 
         case nodes.Unify(left=l, right=r):
             # Star-list unification (e.g. ``X is [*T, Last]``) routes

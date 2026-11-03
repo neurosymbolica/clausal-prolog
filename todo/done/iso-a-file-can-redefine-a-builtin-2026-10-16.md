@@ -11,7 +11,7 @@ test_runtime_engine). The census found no clause head with an ISO
 built-in's name in the repository's `.pl`/`.clausal` files or the
 downstream rule bases. What remains, a module's own definition of a
 non-ISO special-form name (`forall/2`) ignored in its bodies, is
-`todo/a-module-own-forall-definition-is-ignored-in-its-bodies-2026-10-24.md`.
+`todo/done/a-module-own-forall-definition-is-ignored-in-its-bodies-2026-10-24.md`.
 
 Filed 2026-10-16, found while re-measuring the
 [ISO compatibility report](../docs/iso_prolog_compatibility_report.md)

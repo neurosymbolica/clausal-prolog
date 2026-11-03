@@ -609,9 +609,15 @@ class _ClauseLowering:
             # form it may share a name with: its arguments are data, as
             # call/N passes them (the seam's -import_from does the same).
             imported = resolved != name
+            # A special form's name this FILE defines (no ISO built-in, so
+            # it may) is that definition, as in Scryer: its arguments are
+            # data too (``compiler/terms_to_goalop`` calls it).
+            own = (not imported and self._ctx is not None
+                   and (name, len(args)) in self._ctx.own_special_forms)
             as_special_form = (self._special_form_args(name, args, spans)
                                if imported else None)
-            lowered = self._goal_args(name, args, spans, imported=imported)
+            lowered = self._goal_args(name, args, spans,
+                                      imported=imported or own)
             if as_special_form is not None:
                 # Kept for a later ``use_module(M, [])`` that drops the
                 # import: the goal is then the special form again
@@ -1680,6 +1686,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
                            surface=surface)
     if source is not None:
         ctx.prescanned = prescan_constructors(source)
+        ctx.own_special_forms = prescan_own_special_forms(source)
     uses = Uses()
     body: list[ast.stmt] = []
     stats = {"read": 0, "lowered": 0, "refused": 0, "skipped": 0,
@@ -2114,6 +2121,71 @@ def _read_as_quad_text(source, issue, table, in_quad):
     if is_labelled_query(item) or (in_quad and is_answer_description(item.term)):
         return item
     return None
+
+
+#: The special forms and goal controls a Prolog text may define: those
+#: that are no ISO built-in (``forall/2``, ``call_cleanup/2``, ``findall/4``
+#: ...; operator ruling 2026-10-24).
+def _definable_special_forms() -> frozenset:
+    from clausal.logic.special_forms import (  # noqa: PLC0415
+        GOAL_CONTROLS, SPECIAL_FORMS,
+    )
+    return frozenset(k for k in (*SPECIAL_FORMS, *GOAL_CONTROLS)
+                     if not is_iso_builtin(*k))
+
+
+DEFINABLE_SPECIAL_FORMS: frozenset = _definable_special_forms()
+
+#: A line that may define one: a clause or grammar-rule head at the start
+#: of a line (``forall(``, ``'forall'(``, ``call_nth -->``), or a
+#: ``name/arity`` a dynamic/1 directive names.  Only a text that matches is
+#: read ahead; a body goal, indented, does not match.
+_DEFINABLE_NAMES = "|".join(
+    re.escape(n) for n in sorted({n for n, _a in DEFINABLE_SPECIAL_FORMS}))
+_OWN_SPECIAL_FORM_RE = re.compile(
+    rf"(?m)^'?(?:{_DEFINABLE_NAMES})'?[ \t]*(?:\(|-->)"
+    rf"|(?:{_DEFINABLE_NAMES})'?[ \t]*/[ \t]*\d")
+
+
+def prescan_own_special_forms(source: str) -> "frozenset[tuple[str, int]]":
+    """The :data:`DEFINABLE_SPECIAL_FORMS` *source* defines, read ahead of
+    lowering: by a clause or grammar-rule head, or a ``dynamic/1``
+    directive.  A goal of such a name anywhere in the file -- before the
+    definition too -- calls the definition, so its arguments are lowered
+    as data, not as the special form's goals, before the first clause is
+    lowered.  (Read with the standard operators, as
+    ``iso_l3_directives.prescan_constructors`` reads.)"""
+    if not _OWN_SPECIAL_FORM_RE.search(source):
+        return frozenset()
+    from clausal.tools.iso_l3_directives import _sequence  # noqa: PLC0415
+    items, _table = iter_iso(source)
+    found: set = set()
+    for it in items:
+        kind = type(it).__name__
+        t = getattr(it, "term", None)
+        if kind == "Directive":
+            if type(t) is tuple and len(t) == 2 and t[0] == "dynamic":
+                for e, _s in _sequence(t[1], None):
+                    if (type(e) is tuple and len(e) == 3 and e[0] == "/"
+                            and type(e[1]) is str and type(e[2]) is int
+                            and (e[1], e[2]) in DEFINABLE_SPECIAL_FORMS):
+                        found.add((e[1], e[2]))
+            continue
+        if kind == "DCGRule":
+            head = t[1] if type(t) is tuple and len(t) == 3 else None
+            if type(head) is tuple and len(head) == 3 and head[0] == ",":
+                head = head[1]          # a pushback: ``H, PB --> B``
+            key = (head, 2) if type(head) is str else (
+                (head[0], len(head) + 1)
+                if type(head) is tuple and head and type(head[0]) is str
+                else None)
+        elif kind == "Clause":
+            key = _head_indicator(t)
+        else:
+            continue
+        if key in DEFINABLE_SPECIAL_FORMS:
+            found.add(key)
+    return frozenset(found)
 
 
 def lower_source(source: str, filename: "str | None" = None, *,

@@ -434,6 +434,10 @@ class DirectiveContext:
         #: of the same name lowers them, or its LoweringRefused): each goal
         #: of an imported special-form name, for a later drop of the import.
         self.special_form_args: dict[int, tuple] = {}
+        #: The special-form names (no ISO built-in) this file itself
+        #: defines, read ahead (``iso_l3.prescan_own_special_forms``): a
+        #: goal of one calls the definition, its arguments as data.
+        self.own_special_forms: "frozenset[tuple[str, int]]" = frozenset()
         #: A constant's declaring directive span, and each predicate a
         #: constants table defines (the constant-name clash check).
         self.constant_spans: dict = {}

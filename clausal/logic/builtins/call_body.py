@@ -86,6 +86,7 @@ from clausal.logic.cells import _cell_shape, compound_cell_shape, is_chars
 from clausal.logic.trampoline import DONE, FINAL, StepGenerator
 from clausal.pythonic_ast import nodes
 from clausal.end_module import SURFACE_PL as _SURFACE_PL
+from clausal.end_module import SURFACE_CLAUSAL_PROLOG as _SURFACE_CLAUSAL_PROLOG
 
 
 # Comparison / unification goal nodes: both operands are ARGUMENTS.
@@ -472,6 +473,36 @@ from clausal.logic.special_forms import SPECIAL_FORMS  # noqa: E402
 def is_special_form(functor: Any, arity: int) -> bool:
     """True when *functor*/*arity* is a compiler special form."""
     return type(functor) is str and (functor, arity) in SPECIAL_FORMS
+
+
+#: The surfaces whose text is ISO Prolog (``end_module.surface_of``).
+_ISO_TEXT_SURFACES = frozenset({_SURFACE_PL, _SURFACE_CLAUSAL_PROLOG})
+
+
+def own_definition_shadows(db, functor: Any, arity: int) -> bool:
+    """True when the ``.pl`` or ``.clausal`` module of *db* DEFINES
+    *functor*/*arity*, a special form's (or goal control's) name that is no
+    ISO built-in: its own bodies, and call/N from it, run that definition.
+
+    ISO 7.5.1 refuses a Prolog text that defines an ISO built-in (the loader,
+    ``tools/iso_builtins.py``); every other name is the file's to define
+    (operator ruling 2026-10-24), and Scryer then runs the file's
+    definition: ``forall(X, _) :- X = mine.`` makes ``forall(X, true)``
+    bind ``X = mine``.  The seam keeps its special forms whatever it
+    defines (not ISO text).  An IMPORTED definition is
+    ``higher_order._import_shadows_special_form``'s question."""
+    if type(functor) is not str or db is None:
+        return False
+    if getattr(db, "surface", None) not in _ISO_TEXT_SURFACES:
+        return False
+    from clausal.tools.iso_builtins import is_iso_builtin  # noqa: PLC0415
+    if is_iso_builtin(functor, arity):
+        return False
+    for ask in ("is_defined", "is_dynamic"):    # clauses, or dynamic/1
+        method = getattr(db, ask, None)
+        if method is not None and method(functor, arity):
+            return True
+    return False
 
 
 #: The highest arity of each special form's name: a name written with fewer
