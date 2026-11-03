@@ -49,7 +49,12 @@ class(symbolic_escape, ['a','b','f','n','r','t','v','\\','''','"','`']).
 def(escape,   bslash then ( (octdig then octdig* then bslash)
                           | ('x' then hexdig then hexdig* then bslash)
                           | symbolic_escape )).
-def(udigits,  digit then (digit | '_')*).
+% A digit group separator is one `_` between two digits, as in Scryer and
+% Python: `1_000` is 1000, while in `1_000_` and `1__000` the integer ends
+% before the `_` and the rest is a variable, which the parser refuses as
+% cannot_parse_big_int (todo/done/reader-digit-group-trailing-underscore-
+% 2026-10-24.md). The radix rules below keep their own looser grammar.
+def(udigits,  digit then ('_'? then digit)*).
 % ISO 6.4.5's exponent char is "e" | "E", so `1.0E9` is a float; an exponent
 % needs the fraction before it (see float_num).
 def(exp,      ('e' | 'E') then sign? then digit then digit*).

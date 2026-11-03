@@ -402,9 +402,13 @@ These are from the [syntax](#syntax) measurement:
 - `[]` and `'[]'` are the same atom, as ISO says (ruling D70, 2026-10-17):
   `X = '[]', X == []` succeeds and `writeq('[]')` prints `[]`, which reads
   back as itself.
-- A digit group separator with nothing after it (`1_000_`, `1__000`)
-  reads as `1000`; Scryer refuses it (`syntax_error(cannot_parse_big_int)`).
-  See `todo/reader-digit-group-trailing-underscore-2026-10-24.md`.
+- A digit group separator is one `_` between two digits, in the integer
+  part and the fraction alike: `1_000` is 1000, and `1_000_` and `1__000`
+  are `syntax_error(cannot_parse_big_int)`, as in Scryer. Scryer takes no
+  `_` in a fraction (`1.0_0`, read here as 1.0) nor in a `0x`/`0o`/`0b`
+  integer (`0x1_2`, read here as 18), and it lets layout follow the `_`
+  (`1_ 000` is 1000; here a syntax error). See
+  `todo/done/reader-digit-group-trailing-underscore-2026-10-24.md`.
 
 ---
 

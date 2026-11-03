@@ -24,6 +24,18 @@ class TestWorkedExamples:
         assert got[0] == ("float_num", 1.0)
         assert [k for k, _ in got] == ["float_num", "name_atom", "graphic_tok", "name_atom"]
 
+    def test_digit_group_separator_sits_between_digits(self):
+        # One `_` between two digits, as Scryer and Python
+        # (todo/done/reader-digit-group-trailing-underscore-2026-10-24.md):
+        # a trailing or doubled `_` ends the integer, and the rest lexes as
+        # a variable, which the parser refuses as cannot_parse_big_int.
+        assert kv("1_000 ")[0] == ("integer", 1000)
+        assert kv("1_0.5 ")[0] == ("float_num", 10.5)
+        assert kv("1_000_ ")[:2] == [("integer", 1000), ("variable", "_")]
+        assert kv("1__000 ")[:2] == [("integer", 1), ("variable", "__000")]
+        assert kv("1_.5 ")[:2] == [("integer", 1), ("variable", "_")]
+        assert kv("1.0_ ")[:2] == [("float_num", 1.0), ("variable", "_")]
+
     def test_char_codes(self):
         assert kv("0'a ")[0] == ("char_code", 97)
         assert kv("0''' ")[0] == ("char_code", 39)
