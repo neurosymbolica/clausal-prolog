@@ -79,7 +79,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   under legacy and through `inf/2`/`sup/2`); `abs/1`, `min/2`, `max/2` of
   a too-deep argument, and a too-deep comparison of quantities, raise
   `resource_error(stack)`.  An error whose culprit is too deep to print
-  no longer raises while building its message.  clpq DEVIATIONS.md D27.
+  no longer raises while building its message.  Every one of these walks
+  keeps its path, so a cyclic term raises instead of looping for ever:
+  `type_error(evaluable, F/A)` under CLP(Q) and CLP(R), units channel on
+  or off, and `resource_error(finite_memory)` under clpfd with the units
+  channel on (`X > 0`, `all_different/1`, `sum/3`, `scalar_product/4`,
+  `element/3`, `global_cardinality/2` hung).  clpq DEVIATIONS.md D27.
 - **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`): the `-g` printer's residual is
   the toplevel projection, not dump/3** (todo of 2026-10-23, deferred by
   the operator ruling of that date). It projects through project.pl's

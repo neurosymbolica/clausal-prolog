@@ -1942,8 +1942,8 @@ def _arith_cells_to_nodes_deep(x, strict=None):
     RecursionError: under a *strict* context it raises
     ``type_error(evaluable, F/A)``, F/A that compound's functor, as the
     CLP(Q) port's normal_form/2 does (clpq DEVIATIONS.md D23); otherwise
-    ``resource_error(stack)``, the term a Prolog program saw for the
-    RecursionError before."""
+    ``resource_error(finite_memory)``, the engine's error for a cycle a
+    walk has no answer for (``rational_walk.unwalkable_term_error``)."""
     on_path = set()
     stack = []
     pending = x
@@ -1981,6 +1981,12 @@ def _arith_cells_to_nodes_deep(x, strict=None):
 
 
 def _refuse_cycle(term, strict):
+    """Raise the error for the cyclic *term* a walk met again on its path:
+    ``type_error(evaluable, F/A)`` under the CLP(Q) or CLP(R) context
+    *strict*, ``resource_error(finite_memory)`` when *strict* is None.
+    Shared by every stack walk over an arithmetic expression (the cell
+    walk, the units scan, CLP(R)'s and legacy CLP(Q)'s walks; clpq
+    DEVIATIONS.md D27)."""
     if strict is not None:
         raise _not_evaluable(term, strict)
     from clausal.logic.rational_walk import unwalkable_term_error  # noqa: PLC0415

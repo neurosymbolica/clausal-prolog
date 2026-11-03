@@ -407,3 +407,198 @@ def test_a_deep_sum_of_quantities_is_a_stack_error(pinned_limit, solver):
     term = _raised(lambda: solver.q_ge(
         Var(), _left_sum(DEPTH, Quantity(Fraction(1), {euro: 1})), t))
     assert term[1] == ("resource_error", "stack")
+
+
+# ------------------------------------- every stack walk refuses a cycle
+#
+# A stack walk that keeps no path loops for ever on a cyclic term, where
+# the recursion it replaced raised RecursionError.  Each walk below keeps
+# the compounds on its path; each call runs under a SIGALRM timeout, so a
+# loop fails the test rather than hanging the run.
+
+import signal  # noqa: E402
+
+from clausal.logic import _units_flag, units_clp  # noqa: E402
+
+_FINITE = ("resource_error", "finite_memory")
+
+
+class _Hung(BaseException):
+    pass
+
+
+def _within_seconds(call, seconds=5):
+    def ring(*_):
+        raise _Hung(f"no answer within {seconds} s: the walk loops")
+    old = signal.signal(signal.SIGALRM, ring)
+    signal.alarm(seconds)
+    try:
+        return call()
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
+
+
+def _raised_within(call, seconds=5):
+    return _within_seconds(lambda: _raised(call), seconds)
+
+
+def _cyclic_node(trail):
+    x = Var()
+    assert unify(x, Add(left=1, right=x), trail)
+    return x
+
+
+def _cyclic_negation(trail):
+    x = Var()
+    assert unify(x, Negate(operand=Negate(operand=x)), trail)
+    return x
+
+
+def _not_evaluable_plus(term):
+    return term[1] == ("type_error", "evaluable", ("/", "+", 2))
+
+
+@pytest.fixture
+def units_on(monkeypatch):
+    units_clp._ensure_imports()
+    monkeypatch.setattr(_units_flag, "active", True)
+
+
+@pytest.mark.parametrize("make", [_cyclic_node, _cyclic_negation],
+                         ids=["sum", "negation"])
+@pytest.mark.parametrize("walk, expected", [
+    (lambda x, t: units_clp._scan(x), "finite"),
+    (lambda x, t: units_clp._scan(x, "(>=)/2"), "evaluable"),
+    (lambda x, t: units_clp._first_money(x), "finite"),
+    (lambda x, t: units_clp._first_money(x, "(>=)/2"), "evaluable"),
+    (lambda x, t: clpr._collect_vars_from(x, [], "inf/2"), "evaluable"),
+    (lambda x, t: legacy._ensure_q_for_expr(x, t), "evaluable"),
+    (lambda x, t: legacy._promote_fd_in_expr(x, t), "evaluable"),
+    (lambda x, t: legacy._promote_fd_in_expr([1, x], t), "evaluable"),
+    (lambda x, t: legacy._linearize(x, t), "evaluable"),
+], ids=["scan", "scan-strict", "first_money", "first_money-strict",
+        "clpr-vars", "ensure_q", "promote_fd", "promote_fd-list",
+        "linearize"])
+def test_each_walk_refuses_a_cycle(walk, expected, make):
+    t = Trail()
+    units_clp._ensure_imports()
+    term = _raised_within(lambda: walk(make(t), t))
+    if expected == "finite":
+        assert term[1] == _FINITE
+    else:
+        assert term[1][:2] == ("type_error", "evaluable")
+
+
+def test_first_money_refuses_a_cyclic_cell():
+    t = Trail()
+    units_clp._ensure_imports()
+    assert _raised_within(lambda: units_clp._first_money(_cyclic(t)))[1] \
+        == _FINITE
+
+
+def _list_cycle(t):
+    return [_cyclic_node(t), 1]
+
+
+@pytest.mark.parametrize("post", [
+    lambda t: clpfd.fd_gt(_cyclic_node(t), 0, t),
+    lambda t: clpfd.all_different(_list_cycle(t), t),
+    lambda t: list(clpfd.fd_sum(_list_cycle(t), "#=", 3, t)),
+    lambda t: list(clpfd.fd_scalar_product([1, 2], _list_cycle(t), "#=", 3, t)),
+    lambda t: list(clpfd.fd_element(1, _list_cycle(t), 3, t)),
+    lambda t: clpfd.global_cardinality(_list_cycle(t), [(1, 1)], t),
+    lambda t: units_clp.strip_list_for_solver(_list_cycle(t), "label/1", t),
+], ids=["gt", "all_different", "sum", "scalar_product", "element",
+        "global_cardinality", "strip_list"])
+def test_clpfd_with_units_refuses_a_cycle(units_on, post):
+    # Outside CLP(Q)/CLP(R): resource_error(finite_memory).
+    t = Trail()
+    assert _raised_within(lambda: post(t))[1] == _FINITE
+
+
+@pytest.mark.parametrize("solver", SOLVERS)
+@pytest.mark.parametrize("post", [
+    lambda s, t: s.q_ge(Var(), _cyclic_node(t), t),
+    lambda s, t: s.q_ge(Var(), _cyclic(t), t),
+    lambda s, t: s.clpq_constraint_block(("=<", _cyclic(t), Var()), t),
+    lambda s, t: s.clpq_constraint_block(("=<", _cyclic_node(t), Var()), t),
+    lambda s, t: s.inf(_cyclic_node(t), Var(), t),
+    lambda s, t: s.bb_inf([Var()], _cyclic_node(t), Var(), t),
+], ids=["q_ge-node", "q_ge-cell", "block-cell", "block-node", "inf",
+        "bb_inf"])
+def test_clp_q_with_units_refuses_a_cycle_as_not_evaluable(units_on, solver,
+                                                           post):
+    # Under CLP(Q) the cycle is type_error(evaluable, (+)/2) with the units
+    # channel on too (the channel's walks get the post's context).
+    t = Trail()
+    assert _not_evaluable_plus(_raised_within(lambda: post(solver, t)))
+
+
+@pytest.mark.parametrize("call", [
+    lambda t: units_clp.strip_expr_for_solver(_cyclic_node(t), "inf/2", t),
+    lambda t: units_clp.strip_for_real_solver(_cyclic_node(t), 0, "(>=)/2", t),
+    lambda t: clpr.real_bound(_cyclic_node(t), Var(), t, "inf"),
+], ids=["strip_expr", "strip_for_real", "real_bound"])
+def test_clp_r_with_units_refuses_a_cycle_as_not_evaluable(units_on, call):
+    t = Trail()
+    assert _not_evaluable_plus(_raised_within(lambda: call(t)))
+
+
+_SEAM_CYCLE = """\
+pair(1 + Y, Y),
+cyc(X) <- pair(X, X)
+cyc_gt(X) <- (cyc(X), X > 0)
+cyc_alldiff(X, Y) <- (cyc(X), all_different([X, Y]))
+"""
+
+
+@pytest.mark.parametrize("name, arity", [("cyc_gt", 1), ("cyc_alldiff", 2)])
+def test_a_seam_cycle_with_units_on_raises(units_on, tmp_path, name, arity):
+    # The reproducer: a cyclic node from head unification in the seam.
+    from clausal.import_hook import _load_module
+    from clausal.logic.solve import call
+    from tests._suffix import SEAM
+    module_name = f"_deep_cycle_seam_{next(_N)}"
+    path = tmp_path / f"{module_name}{SEAM}"
+    path.write_text(f"-module({module_name}, [cyc/1, cyc_gt/1, "
+                    f"cyc_alldiff/2, pair/2])\n{_SEAM_CYCLE}")
+    module = _load_module(module_name, str(path)).__dict__["$module"]
+    args = [Var() for _ in range(arity)]
+    term = _raised_within(lambda: list(call(name, *args, module=module)))
+    assert term[1] == _FINITE
+
+
+# ------------------------------------------- a shared subterm is no cycle
+
+def _shared(levels):
+    """``S0 = X + 1``, ``Si = S(i-1) + S(i-1)``: every level shares one
+    subterm twice, as nodes."""
+    s = Add(left=Var(), right=1)
+    for _ in range(levels):
+        s = Add(left=s, right=s)
+    return s
+
+
+@pytest.mark.parametrize("walk", [
+    lambda x, t: units_clp._scan(x, "(>=)/2"),
+    lambda x, t: units_clp._first_money(x),
+    lambda x, t: clpr._collect_vars_from(x, []),
+    lambda x, t: legacy._ensure_q_for_expr(x, t),
+    lambda x, t: legacy._promote_fd_in_expr([x, x], t),
+    lambda x, t: legacy._linearize(x, t),
+    lambda x, t: clpfd._arith_cells_to_nodes_deep(x, "(>=)/2"),
+], ids=["scan", "first_money", "clpr-vars", "ensure_q", "promote_fd",
+        "linearize", "cells"])
+def test_a_shared_subterm_is_no_cycle(walk):
+    units_clp._ensure_imports()
+    t = Trail()
+    _within_seconds(lambda: walk(_shared(10), t))
+
+
+def test_a_shared_subterm_linearises_once_per_occurrence():
+    t = Trail()
+    x = Var()
+    s = Add(left=x, right=1)
+    assert legacy._linearize(Add(left=s, right=s), t) == \
+        ({x._id: 2}, 2)

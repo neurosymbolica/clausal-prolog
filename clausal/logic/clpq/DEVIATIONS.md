@@ -1736,9 +1736,36 @@ past about 1,000 levels (D24, deep terms):
   which runs on each post once the process has built a quantity.
 - CLP(R)'s variable walk (`clpr._collect_vars_from`), which `inf/2` and
   `sup/2` run first.
-- legacy's `_ensure_q_for_expr` and `_linearize` (legacy only).
+- legacy's `_ensure_q_for_expr`, `_promote_fd_in_expr` and
+  `_linearize` (legacy only).
 
-Each is the same walk, left to right, on an explicit stack.  Nothing the
+Each is the same walk, left to right, on an explicit stack, and each
+keeps the compounds on its path from the root, as the cell walk does: a
+stack walk with no path loops for ever on a cyclic term, where the
+recursion it replaced raised RecursionError (found by review: with the
+units channel on, a cycle from head unification in the seam,
+`pair(1 + Y, Y)`, `pair(X, X)`, then `X > 0` or `all_different([X, Y])`,
+hung in `units_clp._scan`).  A compound met again while on the path
+raises through `clpfd._refuse_cycle`: `type_error(evaluable, F/A)` under
+a CLP(Q) or CLP(R) context and `resource_error(finite_memory)` outside
+them.  The units channel takes the post's context when CLP(Q) or CLP(R)
+calls it (`strip_for_solver(..., strict=True)`, `strip_for_real_solver`,
+`strip_expr_for_solver`), and its cell walk is strict then too, so legacy
+with the units channel on reports a cycle as `type_error(evaluable,
+(+)/2)`, as without it (it reported `resource_error(finite_memory)`);
+under clpfd (`#>`, `all_different/1`, `sum/3`, `scalar_product/4`,
+`element/3`, `global_cardinality/2`) the cycle is
+`resource_error(finite_memory)`.  Legacy's own walks name `normal_form/2`
+as the context, as the port does; CLP(R)'s names the caller's context
+(`inf/2`, `sup/2`) or leaves it unbound.  The posts refuse a cycle in the
+cell walk first, so these guard the walks when called on their own or
+from a path that skips that walk.  A subterm two branches share is no
+cycle (`test_a_shared_subterm_is_no_cycle`).  Every walk and entry point
+has a cyclic-term test run under a timeout
+(`test_each_walk_refuses_a_cycle`, `test_clpfd_with_units_refuses_a_cycle`,
+`test_clp_q_with_units_refuses_a_cycle_as_not_evaluable`,
+`test_clp_r_with_units_refuses_a_cycle_as_not_evaluable`,
+`test_a_seam_cycle_with_units_on_raises`).  Nothing the
 port reads changes: the nodes the cell walk returns are the ones it
 returned before, so the normal form makes the same variables in the same
 order (D4, D11).  Tested: the residual, the optimum and the number of
@@ -1768,9 +1795,9 @@ raise `error(resource_error(stack), _)` where 1.3.3 answers:
 Tests: `test_a_deep_argument_of_abs_is_a_stack_error`,
 `test_a_deep_sum_of_quantities_is_a_stack_error`.  Both are a
 RecursionError no longer: the error is an ISO term a program can catch.
-Not covered here: clpfd's own posts (`Y #= X` with `X = 1 + X` loops in
-`_fd_int_term`, before and after this change), which are not on the
-CLP(Q) path.
+Not covered here: clpfd's own posts with the units channel off (`Y #= X`
+or `X > 0` with `X = 1 + X` loops in `_fd_int_term`, before and after
+this change), which are not on the CLP(Q) path.
 
 ## D28: the `-g` printer projects as the SICStus toplevel does
 
