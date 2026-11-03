@@ -3141,7 +3141,10 @@ py_occurs_check(PyObject *Py_UNUSED(module), PyObject *args)
     PyObject *root = var_deref(var_obj);
     if (!Var_Check(root))
         Py_RETURN_FALSE;
-    int r = do_occurs_check(Var_CAST(root), term, 0);
+    /* occurs_check_full, not do_occurs_check: past OCCURS_DEEP the latter
+     * answers OCCURS_DEEP_CODE, which read here as True for a deep term
+     * that does not hold the variable.  __occurs_check__ hooks call this. */
+    int r = occurs_check_full(Var_CAST(root), term);
     if (r < 0) return NULL;
     return PyBool_FromLong(r);
 }

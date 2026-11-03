@@ -59,6 +59,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `0x`/`0o`/`0b` rules are unchanged. Pinned in
   `tests/iso/test_syntax_error_terms_scryer.py` and
   `tests/toklex/test_iso_spec.py`.
+- `unify_with_occurs_check/2` no longer builds a cyclic term through a
+  dict, a list view, a quantity, or an operator or clause term
+  (`DictTerm({k: X})` against `DictTerm({k: g(X)})` succeeded and bound
+  `X = g(X)`). Every `__unify__` hook now binds its parts with the
+  occurs check while the outer unification has it, as the Seg* hooks
+  already did; plain `=/2` is unchanged.
+- The occurs check now looks inside operator terms (`Y + 1`), clause
+  terms and quantities: `unify_with_occurs_check(Y, f(Y + 1))` bound
+  `Y` to a term holding it. A dict, partial list or other hooked term
+  on a cycle built by `=/2` no longer sends a later occurs check into
+  RecursionError, and `occurs_check/2` from Python no longer answers
+  True for a very deep term that does not hold the variable.
 
 ## 1.4.0 (2026-11-03)
 

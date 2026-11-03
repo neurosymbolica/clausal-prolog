@@ -201,12 +201,19 @@ class BinOp(Node):
             return NotImplemented
         if type(self) is not type(other):
             return False  # distinct operators (e.g. Add vs Mult) never unify
-        from clausal.logic.variables import unify
+        from clausal.terms import _hook_unifier
+        unify = _hook_unifier(trail)   # occurs-checked under unify_with_occurs_check
         mark = trail.mark()
         if unify(self.left, other.left, trail) and unify(self.right, other.right, trail):
             return True
         trail.undo(mark)
         return False
+
+    def __occurs_check__(self, var):
+        """Called by C do_occurs_check: the operands, the parts ``__unify__``
+        binds -- so ``unify_with_occurs_check(Y, f(Y + 1))`` fails."""
+        from clausal.terms import _occurs_in_parts
+        return _occurs_in_parts(self, var, (self.left, self.right))
 
 
 class BoolOp(BinOp):
@@ -236,8 +243,14 @@ class UnaryOp(Node):
             return NotImplemented
         if type(self) is not type(other):
             return False
-        from clausal.logic.variables import unify
+        from clausal.terms import _hook_unifier
+        unify = _hook_unifier(trail)   # occurs-checked under unify_with_occurs_check
         return unify(self.operand, other.operand, trail)
+
+    def __occurs_check__(self, var):
+        """Called by C do_occurs_check: the operand -- see ``BinOp``."""
+        from clausal.terms import _occurs_in_parts
+        return _occurs_in_parts(self, var, (self.operand,))
 
 
 
@@ -1162,12 +1175,19 @@ class Predicate(Node):
         not compared (``compare=False``)."""
         if not isinstance(other, Predicate):
             return NotImplemented
-        from clausal.logic.variables import unify
+        from clausal.terms import _hook_unifier
+        unify = _hook_unifier(trail)   # occurs-checked under unify_with_occurs_check
         mark = trail.mark()
         if unify(self.head, other.head, trail) and unify(self.body, other.body, trail):
             return True
         trail.undo(mark)
         return False
+
+    def __occurs_check__(self, var):
+        """Called by C do_occurs_check: head and body, the parts
+        ``__unify__`` binds."""
+        from clausal.terms import _occurs_in_parts
+        return _occurs_in_parts(self, var, (self.head, self.body))
 
 
 # ── Module-level items (pipeline split) ──────────────────────────────────────
