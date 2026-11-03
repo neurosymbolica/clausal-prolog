@@ -92,10 +92,13 @@ def directive_lookalike(query) -> "str | None":
 
 def is_labelled_query(item) -> bool:
     """A reader item that is ``label ?- Goal.``: the clause ``?-(label,
-    Goal)`` (``?-`` is read as an infix operator too)."""
+    Goal)`` (``?-`` is read as an infix operator too).  A label is an atom
+    or an integer: Ulrich Neumerkel numbers the quads of his conformity
+    pages (``1 ?- number_chars(1.2,"1.2").``)."""
     t = getattr(item, "term", None)
     return (type(item).__name__ == "Clause" and type(t) is tuple
-            and len(t) == 3 and t[0] == "?-" and type(t[1]) is str)
+            and len(t) == 3 and t[0] == "?-" and type(t[1]) in (str, int)
+            and type(t[1]) is not bool)
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,7 +109,7 @@ class Quad:
     query: object
     names: dict
     descriptions: tuple
-    label: "str | None" = None
+    label: "str | int | None" = None
 
 
 def extract_quads(source: str, op_table=None) -> list[Quad]:

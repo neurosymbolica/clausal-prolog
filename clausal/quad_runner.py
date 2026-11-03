@@ -22,14 +22,20 @@ answers, one at a time, are compared with the description:
 * ``X = f(...)`` -- ``...`` is any subterm; ``unexpected`` -- this answer must
   not be the one given at that point (nothing is claimed after it);
 * ``outputs(Text)`` -- what the query wrote while computing that answer;
+  ``outputs(("_", ...))`` -- a pattern: pieces of text and ``...`` (any
+  text), joined with ``,``;
+* ``inputs(Text)`` -- the query reads ``Text`` and a newline from
+  user_input (what the user types); ``peeks(Text)`` -- after the answer the
+  next characters of user_input are ``Text``;
 * ``sto`` -- accepted, not checked (an occurs-check binding cannot be
   described: such a cyclic answer is not matched).
 
-``loops``, ``other_answer_sequence``, ``waits``, ``inputs/1`` and ``peeks/1``
-are not checked: such a quad is *skipped*, and so is one with no description.
+``loops``, ``other_answer_sequence`` and ``waits`` are not checked: such a
+quad is *skipped*, and so is one with no description; each skip is reported
+with its reason.
 Modelled on Trealla's ``library/quads.pl`` (v3.14), which it differs from:
 ``sto`` is accepted but not checked, a cyclic answer is not matched, and a
-label is an atom.
+label is an atom or an integer.
 """
 from __future__ import annotations
 
@@ -42,8 +48,7 @@ from dataclasses import dataclass, field
 
 from clausal.tools.quads import Quad, extract_quads
 
-_UNSUPPORTED = frozenset({
-    "loops", "other_answer_sequence", "waits", "inputs", "peeks"})
+_UNSUPPORTED = frozenset({"loops", "other_answer_sequence", "waits"})
 _TAIL = frozenset({"...", "ad_infinitum"})
 _ERROR_ATOM = "instantiation_error"
 
@@ -81,6 +86,8 @@ class _Answer:
     tail: bool = False
     false: bool = False
     error: object = None
+    inputs: object = None          # text the query reads from user_input
+    peeks: object = None           # text user_input holds after the answer
     maybe: bool = False
     unexpected: bool = False
     outputs: object = None
@@ -139,6 +146,10 @@ def _answer_of(elements, names_of) -> _Answer:
             a.unexpected = True
         elif type(e) is tuple and len(e) == 2 and e[0] == "outputs":
             a.outputs = e[1]
+        elif type(e) is tuple and len(e) == 2 and e[0] == "inputs":
+            a.inputs = e[1]
+        elif type(e) is tuple and len(e) == 2 and e[0] == "peeks":
+            a.peeks = e[1]
         elif type(e) is str and e in _UNSUPPORTED:
             a.unsupported = e
         elif type(e) is tuple and e and e[0] in _UNSUPPORTED:
@@ -208,15 +219,24 @@ class _Actual:
                 self.items.append(("end",))
                 self.done = True
             except LogicException as exc:
-                self.items.append(("error", _deref_walk(exc.term)))
+                self.items.append(("error", _deref_walk(exc.term),
+                                   _pending_input()))
                 self.done = True
             else:
                 values = {n: _deref_walk(v) for n, v in self.shown}
                 self.items.append(("answer", values,
                                    cli._answer(self.shown, trail),
                                    _has_residual(self.shown, trail),
-                                   buf.getvalue()))
+                                   buf.getvalue(), _pending_input()))
         return self.items[i]
+
+
+def _pending_input() -> str:
+    """What user_input holds pushed back and not read yet (left in place)."""
+    from clausal.logic import streams  # noqa: PLC0415
+    rest = streams.USER_INPUT.take_unread()
+    streams.USER_INPUT.unread(rest)
+    return rest
 
 
 def _has_residual(shown, trail) -> bool:
@@ -304,13 +324,19 @@ def _match_pattern(p, a, env) -> bool:
 def _match_ball(p, a) -> bool:
     """The error an element describes against the ball raised: the context
     (the second argument of ``error/2``) is implementation defined and
-    matches anything; the rest is matched as a variant, as in Trealla."""
+    matches anything; the rest is matched as a variant, as in Trealla, where
+    ``...`` is any subterm (``syntax_error(...)``)."""
     from clausal.logic.variables import Var  # noqa: PLC0415
     if type(p) is tuple and len(p) == 3 and p[0] == "error":
         if not (type(a) is tuple and len(a) == 3 and a[0] == "error"):
             return False
-        return _canon([p[1]]) == _canon([a[1]]) and (
-            isinstance(p[2], (_Wild, Var)) or _canon([p[2]]) == _canon([a[2]]))
+        formal = (_match_pattern(p[1], a[1], {}) if _contains_dots(p[1])
+                  else _canon([p[1]]) == _canon([a[1]]))
+        return formal and (
+            isinstance(p[2], (_Wild, Var)) or p[2] == "..."
+            or _canon([p[2]]) == _canon([a[2]]))
+    if _contains_dots(p):
+        return _match_pattern(p, a, {})
     return _canon([p]) == _canon([a])
 
 
@@ -334,6 +360,18 @@ def _contains_dots(t) -> bool:
     return False
 
 
+def _outputs_ok(spec, output: str) -> bool:
+    """*output* is what ``outputs(Spec)`` describes: the text, or the pieces
+    of ``(Text1, ..., TextN)`` with each ``...`` any text in between."""
+    import re  # noqa: PLC0415
+    pieces = list(_flatten(spec, ","))
+    if len(pieces) == 1 and pieces[0] != "...":
+        return output == _outputs_text(spec)
+    rx = "".join(".*" if p == "..." else re.escape(_outputs_text(p))
+                 for p in pieces)
+    return re.fullmatch(rx, output, re.S) is not None
+
+
 def _outputs_text(spec) -> str:
     """The text an ``outputs/1`` argument names: a string, an atom or a
     list of characters."""
@@ -347,12 +385,15 @@ def _outputs_text(spec) -> str:
 def _check_answer(actual, ans: _Answer, expvars: dict, qnames) -> str:
     """"" when the actual answer *actual* matches *ans*, else why not."""
     from clausal.logic.variables import Var  # noqa: PLC0415
-    _, values, _text, residual, output = actual
+    _, values, _text, residual, output, pending = actual
     for name in (*ans.bindings, *ans.approx):
         if name not in qnames:
             return f"{name} is no variable of the query"
-    if ans.outputs is not None and output != _outputs_text(ans.outputs):
-        return f"the query wrote {output!r}, not {_outputs_text(ans.outputs)!r}"
+    if ans.outputs is not None and not _outputs_ok(ans.outputs, output):
+        return f"the query wrote {output!r}, not {_show(ans.outputs)}"
+    why = _peeks_why(ans, pending)
+    if why:
+        return why
     if residual and not ans.maybe:
         return "the answer has residual constraints (the description lacks `maybe`)"
     if ans.maybe and not residual:
@@ -378,6 +419,16 @@ def _check_answer(actual, ans: _Answer, expvars: dict, qnames) -> str:
     return ""
 
 
+def _peeks_why(ans: _Answer, pending: str) -> str:
+    """"" when user_input holds what ``peeks/1`` says, else why not."""
+    if ans.peeks is None:
+        return ""
+    want = _outputs_text(ans.peeks)
+    if pending.startswith(want):
+        return ""
+    return f"user_input holds {pending!r}, not {want!r} first"
+
+
 def _run_alternative(actual: _Actual, seq, expvars) -> str:
     """"" if the actual answers fit the sequence *seq*, else why not."""
     qnames = [n for n, _ in actual.shown]
@@ -399,7 +450,7 @@ def _run_alternative(actual: _Actual, seq, expvars) -> str:
             if item[0] != "error":
                 return _unexpected(item, "an error")
             if _match_ball(ans.error, item[1]):
-                return ""
+                return _peeks_why(ans, item[2])
             return f"raised {_show(item[1])}"
         if item[0] != "answer":
             return _unexpected(item, "an answer")
@@ -430,6 +481,18 @@ def _unexpected(item, wanted: str) -> str:
 # ── running ───────────────────────────────────────────────────────────────
 
 
+def _feed_input(descriptions) -> None:
+    """The text of the quad's ``inputs/1`` and a newline (the user's
+    Return), pushed onto user_input before the query runs."""
+    from clausal.logic import streams  # noqa: PLC0415
+    for alts in descriptions:
+        for seq, _ in alts:
+            for ans in seq:
+                if ans.inputs is not None:
+                    streams.USER_INPUT.unread(_outputs_text(ans.inputs) + "\n")
+                    return
+
+
 def run_quad(module, quad: Quad, timeout: float = 10.0) -> Result:
     """Run one quad; the limit *timeout* is for this quad alone."""
     try:
@@ -457,6 +520,7 @@ def _run_quad(module, quad: Quad, timeout: float) -> Result:
         if timed:
             old = signal.signal(signal.SIGALRM, alarm)
             signal.setitimer(signal.ITIMER_REAL, timeout)
+        _feed_input(descriptions)
         actual = _Actual(module, quad)
         skipped = ""
         for alts in descriptions:           # every description must hold
@@ -486,6 +550,8 @@ def _run_quad(module, quad: Quad, timeout: float) -> Result:
         from clausal import cli  # noqa: PLC0415
         return Result(quad, "failed", f"raised {cli._describe(exc)}")
     finally:
+        from clausal.logic import streams  # noqa: PLC0415
+        streams.USER_INPUT.take_unread()        # no input leaks to the next quad
         if timed:
             signal.setitimer(signal.ITIMER_REAL, 0)
             if old is not None:
@@ -511,9 +577,9 @@ def run_quads(module, source: str, op_table, filename: str = "<quads>",
         else:
             res = run_quad(module, quad, timeout=timeout)
         summary.results.append(res)
-        if res.status == "failed":
-            label = f" ({quad.label})" if quad.label else ""
-            out.write(f"{filename}:{quad.line}: quad failed{label}: "
+        if res.status in ("failed", "skipped"):
+            label = f" ({quad.label})" if quad.label is not None else ""
+            out.write(f"{filename}:{quad.line}: quad {res.status}{label}: "
                       f"{res.detail}\n")
     out.write(f"quads: {len(summary.results)} found, "
               f"{summary.count('passed')} passed, "

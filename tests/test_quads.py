@@ -162,11 +162,13 @@ def test_a_residual_constraint_needs_maybe(tmp_path):
 
 
 @pytest.mark.parametrize("annotation", ["loops", "other_answer_sequence",
-                                        "waits", "inputs(foo)"])
+                                        "waits"])
 def test_unchecked_annotations_skip(tmp_path, annotation):
     r = _run(tmp_path, f"?- p(X).\n   X = 1, {annotation}.\n")
     assert r.returncode == 0, r.stdout
     assert "0 failed, 1 skipped" in r.stdout
+    # each skip is reported by name, so nothing is silently not run
+    assert f"t.pl:4: quad skipped: {annotation} is not checked" in r.stdout
 
 
 def test_a_query_without_description_is_skipped(tmp_path):
@@ -457,3 +459,97 @@ def test_g_and_quads_agree_on_what_is_pending(tmp_path):
     body = "g :- freeze(_, true).\n?- g.\n   maybe.\n"
     r = _run(tmp_path, body)
     assert r.returncode == 0, r.stdout
+
+
+# ── Ulrich Neumerkel's quad files (number_chars_cont_quad.pl,
+# variable_names_quad.pl) run as published ─────────────────────────────────
+
+
+def test_an_integer_label(tmp_path):
+    r = _run(tmp_path, "1  ?- p(1).\n      true.\n")
+    assert r.returncode == 0, r.stdout
+    assert "1 found, 1 passed, 0 failed, 0 skipped" in r.stdout
+    assert [q.label for q in extract_quads("p(1).\n7 ?- p(1).\n   true.\n")] == [7]
+
+
+def test_an_integer_label_is_reported(tmp_path):
+    r = _run(tmp_path, "12 ?- p(3).\n   true.\n")
+    assert r.returncode == 1 and "quad failed (12):" in r.stdout, r.stdout
+
+
+def test_an_integer_labelled_query_outside_a_quad_is_a_syntax_error(tmp_path):
+    # `1 ?- G` with no description after it is no quad: the program's own
+    # reader has no infix ?-, so the file does not load
+    r = _g(tmp_path, "p(1).\n1 ?- p(1).\nq(2).\n", "q(X)")
+    assert r.returncode != 0 and "syntax" in (r.stderr + r.stdout).lower(), r.stderr
+    assert extract_quads("p(1).\n1 ?- p(1).\nq(2).\n") == []
+
+
+def test_alternatives_without_library_dcgs(tmp_path):
+    # the bar between descriptions, on a line of its own as Ulrich writes it
+    r = _run(tmp_path, "?- atom_length(1, N).\n   false\n|  type_error(atom, 1).\n")
+    assert r.returncode == 0, r.stdout
+    assert "1 found, 1 passed, 0 failed, 0 skipped" in r.stdout
+
+
+def test_the_bar_stays_out_of_the_program(tmp_path):
+    # quad context only: a clause using | as an infix operator still does not
+    # read without library(dcgs), as in Scryer
+    r = _g(tmp_path, "?- p(1).\n   true.\nq((a|b)).\n", "q(X)")
+    assert r.returncode != 0 and "syntax" in (r.stderr + r.stdout).lower(), r.stderr
+
+
+@pytest.mark.parametrize("description, ok", [
+    ("syntax_error(...)", True),
+    ("syntax_error(_)", False),          # a variant: syntax_error(Kind) is no variant of it
+    ("type_error(...)", False),          # not an error description (type_error/2)
+    ("type_error(number, ...)", False),  # the wrong error
+    ("error(syntax_error(...), _)", True),
+    # `...` as the implementation-defined context of error/2 (review
+    # 2026-11-03: it was matched as the atom '...')
+    ("error(syntax_error(...), ...)", True),
+    ("error(type_error(integer, b), ...)", False),
+])
+def test_dots_in_an_expected_error(tmp_path, description, ok):
+    r = _run(tmp_path, f"?- number_chars(N, [a]).\n   {description}.\n")
+    if ok:
+        assert r.returncode == 0 and "1 passed" in r.stdout, r.stdout
+    else:
+        assert "1 passed" not in r.stdout, r.stdout
+
+
+@pytest.mark.parametrize("pattern, ok", [
+    ('("f(_", ..., ")")', True),
+    ('("_", ...)', False),
+    ('(..., "_", ...)', True),
+    ('("f(_", ...)', True),
+    ('"f(_1)"', False),
+])
+def test_an_outputs_pattern(tmp_path, pattern, ok):
+    r = _run(tmp_path, f"?- write(f(_)).\n   outputs({pattern}).\n")
+    assert (r.returncode == 0) is ok, r.stdout
+
+
+def test_inputs_and_peeks(tmp_path):
+    # the quad's input, and the newline its Return types, are user_input
+    good = _run(tmp_path, '?- read(T).\n   inputs("a."), peeks("\\n"), T = a.\n')
+    assert good.returncode == 0, good.stdout
+    bad = _run(tmp_path, '?- read(T).\n   inputs("a."), peeks("x"), T = a.\n')
+    assert bad.returncode == 1 and "user_input holds" in bad.stdout, bad.stdout
+    err = _run(tmp_path, '?- read(T).\n   inputs("a b."), peeks("\\n"), '
+                         'syntax_error(...).\n')
+    assert err.returncode == 0, err.stdout
+
+
+def test_inputs_do_not_leak_to_the_next_quad(tmp_path):
+    # the first quad reads nothing; its input must not reach the second
+    r = _run(tmp_path, '?- p(1).\n   inputs("b."), true.\n'
+                       '?- read(T).\n   inputs("c."), T = c.\n')
+    assert r.returncode == 0, r.stdout
+    assert "2 found, 2 passed" in r.stdout
+
+
+def test_dots_as_the_context_of_error_2(tmp_path):
+    r = _run(tmp_path, "5 ?- atom_length(a, b).\n"
+                       "   error(type_error(integer, b), ...).\n")
+    assert r.returncode == 0 and "1 passed" in r.stdout, r.stdout
