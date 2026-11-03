@@ -232,6 +232,13 @@ class Stream:
         if text:
             self._buf = text + self._buf
 
+    def take_unread(self) -> str:
+        """Remove and return what is pushed back (:meth:`unread`, or a
+        :meth:`peek`) and not read yet."""
+        buf = self._buf
+        self._buf = b"" if self.kind == "binary" else ""
+        return buf
+
     def end_of_stream(self) -> str:
         """``not`` / ``at`` / ``past`` (the ``end_of_stream`` property)."""
         if self.is_output:
