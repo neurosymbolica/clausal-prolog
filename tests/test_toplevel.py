@@ -686,6 +686,18 @@ def test_piped_next_line_is_not_eaten(tmp_path):
     assert r.stdout == "   X = 1.\n   Y = 1.\n"
 
 
+def test_piped_rest_of_line_is_user_input(tmp_path):
+    # Conformity Testing I #270 and #271: the query is read from user_input,
+    # so a goal reading it reads on after the end token (Scryer agrees).
+    r = _piped(tmp_path, "get_char(C). %a\nget_char(C).%a\n")
+    assert r.stdout == "   C = ' '.\n   C = '%'.\n"
+
+
+def test_piped_rest_of_line_left_unread_is_the_next_query(tmp_path):
+    r = _piped(tmp_path, "read(T). foo(bar). X = 3.\nget_char(C).\n")
+    assert r.stdout == "   T = foo(bar).\n   X = 3.\n   C = '\\n'.\n"
+
+
 def test_piped_nondeterministic_query_does_not_loop(tmp_path):
     r = _piped(tmp_path, "between(1, 1000000, X).\n")
     assert r.stdout == "   X = 1.\n"

@@ -700,6 +700,20 @@ class TopLevel:
                     continue
                 # anything else: ignored, the prompt stays
 
+    def _run_with_rest(self, text: str) -> None:
+        """Run the query *text* with the rest of its line as the start of
+        ``user_input``, as when the top-level reads the query with
+        ``read_term/2`` from ``user_input`` (Conformity Testing I #270, #271:
+        ``get_char(C). %a`` answers ``C = ' '``).  What the query leaves
+        unread is read as the next query."""
+        from clausal.logic import streams  # noqa: PLC0415
+        streams.USER_INPUT.unread(self._pending)
+        self._pending = ""
+        try:
+            self.run_query(text)
+        finally:
+            self._pending = streams.USER_INPUT.take_unread()
+
     # -- the loop
 
     def run(self) -> int:
@@ -710,7 +724,7 @@ class TopLevel:
                 if text is None:
                     return 0
                 try:
-                    self.run_query(text)
+                    self._run_with_rest(text)
                 except KeyboardInterrupt:
                     self._write("\n")
         except Halt as h:
