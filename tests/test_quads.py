@@ -505,6 +505,10 @@ def test_the_bar_stays_out_of_the_program(tmp_path):
     ("type_error(...)", False),          # not an error description (type_error/2)
     ("type_error(number, ...)", False),  # the wrong error
     ("error(syntax_error(...), _)", True),
+    # `...` as the implementation-defined context of error/2 (review
+    # 2026-11-03: it was matched as the atom '...')
+    ("error(syntax_error(...), ...)", True),
+    ("error(type_error(integer, b), ...)", False),
 ])
 def test_dots_in_an_expected_error(tmp_path, description, ok):
     r = _run(tmp_path, f"?- number_chars(N, [a]).\n   {description}.\n")
@@ -543,3 +547,9 @@ def test_inputs_do_not_leak_to_the_next_quad(tmp_path):
                        '?- read(T).\n   inputs("c."), T = c.\n')
     assert r.returncode == 0, r.stdout
     assert "2 found, 2 passed" in r.stdout
+
+
+def test_dots_as_the_context_of_error_2(tmp_path):
+    r = _run(tmp_path, "5 ?- atom_length(a, b).\n"
+                       "   error(type_error(integer, b), ...).\n")
+    assert r.returncode == 0 and "1 passed" in r.stdout, r.stdout

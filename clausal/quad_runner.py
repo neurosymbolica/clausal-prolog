@@ -333,7 +333,8 @@ def _match_ball(p, a) -> bool:
         formal = (_match_pattern(p[1], a[1], {}) if _contains_dots(p[1])
                   else _canon([p[1]]) == _canon([a[1]]))
         return formal and (
-            isinstance(p[2], (_Wild, Var)) or _canon([p[2]]) == _canon([a[2]]))
+            isinstance(p[2], (_Wild, Var)) or p[2] == "..."
+            or _canon([p[2]]) == _canon([a[2]]))
     if _contains_dots(p):
         return _match_pattern(p, a, {})
     return _canon([p]) == _canon([a])
