@@ -832,6 +832,12 @@ A CLP(Z) variable enters a CLP(Q) context through a comparison (`{X =< 7}`),
 along: `X #\= 3` has none, so `sup(X, S)` fails, as it does for a variable
 the store does not know.
 
+Only the domain's hull comes along, a rational relaxation: with
+`X in 1..3 \/ 7..9` and `{X >= 4}`, `inf(X, I)` gives 4, not 7. An optimum
+that binds cannot be read off the hull, so `maximize`, `minimize` and
+`bb_inf` raise `representation_error(fd_domain_with_holes)` when a variable
+of the objective (or of `bb_inf`'s integer list) has a domain with a hole.
+
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:fd_q_coexistence"
 ```

@@ -18,17 +18,25 @@ renamed-apart row prerequisite landed 2026-10-20 (see below).
 its residue, the selected solver's dump/3 over the stored row
 (`tabling._answer_residue`), keys the answer on row and residue, and
 `TableEntry.unify_row` re-posts it on each replay (plan steps 1, 2 and 4,
-phase 3's CLP(Q) half). Pinned in tests/test_clpq_tabled_answers.py. Left:
+phase 3's CLP(Q) half). Pinned in tests/test_clpq_tabled_answers.py.
+A review found the textual key let recursion through CLP(Q) answers run
+forever and kept equal constraints twice; since then CLP(Q) answers are
+kept modulo entailment (answer subsumption, `tabling._residue_entails`,
+plan step 4's entailment check), a negation scans a complete table on the
+caller's trail, an answer that is all CLP(Q) waits for completion (the
+D68 stopgap now applies only to constraints the row cannot carry,
+`_has_uncarried_constraint`), and a judging leader takes a conditional
+answer's residue when it is derived and replays it through `unify_row`.
+Pinned in tests/test_clpq_tabled_answer_subsumption.py. Left:
 - dif/2, freeze/2, CLP(FD), CLP(B): no residue yet (phases 1, 2, 3's
   CLP(B) half); their answers still lose the constraint on replay, and
   answers from families with no hook are not refused (phase 4).
-- The D68 stopgap stays: a constrained answer, CLP(Q) included, is still
-  handed over live before its table completes (`_has_attributed_var`).
-  For an answer whose only constraints are CLP(Q) it could now wait for
-  completion like the rest; not done.
-- A judging leader (`seam.judged_answers`) adds its conditional
-  derivations with no trail, after the solve has undone them: no residue
-  there.
+- Subsumption keeps a stored answer when a more general one comes later
+  (sound, not minimal); replacing it would mean retracting a row that
+  consumers may already have read. A loosening recursion
+  (`p(X) :- p(Y), {X >= Y - 1}`) does not terminate.
+- A stored residue over a variable outside its row (the port's slack of
+  `X =\\= 1`) is never used to subsume; such answers can repeat.
 - A united variable (units side channel) in a tabled CLP(Q) answer:
   dump/3 projects onto its shadow, and the re-posted residue is on a
   plain fresh variable; untested.
