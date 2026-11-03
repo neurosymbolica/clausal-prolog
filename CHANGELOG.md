@@ -9,6 +9,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: the back
+  substitution's row scan runs in C.** `delete_factor_hom/4`'s search
+  of a row for the substituted variable compares ids over the
+  dereferenced variables in one C loop instead of a Python loop; the
+  same rows, the same answers, the same pivots (complexity survey R1).
 - **CLP(Q) (`CLAUSAL_CLPQ=holzbaur`): a hook body that reaches the store
   through a fresh `Trail()` is refused too.** The port's entry points
   refused inside an attribute hook only when the trail they were given had

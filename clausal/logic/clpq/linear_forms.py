@@ -14,6 +14,8 @@ the form itself coming back for a factor of 1).
 
 A predicate that can fail returns None where it fails.
 """
+from operator import indexOf, itemgetter
+
 from clausal.logic.clpq.arithmetic import (
     ONE, ZERO, add, arithmetic_normalize, compare, divide, is_zero,
     make_rational, multiply, negate, sign, to_number)
@@ -23,6 +25,8 @@ from clausal.logic.clpq.variable_ordering import (
 from clausal.logic.variables import deref, is_var
 
 MINUS_ONE = (-1, 1)
+
+_first = itemgetter(0)
 
 
 class LinearForm:
@@ -298,15 +302,19 @@ def delete_factor(variable, form):
 def delete_factor_homogeneous(variable, terms):
     """store.pl, delete_factor_hom/4: the live version, which compares the
     variables themselves and continues on both (<) and (>), so it finds
-    *variable* by identity (test_delete_factor_removes_one_variable).  Returns (terms without it, its coefficient), or
-    None."""
+    *variable* by identity (test_delete_factor_removes_one_variable).
+    Returns (terms without it, its coefficient), or None.
+
+    The scan runs in C: the first term whose variable, dereferenced, is
+    *variable*, found by comparing ids, so no __eq__ is consulted.  Every
+    object compared is alive (held by the row or by a binding), so equal
+    ids are the same object (test_row_scans.py)."""
     variable = deref(variable)
-    i = 0
-    for term in terms:
-        if term[0] is variable or deref(term[0]) is variable:
-            return terms[:i] + terms[i + 1:], term[1]
-        i += 1
-    return None
+    try:
+        i = indexOf(map(id, map(deref, map(_first, terms))), id(variable))
+    except ValueError:
+        return None
+    return terms[:i] + terms[i + 1:], terms[i][1]
 
 
 def normal_form_coefficient_of(form, variable):
