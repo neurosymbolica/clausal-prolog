@@ -1984,19 +1984,21 @@ def _compile_predicate_trampoline_impl(
 
 
 @contextlib.contextmanager
-def _too_deep_named(args, kwargs, globals_):
+def too_deep_named(functor, arity, clauses, globals_):
     """A compiler pass that ran out of Python's recursion limit -> the
     ``GeneratedCodeError`` naming the predicate and its clause's line, as
     CPython's own refusal is named: ISO's resource_error(stack).  Such a
     clause nests too deep (a long if-then-else chain, deep bracketed
     nesting, a long conjunction held as data); a long conjunction or
-    disjunction in the body itself compiles without recursion."""
+    disjunction in the body itself compiles without recursion.
+
+    Used where a MODULE is loaded (``compiler_v2.compile_module``) only:
+    a query compile relies on the RecursionError itself, to recompile
+    with a deep or cyclic argument lifted to a parameter
+    (``solve._compile_as_query``)."""
     try:
         yield
     except RecursionError as exc:
-        functor = args[0] if args else kwargs.get("functor")
-        arity = args[1] if len(args) > 1 else kwargs.get("arity")
-        clauses = args[2] if len(args) > 2 else kwargs.get("clauses", ())
         raise GeneratedCodeError(
             _TOO_DEEP_TO_COMPILE, f"{functor}__{arity}", exc,
             filename=(globals_ or {}).get("__file__"),
@@ -2025,7 +2027,7 @@ def compile_predicate_trampoline(*args, **kwargs) -> Callable:
     globals_ = kwargs.get("globals_")
     if globals_ is None and len(args) > 5:
         globals_ = args[5]
-    with lowering_scope(globals_), _too_deep_named(args, kwargs, globals_):
+    with lowering_scope(globals_):
         return _compile_predicate_trampoline_impl(*args, **kwargs)
 
 
@@ -2682,7 +2684,7 @@ def compile_predicate_shallow(*args, **kwargs) -> Callable:
     globals_ = kwargs.get("globals_")
     if globals_ is None and len(args) > 5:
         globals_ = args[5]
-    with lowering_scope(globals_), _too_deep_named(args, kwargs, globals_):
+    with lowering_scope(globals_):
         return _compile_predicate_shallow_impl(*args, **kwargs)
 
 

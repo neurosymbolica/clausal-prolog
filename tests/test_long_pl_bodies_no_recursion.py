@@ -493,3 +493,16 @@ def test_a_long_conjunction_held_as_data_is_a_resource_error(
               f":- dynamic(r/1).\nq(X, X).\np :- assertz((r(X) :- {body})).\n")
     msg = str(e.value)
     assert "resource_error(stack)" in msg and "p/0" in msg and ":3:" in msg
+
+
+def test_a_query_compile_still_raises_recursion_error_itself():
+    # Only a MODULE load names the overflow (compiler_v2): a query compile
+    # must see the RecursionError, to recompile with the deep argument
+    # lifted (tests/test_python_entry_cyclic_deep.py).
+    from clausal.logic.compiler import compile_predicate_trampoline
+    from clausal.logic.compiler.predicate import too_deep_named
+    import inspect
+    assert "RecursionError" not in inspect.getsource(compile_predicate_trampoline)
+    with pytest.raises(SyntaxError):
+        with too_deep_named("p", 1, [], {}):
+            raise RecursionError("deep")

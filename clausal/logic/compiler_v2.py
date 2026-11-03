@@ -38,6 +38,7 @@ from clausal.logic.compiler import (
     compile_predicate_trampoline,
     compile_predicate_shallow,
 )
+from clausal.logic.compiler.predicate import too_deep_named
 from clausal.logic.predicate import (
     record_clause_source,
     field_names_for, is_declared_predicate, is_declared_predicate_name,
@@ -486,7 +487,8 @@ def compile_module(
         clauses = db.clauses_for(functor, arity)
         with _load_gate(db, functor, arity, author, WRITE_LOAD_DISPATCH,
                         _load_through(pred_cls, origins, functor, arity),
-                        origins, module_name, module_dict):
+                        origins, module_name, module_dict), \
+                too_deep_named(functor, arity, clauses, module_dict):
             if db.is_shallow(functor, arity):
                 compile_predicate_shallow(
                     functor, arity, clauses, db,
