@@ -37,6 +37,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   refusal stays ISO's set. Pinned by
   `tests/iso/test_own_special_form_names_scryer.py`.
 
+  `m:g --> ...` there defines `g//0`, and `dynamic/1`, `discontiguous/1`,
+  `table/1` and the `constants_number_*` tables take `m:p/N` (or
+  `m:(p/N)`) as `p/N`; both were refused. A head qualified with any
+  other module is unchanged (still `(:)/2`, an open question in
+  `todo/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md`).
+
 ## 1.4.0 (2026-11-03)
 
 ### Changed
