@@ -7,6 +7,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Changed
+
+- **Every float comes before every integer in the standard order of
+  terms**, whatever their values, as ISO 7.2.1 says (operator ruling
+  2026-11-03, "as with ISO"). `compare(O, 1, 2.0)` gives `>` and
+  `msort([3, 2.5, 1, 0.5], L)` gives `L = [0.5, 2.5, 1, 3]`; numbers used
+  to be ordered by value, a float only before an equal integer. This
+  changes `compare/3`, `@<`/2 and the rest, `sort/2`, `msort/2`,
+  `sort/4`, `keysort/2` and `setof/3` on lists that mix floats and
+  integers. Integers, decimals and fractions still order among themselves
+  by value. Scryer agrees.
+
 ## 1.4.0 (2026-11-03)
 
 ### Changed

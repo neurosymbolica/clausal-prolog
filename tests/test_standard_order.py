@@ -448,3 +448,37 @@ class TestSortDedupCost:
         got = _run_list_builtin(
             _sort__2, [chars("ab"), [char_atom("a"), char_atom("b")], chars("ab")])
         assert len(got) == 1
+
+
+# ── Every float before every integer (ISO 7.2.1, ruling 2026-11-03) ──────
+#
+# The standard order of numbers was by value, with a float before an EQUAL
+# integer.  ISO orders every float before every integer whatever their
+# values (Cor.2 8.4.3.4's sort example; Scryer: ``compare(>, 1, 2.0)``).  The
+# exact kinds -- int, Decimal, Fraction -- keep one band, by value.
+
+def test_a_float_precedes_a_larger_integer():
+    assert _standard_order_key(2.0) < _standard_order_key(1)
+    assert _standard_order_key(100.0) < _standard_order_key(-5)
+    assert _standard_order_key(1.0) < _standard_order_key(1)
+
+
+def test_msort_puts_the_floats_first():
+    assert _run_list_builtin(_msort__2, [3, 2.5, 1, 0.5, 10, -1.0]) == \
+        [-1.0, 0.5, 2.5, 1, 3, 10]
+
+
+def test_sort_the_cor2_example():
+    # Cor.2 8.4.3.4, the bound part: [7.0, 8.0, 1, 2, a, z]
+    assert _run_list_builtin(_sort__2, [1, "z", "a", 1, 7.0, 8.0, 2, 8.0, "a"]) == \
+        [7.0, 8.0, 1, 2, "a", "z"]
+
+
+def test_setof_puts_the_floats_first():
+    assert _set_of_sort_dedup([2, 1.5, 1, 3.0]) == [1.5, 3.0, 1, 2]
+
+
+def test_the_exact_numbers_share_one_band_by_value():
+    from decimal import Decimal
+    got = _run_list_builtin(_msort__2, [Decimal("2.50"), 3, Fraction(1, 2), 1, 0.25])
+    assert got == [0.25, Fraction(1, 2), 1, Decimal("2.50"), 3]

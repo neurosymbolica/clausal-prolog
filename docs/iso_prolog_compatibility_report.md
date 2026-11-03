@@ -207,7 +207,9 @@ float operand of the `#` family is CLP(ℝ) in Clausal and a
 | `1 == 1.0` | fails |
 | `1 = 1.0` | fails (an integer and a float are distinct terms, ISO 7.3; so do `f(1) = f(1.0)`, `[1] = [1.0]` and `X = 1, X = 1.0`) |
 | `a \== b` | succeeds |
-| `compare(O, 1, 1.0)` | `O = (>)` (a float precedes an equal integer) |
+| `compare(O, 1, 1.0)` | `O = (>)` (a float precedes an integer) |
+| `compare(O, 1, 2.0)` | `O = (>)` (every float precedes every integer, whatever their values: ISO 7.2.1) |
+| `msort([3, 2.5, 1, 0.5], L)` | `L = [0.5, 2.5, 1, 3]` |
 | `compare(O, 1, a)` | `O = (<)` |
 | `compare(O, f(a), b)` | `O = (>)` |
 | `compare(O, "abc", abc)` | `O = (>)` (a string is a list, a compound) |

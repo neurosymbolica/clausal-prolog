@@ -613,9 +613,12 @@ _ORD_DICT = 4
 _ORD_SET = 5
 _ORD_OTHER = 6
 
-# Within the number band, at EQUAL value and dimension, the term's numeric
-# TYPE decides. float before int is ISO 7.2.1; the rest are Clausal extensions
-# and follow it, each its own kind. The ranks must agree with
+# Within the number band every float comes first, by value, then every
+# other number (ISO 7.2.1: a float precedes an integer whatever their values,
+# so ``compare(>, 1, 2.0)``; operator ruling 2026-11-03, "as with ISO").  The
+# exact kinds -- int and the Clausal extensions Decimal and Fraction -- share
+# the second band and order by value there, so exact amounts sort as numbers.
+# At EQUAL value and dimension the numeric TYPE decides, each its own kind. The ranks must agree with
 # `iso_compare._numeric_tag` — two terms share a rank exactly when `'=='`
 # calls them identical — because that is what makes
 # `compare(=, X, Y) <=> X == Y` hold by construction rather than by luck.
@@ -671,7 +674,14 @@ def _number_key(x, cell: int = 0) -> tuple:
     # no.  Both components are here, in the ONE number-key constructor, so
     # the shape stays uniform across the band (see the docstring above).
     scale = _number_scale(x)
-    return (_ORD_NUM, (), x, _NUMERIC_RANK.get(_numeric_kind(x), 90), scale, cell)
+    return (_ORD_NUM, (), _float_band(x), x,
+            _NUMERIC_RANK.get(_numeric_kind(x), 90), scale, cell)
+
+
+def _float_band(x) -> int:
+    """0 for a float, 1 for every other number: ISO 7.2.1 orders every float
+    before every integer, whatever their values."""
+    return 0 if isinstance(x, float) else 1
 
 
 def _number_scale(x) -> int:
@@ -847,7 +857,7 @@ def _term_key(term: Any) -> tuple:
         # key (``_number_key``): the rank slot is the Quantity rank, which
         # never ties with a bare number's, and the extra slot comes last.
         v = term.value
-        return (_ORD_NUM, tuple(sorted(term.dims.items())), v,
+        return (_ORD_NUM, tuple(sorted(term.dims.items())), _float_band(v), v,
                 _NUMERIC_RANK_QUANTITY, _number_scale(v), 0,
                 _NUMERIC_RANK.get(_numeric_kind(v), 90))
     if term is True or term is False or term is _Undefined:
