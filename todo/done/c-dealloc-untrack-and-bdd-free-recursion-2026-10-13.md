@@ -1,5 +1,7 @@
 # C deallocs: FD and constraint types never untrack; BDDNode free recurses (2026-10-12)
 
+**Status: FIXED 2026-11-03 (commit 864a7bdc).** Every FD/constraint dealloc untracks first and uses the trashcan; BDDNode frees past 1000 nested levels from a per-thread pending stack. Pinned in tests/test_dealloc_constraint_types.py (test_dying_object_is_untracked_before_its_fields_drop, test_fd_long_chain_frees, test_bdd_deep_node_chain_frees, test_bdd_free_with_reentrant_field).
+
 Found by the GC-segfault fix review (heap-type audit).
 
 1. **Missing untrack.** `FDVar_dealloc` and `ConstraintBase_dealloc` (`_clpfd_propagate.c:196, 265`)
