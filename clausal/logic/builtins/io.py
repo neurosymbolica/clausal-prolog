@@ -394,11 +394,15 @@ def _write_option_bool(value, option):
 
     Source ``quoted(true)`` folds ``true``/``false`` to Python ``True``/
     ``False`` (spec §8), but a term built through ``functor/3`` or by a
-    Python caller carries the ATOM, so both spellings are read.  Anything
-    else is a ``domain_error(write_option, Opt)`` — the option as a whole is
-    what ISO reports.
+    Python caller carries the ATOM, so both spellings are read.  An unbound
+    value is ``instantiation_error`` (ISO 8.14.2.3 b, WDCor.3's example
+    ``write_term(1, [quoted(B)])``; Scryer agrees); anything else is a
+    ``domain_error(write_option, Opt)`` — the option as a whole is what ISO
+    reports.
     """
     value = deref(value)
+    if is_var(value):
+        raise LogicException(instantiation_error("write_term/2"))
     if value is True or value is False:
         return value
     if _term_is_atom(value):

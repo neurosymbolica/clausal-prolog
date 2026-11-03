@@ -693,9 +693,28 @@ def _copy_term__2(original, copy, trail, k):
     trail.undo(mark)
 
 
+def _list_or_partial_list(v) -> bool:
+    """*v* (dereferenced) is a variable, a list, or a list whose tail is
+    a variable."""
+    from clausal.logic.builtins.lists import _as_items  # noqa: PLC0415
+    if is_var(v) or _as_items(v) is not None:
+        return True
+    if isinstance(v, SegList):
+        return isinstance(v._walk_raw(), (list, SegList))
+    return isinstance(v, (SegString, SegBytes))
+
+
 @_builtin("term_variables", 2)
 def _term_variables__2(term, vars_out, trail, k):
-    """term_variables(Term, Vars) — unify Vars with list of unbound variables in Term."""
+    """term_variables(Term, Vars) — unify Vars with list of unbound variables in Term.
+
+    A Vars that is neither a list nor a partial list is ``type_error(list,
+    Vars)`` (ISO Cor.2 8.5.5.3 a, its example ``term_variables(t, [_, _|a])``;
+    Scryer agrees); it used to fail."""
+    if not _list_or_partial_list(deref(vars_out)):
+        from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+        raise LogicException(
+            type_error("list", deref(vars_out), "term_variables/2"))
     term_val = deref(term)
     result: list = []
     _collect_vars_impl(term_val, result)
