@@ -599,6 +599,23 @@ Trail_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     return (PyObject *)self;
 }
 
+/* Release the references one entry owns, with no undo effect. */
+static void
+trail_entry_release(TrailEntry *e)
+{
+    if (e->kind == TRAIL_BINDING) {
+        Py_DECREF(e->u.binding.var);
+        Py_XDECREF(e->u.binding.old_value);
+    } else if (e->kind == TRAIL_ATTR) {
+        Py_DECREF(e->u.attr.attvar);
+        Py_XDECREF(e->u.attr.key);
+        Py_XDECREF(e->u.attr.old_attr);
+    } else {
+        /* TRAIL_CALLBACK; TRAIL_PENDING (fn may be NULL) */
+        Py_XDECREF(e->u.callback.fn);
+    }
+}
+
 static void
 Trail_dealloc(TrailObject *self)
 {
@@ -612,20 +629,12 @@ Trail_dealloc(TrailObject *self)
     PyObject_GC_UnTrack(self);
     if (self->weakrefs)
         PyObject_ClearWeakRefs((PyObject *)self);
-    for (Py_ssize_t i = 0; i < self->length; i++) {
-        TrailEntry *e = &self->entries[i];
-        if (e->kind == TRAIL_BINDING) {
-            Py_DECREF(e->u.binding.var);
-            Py_XDECREF(e->u.binding.old_value);
-        } else if (e->kind == TRAIL_ATTR) {
-            Py_DECREF(e->u.attr.attvar);
-            Py_XDECREF(e->u.attr.key);
-            Py_XDECREF(e->u.attr.old_attr);
-        } else {
-            /* TRAIL_CALLBACK; TRAIL_PENDING (fn may be NULL) */
-            Py_XDECREF(e->u.callback.fn);
-        }
-    }
+    /* No Python a release runs can reach this trail again: its refcount
+     * is 0, it is untracked and its weakrefs are cleared, so walking the
+     * array in place is safe (Trail_clear, reached from the GC, detaches
+     * first because there the trail is still reachable). */
+    for (Py_ssize_t i = 0; i < self->length; i++)
+        trail_entry_release(&self->entries[i]);
     PyMem_Free(self->entries);
     Py_XDECREF(self->wakeup_list);
     Py_XDECREF(self->pending);
@@ -652,23 +661,6 @@ Trail_traverse(TrailObject *self, visitproc visit, void *arg)
     Py_VISIT(self->wakeup_list);
     Py_VISIT(self->pending);
     return 0;
-}
-
-/* Release the references one entry owns, with no undo effect. */
-static void
-trail_entry_release(TrailEntry *e)
-{
-    if (e->kind == TRAIL_BINDING) {
-        Py_DECREF(e->u.binding.var);
-        Py_XDECREF(e->u.binding.old_value);
-    } else if (e->kind == TRAIL_ATTR) {
-        Py_DECREF(e->u.attr.attvar);
-        Py_XDECREF(e->u.attr.key);
-        Py_XDECREF(e->u.attr.old_attr);
-    } else {
-        /* TRAIL_CALLBACK; TRAIL_PENDING (fn may be NULL) */
-        Py_XDECREF(e->u.callback.fn);
-    }
 }
 
 static int
