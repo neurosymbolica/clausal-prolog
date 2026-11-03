@@ -146,6 +146,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `_head_list_unify_output` called with a non-list now raises `TypeError`
   instead of segfaulting. Its C twin no longer treats a `str` subclass as a
   char, so it builds the same term as the Python twin.
+- **Freeing CLP(FD) and CLP(B) objects is safe for deep structures and
+  re-entrant finalizers.** The C deallocs of `FDVar` and the constraint
+  types (`Constraint`, `EqConstraint`/`NeConstraint`/`LtConstraint`/
+  `LeConstraint`, `AllDiffConstraint`, `SumConstraint`,
+  `ScalarProductConstraint`) now untrack the object from the cycle
+  collector before dropping its fields, so a `__del__` that runs meanwhile
+  can no longer reach the dying object through `gc.get_objects()` or a
+  collection (which crashed the interpreter), and use the trashcan, so a
+  long chain of them no longer overflows the C stack. Freeing a deep BDD
+  (`BDDNode`) no longer recurses once per level: past 1000 nested frees
+  the remaining nodes are freed from an explicit stack; a 1M-level BDD
+  used to crash at the default stack size.
 
 ## 1.4.0 (2026-11-03)
 
