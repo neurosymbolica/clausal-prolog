@@ -19,8 +19,7 @@ What is left (not this todo's walks):
   question, not a recursive walk.
 - A long disjunction compiles (a balanced Or tree) but the load is
   superlinear: 3000 disjuncts 4.9 s, 10000 27 s, 30000 170 s (1 GB);
-  a 100000-way disjunction did not finish on the 3.9 GB box (the process
-  was killed after ~25 min, cause not established). Most of the time is
+  100000 loads and answers, but takes 2535 s (42 min; lower_source 33 s). Most of the time is
   in the engine compiler, not the front end (lower_source: 9 s at 30000);
   `final_yields._walk_block` slices and rescans each statement list
   (quadratic in a long block) -- an unrelated pre-existing cost.

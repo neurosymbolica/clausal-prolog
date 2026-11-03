@@ -21,7 +21,7 @@ surface described in [docs/public-api.md](docs/public-api.md).
   binary operator in a body as read or in a data term is built by
   `$right_nested`/`$left_nested` over a flat list, so the generated
   Python stays shallow. Conjunctions of 5000 goals and disjunctions of
-  30k now load (slowly: 75 s and 170 s). Still limited: a conjunction of ~10k goals exceeds
+  100k now load (slowly: 75 s for the 5000, 170 s for 30k disjuncts, 42 min for 100k). Still limited: a conjunction of ~10k goals exceeds
   CPython's compiler in the engine's generated code (a
   `GeneratedCodeError` naming the clause; it was already), and deep
   bracketed nesting (`s(s(...))` ~250 deep), a long if-then-else chain
