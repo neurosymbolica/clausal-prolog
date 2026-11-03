@@ -63,6 +63,7 @@ import contextlib
 import contextvars
 import io
 import os
+import re
 import signal
 import sys
 import threading
@@ -119,17 +120,18 @@ DIAG_MAX_COLLAPSE_DEPTH = 5
 #: ...how many clauses per descended predicate are WALKED (their bodies
 #: re-run, recursively).  Head unification is checked for every clause --
 #: it is cheap -- so the walk takes the first clauses whose heads unify, and
-#: a head listing's claim covers every clause; this caps the listing's lines.
+#: a head listing's claim covers every clause.
 DIAG_MAX_DESCENT_CLAUSES = 4
 #: A clause head in a head listing is printed from its source, its brackets
 #: nested at most this deep (deeper content becomes ``…``) ...
 DIAG_MAX_HEAD_DEPTH = 4
 #: ...and at most this many characters long (cut, ending in ``…``).
 DIAG_MAX_HEAD_CHARS = 160
-#: ...how many leaf findings in total.
+#: A head listing names this many heads, then "and N more heads".
+DIAG_MAX_HEAD_LISTING = 12
+#: ...how many findings are printed in full; every further finding is still
+#: listed, by its first line (see _cap_leaves).
 DIAG_MAX_DESCENT_LEAVES = 6
-#: ...how many bindings per leaf.
-DIAG_MAX_DESCENT_BINDINGS = 4
 
 
 def _diag_budget() -> float:
@@ -188,6 +190,13 @@ def _watchdog(seconds: float):
         signal.signal(signal.SIGALRM, previous)
 
 
+#: A binding line of a descent report: ``<indent>Name = value``.  Every other
+#: descent line starts with a ``file:line`` label or with lower-case prose.
+_BINDING_LINE = re.compile(r"^(\s*)([A-Z_][A-Za-z0-9_]*) = (.*)$")
+#: What a repeated binding (same name, same printed value) prints instead.
+SAME_AS_ABOVE = "(same as above)"
+
+
 @dataclass
 class GoalDiagnostic:
     """Why a test failed, at conjunct granularity.
@@ -236,9 +245,20 @@ class GoalDiagnostic:
             out.extend(_wrap_goal(self.nearest, indent + "  "))
         for example in self.nearest_examples:
             out.extend(_wrap_goal(example, indent + "  "))
+        # A binding printed once is not printed again with the same text:
+        # per variable name, within this report (a nested descent shows the
+        # same 1 KB input under every leaf otherwise).
+        printed = {name: value for name, value in self.bindings}
         for line in self.descent:
+            m = _BINDING_LINE.match(line)
+            if m is not None:
+                lead, name, value = m.groups()
+                if printed.get(name) == value:
+                    line = f"{lead}{name} = {SAME_AS_ABOVE}"
+                else:
+                    printed[name] = value
             out.append(f"{indent}  {line}")
-        for note in self.notes:
+        for note in dict.fromkeys(self.notes):     # identical notes once
             out.append(f"{indent}note: {note}")
         return out
 
@@ -903,6 +923,23 @@ def _pair_native(runtime, t, var_names, out) -> bool:
         return (isinstance(runtime, list) and len(runtime) == len(t)
                 and all(_pair_native(a, x, var_names, out)
                         for a, x in zip(runtime, t)))
+    if type(t) is tuple and len(t) == 3 and t[0] == "." \
+            and isinstance(runtime, list):
+        # A partial list: the reader's '.' cons chain, the runtime's list
+        # whose last element is the tail splat (``[H|T]`` is ``[H, *T]``).
+        from clausal.pythonic_ast.nodes import StarUnpack  # noqa: PLC0415
+        elems = []
+        while type(t) is tuple and len(t) == 3 and t[0] == ".":
+            elems.append(t[1])
+            t = t[2]
+        if type(t) is list:
+            return _pair_native(runtime, elems + t, var_names, out)
+        if not (runtime and isinstance(runtime[-1], StarUnpack)
+                and len(runtime) - 1 == len(elems)):
+            return False
+        return (all(_pair_native(a, x, var_names, out)
+                    for a, x in zip(runtime, elems))
+                and _pair_native(runtime[-1].value, t, var_names, out))
     if type(t) is tuple and t:
         if t[0] == "$chars":
             return True
@@ -1890,17 +1927,23 @@ def _goal_name(goal) -> str | None:
 
 
 def _cap_leaves(leaves, notes):
-    """Trim descent finding-GROUPS to ``DIAG_MAX_DESCENT_LEAVES``, noting the cut.
+    """Every descent finding-GROUP, the first ``DIAG_MAX_DESCENT_LEAVES`` in
+    full and each further one by its first line, noting which.
 
-    The cap counts findings (groups) across the whole descent including fan-out,
-    so a finding and its binding sub-lines are shown or dropped as a unit — never
-    split.  Shared by the rung-3 descent and the wrong-value bridge."""
+    Nothing is dropped: a finding past the bound keeps its leaf line (where
+    and what failed) and loses only its detail lines (bindings, a head
+    listing beneath it).  Shared by the rung-3 descent and the wrong-value
+    bridge."""
     if len(leaves) > DIAG_MAX_DESCENT_LEAVES:
+        first, last = DIAG_MAX_DESCENT_LEAVES + 1, len(leaves)
+        which = (f"finding {first} is" if first == last
+                 else f"findings {first} to {last} are")
         notes.append(
-            f"only the first {DIAG_MAX_DESCENT_LEAVES} of {len(leaves)} "
-            f"descent findings are shown"
-        )
-        leaves = leaves[:DIAG_MAX_DESCENT_LEAVES]
+            f"descent {which} shown by their first line only"
+            if first != last else
+            f"descent {which} shown by its first line only")
+        leaves = (leaves[:DIAG_MAX_DESCENT_LEAVES]
+                  + [group[:1] for group in leaves[DIAG_MAX_DESCENT_LEAVES:]])
     return leaves
 
 
@@ -2329,8 +2372,8 @@ def _findall_collapse_finding(goal, logic_module, path, deadline,
 
     Runs the findall body's conjuncts through ``_first_failing`` (with the outer
     bindings live); when the body has no solution the first-failing conjunct is
-    the culprit, rendered as one leaf group (source line + up to
-    ``DIAG_MAX_DESCENT_BINDINGS`` bindings), prefixed with the findall it hid
+    the culprit, rendered as one leaf group (source line + its bindings),
+    prefixed with the findall it hid
     behind.
 
     A body that DOES have a solution is not automatically healthy: the measured
@@ -2399,8 +2442,7 @@ def _findall_collapse_finding(goal, logic_module, path, deadline,
                 reified_leaf = None
         lines.append(
             f"  {_descent_leaf_line(leaf, reified_leaf, _NO_CLAUSE, path)}")
-        for name, value in _leaf_bindings(leaf, reified_leaf, path):
-            lines.append(f"    {name} = {value}")
+        lines.extend(_leaf_binding_lines(leaf, reified_leaf, path))
         # The failing body conjunct may be a call whose own failing route lies
         # deeper (the measured chain: stay_is_valid_for_length → its inner
         # collapsed findall → window_days_used).  Follow it while the depth
@@ -2727,7 +2769,7 @@ def _report_descent(diag, goal, logic_module, deadline, path,
         # how many are listed.
         headline, leaves = leaves[0], leaves[1:]
         diag.nearest_note = f"{intro}; {headline}"
-        diag.descent = leaves[:DIAG_MAX_DESCENT_LEAVES]
+        diag.descent = leaves
         diag.notes.extend(notes)
         return True
     return False
@@ -3136,18 +3178,16 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
                 # A head listing beneath this parent leaf is ONE finding: the
                 # parent conjunct, its bindings, and the heads, all one group.
                 lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
-                for name, value in _leaf_bindings(
-                        leaf, reified_leaf, path, native_leaf):
-                    lines.append(f"    {name} = {value}")
+                lines.extend(_leaf_binding_lines(
+                    leaf, reified_leaf, path, native_leaf))
                 # deeper = [headline, *head lines] (see _descend).
                 lines.append(f"    {deeper[0]}")
                 lines.extend(f"      {line}" for line in deeper[1:])
                 return [lines], "leaves"
             # "none" falls through to render this conjunct as the leaf.
         lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
-        for name, value in _leaf_bindings(
-                leaf, reified_leaf, path, native_leaf):
-            lines.append(f"    {name} = {value}")
+        lines.extend(_leaf_binding_lines(
+            leaf, reified_leaf, path, native_leaf))
         # A failing leaf that CONSUMES a collapsed findall's bag (`length(
         # VALID_DAYS, LENGTH)` with `VALID_DAYS = []`) is only the symptom;
         # the swallowed failure inside the findall is the cause.  Name it
@@ -3212,16 +3252,16 @@ def _head_listing(row, clauses, path) -> list[str]:
 
     *clauses* are all of the predicate's clauses -- every head was checked --
     and one ``file:line  <head source>`` line is listed for each of the first
-    ``DIAG_MAX_DESCENT_CLAUSES``.  The headline (shared by the top-level and
+    ``DIAG_MAX_HEAD_LISTING``, then "and N more heads" for the rest.  The headline (shared by the top-level and
     the nested report) says how many were checked and how many are listed."""
     total = len(clauses)
-    shown = clauses[:DIAG_MAX_DESCENT_CLAUSES]
+    shown = clauses[:DIAG_MAX_HEAD_LISTING]
     if len(shown) == total:
         headline = ("no clause head unifies with these arguments "
                     "— the heads are:")
     else:
         headline = (f"none of the {total} clause heads unifies with these "
-                    f"arguments — the first {len(shown)} are:")
+                    "arguments — the heads are:")
     lines = [headline]
     label = os.path.basename(str(path)) if path else row.db.module_name()
     for clause in shown:
@@ -3245,6 +3285,9 @@ def _head_listing(row, clauses, path) -> list[str]:
         line = clause.position[0] if clause.position else None
         lines.append(f"{label}:{line}  {text}" if line is not None
                      else f"{label}  {text}")
+    more = total - len(shown)
+    if more:
+        lines.append(f"and {more} more head{'s' if more != 1 else ''}")
     return lines
 
 
@@ -3371,19 +3414,23 @@ def _descent_leaf_line(leaf, reified_leaf, clause, path) -> str:
 
 
 def _leaf_bindings(leaf, reified_leaf, path=None,
-                   native_leaf=None) -> list[tuple[str, str]]:
-    """Up to DIAG_MAX_DESCENT_BINDINGS named, bound variables of the leaf.
+                   native_leaf=None) -> "list[tuple[str, str]] | None":
+    """Every named, bound variable of the leaf, as ``(name, rendered value)``.
 
-    *native_leaf* is the ``(reader goal, var_names)`` twin of a native
-    Prolog leaf (:func:`_native_twins`), used when there is no reified one."""
+    ``None`` when the leaf's variables cannot be named: no source twin, or
+    one whose shape does not match.  *native_leaf* is the ``(reader goal,
+    var_names)`` twin of a native Prolog leaf (:func:`_native_twins`), used
+    when there is no reified one."""
     from clausal.logic.variables import deref, is_var
 
     if reified_leaf is not None:
-        named = _collect_named([leaf], [reified_leaf]) or []
+        named = _collect_named([leaf], [reified_leaf])
     elif native_leaf is not None:
-        named = _collect_native_named([leaf], [native_leaf]) or []
+        named = _collect_native_named([leaf], [native_leaf])
     else:
-        return []
+        return None
+    if named is None:
+        return None
     out: list[tuple[str, str]] = []
     seen_ids: set[int] = set()
     for name, var in named:
@@ -3397,9 +3444,32 @@ def _leaf_bindings(leaf, reified_leaf, path=None,
             out.append((name, _render_value(value, path)))
         except Exception:  # noqa: BLE001
             continue
-        if len(out) >= DIAG_MAX_DESCENT_BINDINGS:
-            break
     return out
+
+
+#: The line under a descent leaf whose variables are all unbound (or that
+#: has none), so that an empty space never reads as a cut.
+NO_BINDINGS = "no bindings"
+#: ...and under one whose variables could not be named from its source.
+BINDINGS_UNAVAILABLE = ("bindings unavailable — could not recover the "
+                        "goal's source variable names")
+
+
+def _leaf_binding_lines(leaf, reified_leaf, path=None, native_leaf=None,
+                        indent: str = "    ") -> list[str]:
+    """The binding lines printed under a descent leaf: one per bound
+    variable, else one line saying there are none or they are unknown."""
+    bindings = _leaf_bindings(leaf, reified_leaf, path, native_leaf)
+    if bindings is None:
+        if (path is not None and is_prolog_source(path)
+                and not _NATIVE_REPORT.get()):
+            # A translator-loaded .pl report keeps its pinned shape (its
+            # positions are of a translation; it never names variables).
+            return []
+        return [f"{indent}{BINDINGS_UNAVAILABLE}"]
+    if not bindings:
+        return [f"{indent}{NO_BINDINGS}"]
+    return [f"{indent}{name} = {value}" for name, value in bindings]
 
 
 # ── Report formatting ────────────────────────────────────────────────────────

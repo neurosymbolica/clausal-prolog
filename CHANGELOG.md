@@ -17,12 +17,22 @@ surface described in [docs/public-api.md](docs/public-api.md).
   first 4 clauses whose heads unify, and its note counts those ("descent
   walked only the first 4 of 6 clauses of engagement whose heads unify with
   these arguments (8 clauses in all)").  A head listing says "no clause head
-  unifies with these arguments — the heads are:" or, past 4 clauses, "none of
-  the N clause heads unifies with these arguments — the first 4 are:", with
-  the same words at the top level and nested.  A head of a natively loaded
-  file prints from its source (`engagement(P, met(a))`, not
-  `engagement(_, _)`), bracket depth past 4 elided to `…` and cut at 160
-  characters.
+  unifies with these arguments — the heads are:" (or, past 12 heads, "none
+  of the N clause heads unifies with these arguments — the heads are:") and
+  lists up to 12 heads, then "and N more heads"; the same words at the top
+  level and nested.  A head of a natively loaded file prints from its source
+  (`engagement(P, met(a))`, not `engagement(_, _)`), bracket depth past 4
+  elided to `…` and cut at 160 characters ending in `…`.
+- **A failure report prints each binding once and hides nothing.**  A
+  binding repeated with the same printed text under the same name prints
+  `Name = (same as above)`; identical notes print once.  Every descent
+  finding is listed: the first 6 in full, the rest by their first line, with
+  a note saying which.  A leaf prints every bound variable (it printed at
+  most 4, unmarked), `no bindings` when none is bound, and `bindings
+  unavailable — ...` when its variables cannot be named.  A goal with a
+  partial-list argument (`[Key-Value|AccIn]`) in a Clausal Prolog file now
+  shows its bindings: the pairing with its source refused the `'.'` list
+  term, so the goal printed none.
 
 ## 1.4.0 (2026-11-03)
 

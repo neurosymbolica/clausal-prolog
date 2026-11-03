@@ -304,12 +304,13 @@ def test_clause_cap_is_applied_and_noted(capsys, tmp_path):
             "heads unify with these arguments\n") in out
 
 
-# The DIAG_MAX_DESCENT_LEAVES cap bounds TOTAL findings across the whole
-# descent, INCLUDING fan-out: one clause route that recurses into a deeper
+# DIAG_MAX_DESCENT_LEAVES bounds how many findings, across the whole descent
+# INCLUDING fan-out, are printed IN FULL; every further one is still listed by
+# its first line: one clause route that recurses into a deeper
 # predicate can produce several findings (design §Flat leaves: "one clause
 # route can fan out into several leaves — the flat list is leaves, not
 # routes").  Here 4 outer clauses each recurse into ``inner`` (2 failing
-# routes), so descent produces 4 x 2 = 8 findings — over the cap of 6.  Neither
+# routes), so descent produces 4 x 2 = 8 findings — over the bound of 6.  Neither
 # the outer (4 clauses) nor the inner (2 clauses) predicate trips the
 # per-predicate clause cap (DIAG_MAX_DESCENT_CLAUSES=4), so this exercises the
 # leaves cap in isolation.  Same unsatisfiability requirement as the other
@@ -336,21 +337,25 @@ test("fan out") <- (
 """
 
 
-def test_leaves_cap_bounds_total_findings_across_fanout(capsys, tmp_path):
+def test_every_finding_is_listed_past_the_detail_bound(capsys, tmp_path):
     p = write(tmp_path, f"fanout{SEAM}", FANOUT_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
-    # 8 findings fan out; exactly DIAG_MAX_DESCENT_LEAVES=6 are rendered.
+    # 8 findings fan out; all 8 are listed (none is dropped) ...
     findings = out.count("N > 100") + out.count("N > 200")
-    assert findings == 6
-    # ...and the truncation is stated, counting findings not routes/clauses.
-    assert "only the first 6 of 8 descent findings are shown" in out
+    assert findings == 8
+    # ... the first DIAG_MAX_DESCENT_LEAVES=6 with their bindings, the rest by
+    # their first line, and the report says which.
+    assert out.count("N = 5") == 1                       # printed in full once
+    assert out.count("N = (same as above)") == 5         # findings 2..6
+    assert ("note: descent findings 7 to 8 are shown by their first line "
+            "only") in out
 
 
-# A head listing over more than DIAG_MAX_DESCENT_CLAUSES (=4) clauses lists
-# only the first 4 heads, but every head WAS checked, so the headline states
-# exactly that: none of the 6 unifies, the first 4 are shown.  (It used to say
-# "no clause head among the first 4 unifies": only 4 heads were checked.)
+# A head listing over more than DIAG_MAX_DESCENT_CLAUSES (=4) clauses: every
+# head WAS checked (the cap bounds only the body walk), so the headline is the
+# exact claim and all six heads are listed.  (It used to say "no clause head
+# among the first 4 unifies" and list four: only 4 heads were checked.)
 # Same rung-3 requirement as the other head-listing fixtures: each head
 # carries a DISTINCT atom literal so no head unifies with the concrete goal
 # atom ``zzz``, and each body is a non-recursive ``1 > 2`` so the all-holes
@@ -376,15 +381,15 @@ def test_capped_head_listing_states_every_head_was_checked(capsys, tmp_path):
     p = write(tmp_path, f"sixhead{SEAM}", SIX_HEADS_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
-    assert ("none of the 6 clause heads unifies with these arguments "
-            "— the first 4 are:") in out
+    assert ("no clause head unifies with these arguments "
+            "— the heads are:") in out
     # Nothing was left unchecked, so there is no cap note and no bound claim.
     assert "descent walked" not in out
     assert "among the first" not in out
-    # Only the first 4 heads are listed.
-    assert "sixhead(a, N)" in out
-    assert "sixhead(d, N)" in out
-    assert "sixhead(e, N)" not in out
+    # Every head is listed.
+    for atom in "abcdef":
+        assert f"sixhead({atom}, N)" in out
+    assert "more head" not in out
 
 
 # ── degenerate rung-1/2 solutions descend (todo D) ───────────────────────────
@@ -1119,12 +1124,15 @@ def test_matching_clause_beyond_the_cap_is_walked_nested(capsys, tmp_path):
 
 
 CAPPED_LISTING = (
-    "none of the 8 clause heads unifies with these arguments "
-    "— the first 4 are:\n"
+    "no clause head unifies with these arguments — the heads are:\n"
     "{i}eng_{n}{cp}:1  engagement(P, met(a))\n"
     "{i}eng_{n}{cp}:2  engagement(P, met(b))\n"
     "{i}eng_{n}{cp}:3  engagement(P, met(c))\n"
     "{i}eng_{n}{cp}:4  engagement(P, met(d))\n"
+    "{i}eng_{n}{cp}:5  engagement(P, met(e))\n"
+    "{i}eng_{n}{cp}:6  engagement(P, met(f))\n"
+    "{i}eng_{n}{cp}:7  engagement(P, unmet)\n"
+    "{i}eng_{n}{cp}:8  engagement(P, open(x))\n"
 )
 
 
@@ -1244,9 +1252,95 @@ def test_fact_table_head_listing_checks_every_fact(capsys, tmp_path):
                  + "test(hit) :- outer(5).\n")
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
+    heads = "".join(f"            facts{CP}:{i + 1}  fact({i}, v{i})\n"
+                    for i in range(12))
     assert (f"      facts{CP}:302  fact(X, zz)\n"
-            "          X = 5\n"
+            "          X = (same as above)\n"
             "          none of the 300 clause heads unifies with these "
-            "arguments — the first 4 are:\n"
-            f"            facts{CP}:1  fact(0, v0)\n") in out
+            "arguments — the heads are:\n"
+            + heads +
+            "            and 288 more heads\n") in out
     assert "descent walked" not in out
+
+
+# A goal with a partial-list argument (`[Key-Value|AccIn]`) printed no
+# bindings at all: the reader spells the list as a '.' cons chain, the
+# runtime as a list ending in a tail splat, and the native pairing refused
+# the '.' term, so every variable of the goal went unnamed.
+PARTIAL_LIST_CP = textwrap.dedent("""\
+    pg(_, k, v).
+    cpairs(Profile, [Key|Keys], Pairs) :-
+        pg(Profile, Key, Value),
+        cpairs(Keys, [Key-Value|AccIn], Pairs),
+        AccIn = [].
+    cpairs(_Profile, [], Pairs) :- Pairs = z, 1 > 2.
+    outer(P) :- cpairs(P, [k], _), 1 > 2.
+    test(t) :- outer(p).
+""")
+
+
+def test_partial_list_goal_keeps_its_bindings(capsys, tmp_path):
+    p = tmp_path / f"cpairs{CP}"
+    p.write_text(PARTIAL_LIST_CP)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert (f"      cpairs{CP}:4  cpairs(Keys, [Key-Value|AccIn], Pairs)\n"
+            "          Keys = []\n"
+            "          Key = k\n"
+            "          Value = v\n") in out
+
+
+# ── each binding printed once; notes once; an empty binding list said ─────
+
+# Three findings under one test, each binding the same 1-element input.  The
+# first prints it, the others say "(same as above)"; a different value under
+# the same name prints in full.
+REPEAT_CP = textwrap.dedent("""\
+    r(In, a) :- In = [N], N > 100, N < 0.
+    r(In, b) :- In = [N], N > 200, N < 0.
+    r(In, c) :- In = [N], N > 300, N < 0.
+    s(In) :- r(In, _).
+    test(rep) :- s([5]).
+""")
+
+
+def test_a_repeated_binding_prints_same_as_above(capsys, tmp_path):
+    p = tmp_path / f"rep{CP}"
+    p.write_text(REPEAT_CP)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert out.count("N = 5") == 1
+    assert out.count("N = (same as above)") == 2
+
+
+def test_binding_dedupe_compares_printed_text_per_name():
+    from clausal.testing import GoalDiagnostic
+    d = GoalDiagnostic(
+        index=1, total=1, bindings=[("P", "[1]")],
+        descent=["f.clausal:1  g(P)", "    P = [1]", "    Q = [1]",
+                 "f.clausal:2  h(P)", "    P = [2]", "    P = [2]",
+                 "    P = [1]"],
+        notes=["n1", "n2", "n1"])
+    text = "\n".join(d.lines())
+    assert ("          P = (same as above)\n"
+            "          Q = [1]\n") in text
+    # Compared with the value last printed under the name: after P = [2],
+    # P = [1] is printed in full again, never "(same as above)".
+    assert ("          P = [2]\n"
+            "          P = (same as above)\n"
+            "          P = [1]\n") in text
+    assert text.count("note: n1") == 1 and text.endswith("note: n2")
+
+
+def test_a_leaf_without_bound_variables_says_no_bindings(capsys, tmp_path):
+    p = tmp_path / f"nob{CP}"
+    p.write_text(textwrap.dedent("""\
+        q(_) :- 1 > 2.
+        nob(_) :- q(_Y), 1 > 2.
+        test(t) :- nob(1).
+    """))
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    # The descent reaches q/1's body: `1 > 2` has no variables at all.
+    assert (f"      nob{CP}:1  1 > 2\n"
+            "          no bindings\n") in out

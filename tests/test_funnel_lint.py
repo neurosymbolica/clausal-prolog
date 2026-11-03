@@ -306,8 +306,10 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # (2026-10-13; mechanical again).
     # Range shifted 2874-2986 -> 2992-3107 by the every-clause head check and
     # the bounded head listing (``_head_goals``, ``_head_unifies``,
-    # ``_heads_clash``) above the site (2026-11-03; mechanical again).
-    AllowEntry("clausal/testing.py", (2992, 3107),
+    # ``_heads_clash``) above the site, then -> 3037-3149 by the binding
+    # dedupe, the 12-head listing and the partial-list pairing above it
+    # (2026-11-03; mechanical again).
+    AllowEntry("clausal/testing.py", (3037, 3149),
                "task-3 skip: diagnostic head-name fallback, semantics diverge "
                "from _functor_name (see task-3-report.md determination)"),
     # task-2-report.md / plan Task 2 text: "leave head_key itself as-is (it
@@ -641,8 +643,9 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:3094 (2973 before the every-clause head check and
-    its helpers were added above it, 2026-11-03; 2972 before load_clausal_module's docstring
+    """clausal/testing.py:3136 (3094 before the head-listing, binding and
+    findings changes above it, 2026-11-03; 2973 before the every-clause head
+    check and its helpers were added above it, 2026-11-03; 2972 before load_clausal_module's docstring
         named the native .pl default above it, 2026-10-13; 2638 before the native-path failure reports
     were added above it, 2026-10-13; 2612 before ``_positions_are_translated`` and
     the reworded translator note were added above it, 2026-10-05; 2631 before the py-interop note collection
@@ -665,7 +668,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
     lines) has a real ``getattr(clause.head, "functor",
     None) or type(clause.head).__name__`` occurrence -- now that the
     receiver group is dotted-aware, the task-3 ALLOWLIST range for
-    testing.py (currently 2992-3107, which still covers the site; the entry's
+    testing.py (currently 3037-3149, which still covers the site; the entry's
     own comment records how it has moved as code above the site grew) is doing
     real exemption work, not sitting on an already-invisible site.
 
@@ -685,7 +688,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 3094
+        v.pattern == "functor_fallback" and v.line == 3136
         for v in testing_violations
     ), testing_violations
 
