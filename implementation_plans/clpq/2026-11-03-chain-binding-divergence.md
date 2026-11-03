@@ -250,3 +250,53 @@ sh benchmarks/clpq_chain_binding_trace/run.sh /tmp/out 10 forward   # identical
 (`PYTHON=` selects the interpreter with the engine built. `CLAUSAL_SCRYER=`
 and `SCRYER_CLPQ_PL=` select the Scryer binary and the clpq.pl to
 instrument. The instrumented copy is written to the output directory.)
+
+## Resolution (2026-11-03)
+
+The owner ruled for option 1 ("Follow 1.3.3"): the bound variables of one
+unification are processed in binding order.
+
+- **Harness first.** The identity harness gained three families that bind
+  several variables of one store in one unification (`chain_bind`,
+  `dense_bind`, `implied_bind`, 414 workloads, `["unify", ...]` steps), and
+  the exact Scryer comparison gained 40 (default) and 300 (full)
+  multi-binding queries with a baseline of every difference
+  (`_MULTIBIND_BASELINE` in `test_differential_scryer.py`).
+- **Option 3, implementation only.** The stand-in pass reads no row when
+  every bound member is dependent (a dependent variable is in no other row
+  of a solved form; `CLAUSAL_CLPQ_CHECK_ROW_INDEX=1` cross-checks).
+  Byte-identical goldens. The row copies of `delete_factor_homogeneous`
+  and the cyclic GC were left (below).
+- **Option 1, the order.** The first hook still makes every stand-in, but
+  does only its own variable's work; each later member's own hook takes
+  its stand-in and does its work, each followed by the bindings it implies
+  (`attribute_hooks._TURNS`, `_take_turn`, `_verify_turn`; D3 amended).
+  An implied binding of a later member's stand-in is checked against that
+  member's own binding at its turn.
+- **Traces.** `run.sh` at n = 6 and 10, `all`, `forward` and `backward`:
+  identical to Scryer's, event for event (23 and 39 events). The queued
+  implied verifies now come nested in each turn, as in Scryer.
+- **Changed records.** The 963 single-binding workloads: byte-identical.
+  Of the 414 multi-binding ones, 266 changed their trace and 1 its
+  observation: `dense_bind-6-11`, step 27, `dump([X3, X5])` after
+  `f(X2, X0, X5) = f(4, 6, 0)` under a mark. The new residual is exactly
+  Scryer's (`_I1+1/5*_I2>182/185, X3=64/15+1/3*_I1+1/15*_I2, ...`); the
+  old one was equivalent in another basis. The 265 trace-only changes
+  keep their answers, so their agreement with Scryer is unchanged.
+- **Scryer, multi-binding queries.** Before: 46 differences (44 where
+  Scryer fails the one unification and answers the same bindings made one
+  at a time, 2 text). After: 45. `scryer-multibind-40-98` now agrees; no
+  query that agreed differs. The remaining text difference,
+  `scryer-multibind-40-215`, is not about bindings: the posts alone dump
+  in another order (`{X1 = X0 + 2}, {X1 =< X2}, {X0 >= -2}`: the port
+  `X1>=0, X0=-2+X1`, Scryer `X0=-2+X1, X1>=0`). Open, not investigated.
+- **Cost.** `bind_numbers` now rewrites the same rows as Scryer:
+  n(n-1)/2 + n - 1 (5,049, 20,099, 80,199 at n = 100, 200, 400), and
+  reads n^2. 1.3.3's work is quadratic. The port's time is not:
+  0.039, 0.167, 0.90, 10.0 s at n = 100..800 (slope 2.65, top 3.5),
+  against 0.032, 0.118, 0.58, 2.68 s in the old order, which rewrote
+  about 2n rows. With the GC off: 0.039, 0.151, 0.68, 3.7, 37 s at
+  100..1600 (slopes 2.0, 2.2, 2.5, 3.3). What is left per rewritten row is
+  the port's: the cyclic GC walking the n^2/2 long-lived term tuples, and
+  the row copy of `delete_factor_homogeneous`, where 1.3.3 shares the tail.
+  Both need a change of representation or of GC policy, not of algorithm.

@@ -55,7 +55,7 @@ sizes is in brackets.
 | the same after R3 (`dense_rows`, 2026-11-03) | 5..80 | before (this run) .0012 .0054 .018 .079 .41; after .00097 .0040 .012 .038 .14 | 1.87 (1.71) | 2.26 | - | **R3 done**: 2.9x at n = 80 |
 | post disequations on a chain (`diseq`) | 100..1600 | .014 .044 .17 .81 3.7 | 2.2 (2.0) | 1.9 (manual run, 100..400) | python_calls 1.95 | inherent |
 | post the path LP (`lp_post`) | 25..800 | .002 .. .075 | 1.0 | - | - | linear |
-| bind a chain to numbers in one unification (`bind_numbers`) | 50..800 | .011 .042 .18 1.0 7.9 | **3.0** (2.35) | **1.96** | terms_scanned 3.0, terms_read 2.0 | **unclear: the port does more work than Scryer's copy** (R2). **After R1b: n = 50..1600 .010 .033 .14 .59 2.9 13.5, slope 2.10 (top 2.2)**: the cubic term was the scan |
+| bind a chain to numbers in one unification (`bind_numbers`) | 50..800 | .011 .042 .18 1.0 7.9 | **3.0** (2.35) | **1.96** | terms_scanned 3.0, terms_read 2.0 | **unclear: the port does more work than Scryer's copy** (R2). **After R1b: n = 50..1600 .010 .033 .14 .59 2.9 13.5, slope 2.10 (top 2.2)**: the cubic term was the scan. **Binding order (D3, ruling 2026-11-03)**: the same rows as Scryer's copy, n(n-1)/2 + n - 1 rewritten (work exponent 2.0), but n = 100..800 .039 .17 .90 10.0 s (slope 2.65; the old order, after the stand-in row skip: .032 .12 .58 2.7): GC and row copies per rewritten row, see R2 |
 | var-var binding of a chain (`bind_varvar`) | 25..400 | .012 .061 .39 3.4 33.9 | 3.3 (2.9) | 2.85 | terms_read 3.0 | inherent (D24, Low 8); overhead partly removed on r32-varvar (7a573135). After R1b and R4: unchanged within noise (paired n = 200: 1.64 s against 1.60 s): its rows almost all hold the variable, so there is nothing to skip |
 | `sup` of a sum over a bounded chain (`sup_chain`) | 50..1600 | .005 .020 .074 .31 1.5 6.8 | 2.2 (2.1) | 1.98 | terms_read 2.0, 1 pivot | inherent |
 | `inf(Xn - X1)` (`inf_chain`) | 50..1600 | 0.0001 .. 0.003 | 1.25 | - | - | linear |
@@ -203,6 +203,25 @@ time it costs at sizes people use.
   overhead.
 - **Why it ranks high.** Labelling or binding the variables of a solved
   store is the commonest end of a CLP(Q) program.
+- **Resolved 2026-11-03** (implementation_plans/clpq/2026-11-03-chain-binding-divergence.md,
+  "Resolution"). The choice was the same; the order of the bound
+  variables' work was not (D3's stand-in pass, newest first). Ruled:
+  binding order, as 1.3.3 under SICStus and Scryer. The decision traces
+  now match Scryer's at n = 6 and 10. Measured (min of 3, loaded box):
+
+  | case, n = 100/200/400/800 | before | stand-in row skip | binding order |
+  |---|---|---|---|
+  | `bind_numbers` (one unification) | .038 .26 .70 3.45 s | .032 .12 .58 2.68 s | .039 .17 .90 10.0 s (slope 2.65) |
+  | `bind_numbers_each` (first to last) | .065 .35 2.18 21.1 s | .041 .19 1.11 11.2 s | .041 .20 1.11 11.0 s |
+  | `bind_varvar` | .29 2.14 25.8 - s | .21 1.45 11.5 142 s | .22 1.46 11.9 130 s |
+
+  In binding order the port rewrites the n^2/2 rows Scryer's copy does
+  (work exponent 2.0, Scryer 1.96 by inferences), but each rewrite is a
+  new Python row: with the GC off `bind_numbers` takes .039 .15 .68 3.7
+  37 s at n = 100..1600, so the GC is about two thirds of the time at
+  800 and the row copies of `delete_factor_homogeneous` (1.3.3 shares the
+  tail) set the exponent above 2 past n = 400. Not addressed: both need a
+  change of representation or GC policy.
 
 ### R3. Merging normal forms (`normal_form_add`, `_standard_order`): quadratic left-leaning sums (inherent in 1.3.3's text, removable by implementation)
 

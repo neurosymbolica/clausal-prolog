@@ -178,12 +178,54 @@ hook runs, another constrained variable W of the same unification can be
 bound with its hook still to come ("unhooked"), and W can be in rows and
 member lists the solver walks.  Before X's hook reads a row, it makes a
 stand-in for every bound member of X's component, of Y's, and of the
-component each such member's value is in, transitively, and does each
-one's work (`_stand_in_for_bound_members`).  An unhooked W whose work was
-done this way is no longer a member; when its own hook comes it finds that
-and returns at once.  Components are scanned once each: X's and Y's are
-one component when the binding is inside it
+component each such member's value is in, transitively
+(`_stand_in_for_bound_members`).  Components are scanned once each: X's
+and Y's are one component when the binding is inside it
 (`test_a_binding_within_one_component_makes_one_stand_in`).
+
+The order of the bound members' work (ruling 2026-11-03, "Follow
+1.3.3").  X's hook does only X's work, on X's stand-in, and keeps the
+other stand-ins (`attribute_hooks._TURNS`); each member's own hook,
+which the engine calls in binding order, takes its stand-in and does its
+work then (`_take_turn`, `_verify_turn`), each followed by the bindings
+it implies (`bind_queued`).  So the members are verified X1, X2, ..., Xn
+in the order of the bindings, each while the later ones are unbound,
+constrained stand-ins: what 1.3.3's `verify_attributes/3` sees under
+SICStus's driver (bindings undone, then for each variable in turn the
+hook and the binding redone) and under Scryer's (`'$atts':driver/2`,
+`iterate/3`).  An implied binding (bv.pl's `export_binding/1`) can bind
+a later member's stand-in before that member's turn; its turn then
+unifies the implied value with its own and wakes its delayed goals
+(`test_a_binding_implied_by_an_earlier_one_is_checked_against_its_own`).
+An undo past the first hook (a later hook failed) drops the kept
+stand-ins (`trail.record`).  Until this ruling the first hook did every
+member's work itself, in the order of the component's member list,
+newest first: X1, then Xn, ..., X2 for a chain bound as a list.  That
+selected other variables in `solve/5` from the second binding on, and
+made binding a chain in one unification cubic in 1.3.3's own work where
+Scryer's is quadratic
+(implementation_plans/clpq/2026-11-03-chain-binding-divergence.md,
+`test_one_unification_does_the_bound_variables_in_binding_order`; the
+decision traces of `benchmarks/clpq_chain_binding_trace/run.sh` at n = 6
+and 10 are now identical to Scryer's in all three orders).  Changed
+answers: of the 1,377 workloads of the differential corpus, the 963
+that bind one variable per unification keep byte-identical records; of
+the 414 that bind several, 266 changed their decision trace and one its
+answer (`dense_bind-6-11`: a dump after `f(X2, X0, X5) = f(4, 6, 0)`,
+now exactly Scryer's residual, before an equivalent one in another
+basis).  Of the multi-binding queries compared with Scryer exactly (40 by default, 300 in the full set;
+tests/clpq_port/differential/test_differential_scryer.py), the same 44
+differ before and after (Scryer fails the one unification and answers
+the same bindings made one at a time), plus one whose posts alone
+already differ; one that differed in its residual's basis now agrees,
+and none that agreed differs.
+
+What is still not 1.3.3's here: the value each member's work sees is
+what it is bound to after the whole unification (the engine hands the
+hook the dereferenced value), so in `f(X, Y) = f(Y, 1)` X's work sees
+1 where 1.3.3's sees Y unbound; and Scryer fails a unification whose
+later binding an earlier one implied even where the values agree, where
+the port answers (below).
 
 Nothing else runs inside that window, because one rule holds (ruling
 R27, fail-closed since ruling R30, on any trail since D26): **no attribute hook body calls an

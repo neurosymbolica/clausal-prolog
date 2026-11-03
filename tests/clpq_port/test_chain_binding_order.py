@@ -11,15 +11,15 @@ holds and X(k)'s does not: the slack of the constraint Xk =< X(k+1).
 
 - One variable at a time, first to last or last to first, the port selects
   exactly what 1.3.3 selects.
-- In one unification the port differs from the second binding on: the hook
-  of the first variable does every bound member's work
-  (attribute_hooks._stand_in_for_bound_members, DEVIATIONS.md D3) in the
-  order of the component's member list, which is newest first, so after
-  X1 it does Xn, ..., X2.  Scryer (and, by the SICStus manual's
-  description of verify_attributes/3, SICStus) does X1, X2, ..., Xn, the
-  order of the bindings.  That order makes the port's one-unification
-  binding cubic in 1.3.3's own work where Scryer's is quadratic.  This test
-  pins the difference; a change of the order must update it.
+- In one unification the port does each bound variable's work in the
+  order of the bindings, X1, X2, ..., Xn, as Scryer (and, by the SICStus
+  manual's description of verify_attributes/3, SICStus) does: the first
+  hook makes a stand-in for every bound member (DEVIATIONS.md D3), and
+  each variable's own hook does that variable's work on its stand-in
+  (ruling 2026-11-03, "Follow 1.3.3").  Until then the first hook did all
+  of the work in the member list's order, newest first (X1, then Xn, ...,
+  X2), which made binding the chain in one unification cubic in 1.3.3's
+  own work.
 """
 from clausal.logic.clpq import bounded_simplex
 from clausal.logic.clpq import holzbaur as h
@@ -37,10 +37,11 @@ LAST_TO_FIRST = [("solve", 2, "X1"), ("solve", 4, "S5"), ("solve", 4, "S4"),
 #: Scryer's copy, L = [0, ..., 5] in one unification: verify_attributes/3
 #: runs for X1, X2, ... in turn, so the selections are FIRST_TO_LAST's.
 SCRYER_ONE_UNIFICATION = FIRST_TO_LAST
-#: The port today: X1's hook, then the stand-ins of X6, X5, X4, X3, X2.
-PORT_ONE_UNIFICATION = [("solve_for_variable", "X1"), ("solve", 4, "S5"),
-                        ("solve", 4, "S4"), ("solve", 4, "S3"),
-                        ("solve", 4, "S2"), ("solve", 4, "S1")]
+#: The port before the ruling of 2026-11-03: X1's hook, then the
+#: stand-ins of X6, X5, X4, X3, X2.
+MEMBER_LIST_ORDER = [("solve_for_variable", "X1"), ("solve", 4, "S5"),
+                     ("solve", 4, "S4"), ("solve", 4, "S3"),
+                     ("solve", 4, "S2"), ("solve", 4, "S1")]
 
 
 def _order(variable):
@@ -104,7 +105,49 @@ def test_last_to_first_selects_what_1_3_3_selects():
     assert _selections(_one_at_a_time(range(N - 1, -1, -1))) == LAST_TO_FIRST
 
 
-def test_one_unification_does_the_bound_members_newest_first():
+def test_one_unification_does_the_bound_variables_in_binding_order():
     selections = _selections(_all_at_once)
-    assert selections == PORT_ONE_UNIFICATION
-    assert selections != SCRYER_ONE_UNIFICATION
+    assert selections == SCRYER_ONE_UNIFICATION
+    assert selections != MEMBER_LIST_ORDER
+
+
+def test_one_unification_in_reverse_does_them_in_its_binding_order():
+    # Binding order is the unification's, not the member list's: the list
+    # bound last to first selects what 1.3.3 selects last to first.
+    def bind(t, xs):
+        assert unify(xs[::-1], list(range(N))[::-1], t)
+        assert any(True for _ in drain(t))
+    assert _selections(bind) == LAST_TO_FIRST
+
+
+def _implied(values, order):
+    """{X1 + X2 = 3, X2 >= 1, X1 >= 2} (X1 = 2 implies X2 = 1), then
+    f(X1, X2) = f(*values), bound in *order*: the answer and X1, X2."""
+    t = Trail()
+    x1, x2 = Var(), Var()
+    assert h.q_eq(_sum(x1, x2), 3, t)
+    assert h.q_ge(x2, 1, t) and h.q_ge(x1, 2, t)
+    pairs = list(zip((x1, x2), values))
+    if order == "X2 first":
+        pairs.reverse()
+    left = ("f",) + tuple(v for v, _ in pairs)
+    right = ("f",) + tuple(n for _, n in pairs)
+    ok = unify(left, right, t) and any(True for _ in drain(t))
+    return ok, deref(x1), deref(x2)
+
+
+def _sum(a, b):
+    from clausal.terms import Add
+    return Add(left=a, right=b)
+
+
+def test_a_binding_implied_by_an_earlier_one_is_checked_against_its_own():
+    # X1 = 2 implies X2 = 1 inside X1's work (bv.pl export_binding/1), so
+    # X2's stand-in is bound before X2's turn; X2's own binding must then
+    # agree with it.  (Scryer fails these unifications even where the
+    # values agree; SICStus's driver is documented to unify instead.)
+    assert _implied((2, 1), "X1 first") == (True, 2, 1)
+    assert _implied((2, 7), "X1 first")[0] is False
+    assert _implied((2, 1), "X2 first") == (True, 2, 1)
+    assert _implied((2, 7), "X2 first")[0] is False
+    assert _implied((3, 0), "X1 first")[0] is False

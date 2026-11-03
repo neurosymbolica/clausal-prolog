@@ -25,6 +25,19 @@ surface described in [docs/public-api.md](docs/public-api.md).
   The merges `add_linear_ffh/7` and `add_linear_11h/5` look each term's
   order up once, as `add_linear_f1h/6` already did (survey R4).  The
   same rows, the same answers, the same pivots.
+- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`): the variables one unification
+  binds are verified in the order of the bindings, as 1.3.3 does under
+  SICStus and Scryer** (ruling 2026-11-03; DEVIATIONS.md D3).  The first
+  hook did every bound variable's work in the order of the store's member
+  list, newest first.  Where several constrained variables of one store
+  are bound in one unification and others stay unbound, a residual can
+  now come out in another (Scryer's) basis: of 414 such workloads in the
+  differential corpus one answer changed, to Scryer's exact residual, and
+  one of 340 generated queries now matches Scryer where it did not; no
+  answer that matched Scryer changed.  Performance: binding a chain
+  `X1 =< ... =< Xn` as a list now does 1.3.3's n^2/2 row rewrites instead
+  of about 2n, which costs more in the port (n = 800: 2.7 s to 10 s;
+  one variable at a time, 11 s, is unchanged).
 - **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: binding a
   dependent variable no longer reads every row of its store.** The
   unification hook's stand-in pass (DEVIATIONS.md D3) read every row of
