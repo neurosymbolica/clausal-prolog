@@ -7,6 +7,7 @@ bb_inf is called the way bv.pl's inf is, with a variable for Inf that the
 answer binds.
 """
 import itertools
+import pathlib
 import sys
 from fractions import Fraction
 
@@ -20,6 +21,7 @@ from clausal.logic.clpq.delayed_goals import attribute_goal as delayed_goals_of
 from clausal.logic.exceptions import LogicException
 from clausal.logic.pending import run_first
 from clausal.logic.variables import Trail, Var, deref, is_var, unify
+from tests._oracles import SCRYER, run_scryer
 
 
 def _post(trail, *constraints):
@@ -318,6 +320,20 @@ def test_round_rational_is_nearest_with_half_away_from_zero(
     # (-1, -1/2] (I = N // D is 0 there, and I >= 0 adds one).
     value = arithmetic.make_rational(numerator, denominator)
     assert arithmetic.round_rational(value) == arithmetic.make_rational(rounded, 1)
+
+
+def test_roundq_of_1_3_3_rounds_minus_one_to_minus_a_half_up_to_one():
+    # DEVIATIONS.md D18, run rather than read: Scryer's clpq.pl keeps
+    # 1.3.3's roundq/4, and Scryer's // truncates as SICStus's does.
+    if not pathlib.Path(SCRYER).exists():
+        pytest.skip(f"needs the Scryer CLP(Q) build at {SCRYER}")
+    cases = [((-3, 2), -2), ((-1, 1), -1), ((-3, 4), 1), ((-1, 2), 1),
+             ((-1, 4), 0), ((0, 1), 0), ((1, 2), 1), ((3, 2), 2)]
+    goals = [f"use_module(library(clpq)), clpq:roundq({n},{d},R,_)."
+             for (n, d), _ in cases]
+    got = run_scryer(None, goals).stdout.split("\n")
+    want = [f"   R = {r}." for _, r in cases]
+    assert got[:len(want)] == want, got
 
 
 def test_the_vertex_rounds_a_value_in_minus_one_to_minus_a_half_down():

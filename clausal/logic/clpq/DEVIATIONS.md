@@ -890,7 +890,7 @@ the nearest integer, a half away from zero, so `-1/2` and `-3/4` give
 `-1` (`test_round_rational_is_nearest_with_half_away_from_zero`, over
 -3/2, -1, -3/4, -1/2, -1/4, 0, 1/2 and 3/2).
 
-`roundq/4` itself, run on 2026-11-03 under Scryer (its copy in Scryer's
+`roundq/4` itself, run on 2026-11-03 under Scryer (`test_roundq_of_1_3_3_rounds_minus_one_to_minus_a_half_up_to_one`) (its copy in Scryer's
 clpq.pl is 1.3.3's text, and Scryer's `//` truncates toward zero, as
 SICStus's does), gives `round(-3/2) = -2`, `round(-1) = -1`,
 `round(-3/4) = 1`, `round(-1/2) = 1`, `round(-1/4) = 0`, and the nearest
