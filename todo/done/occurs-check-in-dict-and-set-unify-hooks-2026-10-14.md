@@ -1,5 +1,7 @@
 # unify_with_occurs_check through DictTerm and other __unify__ hooks builds cycles
 
+**Status: FIXED 2026-11-03 (commit 88c0f91b).** Every `__unify__` hook (DictTerm, SegListView, quantity, Seg*, and the BinOp/UnaryOp/Predicate nodes) binds its parts with `_hook_unifier(trail)`, the occurs-checked unifier while `trail.unify_oc` is set. Pinned in tests/test_occurs_check_through_unify_hooks.py::test_occurs_check_unify_through_the_hook_fails (one case per hook, mutation-checked).
+
 Since e9ff13e7 the C unifier sets `trail.unify_oc` while a term's `__unify__`
 hook runs for an occurs-checked unification, and the SegList hook binds its
 parts with `_seg_unifier(trail)` (clausal/terms.py). The other hooks still
