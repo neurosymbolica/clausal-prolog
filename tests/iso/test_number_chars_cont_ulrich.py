@@ -123,6 +123,16 @@ ULRICH_ONLY = [
      "catch(number_chars(N, ['-', '1', '.', '0', e, '4', '0', '0']),"
      " error(F, _), R = F)",
      ["representation_error(max_float)"]),
+    # ... but a text that is no number is a syntax error first (ISO
+    # 8.16.7), as it was before the overflow check (review 2026-11-03)
+    ("#82 overflow then a letter",
+     "catch(number_chars(N, ['9', '.', '9', e, '9', '9', '9', x]), error(F, _),"
+     " R = F)",
+     ["syntax_error(unexpected_char)"]),
+    ("#82 overflow then layout",
+     "catch(number_chars(N, ['9', '.', '9', e, '9', '9', '9', ' ']), error(F, _),"
+     " R = F)",
+     ["syntax_error(unexpected_char)"]),
     ("#82 number_codes too",
      "catch(number_codes(N, [0'9, 0'., 0'9, 0'e, 0'9, 0'9, 0'9]), error(F, _),"
      " R = F)",

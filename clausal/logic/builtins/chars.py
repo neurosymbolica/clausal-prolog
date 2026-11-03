@@ -649,7 +649,13 @@ class _FloatOverflow(Exception):
     """A float token that no double holds (``9.9e999``): number_chars/2
     raises ``representation_error(max_float)``, not a syntax error
     (Ulrich's number_chars_cont #82 marks ``syntax_error(...)`` unexpected;
-    Trealla agrees, Scryer does not)."""
+    Trealla agrees, Scryer does not) -- but only when the token is the
+    whole number text: ``9.9e999x`` is no number, a syntax error first
+    (ISO 8.16.7).  *end* is where the token ends."""
+
+    def __init__(self, end: int):
+        super().__init__(end)
+        self.end = end
 
 
 class _NumberSyntax(Exception):
@@ -784,7 +790,7 @@ def _number_token_at(s: str, i: int):
                 k = m
         value = float(s[i:k].replace("_", ""))
         if value in (float("inf"), float("-inf")):
-            raise _FloatOverflow()
+            raise _FloatOverflow(k)
         return value, k
     text = s[i:j].replace("_", "")
     # through Decimal: CPython caps int(str) at ~4300 digits
@@ -869,7 +875,12 @@ def _read_number_text(s: str):
         if i == n:
             raise _eof(n)
     if "0" <= s[i] <= "9":
-        value, end = _number_token_at(s, i)
+        try:
+            value, end = _number_token_at(s, i)
+        except _FloatOverflow as overflow:
+            if overflow.end < n:          # not a number at all: syntax first
+                raise _bad_char(overflow.end) from None
+            raise
         if end < n:
             raise _bad_char(end)
         # ``-0.0`` reads as 0.0, as the reader has it (operator ruling
