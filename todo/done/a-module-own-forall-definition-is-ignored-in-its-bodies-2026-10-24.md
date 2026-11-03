@@ -1,6 +1,6 @@
 # A module's own definition of `forall/2` is ignored in its own bodies
 
-**Status: FIXED 2026-11-03 (commit COMMIT).** A `.pl` or `.clausal` file's own
+**Status: FIXED 2026-11-03 (commit b38fafd5).** A `.pl` or `.clausal` file's own
 definition (clauses or `dynamic/1`) of a special form or goal control that is
 no ISO built-in now runs in its own bodies and through `call/N`, its
 arguments passed as data: the compiler (`terms_to_goalop`) and call/N ask
