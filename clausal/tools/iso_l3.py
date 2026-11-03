@@ -2090,30 +2090,46 @@ def iter_iso(source: str, op_table=None):
 
 
 def _read_as_quad_text(source, issue, table, in_quad):
-    """A ``SyntaxIssue`` item re-read with the two operators of a quad
-    (infix ``?-`` for ``label ?- Query``, ``~~`` for ``X ~~ '14.2000'``),
+    """A ``SyntaxIssue`` item re-read with the operators of a quad
+    (infix ``?-`` for ``label ?- Query``, ``~~`` for ``X ~~ '14.2000'``, and
+    ``|`` between alternative descriptions),
     which stay out of the program's own table: the item it gives if it is a
     labelled query, or an answer description right after a quad's query;
     else None (the issue stands)."""
+    if not issue.resumable or not issue.span or "?-" not in source and not in_quad:
+        return None
+    item = _reread(source, issue.span, table, bar=False)
+    if item is not None and (is_labelled_query(item) or (
+            in_quad and is_answer_description(item.term))):
+        return item
+    if in_quad:
+        # ``D1 | D2``: the bar between alternative descriptions is an
+        # operator here only, as in Neumerkel's quad files; the program's
+        # table keeps it out unless library(dcgs) brings it, as in Scryer.
+        item = _reread(source, issue.span, table, bar=True)
+        if item is not None and is_answer_description(item.term):
+            return item
+    return None
+
+
+def _reread(source, span, table, *, bar):
+    """The item of the text *span* of *source*, read with the quad operators
+    (and ``|`` when *bar*), or None when it is no clause."""
     import copy  # noqa: PLC0415
     from clausal.tools.prolog_reader import PrologReader  # noqa: PLC0415
     from clausal.tools.prolog_tokenizer import PL_SOURCE_NESTED_COMMENTS  # noqa: PLC0415
-    if not issue.resumable or not issue.span or "?-" not in source and not in_quad:
-        return None
-    start, end = issue.span
+    start, end = span
     extra = copy.deepcopy(table)
     extra.define(1200, "xfx", "?-")
     extra.define(700, "xfx", "~~")
+    if bar:
+        extra.define(1100, "xfy", "|")
     reader = PrologReader(op_table=extra,
                           nested_comments=PL_SOURCE_NESTED_COMMENTS)
     reader.feed(" " * start + source[start:end] + "\n")   # offsets stay aligned
     reader.close()
     item = reader.read_term()
-    if type(item).__name__ != "Clause":
-        return None
-    if is_labelled_query(item) or (in_quad and is_answer_description(item.term)):
-        return item
-    return None
+    return item if type(item).__name__ == "Clause" else None
 
 
 def lower_source(source: str, filename: "str | None" = None, *,
