@@ -35,8 +35,10 @@ reads rows and member lists that hold those bindings.  clpfd calls
 ``q_eq``, ``q_ne``, ``q_le``, ``q_lt`` (and ``q_gt``, ``q_ge`` through
 them) and ``sync_fd_bounds`` from its propagation, which runs inside the
 FD hook, from its reified comparisons and from the units hook.  So while
-``trail.hooks_running`` is above 0 (the engine is dispatching attribute
-hooks, docs/coroutining.md "Inside a hook or at a goal") these functions
+``trail.hooks_running`` or ``hook_dispatch_depth()`` is above 0 (the
+engine is dispatching attribute hooks, on this trail or on any other in
+this thread, docs/coroutining.md "Inside a hook or at a goal" and "On any
+trail"; ``attributes.inside_attribute_hooks``) these functions
 queue the post on the trail's pending queue (``trail.push_pending`` of a
 ``QueuedPost``) and return True; the post runs at the goal boundary after
 every hook of the unification.  At a goal (``hooks_running == 0``) they
@@ -55,8 +57,9 @@ from a hook, and post in place.
 
 Every other entry point here refuses to run inside a hook (ruling R30):
 ``error(permission_error(call, goal, Goal), Name/Arity)`` while
-``trail.hooks_running`` is above 0, as the engine's ``solve`` does there
-(DEVIATIONS.md D3, tests/clpq_port/test_refused_inside_a_hook.py).
+``trail.hooks_running`` or ``hook_dispatch_depth()`` is above 0, as the
+engine's ``solve`` does there (DEVIATIONS.md D3 and D26,
+tests/clpq_port/test_refused_inside_a_hook.py).
 
 ``{C1 ; C2}`` (ruling R18, DEVIATIONS.md D12).  A block that holds ``;``
 is posted with ``post_constraint_with_choices``, and
@@ -77,7 +80,8 @@ from clausal.logic.clpq import variable_ordering as _variable_ordering
 from clausal.logic.clpq.arithmetic import (
     arithmetic_normalize, is_exact_decimal, is_number)
 from clausal.logic.clpq.attributes import (
-    CLPQ_KEY, culprit_argument, refuse_inside_attribute_hooks, state_of)
+    CLPQ_KEY, culprit_argument, inside_attribute_hooks,
+    refuse_inside_attribute_hooks, state_of)
 from clausal.logic.clpq.legacy import (
     _block_cell_as_node, _cell_as_node, _cells_as_nodes, _units_result,
     _units_strip, _units_strip_expr)
@@ -258,7 +262,7 @@ def _post_from_library(node_class, left, right, trail):
     """A comparison from clpfd (fd_eq and the others, its Python and its C
     form): queued while the engine is dispatching attribute hooks, posted
     in place at a goal (ruling R28c as the module docstring states it)."""
-    if trail.hooks_running > 0:
+    if inside_attribute_hooks(trail):
         trail.push_pending(QueuedPost(node_class, left, right, trail))
         return True
     return _post_now(node_class, left, right, trail)
@@ -315,7 +319,7 @@ def sync_fd_bounds(variable, lower, upper, trail):
     variable = deref(variable)
     if not is_var(variable):
         return True
-    if trail.hooks_running > 0:
+    if inside_attribute_hooks(trail):
         if type(lower) is int:
             trail.push_pending(QueuedPost(GtE, variable, lower, trail))
         if type(upper) is int:

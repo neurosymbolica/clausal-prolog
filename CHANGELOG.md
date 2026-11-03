@@ -9,6 +9,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **CLP(Q) (`CLAUSAL_CLPQ=holzbaur`): a hook body that reaches the store
+  through a fresh `Trail()` is refused too.** The port's entry points
+  refused inside an attribute hook only when the trail they were given had
+  hooks running, so a hook could bypass the rule with a fresh trail and get
+  a wrong answer.  The checks now also read `hook_dispatch_depth()`: the
+  entry points raise `permission_error(call, goal, Goal)` there, and
+  clpfd's posts into CLP(Q) are queued on the trail they were given
+  (clausal/logic/clpq/DEVIATIONS.md D26).
 - **A `.clausal` or `.pl` file that fails to load reports every error,
   not the first** (operator ruling 2026-11-02: like a compiler). The
   native front end lowers the whole file before it refuses, and the

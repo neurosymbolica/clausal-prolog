@@ -3,8 +3,9 @@
 
 A public entry point of the port that reads or writes the store raises
 ``error(permission_error(call, goal, Culprit), Name/Arity)`` while the
-engine is dispatching attribute hooks (``trail.hooks_running`` above 0),
-the shape the engine's ``solve``/``call`` raise there (a750f58c).  At a
+engine is dispatching attribute hooks (``trail.hooks_running`` above 0,
+or ``hook_dispatch_depth()`` above 0 for a fresh trail built inside a
+hook, DEVIATIONS.md D26), the shape the engine's ``solve``/``call`` raise there (a750f58c).  At a
 goal, bare or under a driver, the same calls run.  clpfd's posts (``q_eq``
 and the others, ``sync_fd_bounds``) are not refused: they queue (ruling
 R28c, test_switch.py).  DEVIATIONS.md D3.
@@ -22,7 +23,8 @@ from clausal.logic.clpq import variable_ordering as vo
 from clausal.logic.exceptions import LogicException
 from clausal.logic.pending import drain
 from clausal.logic.variables import (
-    Trail, Var, deref, is_var, put_attr, register_attr_hook, unify)
+    Trail, Var, deref, hook_dispatch_depth, is_var, put_attr,
+    register_attr_hook, unify)
 from clausal.pythonic_ast.nodes import Add, ArithEq, GtE, LtE
 
 _PROBE_KEY = "clpq_test_refused_probe"
@@ -234,24 +236,85 @@ def test_the_port_s_own_hook_is_not_refused():
         assert (deref(low), deref(high)) == (1, 5)
 
 
-def test_a_fresh_trail_inside_a_hook_is_not_seen_by_the_check():
-    # Ruling R31, a documented limit: the check reads the counter of the
-    # trail the entry point is given.  A hook body that reaches the store
-    # through a fresh Trail reads 0 there, is not refused, and gets R27's
-    # wrong answer (D3's repro: `[W =< 20]`, Q unbound).  A hook must not
-    # do this (DEVIATIONS.md D3).  An engine-wide dispatch depth would
-    # refuse it, and this test would then fail: flip it to expect the
-    # permission_error.
+def test_a_fresh_trail_inside_a_hook_is_refused_too():
+    # Ruling R31's limit is closed: the check reads hook_dispatch_depth()
+    # as well as the counter of the trail it is given.  D3's repro through
+    # a fresh Trail inside a hook: the fresh trail reads 0, the thread's
+    # dispatch depth reads 1, and dump/3 refuses instead of answering
+    # `[W =< 20]` with Q left unbound.
     t, x, q, w = _store()
     out = {}
 
     def body(trail):
         other = Trail()
         out["hooks_running"] = other.hooks_running
+        out["depth"] = hook_dispatch_depth()
         out["dump"] = rc.dump([w], ["W"], other)
         return nf.post_constraint(("=<", q, 1), other)
     z = Var()
     put_attr(z, _PROBE_KEY, body, t)
+    with pytest.raises(LogicException) as caught:
+        unify(("f", z, x), ("f", 1, 2), t)
+    assert out == {"hooks_running": 0, "depth": 1}
+    assert caught.value.term[1][:3] == ("permission_error", "call", "goal")
+    assert caught.value.term[2] == ("/", "dump", 3)
+    assert t.hooks_running == 0 and hook_dispatch_depth() == 0
+
+
+def _inside_a_hook_on_a_fresh_trail(call):
+    """Run *call* in a probe hook body with a fresh Trail, not the hook's:
+    return what it raised (None if nothing)."""
+    t, x, q, w = _store()
+    seen = {}
+
+    def body(trail):
+        other = Trail()
+        seen["hooks_running"] = other.hooks_running
+        try:
+            call(other, w)
+        except LogicException as exc:
+            seen["raised"] = exc
+        return True
+    z = Var()
+    put_attr(z, _PROBE_KEY, body, t)
     assert unify(("f", z, x), ("f", 1, 2), t)
-    assert out == {"hooks_running": 0, "dump": [("=<", "W", 20)]}
-    assert is_var(deref(q))
+    assert seen["hooks_running"] == 0
+    return seen.get("raised")
+
+
+@pytest.mark.parametrize(
+    "label, call, name, arity", _ENTRY_POINTS,
+    ids=[entry[0] for entry in _ENTRY_POINTS])
+def test_an_entry_point_called_from_a_hook_on_a_fresh_trail_is_refused(
+        label, call, name, arity):
+    raised = _inside_a_hook_on_a_fresh_trail(call)
+    assert raised is not None, f"{label} ran inside a hook on a fresh trail"
+    assert raised.term[1][:3] == ("permission_error", "call", "goal")
+    assert raised.term[2] == ("/", name, arity)
+
+
+@pytest.mark.parametrize("post", [
+    lambda t, w: h.q_le(w, 10, t),
+    lambda t, w: h.sync_fd_bounds(w, 2, 5, t),
+], ids=["q_le", "sync_fd_bounds"])
+def test_a_clpfd_post_from_a_hook_on_a_fresh_trail_is_queued(post):
+    # Ruling R28c through a fresh trail: the post is queued on the trail
+    # it was given, not made in place, and runs when that trail reaches a
+    # goal boundary.
+    t, x, q, w = _store()
+    seen = {}
+
+    def body(trail):
+        other = Trail()
+        assert post(other, w)
+        seen["queued"] = other.pending is not None
+        seen["other"] = other
+        return True
+    z = Var()
+    put_attr(z, _PROBE_KEY, body, t)
+    assert unify(("f", z, x), ("f", 1, 2), t)
+    assert seen["queued"] is True
+    other = seen["other"]
+    assert [None for _ in drain(other)][:1] == [None]
+    high = Var()
+    assert h.sup(w, high, other) and deref(high) in (10, 5)

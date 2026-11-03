@@ -13,7 +13,8 @@ trail.
 """
 from collections import deque
 
-from clausal.logic.variables import Var, get_attr, put_attr
+from clausal.logic.variables import (
+    Var, get_attr, hook_dispatch_depth, put_attr)
 
 CLPQ_KEY = "clpq_holzbaur"
 
@@ -50,24 +51,34 @@ def culprit_argument(value):
     return Var() if value is None else value
 
 
+def inside_attribute_hooks(trail):
+    """True while the engine is dispatching attribute hooks in this
+    thread: ``trail.hooks_running`` of the trail an entry point was given
+    is above 0, or ``hook_dispatch_depth()`` is (any trail).  The second
+    count sees a hook body that reaches the store through a fresh
+    ``Trail()``, which reads 0 on its own counter (docs/coroutining.md
+    "On any trail")."""
+    return ((trail is not None and trail.hooks_running > 0)
+            or hook_dispatch_depth() > 0)
+
+
 def refuse_inside_attribute_hooks(trail, culprit, name, arity):
     """Ruling R30: a public entry point of the port does not run while the
-    engine is dispatching attribute hooks (``trail.hooks_running`` above
-    0).  A hook body runs while other variables of the same unification
-    are bound with their hooks still to come, so the store it would read
+    engine is dispatching attribute hooks (``inside_attribute_hooks``).
+    A hook body runs while other variables of the same unification are
+    bound with their hooks still to come, so the store it would read
     holds unhooked bindings (DEVIATIONS.md D3, ruling R27).  Raises
     ``error(permission_error(call, goal, Culprit), Name/Arity)``, the shape
     the engine's ``solve``/``call`` raise there (a750f58c).  The port's own
     hook and its internals call no public entry point
     (tests/clpq_port/test_refused_inside_a_hook.py).
 
-    The check is per trail (ruling R31): it reads the counter of the trail
-    the entry point is given.  A hook body that reaches the store through
-    another trail (a fresh ``Trail()``) reads 0 there and is not refused,
-    and it gets R27's wrong answer.  A hook must not reach the store
-    through another trail
-    (test_a_fresh_trail_inside_a_hook_is_not_seen_by_the_check)."""
-    if trail is not None and trail.hooks_running:
+    The check reads the engine's thread-wide dispatch depth as well as
+    the given trail's counter, so a hook body that reaches the store
+    through another trail (a fresh ``Trail()``) is refused too; ruling
+    R31's per-trail limit is closed
+    (test_a_fresh_trail_inside_a_hook_is_refused_too)."""
+    if inside_attribute_hooks(trail):
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, permission_error)
         raise LogicException(
