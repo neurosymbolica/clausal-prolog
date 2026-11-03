@@ -749,8 +749,8 @@ def refuse_cyclic_term(term):
     from its entry to its exit, and one met again while on the path closes
     a cycle.  A compound already left is not walked again, so a term with
     shared subterms costs its number of distinct compounds.  The adapter
-    calls it before clpfd's cell walk, which recurses
-    (test_the_adapter_refuses_a_cyclic_term)."""
+    calls it before clpfd's cell walk, which recursed
+    (test_the_adapter_refuses_a_cyclic_term; D27)."""
     on_path = set()
     done = set()
     stack = [(False, term)]

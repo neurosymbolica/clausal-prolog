@@ -495,22 +495,24 @@ def _collect_constraint_vars(lhs, rhs) -> tuple:
 
 
 def _collect_vars_from(expr, result: list) -> None:
-    expr = deref(expr)
-    if is_var(expr):
-        result.append(expr)
-        return
-    _ensure_term_imports()
-    if isinstance(expr, (_Add, _Sub, _Mult)):
-        _collect_vars_from(expr.left, result)
-        _collect_vars_from(expr.right, result)
-    elif _Div is not None and isinstance(expr, (_Div, _FloorDiv, _Mod)):
-        _collect_vars_from(expr.left, result)
-        _collect_vars_from(expr.right, result)
-    elif _Pow is not None and isinstance(expr, _Pow):
-        _collect_vars_from(expr.left, result)
-        _collect_vars_from(expr.right, result)
-    elif _Negate is not None and isinstance(expr, _Negate):
-        _collect_vars_from(expr.operand, result)
+    """Append the variables of *expr* to *result*, left to right, depth
+    first, as met (a repeated variable each time).  An explicit stack, so a
+    sum nested 100,000 deep raises no RecursionError (clpq DEVIATIONS.md
+    D27: ``inf/2`` and ``sup/2`` call this first)."""
+    stack = [expr]
+    while stack:
+        expr = deref(stack.pop())
+        if is_var(expr):
+            result.append(expr)
+            continue
+        _ensure_term_imports()
+        if (isinstance(expr, (_Add, _Sub, _Mult))
+                or (_Div is not None and isinstance(expr, (_Div, _FloorDiv, _Mod)))
+                or (_Pow is not None and isinstance(expr, _Pow))):
+            stack.append(expr.right)
+            stack.append(expr.left)
+        elif _Negate is not None and isinstance(expr, _Negate):
+            stack.append(expr.operand)
 
 
 # ── Constraint base class and concrete types ──────────────────────────────────

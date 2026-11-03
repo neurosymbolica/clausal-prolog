@@ -138,7 +138,13 @@ def render_error_term(term: Any) -> str:
     try:
         return term_writeq(term, local_vars=True)
     except Exception:  # noqa: BLE001 - a message may not out-fail its error
+        pass
+    try:
         return repr(term)
+    except RecursionError:
+        # A term nested deeper than Python's stack (a culprit 100,000 deep)
+        # has no text either way; the term itself is still on the error.
+        return f"<{type(term).__name__} nested too deep to print>"
 
 
 class LogicException(Exception):

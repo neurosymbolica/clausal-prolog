@@ -1309,10 +1309,13 @@ raise the same term.  Tests (bare and as a driver leaves the trail):
 `test_the_adapter_refuses_a_cyclic_term`; through the engine,
 `test_switch_engine.py`'s `test_a_cyclic_term_raises_through_the_engine`.
 
-Not covered: the `inf/2` and `sup/2` builtins ask CLP(R) first
-(`clpr.is_real_expression`), whose cell walk recurses before CLP(Q) is
-reached, so `X = 1 + X, inf(X, I)` through the engine still raises
-`RecursionError`, under both switches (shared code; D24, deep terms).
+The `inf/2` and `sup/2` builtins ask CLP(R) first
+(`clpr.is_real_expression`), whose cell walk overflowed before CLP(Q) was
+reached, so `X = 1 + X, inf(X, I)` through the engine raised
+`RecursionError` under both switches.  The shared cell walk now finds the
+cycle itself (D27), so it raises `type_error(evaluable, (+)/2)` there too,
+with the builtin as the context, `inf/2` or `sup/2`, under both switches
+(`test_clpq_deep_terms.py`'s `test_a_cyclic_objective_through_the_engine`).
 
 ## D24: known limits, deferred by ruling R34; the first three capped (rulings D42, D51)
 
@@ -1591,11 +1594,10 @@ found are.  Timed at a load average of 9 to 11 on 8 cores:
   The other shape was never slow: unifying the chain with numbers,
   `[X1, ..., Xn] = [0, ..., n-1]`, is FASTER on the port, n = 200 1.16 s
   against legacy 10.09 s.
-- **Deep terms raise RecursionError in shared clpfd code** (Medium 7):
+- **Deep terms raised RecursionError in shared clpfd code** (Medium 7):
   a sum nested 100,000 deep (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`,
-  then `{Y >= T}`) raises `RecursionError` from clpfd's cell walk before
-  the port is reached.  Legacy the same.  The cyclic case of the same walk
-  under `inf/2`/`sup/2` is in D23.
+  then `{Y >= T}`) raised `RecursionError` from clpfd's cell walk before
+  the port was reached.  Legacy the same.  Fixed: see D27.
 
 ## D25: an error names a non-linear base by its expression
 
@@ -1635,3 +1637,64 @@ it leaves the post on that trail's queue.  The engine's `solve`/`call`
 still refuse only on the same trail (docs/coroutining.md); a driver on a
 fresh trail inside a hook runs with the depth above 0, so the port's
 entry points it reaches refuse.  The cost is one C call per check.
+
+## D27: deep terms are walked on an explicit stack
+
+Implementation only for the sums and products 1.3.3 answers; the port's
+algorithm is unchanged.  1.3.3's `nf/2` recurses on the term, on
+Prolog's stack: Scryer's clpq posts `{Y >= T}` for a
+sum `T` nested 100,000 deep (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`)
+and answers (checked 2026-11-03).  The port's `normal_form` already
+walked the term with an explicit stack (D23), but four Python walks
+before it recursed, one frame per level, and raised `RecursionError`
+past about 1,000 levels (D24, deep terms):
+
+- clpfd's cell walk (`_arith_cells_to_nodes`), shared by every CLP post.
+  It keeps its recursion for the first 50 levels (the common case, at
+  its old speed) and hands anything deeper to
+  `_arith_cells_to_nodes_deep`, the same body as a generator on an
+  explicit stack, so it visits, rebuilds and refuses in the same order.
+  It keeps the compounds on the path from the root, so a cyclic term
+  raises instead of overflowing: `type_error(evaluable, F/A)` under a
+  CLP(Q) or CLP(R) context, as `normal_form/2` raises (D23), and
+  `resource_error(finite_memory)` outside them (clpfd, `between/3`), the
+  engine's error for a cycle a walk has no answer for.
+- the units side channel's scan (`units_clp._scan`, `_first_money`),
+  which runs on each post once the process has built a quantity.
+- CLP(R)'s variable walk (`clpr._collect_vars_from`), which `inf/2` and
+  `sup/2` run first.
+- legacy's `_ensure_q_for_expr` and `_linearize` (legacy only).
+
+Each is the same walk, left to right, on an explicit stack.  Nothing the
+port reads changes: the nodes the cell walk returns are the ones it
+returned before, so the normal form makes the same variables in the same
+order (D4, D11).  Tested: the residual, the optimum and the number of
+variables made, for random mixed expressions 300 deep, are the same
+through the recursive walk and the stack walk on both solvers
+(`test_the_stack_walk_answers_as_the_recursive_one`), the two walks
+agree term by term on every kind of argument
+(`test_the_cell_walks_agree_term_by_term`), legacy's linear forms match
+the recursive `_linearize` they replace, coefficients and variable order
+(`test_legacy_linear_forms_match_the_recursive_walk`), and the clpq,
+clpfd, clpz, clpr and units suites pass with the stack walk taken from
+the root (`_SHALLOW_CELL_WALK = -1`).  Depth 100,000 posts and answers on
+both solvers, the post in about 0.9 s on the port (`lsum/3` building the
+term takes longer).
+
+**The deviation.** Two walks still recurse, and past Python's stack they
+raise `error(resource_error(stack), _)` where 1.3.3 answers:
+
+- an `abs/1`, `min/2` or `max/2` (an evaluable with no operator node)
+  whose argument is nested deeper than the stack: the cell walk
+  evaluates it with is/2's evaluator, which recurses, as is/2 does and
+  raises the same error;
+- a deep comparison that holds units material (a quantity or a united
+  variable): the dimension analysis and the strip recurse.  Units are
+  not 1.3.3's.
+
+Tests: `test_a_deep_argument_of_abs_is_a_stack_error`,
+`test_a_deep_sum_of_quantities_is_a_stack_error`.  Both are a
+RecursionError no longer: the error is an ISO term a program can catch.
+Not covered here: clpfd's own posts (`Y #= X` with `X = 1 + X` loops in
+`_fd_int_term`, before and after this change), which are not on the
+CLP(Q) path.

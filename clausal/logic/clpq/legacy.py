@@ -1268,22 +1268,28 @@ def _ensure_q_for_expr(expr: Any, trail: Trail) -> None:
 
     If a variable has an FD attribute but no Q attribute, promotes it
     (mirrors ``_ensure_real`` promoting FD to real in CLP(R)).
+
+    Variables are met left to right, depth first, on an explicit stack, so
+    a sum nested 100,000 deep raises no RecursionError (DEVIATIONS.md
+    D27).
     """
-    expr = deref(expr)
-    if is_var(expr):
-        if get_attr(expr, Q_KEY) is None:
-            from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
-            if get_attr(expr, FD_KEY) is not None:
-                _promote_fd_to_q(expr, trail)
-            else:
-                _post_q_domain(expr, None, None, trail)
-        return
-    _ensure_term_imports()
-    if isinstance(expr, (_Add, _Sub, _Mult, _Div)):
-        _ensure_q_for_expr(expr.left, trail)
-        _ensure_q_for_expr(expr.right, trail)
-    elif isinstance(expr, _Negate):
-        _ensure_q_for_expr(expr.operand, trail)
+    stack = [expr]
+    while stack:
+        expr = deref(stack.pop())
+        if is_var(expr):
+            if get_attr(expr, Q_KEY) is None:
+                from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+                if get_attr(expr, FD_KEY) is not None:
+                    _promote_fd_to_q(expr, trail)
+                else:
+                    _post_q_domain(expr, None, None, trail)
+            continue
+        _ensure_term_imports()
+        if isinstance(expr, (_Add, _Sub, _Mult, _Div)):
+            stack.append(expr.right)
+            stack.append(expr.left)
+        elif isinstance(expr, _Negate):
+            stack.append(expr.operand)
 
 
 # ── Linearization ────────────────────────────────────────────────────────────
@@ -1317,77 +1323,81 @@ def _linearize(expr: Any, trail: Trail,
     """Flatten an expression tree to ``{var_id: coeff, …}, constant``.
 
     Returns None for non-linear expressions (e.g. Var * Var).
+
+    A post-order walk on an explicit stack (a sum nested 100,000 deep
+    raises no RecursionError; DEVIATIONS.md D27): both operands of a
+    node are flattened, left first, before the node combines them, as
+    the recursive walk it replaces did.
     """
     _ensure_term_imports()
-    expr = deref(expr)
+    results: list = []
+    stack: list = [(expr, False)]
+    while stack:
+        expr, ready = stack.pop()
+        if ready:
+            if isinstance(expr, _Negate):
+                inner = results.pop()
+                if inner is None:
+                    results.append(None)
+                else:
+                    k, v = inner
+                    results.append(({x: -c for x, c in k.items()}, -v))
+                continue
+            rc = results.pop()
+            lc = results.pop()
+            results.append(_combine_linear(expr, lc, rc))
+            continue
+        expr = deref(expr)
+        if isinstance(expr, bool):
+            results.append(None)
+        elif isinstance(expr, int):
+            results.append(({}, Fraction(expr)))
+        elif isinstance(expr, Fraction):
+            results.append(({}, expr))
+        elif isinstance(expr, (Decimal, float)):
+            results.append(({}, _exact_number(expr)))    # exact; scale is not carried
+        elif is_var(expr):
+            results.append(({expr._id: ONE}, ZERO))
+        elif isinstance(expr, (_Add, _Sub, _Mult, _Div)):
+            stack.append((expr, True))
+            stack.append((expr.right, False))
+            stack.append((expr.left, False))
+        elif isinstance(expr, _Negate):
+            stack.append((expr, True))
+            stack.append((expr.operand, False))
+        else:
+            results.append(None)
+    return results[0]
 
-    if isinstance(expr, bool):
+
+def _combine_linear(expr: Any, lc: Any, rc: Any,
+                    ) -> tuple[dict[int, Fraction], Fraction] | None:
+    """One binary node of :func:`_linearize`: its operands' linear forms
+    *lc* and *rc* (None for a non-linear one) combined."""
+    if lc is None or rc is None:
         return None
-    if isinstance(expr, int):
-        return {}, Fraction(expr)
-    if isinstance(expr, Fraction):
-        return {}, expr
-    if isinstance(expr, (Decimal, float)):
-        return {}, _exact_number(expr)    # exact; scale is not carried
-    if is_var(expr):
-        return {expr._id: ONE}, ZERO
-
+    lk, lv = lc
+    rk, rv = rc
     if isinstance(expr, _Add):
-        lc = _linearize(expr.left, trail)
-        rc = _linearize(expr.right, trail)
-        if lc is None or rc is None:
-            return None
-        lk, lv = lc
-        rk, rv = rc
         m = dict(lk)
         for v, c in rk.items():
             m[v] = m.get(v, ZERO) + c
         return {v: c for v, c in m.items() if c != ZERO}, lv + rv
-
     if isinstance(expr, _Sub):
-        lc = _linearize(expr.left, trail)
-        rc = _linearize(expr.right, trail)
-        if lc is None or rc is None:
-            return None
-        lk, lv = lc
-        rk, rv = rc
         m = dict(lk)
         for v, c in rk.items():
             m[v] = m.get(v, ZERO) - c
         return {v: c for v, c in m.items() if c != ZERO}, lv - rv
-
     if isinstance(expr, _Mult):
-        lc = _linearize(expr.left, trail)
-        rc = _linearize(expr.right, trail)
-        if lc is None or rc is None:
-            return None
-        lk, lv = lc
-        rk, rv = rc
         if not lk:
             return {v: lv * c for v, c in rk.items()}, lv * rv
         if not rk:
             return {v: rv * c for v, c in lk.items()}, lv * rv
         return None  # non-linear
-
-    if isinstance(expr, _Div):
-        lc = _linearize(expr.left, trail)
-        rc = _linearize(expr.right, trail)
-        if lc is None or rc is None:
-            return None
-        rk, rv = rc
-        if rk or rv == ZERO:
-            return None
-        lk, lv = lc
-        return {v: c / rv for v, c in lk.items()}, lv / rv
-
-    if isinstance(expr, _Negate):
-        inner = _linearize(expr.operand, trail)
-        if inner is None:
-            return None
-        k, v = inner
-        return {x: -c for x, c in k.items()}, -v
-
-    return None
+    # _Div
+    if rk or rv == ZERO:
+        return None
+    return {v: c / rv for v, c in lk.items()}, lv / rv
 
 
 def _zero_divisor(*exprs: Any) -> bool:

@@ -150,27 +150,31 @@ def _scan(x: Any):
     (atom, string, date, …) — not engaged, no exception raised for it,
     since a comparison over atoms is ordinary corpus code. Primes the lazy
     term-class imports itself: it is an entry point for callers that go
-    nowhere else in this module (cumulative/2)."""
+    nowhere else in this module (cumulative/2).
+
+    Leaves are read left to right on an explicit stack, so a sum nested
+    100,000 deep raises no RecursionError (clpq DEVIATIONS.md D27); the first foreign
+    leaf answers None, else any material True."""
     if _Quantity is None:
         _ensure_imports()
-    x = deref(x)
-    if isinstance(x, _Quantity):
-        return True
-    if is_var(x):
-        return get_attr(x, UNITS_KEY) is not None
-    if _is_plain_number(x):
-        return False
-    if isinstance(x, _BINARY):
-        left = _scan(x.left)
-        if left is _FOREIGN:
+    found = False
+    stack = [x]
+    while stack:
+        x = deref(stack.pop())
+        if isinstance(x, _Quantity):
+            found = True
+        elif is_var(x):
+            found = found or get_attr(x, UNITS_KEY) is not None
+        elif _is_plain_number(x):
+            pass
+        elif isinstance(x, _BINARY):
+            stack.append(x.right)
+            stack.append(x.left)
+        elif isinstance(x, _Negate):
+            stack.append(x.operand)
+        else:
             return _FOREIGN
-        right = _scan(x.right)
-        if right is _FOREIGN:
-            return _FOREIGN
-        return left or right
-    if isinstance(x, _Negate):
-        return _scan(x.operand)
-    return _FOREIGN
+    return found
 
 
 def _refuse_bypassed(v, context: str) -> None:
@@ -565,9 +569,11 @@ def strip_for_solver(l: Any, r: Any, context: str, trail: Trail):
         return None
     try:
         _, _, env = analyse(l, r, context)
+        return strip(l, env, trail), strip(r, env, trail)
     except _NotEngaged:
         return None
-    return strip(l, env, trail), strip(r, env, trail)
+    except RecursionError:
+        raise _too_deep((l, r), context) from None
 
 
 def strip_for_real_solver(l: Any, r: Any, context: str, trail: Trail):
@@ -591,26 +597,27 @@ def strip_for_real_solver(l: Any, r: Any, context: str, trail: Trail):
 
 def _first_money(x: Any):
     """The first currency-dimensioned leaf (a Quantity or a united Var) in
-    the tree, or None."""
+    the tree, or None.  Left to right on an explicit stack (clpq
+    DEVIATIONS.md D27)."""
     from clausal.terms import _currency_info  # noqa: PLC0415
-    x = deref(x)
-    dims = None
-    if isinstance(x, _Quantity):
-        dims = x.dims
-    elif is_var(x):
-        state = get_attr(x, UNITS_KEY)
-        dims = state.dims if state is not None else None
-    elif isinstance(x, _BINARY):
-        return _first_money(x.left) or _first_money(x.right)
-    elif isinstance(x, _Negate):
-        return _first_money(x.operand)
-    elif type(x) is tuple:
-        for a in x[1:]:
-            found = _first_money(a)
-            if found is not None:
-                return found
-    if dims and any(_currency_info(k) is not None for k in dims):
-        return x
+    stack = [x]
+    while stack:
+        x = deref(stack.pop())
+        dims = None
+        if isinstance(x, _Quantity):
+            dims = x.dims
+        elif is_var(x):
+            state = get_attr(x, UNITS_KEY)
+            dims = state.dims if state is not None else None
+        elif isinstance(x, _BINARY):
+            stack.append(x.right)
+            stack.append(x.left)
+        elif isinstance(x, _Negate):
+            stack.append(x.operand)
+        elif type(x) is tuple:
+            stack.extend(reversed(x[1:]))
+        if dims and any(_currency_info(k) is not None for k in dims):
+            return x
     return None
 
 
@@ -635,9 +642,20 @@ def strip_expr_for_solver(expr: Any, context: str, trail: Trail):
     a = _Analysis(context)
     try:
         dims, _ = a.run(expr, expr)
+        return strip(expr, a.env, trail), dims
     except _NotEngaged:
         return None
-    return strip(expr, a.env, trail), dims
+    except RecursionError:
+        raise _too_deep(expr, context) from None
+
+
+def _too_deep(term, context: str) -> Exception:
+    """The dimension analysis and the strip recurse on the tree: past
+    Python's stack a comparison holding units material raises
+    ``resource_error(stack)``, never a RecursionError (clpq DEVIATIONS.md
+    D27)."""
+    from clausal.logic.rational_walk import unwalkable_term_error  # noqa: PLC0415
+    return unwalkable_term_error(term, context, "dimension")
 
 
 def reattach(value, dims: dict):
