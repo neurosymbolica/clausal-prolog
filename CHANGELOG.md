@@ -25,6 +25,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
   The merges `add_linear_ffh/7` and `add_linear_11h/5` look each term's
   order up once, as `add_linear_f1h/6` already did (survey R4).  The
   same rows, the same answers, the same pivots.
+- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: binding a
+  dependent variable no longer reads every row of its store.** The
+  unification hook's stand-in pass (DEVIATIONS.md D3) read every row of
+  the component on each binding; a dependent variable is in no other row
+  of a solved form, so where every bound variable is dependent only the
+  member list and the basis are rewritten
+  (`CLAUSAL_CLPQ_CHECK_ROW_INDEX=1` reads the skipped rows and raises if
+  one holds a bound variable).  Binding a chain of 800 one variable at a
+  time: 21.1 s to 11.2 s.  The same answers and decisions (the
+  differential goldens are identical).
 
 - **CLP(Q) (`CLAUSAL_CLPQ=holzbaur`): a hook body that reaches the store
   through a fresh `Trail()` is refused too.** The port's entry points

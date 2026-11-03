@@ -221,6 +221,33 @@ def bind_numbers(n):
     return run
 
 
+_BIND_EACH_PL = _BIND_PL + """
+each([], []).
+each([X|Xs], [N|Ns]) :- X = N, each(Xs, Ns).
+binde(N) :- length(L, N), chain(L), nums(0, N, Ns), time(each(L, Ns)).
+"""
+
+
+@case([50, 100, 200, 400, 800, 1600], scryer=(_BIND_EACH_PL, "binde({n})"))
+def bind_numbers_each(n):
+    """The chain of bind_numbers bound to [0, ..., n-1] one variable at a
+    time, first to last (n unifications)."""
+    h, drain, Trail, Var, deref, unify = _api()
+    t = Trail()
+    xs = [Var() for _ in range(n)]
+    _chain(h, t, xs)
+
+    def run():
+        for i, x in enumerate(xs):
+            assert unify(x, i, t)
+            for _ in drain(t):
+                break
+            else:
+                return False
+        return True
+    return run
+
+
 _VARVAR_PL = _CHAIN_PL + """
 nonneg([]).
 nonneg([Y|T]) :- {Y >= 0}, nonneg(T).

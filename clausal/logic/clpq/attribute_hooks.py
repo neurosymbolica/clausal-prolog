@@ -54,7 +54,7 @@ from clausal.logic.clpq.components import (
     component_drop, list_elements)
 from clausal.logic.clpq.delayed_goals import verify_delayed
 from clausal.logic.clpq.linear_forms import (
-    LinearForm, independent, normal_form_coefficient_of)
+    CHECK_ROW_INDEX, LinearForm, independent, normal_form_coefficient_of)
 from clausal.logic.exceptions import LogicException, system_error, type_error
 from clausal.logic.pending import run_first
 from clausal.logic.variables import (
@@ -321,9 +321,22 @@ def _stand_in_for_bound_members(components, state, trail):
             member_state, delayed_goals=None,
             linear_form=_rename_in_form(member_state.linear_form, stand_ins)),
             trail)
+    rows = any(_in_its_own_row(member, member_state)
+               for member, member_state in bound)
     for component in components:
-        _rename_in_component(component, stand_ins, trail)
+        _rename_in_component(component, stand_ins, trail, rows)
     return result
+
+
+def _in_its_own_row(member, member_state):
+    """*member*'s own row holds it: it is independent (its row is 1*X),
+    so other rows may hold it too.  A dependent member's row does not hold
+    it, and no other row does: a solved form's rows hold only independent
+    variables (bv.pl keeps them so: a pivot back-substitutes the new
+    dependent variable out of every row), and the stand-in left in a row
+    (DEVIATIONS.md D3) is unbound."""
+    form = member_state.linear_form
+    return form is not None and any(term[0] is member for term in form.terms)
 
 
 _first = itemgetter(0)
@@ -335,6 +348,12 @@ def _rename_in_form(form, stand_ins):
     sorted."""
     if form is None:
         return None
+    ids = form.variable_ids
+    if ids and stand_ins.keys().isdisjoint(ids):
+        # The row's index holds the id of every variable of its terms
+        # (linear_forms.row_variable_ids), so no stand-in's variable is
+        # in the row.
+        return form
     terms = form.terms
     if stand_ins.keys().isdisjoint(map(id, map(_first, terms))):
         return form                     # the common case, in one C loop
@@ -375,8 +394,12 @@ def _rename_in_list(items, stand_ins):
     return result
 
 
-def _rename_in_component(component, stand_ins, trail):
-    """The stand-ins in *component*'s member list, basis and rows."""
+def _rename_in_component(component, stand_ins, trail, rows=True):
+    """The stand-ins in *component*'s member list, basis and rows.  With
+    *rows* False no row holds a variable that has a stand-in (every one is
+    dependent, _in_its_own_row), so the rows are not read;
+    CHECK_ROW_INDEX reads them and raises AssertionError where one would
+    change."""
     record = get_attr(component, COMPONENT_KEY)
     members = _rename_in_list(record.members, stand_ins)
     basis = _rename_in_list(record.basis, stand_ins)
@@ -384,6 +407,10 @@ def _rename_in_component(component, stand_ins, trail):
         put_attr(component, COMPONENT_KEY,
                  ComponentRecord(members, record.tail, basis, record.priority),
                  trail)
+    if not rows:
+        if CHECK_ROW_INDEX:
+            _check_no_row_holds_a_stand_in(members, stand_ins)
+        return
     for member in list_elements(members):
         member = deref(member)
         if not is_var(member):
@@ -395,6 +422,23 @@ def _rename_in_component(component, stand_ins, trail):
         if form is not member_state.linear_form:
             put_state(member, with_changes(member_state, linear_form=form),
                       trail)
+
+
+def _check_no_row_holds_a_stand_in(members, stand_ins):
+    """CHECK_ROW_INDEX: the rows of *members* that _rename_in_component
+    skipped hold no variable that has a stand-in."""
+    for member in list_elements(members):
+        member = deref(member)
+        if not is_var(member):
+            continue
+        member_state = state_of(member)
+        if member_state is None or member_state.linear_form is None:
+            continue
+        form = member_state.linear_form
+        if not stand_ins.keys().isdisjoint(map(id, map(_first, form.terms))):
+            raise AssertionError(
+                f"clpq stand-in pass skipped the rows, but the row of "
+                f"{member!r} holds a bound dependent variable: {form!r}")
 
 
 # ---------------------------------------------------------------- itf3.pl
