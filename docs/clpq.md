@@ -823,6 +823,12 @@ A variable can have **both** FD and Q attributes simultaneously, just like FD an
 4. When FD narrows (via `_narrow`), Q bounds are tightened to match
 5. Integer-valued `Fraction` results (like `Fraction(3)`) are accepted by the FD hook
 
+A CLP(Z) variable enters a CLP(Q) context through a comparison (`{X =< 7}`),
+`in_q/1,3`, or the objective of `sup/2`, `inf/2`, `maximize`, `minimize` and
+`bb_inf`: with `X in 1..5`, `sup(X, S)` gives `S = 5`. Only finite ends come
+along: `X #\= 3` has none, so `sup(X, S)` fails, as it does for a variable
+the store does not know.
+
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:fd_q_coexistence"
 ```

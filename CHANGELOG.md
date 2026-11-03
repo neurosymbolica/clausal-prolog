@@ -29,6 +29,23 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A tabled answer keeps its CLP(Q) constraints.** With `p(X) :- {X >= 1,
+  X =< 5}` tabled, an answer handed out from the table (a second call, or a
+  call in the first one's continuation) was an unconstrained variable:
+  `(p(X), sup(X, S))` failed and `(p(X), X = 6)` succeeded. The table now
+  stores each such answer with the constraints projected onto its
+  variables (the selected solver's `dump/3`) and posts them again on every
+  replay, under either solver; two answers that differ only in their
+  CLP(Q) constraints are two answers. `dif/2`, `freeze/2` and CLP(FD)
+  constraints on a tabled answer are still lost on replay
+  (todo/tabled-answers-drop-their-constraints-on-replay-2026-07-05.md).
+- **A CLP(FD) variable brings its bounds to `in_q/1,3` and to the
+  objective of `sup/2`, `inf/2`, `maximize`, `minimize` and `bb_inf`.**
+  With `X in 1..5` and no CLP(Q) state, `sup(X, S)` failed (unbounded) and
+  `in_q(X, 0, 20), sup(X, S)` gave 20; both give 5 now, on both solvers
+  (DEVIATIONS.md D26). The default solver's promotion of an FD variable
+  whose domain has an infinite end (`X #\= 3, {X =< 7}`) raised
+  `OverflowError`; that end is left open now.
 - **CLP(Q)'s default solver refuses a non-linear constraint with an ISO
   error, not a Python `TypeError`.** `{X * Y = 10}`, and `inf/2`, `sup/2`,
   `minimize/1`, `maximize/1` and `bb_inf` on a non-linear objective, raise
