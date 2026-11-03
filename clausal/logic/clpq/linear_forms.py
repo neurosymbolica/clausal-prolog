@@ -14,6 +14,7 @@ the form itself coming back for a factor of 1).
 
 A predicate that can fail returns None where it fails.
 """
+import os
 from operator import indexOf, itemgetter
 
 from clausal.logic.clpq.arithmetic import (
@@ -28,15 +29,27 @@ MINUS_ONE = (-1, 1)
 
 _first = itemgetter(0)
 
+#: CLAUSAL_CLPQ_CHECK_ROW_INDEX=1: every answer of a row's index that a
+#: variable is not in the row is checked against a full scan of the row
+#: (delete_factor), and a stale index raises AssertionError.  A debugging
+#: aid: the check costs the scan the index saves.
+CHECK_ROW_INDEX = os.environ.get("CLAUSAL_CLPQ_CHECK_ROW_INDEX", "") not in ("", "0")
+
 
 class LinearForm:
-    """store.pl's `[Inhomogeneous, Rest | Terms]` (decompose/4 splits it)."""
-    __slots__ = ("constant", "rest", "terms")
+    """store.pl's `[Inhomogeneous, Rest | Terms]` (decompose/4 splits it).
+
+    A form is never changed once made: every operation makes a new one.
+    `variable_ids` is the row's index, made by row_variable_ids the first
+    time the row is scanned and kept with the form, so a form the trail
+    puts back brings its own index back."""
+    __slots__ = ("constant", "rest", "terms", "variable_ids")
 
     def __init__(self, constant, rest, terms):
         self.constant = constant
         self.rest = rest
         self.terms = terms
+        self.variable_ids = None
 
     def __repr__(self):
         return f"LinearForm({self.constant!r}, {self.rest!r}, {self.terms!r})"
@@ -317,13 +330,47 @@ def normal_form_substitute(variable, form_variable, form_x, keys=None):
                                          keys)
 
 
+def row_variable_ids(form):
+    """*form*'s index: the ids of its terms' variables as they are, and as
+    they dereference now.  Made once, the first time it is asked for."""
+    ids = form.variable_ids
+    if ids is None:
+        variables = list(map(_first, form.terms))
+        ids = set(map(id, variables))
+        ids.update(map(id, map(deref, variables)))
+        form.variable_ids = ids
+    return ids
+
+
 def delete_factor(variable, form):
     """store.pl, delete_factor/4.  Returns (form without *variable*, its
-    coefficient), or None."""
+    coefficient), or None.
+
+    A variable not in the row's index (row_variable_ids) is not in the row,
+    so the scan is skipped; where it is in the index, or is not a variable,
+    the scan decides.  The index is right as long as no variable of the row
+    is bound after the row was indexed, and the solver never leaves a bound
+    variable in a row it reads: the hook replaces it by a stand-in first
+    (DEVIATIONS.md D3).  CHECK_ROW_INDEX checks every skip against the scan
+    (test_the_check_mode_catches_a_stale_index)."""
+    variable = deref(variable)
+    if is_var(variable) and id(variable) not in row_variable_ids(form):
+        if CHECK_ROW_INDEX:
+            _check_skip(variable, form)
+        return None
     deleted = delete_factor_homogeneous(variable, form.terms)
     if deleted is None:
         return None
     return LinearForm(form.constant, form.rest, deleted[0]), deleted[1]
+
+
+def _check_skip(variable, form):
+    """CHECK_ROW_INDEX: the index said *variable* is not in *form*; the
+    scan must agree."""
+    if delete_factor_homogeneous(variable, form.terms) is not None:
+        raise AssertionError(
+            f"clpq row index is stale: {variable!r} is in the row "
+            f"{form!r} but not in its index")
 
 
 def delete_factor_homogeneous(variable, terms):

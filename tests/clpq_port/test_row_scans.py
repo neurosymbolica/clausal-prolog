@@ -9,8 +9,13 @@ implementation_plans/clpq/2026-11-03-port-complexity-survey.md).
 - add_linear_ffh/7 and add_linear_11h/5 compare by order keys looked up
   once a term (variable_ordering.order_key), as add_linear_f1h/6 does since
   the var-var fix: the same comparisons with the same outcomes.
+- delete_factor/4 skips a row whose index (the ids of its variables)
+  does not hold the variable, without scanning it (survey R1b);
+  CLAUSAL_CLPQ_CHECK_ROW_INDEX=1 checks every skip against the scan.
 """
 from functools import cmp_to_key
+
+import pytest
 
 from clausal.logic.clpq import linear_forms
 from clausal.logic.clpq import variable_ordering
@@ -191,3 +196,135 @@ def test_the_merges_fail_on_a_variable_without_an_order():
         [(x, (1, 1))], (1, 1), [(bare, (1, 1))], (1, 1)) is None
     # Never compared, so never failed: the rest of B is copied as it is.
     assert add_homogeneous_parts([], [(bare, (1, 1))]) == [(bare, (1, 1))]
+
+
+# ---------------------------------------------------------------- the row index
+
+def _row(t, n):
+    xs = _constrained(n, t)
+    return xs, LinearForm((1, 1), ZERO, [(x, (i + 1, 1))
+                                         for i, x in enumerate(xs)])
+
+
+def test_a_miss_reads_no_term_once_the_row_is_indexed(monkeypatch):
+    # The first scan of a row builds its index; after that a variable not
+    # in the row is answered without dereferencing the row's terms (the
+    # check mode scans, so it is off here).
+    monkeypatch.setattr(linear_forms, "CHECK_ROW_INDEX", False)
+    t = Trail()
+    xs, form = _row(t, 50)
+    absent = _constrained(1, t)[0]
+    assert delete_factor(absent, form) is None
+    calls = [0]
+    real = linear_forms.deref
+
+    def counting(term):
+        calls[0] += 1
+        return real(term)
+
+    monkeypatch.setattr(linear_forms, "deref", counting)
+    for _ in range(3):
+        assert delete_factor(absent, form) is None
+    assert calls[0] <= 3, calls[0]            # the sought variable, once a call
+    rest, coefficient = delete_factor(xs[17], form)
+    assert coefficient == (18, 1)
+    assert rest.terms == form.terms[:17] + form.terms[18:]
+
+
+def test_the_index_answers_as_the_scan_does():
+    t = Trail()
+    xs, form = _row(t, 12)
+    others = _constrained(4, t)
+    for v in xs + others + [Var()]:
+        got = delete_factor(v, form)
+        expected = _reference_delete(v, form.terms)
+        if expected is None:
+            assert got is None
+        else:
+            assert (got[0].terms, got[1]) == expected
+
+
+def test_a_sought_variable_bound_to_a_number_is_scanned_as_before():
+    # Not a variable, so the index is not asked: the scan compares the
+    # number by identity with the dereferenced terms, as 1.3.3's ==/2.
+    t = Trail()
+    xs, form = _row(t, 3)
+    assert delete_factor(Var(), form) is None          # index built
+    five = 10 ** 30                                     # one object
+    assert unify(xs[1], five, t)
+    got = delete_factor(xs[1], form)
+    assert (got[0].terms, got[1]) == _reference_delete(xs[1], form.terms)
+
+
+def test_a_variable_unbound_by_undo_is_found_through_the_index():
+    # A row built while X was bound to Y, then X unbound by the trail:
+    # the index holds X itself as well as what it dereferenced to.
+    t = Trail()
+    x, y, z = _constrained(3, t)
+    mark = t.mark()
+    assert unify(x, y, t)
+    form = LinearForm(ZERO, ZERO, [(x, (1, 1)), (z, (2, 1))])
+    assert delete_factor(y, form)[1] == (1, 1)         # index built, X -> Y
+    t.undo(mark)
+    assert delete_factor(x, form)[1] == (1, 1)
+    assert delete_factor(y, form) is None
+
+
+def test_a_renamed_row_has_its_own_index():
+    from clausal.logic.clpq.attribute_hooks import _rename_in_form
+    t = Trail()
+    xs, form = _row(t, 5)
+    stand_in = _constrained(1, t)[0]
+    assert delete_factor(stand_in, form) is None       # index built
+    renamed = _rename_in_form(form, {id(xs[2]): stand_in})
+    assert renamed is not form
+    assert delete_factor(stand_in, renamed)[1] == (3, 1)
+    assert delete_factor(xs[2], renamed) is None
+
+
+def test_the_check_mode_catches_a_stale_index(monkeypatch):
+    from clausal.logic.variables import deref
+    # A row variable bound to another variable after the row was indexed
+    # makes the index stale.  The solver never leaves a bound variable in
+    # a row (DEVIATIONS.md D3: the hook replaces it by a stand-in first);
+    # CLAUSAL_CLPQ_CHECK_ROW_INDEX=1 checks every miss against the scan.
+    monkeypatch.setattr(linear_forms, "CHECK_ROW_INDEX", True)
+    # Plain variables, so no hook runs; the younger one, in the row, is
+    # bound to the older.
+    t = Trail()
+    y = Var()
+    w = Var()
+    form = LinearForm(ZERO, ZERO, [(w, (1, 1))])
+    assert delete_factor(y, form) is None              # index built
+    assert unify(w, y, t) and deref(w) is y
+    with pytest.raises(AssertionError, match="row index"):
+        delete_factor(y, form)
+
+
+def test_the_store_keeps_its_indexes_right_through_bindings_and_undo(
+        monkeypatch):
+    from clausal.logic.clpq import holzbaur as h
+    from clausal.logic.pending import drain
+    from clausal.logic.variables import deref
+    monkeypatch.setattr(linear_forms, "CHECK_ROW_INDEX", True)
+    t = Trail()
+    n = 12
+    xs = [Var() for _ in range(n)]
+    ys = [Var() for _ in range(n)]
+    for a, b in zip(xs, xs[1:]):
+        assert h.q_le(a, b, t)
+    for y in ys:
+        assert h.q_ge(y, 0, t)
+    mark = t.mark()
+    assert unify(xs, ys, t)
+    assert any(True for _ in drain(t))
+    s = Var()
+    assert h.inf(xs[-1], s, t) and deref(s) == 0
+    t.undo(mark)
+    mark = t.mark()
+    assert unify(xs, list(range(n)), t)
+    assert any(True for _ in drain(t))
+    t.undo(mark)
+    assert h.q_ge(xs[0], 3, t)
+    s = Var()
+    assert h.inf(xs[-1], s, t) and deref(s) == 3

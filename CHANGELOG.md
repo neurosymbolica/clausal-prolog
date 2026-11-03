@@ -16,7 +16,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   same rows, the same answers, the same pivots (complexity survey R1).
   The merges `add_linear_ffh/7` and `add_linear_11h/5` look each term's
   order up once, as `add_linear_f1h/6` already did: the same comparisons
-  with the same outcomes (survey R4).
+  with the same outcomes (survey R4).  Each row now keeps an index of
+  its variables, so a row without the substituted variable is skipped
+  without a scan: posting a chain `X1 =< ... =< Xn` grows as n^2, not n^3
+  (survey R1b).  `CLAUSAL_CLPQ_CHECK_ROW_INDEX=1` checks every skip
+  against a full scan.
 - **CLP(Q) (`CLAUSAL_CLPQ=holzbaur`): a hook body that reaches the store
   through a fresh `Trail()` is refused too.** The port's entry points
   refused inside an attribute hook only when the trail they were given had
