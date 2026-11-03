@@ -114,3 +114,21 @@ def test_positions_count_characters_not_bytes(src):
     second = ast.literal_eval(next(k.value for k in preds[1].keywords
                                    if k.arg == "position"))
     assert second[:2] == (2, 0)
+
+
+def test_a_negative_literal_is_the_right_operand_of_an_xfx_200_operator():
+    """`-1` is a term of priority 0 (ISO 6.3.4.1), so it fits the 199 slot
+    right of `**` and of any user xfx 200 operator, as in Scryer
+    (todo/done/reader-negative-literal-after-xfx-200-operator-2026-09-29.md)."""
+    from clausal.tools.iso_l3 import read_iso
+    items = read_iso("a(X) :- X is 2 ** -1.\n"
+                     ":- op(200, xfx, pw).\n"
+                     "k(2 pw -1).\n"
+                     "k(2 pw - 1.5).\n")
+    assert [i.term for i in items] == [
+        (":-", ("a", items[0].term[1][1]),
+         ("is", items[0].term[1][1], ("**", 2, -1))),
+        ("op", 200, "xfx", "pw"),
+        ("k", ("pw", 2, -1)),
+        ("k", ("pw", 2, -1.5)),
+    ]

@@ -79,6 +79,10 @@ READ_OK = [
     ("[- 1]", "X = [- 1], X == [-1]"),
     ("f(- 1)", "X = f(- 1), X == f(-1)"),
     ("2 ** - 1: the literal fits a 199 slot", "X = (2 ** - 1), X == **(2,-1)"),
+    # The adjacent literal after an xfx 200 operator, read through a clause
+    # body (todo/done/reader-negative-literal-after-xfx-200-operator-2026-09-29.md).
+    ("2 ** -1 is ** over the literal", "X = (2 ** -1), X == **(2,-1)"),
+    ("X is 2 ** -1", "X is 2 ** -1, X =:= 0.5"),
 ]
 
 #: Rows the TRANSLATOR front end still gets wrong, for reasons other than the
