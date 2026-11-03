@@ -39,7 +39,8 @@ bindings had to be undone by someone else.  The drivers report a FINAL
 from __future__ import annotations
 
 import ast
-import copy
+
+from clausal.codegen import copy_ast, drive, fix_missing_locations
 
 from ._ast_helpers import _name
 
@@ -204,9 +205,16 @@ class _Site:
         self.kind, self.block, self.stmt, self.conds = kind, block, stmt, conds
 
 
-def _walk_block(stmts, conds, ok, n: _Names, out: list, end=None) -> None:
+# The walk is recursive in form and iterative in fact: each walk function is
+# a generator whose recursive calls are ``yield <walk>(...)``, run by
+# ``clausal.codegen.drive`` -- the generated function of a clause body of N
+# goals nests about N levels deep.
+
+
+def _walk_block(stmts, conds, ok, n: _Names, out: list, end=None):
     """Walk ``stmts[:end]`` (the list itself, so a site can be inserted
-    into it); what follows *end* in *stmts* is accounted for by the caller."""
+    into it); what follows *end* in *stmts* is accounted for by the caller.
+    A generator: run it with ``drive``."""
     if end is None:
         end = len(stmts)
     i = 0
@@ -221,8 +229,8 @@ def _walk_block(stmts, conds, ok, n: _Names, out: list, end=None) -> None:
             while j < len(rest) and id(rest[j]) in n.later_excluded_arms:
                 j += 1
             if j and _inert_block(rest[j:], n):
-                _walk_stmt(st, stmts, conds + [n.later_excluded[id(st)]],
-                           True, n, out)
+                yield _walk_stmt(st, stmts, conds + [n.later_excluded[id(st)]],
+                                 True, n, out)
                 i += 1
                 continue
         sc = _sub_call(stmts, i) if i + 2 < end else None
@@ -238,45 +246,47 @@ def _walk_block(stmts, conds, ok, n: _Names, out: list, end=None) -> None:
                 # only after the child's own last answer.
                 cond = ast.Compare(left=_name(status), ops=[ast.Is()],
                                    comparators=[_name(_FINAL)])
-                _walk_block(loop.body, conds + [cond], here, n, out,
-                            end=len(loop.body) - 1)
+                yield _walk_block(loop.body, conds + [cond], here, n, out,
+                                  end=len(loop.body) - 1)
             i += 3
             continue
-        _walk_stmt(st, stmts, conds, here, n, out)
+        yield _walk_stmt(st, stmts, conds, here, n, out)
         i += 1
 
 
-def _walk_stmt(st, block, conds, ok, n: _Names, out: list) -> None:
+def _walk_stmt(st, block, conds, ok, n: _Names, out: list):
+    """A generator: run it with ``drive``."""
     t = type(st)
     if _is_leaf_yield(st, n):
         if ok:
             out.append(_Site("leaf", block, st, conds))
         return
     if t is ast.If:
-        _walk_block(st.body, conds, ok, n, out)
-        _walk_block(st.orelse, conds, ok, n, out)
+        yield _walk_block(st.body, conds, ok, n, out)
+        yield _walk_block(st.orelse, conds, ok, n, out)
     elif t is ast.Match:
         for case in st.cases:
-            _walk_block(case.body, conds, ok, n, out)
+            yield _walk_block(case.body, conds, ok, n, out)
     elif t is ast.Try:
         plain = _generator_exit_only(st.handlers) and not st.orelse
         body_ok = ok and plain and _inert_block(st.finalbody, n)
-        _walk_block(st.body, conds, body_ok, n, out)
+        yield _walk_block(st.body, conds, body_ok, n, out)
     elif t is ast.For and not st.orelse:
         it = st.iter
         if (type(it) is ast.Call and type(it.func) is ast.Name
                 and it.func.id in _GOAL_BOUNDARY_ITERS):
             # Runs its body once -- unless the unification woke goals,
             # whose drain answers once per answer of theirs.
-            _walk_goal_boundary(st, conds, ok, n, out)
+            yield _walk_goal_boundary(st, conds, ok, n, out)
         elif st.body and type(st.body[-1]) is ast.Break:
             # ``for _ in G(): ...; break`` -- at most one pass (once/1).
-            _walk_block(st.body, conds, ok, n, out, end=len(st.body) - 1)
+            yield _walk_block(st.body, conds, ok, n, out, end=len(st.body) - 1)
     # Anything else (other loops, with, nested defs) is left alone: an
     # answer under it keeps its plain None.
 
 
-def _walk_goal_boundary(st, conds, ok, n: _Names, out: list) -> None:
+def _walk_goal_boundary(st, conds, ok, n: _Names, out: list):
+    """A generator: run it with ``drive``."""
     if not ok:
         return
     # Name the iterable, so the answer can ask whether it is the shared
@@ -287,9 +297,9 @@ def _walk_goal_boundary(st, conds, ok, n: _Names, out: list) -> None:
     cond = ast.Compare(left=_name(it_name), ops=[ast.Is()],
                        comparators=[_name(_ONCE)])
     before = len(out)
-    _walk_block(st.body, conds + [cond], ok, n, out)
+    yield _walk_block(st.body, conds + [cond], ok, n, out)
     if len(out) > before:
-        st._final_iter = it_name                  # see _NameIters
+        st._final_iter = it_name                  # see _name_iters
 
 
 # ── rewriting ────────────────────────────────────────────────────────────────
@@ -315,17 +325,20 @@ def _set_tail_final(self_name):
         value=ast.Constant(True))
 
 
-class _NameIters(ast.NodeTransformer):
+def _name_iters(root) -> None:
     """``for _ in $unify_iter(...)`` -> ``_fin_itN = $unify_iter(...)`` then
-    ``for _ in _fin_itN`` for the loops a site depends on."""
-
-    def generic_visit(self, node):
+    ``for _ in _fin_itN`` for the loops a site depends on.  Each statement
+    list is rewritten on its own, so the order the lists are visited in
+    does not matter; an explicit stack, not recursion (see ``drive``)."""
+    stack = [root]
+    while stack:
+        node = stack.pop()
         for field, old in ast.iter_fields(node):
             if isinstance(old, list):
                 new = []
                 for s in old:
                     if isinstance(s, ast.AST):
-                        s = self.visit(s)
+                        stack.append(s)
                     name = getattr(s, "_final_iter", None)
                     if name is not None:
                         assign = ast.Assign(
@@ -338,15 +351,15 @@ class _NameIters(ast.NodeTransformer):
                     new.append(s)
                 old[:] = new
             elif isinstance(old, ast.AST):
-                self.visit(old)
-        return node
+                stack.append(old)
 
 
-def _unshare(node, seen: set) -> None:  # noqa: C901
+def _unshare(node, seen: set):  # noqa: C901
     """Make every statement object occur once in the tree.  Lowering threads
     one continuation into several places (both arms of a disjunction get
     the same ``k_stmts``), and a site is final in one place and not in the
-    other: each occurrence must be its own node before any is rewritten."""
+    other: each occurrence must be its own node before any is rewritten.
+    A generator: run it with ``drive``."""
     for field, value in ast.iter_fields(node):
         if isinstance(value, list):
             if id(value) in seen:           # the statement LIST is shared too
@@ -358,11 +371,11 @@ def _unshare(node, seen: set) -> None:  # noqa: C901
                     continue
                 if isinstance(item, ast.stmt):
                     if id(item) in seen:
-                        item = value[i] = copy.deepcopy(item)
+                        item = value[i] = copy_ast(item)
                     seen.add(id(item))
-                _unshare(item, seen)
+                yield _unshare(item, seen)
         elif isinstance(value, ast.AST):
-            _unshare(value, seen)
+            yield _unshare(value, seen)
 
 
 def mark_final_yields(func_def: ast.FunctionDef, *, self_name: str,
@@ -374,9 +387,9 @@ def mark_final_yields(func_def: ast.FunctionDef, *, self_name: str,
     ``match`` statements, by id) and, per arm, the runtime test under which
     no later arm can match the call (first-argument keys)."""
     n = _Names(self_name, proceed_name, fail_name, later_excluded)
-    _unshare(func_def, set())
+    drive(_unshare(func_def, set()))
     sites: list[_Site] = []
-    _walk_block(func_def.body, [], True, n, sites)
+    drive(_walk_block(func_def.body, [], True, n, sites))
     for site in sites:
         idx = next(j for j, s in enumerate(site.block) if s is site.stmt)
         if site.kind == "leaf":
@@ -390,8 +403,8 @@ def mark_final_yields(func_def: ast.FunctionDef, *, self_name: str,
                 mark = ast.If(test=_cond_expr(site.conds), body=[mark], orelse=[])
             ast.copy_location(mark, site.stmt)
             site.block.insert(idx, mark)
-    _NameIters().visit(func_def)
-    ast.fix_missing_locations(func_def)
+    _name_iters(func_def)
+    fix_missing_locations(func_def)
     return len(sites)
 
 

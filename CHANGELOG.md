@@ -51,6 +51,7 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `{}/1` from `clausal/stdlib/clpq_braces.clausal`, which posts through
   `clpq.rational/1`; a file's own `{}/1` still wins, and without the import
   `{}/1` stays undefined, as in Scryer.
+
 ### Changed
 
 - **A digit group separator is one `_` between two digits** in an ISO
@@ -71,7 +72,6 @@ surface described in [docs/public-api.md](docs/public-api.md).
   on a cycle built by `=/2` no longer sends a later occurs check into
   RecursionError, and `occurs_check/2` from Python no longer answers
   True for a very deep term that does not hold the variable.
-### Changed
 
 - A list a clause head builds after its body with an unbound tail
   (`mk(N, Z, [N|T]) :- ..., mk(N1, Z, T)` with `Z` unbound) builds about
@@ -158,7 +158,6 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (`BDDNode`) no longer recurses once per level: past 1000 nested frees
   the remaining nodes are freed from an explicit stack; a 1M-level BDD
   used to crash at the default stack size.
-### Changed
 
 - **Performance: completing a tabled call no longer walks the whole table
   store.** The search for dormant SCC members at each completion visited
@@ -167,6 +166,25 @@ surface described in [docs/public-api.md](docs/public-api.md).
   13.4 s -> 2.1 s). Answers, their order and WFS truth values are
   unchanged. `CLAUSAL_CHECK_SCC_MEMBERS=1` checks the new registry against
   the full scan at every completion (a debugging aid).
+- **A long `.pl` / `.clausal` clause body loads.** A body of ~500 goals
+  failed in the native reader and ~1000 in the parser with a bare
+  `RecursionError`. The parser's operator loop, the reader's term
+  transform, the lowering's walks (`Uses`, `_show`, clause/2's source
+  body, the DCG body translation), the compiler's `final_yields` pass and
+  the translator's goal collectors no longer recurse once per goal; each
+  produces what the recursive walk did. A `;` chain of 32 or more
+  disjuncts compiles as a balanced `Or` tree (same answers, same order:
+  disjunction is associative), and a chain of 32 or more operands of one
+  binary operator in a body as read or in a data term is built by
+  `$right_nested`/`$left_nested` over a flat list, so the generated
+  Python stays shallow. Conjunctions of 5000 goals and disjunctions of
+  100k now load (slowly: 75 s for the 5000, 170 s for 30k disjuncts, 42 min for 100k). Still limited: a conjunction of ~10k goals exceeds
+  CPython's compiler in the engine's generated code (a
+  `GeneratedCodeError` naming the clause; it was already), and deep
+  bracketed nesting (`s(s(...))` ~250 deep), a long if-then-else chain
+  (~200) or a long conjunction held as data (`assertz((H :- ...))`, ~500)
+  now fails with a load error naming the line and `resource_error(stack)`,
+  not a bare `RecursionError`.
 
 ## 1.4.0 (2026-11-03)
 

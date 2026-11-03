@@ -726,17 +726,20 @@ def _collect_predicate_names(pmodule: PModule) -> set[str]:
     names: set[str] = set()
 
     def walk(term) -> None:
-        if isinstance(term, PCompound):
-            names.add(term.functor)
-            for a in term.args:
-                walk(a)
-        elif isinstance(term, PList):
-            for e in term.elements:
-                walk(e)
-            if term.tail is not None:
-                walk(term.tail)
-        elif isinstance(term, PCurly):
-            walk(term.body)
+        # A work stack, not recursion: a clause body of 100k goals is a
+        # ','/2 chain that deep.  The result is a set: order is immaterial.
+        stack = [term]
+        while stack:
+            term = stack.pop()
+            if isinstance(term, PCompound):
+                names.add(term.functor)
+                stack.extend(term.args)
+            elif isinstance(term, PList):
+                stack.extend(term.elements)
+                if term.tail is not None:
+                    stack.append(term.tail)
+            elif isinstance(term, PCurly):
+                stack.append(term.body)
 
     for item in pmodule.items:
         head = getattr(item, "head", None)
@@ -965,6 +968,24 @@ _DCG_BODY_ARGS: dict[str, tuple[int, ...]] = {"phrase": (0,)}
 
 _CONTROL_FUNCTORS = frozenset({",", ";", "->", "*->", "\\+", ":-", "|"})
 
+def _ite_refused() -> "PrologTranslationError":
+    """The translator's refusal of ``(Cond -> Then ; Else)``."""
+    return PrologTranslationError(
+                "If-then-else (( -> ; )) cannot be translated to Clausal.\n"
+                "ISO defines (C -> T ; E) in terms of cut, so it inherits "
+                "cut's problems — non-monotonicity, broken completeness, and "
+                "unsound interaction with constraints.\n"
+                "Rewrite using pure alternatives:\n"
+                "  - Reified if-then-else: (THEN if COND else ELSE)\n"
+                "  - Separate clauses with dif/2 guards\n"
+                "  - CLP(FD) / CLP(B) constraints\n"
+                "See: docs/reified_ite.md, docs/for_prolog_programmers.md")
+
+
+#: A right-nested ``;`` chain of at least this many disjuncts is emitted as a
+#: balanced ``or`` tree (``_emit_disjunction``).
+_FLAT_DISJUNCTION = 32
+
 
 def _collect_goal_names(pmodule: PModule) -> set[str]:
     """Every name *pmodule* uses as a GOAL -- in a clause body, or in a goal
@@ -975,26 +996,30 @@ def _collect_goal_names(pmodule: PModule) -> set[str]:
     names: set[str] = set()
 
     def goal(term) -> None:
-        if isinstance(term, PAtom):
-            names.add(term.name)
-            return
-        if not isinstance(term, PCompound):
-            return
-        f, args = term.functor, term.args
-        if f in _CONTROL_FUNCTORS:
-            for a in args:
-                goal(a)
-            return
-        if f == "^" and len(args) == 2:
-            goal(args[1])
-            return
-        if f == ":" and len(args) == 2:
-            goal(args[1])
-            return
-        names.add(f)
-        for i in _META_GOAL_ARGS.get(f, ()):
-            if i < len(args):
-                goal(args[i])
+        # A work stack, not recursion (a long body is a deep ','/2 chain);
+        # the result is a set, so the order is immaterial.
+        stack = [term]
+        while stack:
+            term = stack.pop()
+            if isinstance(term, PAtom):
+                names.add(term.name)
+                continue
+            if not isinstance(term, PCompound):
+                continue
+            f, args = term.functor, term.args
+            if f in _CONTROL_FUNCTORS:
+                stack.extend(args)
+                continue
+            if f == "^" and len(args) == 2:
+                stack.append(args[1])
+                continue
+            if f == ":" and len(args) == 2:
+                stack.append(args[1])
+                continue
+            names.add(f)
+            for i in _META_GOAL_ARGS.get(f, ()):
+                if i < len(args):
+                    stack.append(args[i])
 
     for item in pmodule.items:
         body = getattr(item, "body", None)
@@ -1438,17 +1463,34 @@ class _PrologToClausal:
         left, right = term.args
         # If-then-else: (Cond -> Then ; Else) — REJECTED
         if isinstance(left, PCompound) and left.functor == "->" and len(left.args) == 2:
-            raise PrologTranslationError(
-                "If-then-else (( -> ; )) cannot be translated to Clausal.\n"
-                "ISO defines (C -> T ; E) in terms of cut, so it inherits "
-                "cut's problems — non-monotonicity, broken completeness, and "
-                "unsound interaction with constraints.\n"
-                "Rewrite using pure alternatives:\n"
-                "  - Reified if-then-else: (THEN if COND else ELSE)\n"
-                "  - Separate clauses with dif/2 guards\n"
-                "  - CLP(FD) / CLP(B) constraints\n"
-                "See: docs/reified_ite.md, docs/for_prolog_programmers.md"
-            )
+            raise _ite_refused()
+
+        # A long right-nested chain (at least _FLAT_DISJUNCTION
+        # disjuncts) is emitted as a BALANCED tree of ``or``: disjunction is
+        # associative (same answers, same order), and the seam text then
+        # nests log2(N) parentheses deep, not N -- Python's parser refuses
+        # 200.  A shorter chain is emitted as it always was.
+        items = [left]
+        rest = right
+        while (isinstance(rest, PCompound) and rest.functor == ";"
+               and len(rest.args) == 2):
+            items.append(rest.args[0])
+            rest = rest.args[1]
+        if len(items) + 1 >= _FLAT_DISJUNCTION:
+            emitted = []
+            for d in items:
+                if (isinstance(d, PCompound) and d.functor == "->"
+                        and len(d.args) == 2):
+                    raise _ite_refused()      # as above, for this disjunct
+                emitted.append(self._emit_goal(d))
+            emitted.append(self._emit_goal(rest))
+
+            def tree(lo: int, hi: int) -> str:
+                if hi - lo == 1:
+                    return emitted[lo]
+                mid = (lo + hi) // 2
+                return f"({tree(lo, mid)} or {tree(mid, hi)})"
+            return tree(0, len(emitted))
 
         left_s = self._emit_goal(left)
         right_s = self._emit_goal(right)
@@ -2938,12 +2980,19 @@ class _PrologToClausal:
     # ── Conjunction/disjunction flattening ────────────────────────────
 
     def _flatten_conjunction(self, term: PTerm) -> list[PTerm]:
-        """flatten nested ',' into a flat list of goals."""
-        if isinstance(term, PCompound) and term.functor == "," and len(term.args) == 2:
-            left = self._flatten_conjunction(term.args[0])
-            right = self._flatten_conjunction(term.args[1])
-            return left + right
-        return [term]
+        """flatten nested ',' into a flat list of goals, left to right.
+        A work stack, not recursion: a body of 100k goals is a ','/2
+        chain that deep."""
+        out: list[PTerm] = []
+        stack = [term]
+        while stack:
+            term = stack.pop()
+            if isinstance(term, PCompound) and term.functor == "," and len(term.args) == 2:
+                stack.append(term.args[1])
+                stack.append(term.args[0])
+            else:
+                out.append(term)
+        return out
 
 
 # ── CLI ──────────────────────────────────────────────────────────────

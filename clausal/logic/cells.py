@@ -93,6 +93,8 @@ __all__ = [
     "is_reserved_1tuple", "refuse_reserved_1tuple",
     "make_cell",
     "make_tuple_cell",
+    "right_nested",
+    "left_nested",
     "is_cell",
     "cell_functor",
     "cell_args",
@@ -1229,6 +1231,31 @@ def make_cell(functor: Any, *args: Any) -> tuple:
             "higher-order construction over cells"
         )
     return (functor, *args)
+
+
+def right_nested(functor: str, items: list) -> tuple:
+    """``right_nested(',', [A, B, C])`` is ``(',', A, (',', B, C))``: the
+    right-nested chain of a binary *functor* over *items* (at least two).
+
+    The native front end's generated code builds a long chain of one
+    binary functor (a clause body AS READ, for clause/2: ``','``/2, ``;``/2;
+    a data term such as ``a-b-...`` written ``xfy``) through this call over
+    a flat list instead of as nested tuple displays: a Python AST nested
+    100k deep is past what ``compile()`` accepts."""
+    out = items[-1]
+    for k in range(len(items) - 2, -1, -1):
+        out = (functor, items[k], out)
+    return out
+
+
+def left_nested(functor: str, items: list) -> tuple:
+    """``left_nested('+', [A, B, C])`` is ``('+', ('+', A, B), C)``: the
+    left-nested chain (a ``yfx`` operator's, ``1 + 2 + 3``) of a binary
+    *functor* over *items* (at least two).  See :func:`right_nested`."""
+    out = items[0]
+    for k in range(1, len(items)):
+        out = (functor, out, items[k])
+    return out
 
 
 def make_tuple_cell(*elems: Any) -> tuple:

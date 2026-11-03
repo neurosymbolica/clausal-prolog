@@ -192,6 +192,18 @@ def _negative_literal(value):
     return -value
 
 
+class _PrefixOperand:
+    """A prefix operator token read as an operator: :meth:`PrologParser.
+    _parse_term` parses its operand (at priority *r_prec*) and builds
+    ``name(Operand)``, iteratively."""
+    __slots__ = ("name", "tok", "r_prec")
+
+    def __init__(self, name: str, tok: Token, r_prec: int) -> None:
+        self.name = name
+        self.tok = tok
+        self.r_prec = r_prec
+
+
 class PrologParser:
     """Pratt parser for Prolog terms."""
 
@@ -341,106 +353,157 @@ class PrologParser:
         (6.3.3.1), a parenthesised term (6.3.4.1), and -- as Scryer reads
         them -- a curly term and a whole clause or read term (`- .`).
         Only the operand of an operator is parsed without it.
+
+        Iterative, not recursive: the right operand of an infix operator
+        and the operand of a prefix operator are parsed by pushing the
+        suspended term on *frames* and starting a fresh one, so a clause
+        body of 100k goals (a right-nested ``','/2`` chain) or a long
+        ``;``/``->``/prefix chain does not hit Python's recursion limit.
+        Each frame holds exactly what the recursive call's caller held
+        (its *max_prec*, *bare_op_atom*, first token, and the left operand
+        or prefix token), so the tree, the spans and the errors are the
+        ones the recursive parser produced (todo/done/pl-readers-recursion-
+        limit-on-long-clause-bodies-2026-10-02.md).  Only bracketed nesting
+        (``f(f(...))``, ``(((...)))``, ``[[...]]``) still recurses.
         """
-        first_tok = self._peek()
-        left, left_prec = self._parse_primary(max_prec)
-        # Priority of the term built so far. Primaries (numbers, vars,
-        # functor(...) calls, parenthesised terms, atoms that are not
-        # operators) have priority 0; an operator compound gets the
-        # operator's priority. Used to enforce xfx/xfy/yfx argument-priority
-        # limits so `a = b = c` / `2 ** 3 ** 2` are rejected (F028) rather
-        # than silently accepted. A bare atom that IS an operator has
-        # priority 1201 (ISO 6.3.1.3), so it is never an operand: `1 = f`
-        # after op(400, fx, f), `(- -)`, `(-, (1))` are syntax errors.
+        # A suspended term: (op entry, max_prec, bare_op_atom, first_tok,
+        # left operand, operator token) for an infix operator, and
+        # (None, max_prec, bare_op_atom, first_tok, prefix token, prefix
+        # name) for a prefix operator.
+        frames: list = []
         while True:
-            tok = self._peek()
-            if tok.type == TokenType.END:
-                break
+            # ── Start a term at (max_prec, bare_op_atom). ──
+            first_tok = self._peek()
+            prim = self._parse_primary(max_prec)
+            if type(prim) is _PrefixOperand:
+                frames.append((None, max_prec, bare_op_atom, first_tok,
+                               prim.tok, prim.name))
+                max_prec, bare_op_atom = prim.r_prec, False
+                continue
+            left, left_prec = prim
+            # Priority of the term built so far. Primaries (numbers, vars,
+            # functor(...) calls, parenthesised terms, atoms that are not
+            # operators) have priority 0; an operator compound gets the
+            # operator's priority. Used to enforce xfx/xfy/yfx argument-
+            # priority limits so `a = b = c` / `2 ** 3 ** 2` are rejected
+            # (F028) rather than silently accepted. A bare atom that IS an
+            # operator has priority 1201 (ISO 6.3.1.3), so it is never an
+            # operand: `1 = f` after op(400, fx, f), `(- -)`, `(-, (1))` are
+            # syntax errors.
+            while True:
+                entry = self._next_operator(left_prec, max_prec)
+                if entry is not None and entry.specifier in ("xfx", "xfy", "yfx"):
+                    # Suspend this term; parse the right operand as a new one.
+                    op_tok = self._advance()
+                    frames.append((entry, max_prec, bare_op_atom, first_tok,
+                                   left, op_tok))
+                    max_prec, bare_op_atom = self._right_prec(entry), False
+                    break
+                if entry is not None and entry.specifier in ("xf", "yf"):
+                    op_tok = self._advance()
+                    left = PCompound(entry.name, (left,), span=_span_join(left, op_tok))
+                    left_prec = entry.precedence
+                    continue
+                # ── This term is complete. ──
+                if left_prec > max_prec and not bare_op_atom:
+                    raise ParseError(
+                        f"operator priority clash: operator atom {left.name!r} "
+                        f"cannot be an operand",
+                        first_tok.line, first_tok.col,
+                        expected="term", found=left.name,
+                    )
+                if not frames:
+                    return left
+                # Resume the suspended term with this one as its operand.
+                entry, max_prec, bare_op_atom, first_tok, held, op_tok = frames.pop()
+                if entry is None:
+                    # Prefix operator: `held` is its token, `op_tok` its
+                    # name; priority 0, as _parse_primary returned it.
+                    left = PCompound(op_tok, (left,), span=_span_join(held, left))
+                    left_prec = 0
+                else:
+                    left = PCompound(entry.name, (held, left),
+                                     span=_span_join(held, op_tok, left))
+                    left_prec = entry.precedence
+            # (break above: start the suspended term's right operand)
 
-            # Try infix or postfix operator
-            name = self._operator_name_from_token(tok)
-            if name is None:
-                break
+    def _next_operator(self, left_prec: int, max_prec: int) -> OpEntry | None:
+        """The infix or postfix operator entry the next token applies as
+        after a term of priority *left_prec* inside a term of at most
+        *max_prec*, or None when the term ends here.  Consumes nothing;
+        raises the ISO priority clash for a left operand too strong."""
+        tok = self._peek()
+        if tok.type == TokenType.END:
+            return None
 
-            # Try infix first
-            infix_entry = self._ops.lookup_infix(name)
-            postfix_entry = self._ops.lookup_postfix(name)
+        # Try infix or postfix operator
+        name = self._operator_name_from_token(tok)
+        if name is None:
+            return None
 
-            # Pick the applicable entry
-            entry = None
-            if infix_entry and infix_entry.precedence <= max_prec:
-                entry = infix_entry
-                # Guarded postfix fallback: if we have both infix and postfix,
-                # and the next token cannot start a term, use postfix instead
-                if postfix_entry and postfix_entry.precedence <= max_prec \
-                        and not self._can_start_term_conservative(self._peek(1)):
-                    entry = postfix_entry
-            elif postfix_entry and postfix_entry.precedence <= max_prec:
-                # Infix didn't fit under this call's max_prec, but postfix
-                # does. Apply the SAME guard as above before committing to
-                # postfix: if the next token could still start a term, this
-                # is far more likely a continuing infix chain (e.g. the 2nd
-                # `+` of `a + b + c`, whose recursive right-operand parse
-                # has max_prec reduced below the infix precedence) than a
-                # genuine postfix use, and treating it as postfix would
-                # silently misparse the operand that follows. Leave `entry`
-                # unset and fall through to the "defer to caller" break
-                # below instead of guessing wrong (F041-style bug: a bare
-                # 3+-way chain of an operator declared both infix and
-                # postfix, e.g. toklex's `+`, used to raise a spurious
-                # ParseError here). With no infix entry at all there is no
-                # chain to continue: after a complete term the name can only
-                # be postfix (`0 f f` with f fy and yf, Ulrich #160, where
-                # the 2nd `f` is also a prefix operator and so "can start a
-                # term").
-                if infix_entry is None \
-                        or not self._can_start_term_conservative(self._peek(1)):
-                    entry = postfix_entry
+        # Try infix first
+        infix_entry = self._ops.lookup_infix(name)
+        postfix_entry = self._ops.lookup_postfix(name)
 
-            if entry is None:
-                # Could be infix with too-high precedence — stop
-                break
+        # Pick the applicable entry
+        entry = None
+        if infix_entry and infix_entry.precedence <= max_prec:
+            entry = infix_entry
+            # Guarded postfix fallback: if we have both infix and postfix,
+            # and the next token cannot start a term, use postfix instead
+            if postfix_entry and postfix_entry.precedence <= max_prec \
+                    and not self._can_start_term_conservative(self._peek(1)):
+                entry = postfix_entry
+        elif postfix_entry and postfix_entry.precedence <= max_prec:
+            # Infix didn't fit under this term's max_prec, but postfix
+            # does. Apply the SAME guard as above before committing to
+            # postfix: if the next token could still start a term, this
+            # is far more likely a continuing infix chain (e.g. the 2nd
+            # `+` of `a + b + c`, whose right-operand parse has max_prec
+            # reduced below the infix precedence) than a genuine postfix
+            # use, and treating it as postfix would silently misparse the
+            # operand that follows. Leave `entry` unset and end the term
+            # ("defer to the enclosing term") instead of guessing wrong
+            # (F041-style bug: a bare 3+-way chain of an operator declared
+            # both infix and postfix, e.g. toklex's `+`, used to raise a
+            # spurious ParseError here). With no infix entry at all there
+            # is no chain to continue: after a complete term the name can
+            # only be postfix (`0 f f` with f fy and yf, Ulrich #160, where
+            # the 2nd `f` is also a prefix operator and so "can start a
+            # term").
+            if infix_entry is None \
+                    or not self._can_start_term_conservative(self._peek(1)):
+                entry = postfix_entry
 
-            # Enforce the left-argument priority limit (x → strictly less,
-            # y → less-or-equal). A violation is an ISO priority-clash error.
-            if left_prec > self._left_prec(entry):
-                raise ParseError(
-                    f"operator priority clash: {name!r} cannot take a "
-                    f"left operand of priority {left_prec}",
-                    tok.line, tok.col,
-                    expected=("priority", self._left_prec(entry)),
-                    found=("priority", left_prec),
-                )
+        if entry is None:
+            # Could be infix with too-high precedence — stop
+            return None
 
-            if entry.specifier in ("xfx", "xfy", "yfx"):
-                op_tok = self._advance()
-                r_prec = self._right_prec(entry)
-                right = self._parse_term(r_prec)
-                left = PCompound(entry.name, (left, right),
-                                 span=_span_join(left, op_tok, right))
-                left_prec = entry.precedence
-            elif entry.specifier in ("xf", "yf"):
-                op_tok = self._advance()
-                left = PCompound(entry.name, (left,), span=_span_join(left, op_tok))
-                left_prec = entry.precedence
-            else:
-                break
-
-        if left_prec > max_prec and not bare_op_atom:
+        # Enforce the left-argument priority limit (x → strictly less,
+        # y → less-or-equal). A violation is an ISO priority-clash error.
+        if left_prec > self._left_prec(entry):
             raise ParseError(
-                f"operator priority clash: operator atom {left.name!r} "
-                f"cannot be an operand",
-                first_tok.line, first_tok.col,
-                expected="term", found=left.name,
+                f"operator priority clash: {name!r} cannot take a "
+                f"left operand of priority {left_prec}",
+                tok.line, tok.col,
+                expected=("priority", self._left_prec(entry)),
+                found=("priority", left_prec),
             )
-        return left
+        if entry.specifier not in ("xfx", "xfy", "yfx", "xf", "yf"):
+            return None
+        return entry
 
-    def _parse_primary(self, context_prec: int = 1200) -> tuple[PTerm, int]:
-        """Parse a primary (non-operator) term; return it with its priority."""
+    def _parse_primary(self, context_prec: int = 1200):
+        """Parse a primary (non-operator) term; return it with its priority,
+        or a :class:`_PrefixOperand` when it is a prefix operator whose
+        operand :meth:`_parse_term` must parse next."""
         tok = self._peek()
         if tok.type == TokenType.ATOM:
             return self._parse_atom_or_compound(context_prec)
-        return self._parse_primary_nonatom(tok, context_prec), 0
+        term = self._parse_primary_nonatom(tok, context_prec)
+        if type(term) is _PrefixOperand:
+            return term
+        return term, 0
 
     def _parse_primary_nonatom(self, tok: Token, context_prec: int) -> PTerm:
 
@@ -550,9 +613,10 @@ class PrologParser:
             prev = t
         return "".join(out)
 
-    def _parse_atom_or_compound(self, context_prec: int = 1200) -> tuple[PTerm, int]:
-        """Parse an atom, possibly followed by (...) arguments, or a prefix
-        operator; return the term with its priority (see _parse_term)."""
+    def _parse_atom_or_compound(self, context_prec: int = 1200):
+        """Parse an atom, possibly followed by (...) arguments; return the
+        term with its priority (see _parse_term).  A prefix operator with
+        an operand to come returns a :class:`_PrefixOperand` instead."""
         tok = self._advance()
         name = tok.value
         assert isinstance(name, str)
@@ -580,9 +644,8 @@ class PrologParser:
             # But not if it's also an atom that's being used as a term
             # Heuristic: if next token can start a term, treat as prefix
             if self._can_start_term():
-                r_prec = self._prefix_right_prec(prefix_entry)
-                operand = self._parse_term(r_prec)
-                return PCompound(name, (operand,), span=_span_join(tok, operand)), 0
+                # The operand is parsed by _parse_term's loop, not here.
+                return _PrefixOperand(name, tok, self._prefix_right_prec(prefix_entry))
 
         atom = PAtom(name, quoted=tok.quoted, span=(tok.offset, tok.end_offset))
         if self._operator_atom_operands or not self._ops.is_operator(name):
@@ -715,8 +778,9 @@ class PrologParser:
         call = self._parse_compound_args(name, close_tok)
         return dataclasses.replace(call, span=(open_tok.offset, call.span[1]))
 
-    def _parse_prefix(self, entry: OpEntry) -> PTerm:
-        """Parse a prefix operator application."""
+    def _parse_prefix(self, entry: OpEntry):
+        """A prefix operator application: the negative literal, or a
+        :class:`_PrefixOperand` whose operand _parse_term parses next."""
         tok = self._advance()
         name = entry.name
 
@@ -728,9 +792,8 @@ class PrologParser:
             self._advance()
             return PNumber(_negative_literal(self._literal_value(nxt)), span=_span_join(tok, nxt))
 
-        r_prec = self._prefix_right_prec(entry)
-        operand = self._parse_term(r_prec)
-        return PCompound(name, (operand,), span=_span_join(tok, operand))
+        # The operand is parsed by _parse_term's loop, not here.
+        return _PrefixOperand(name, tok, self._prefix_right_prec(entry))
 
     # ── Precedence helpers ───────────────────────────────────────────
 
