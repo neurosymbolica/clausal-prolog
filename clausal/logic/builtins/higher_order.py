@@ -13,7 +13,8 @@ from clausal.logic.exceptions import (
 from clausal.logic.meta_predicate import is_goal_object as _is_goal_object
 from clausal.logic.trampoline import DONE, FINAL, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _open_skeleton, _partial, _seq_result, _was_string
-from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
+from clausal.logic.builtins._helpers import (
+    _is_empty_list, _standard_order_key, _standard_order_key_for)
 from clausal.logic.predicate import (
     _dispatch_at, _refuse_unqualified_other_arity,
     is_declared_predicate_name, localize_goal, localize_owner_functor,
@@ -1667,10 +1668,10 @@ def _sort_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, sorted_lst
         k = deref(key)
         trail.undo(mark)
         keyed.append((k, deref(elem)))
-    try:
-        keyed.sort(key=lambda pair: pair[0])
-    except TypeError:
-        keyed.sort(key=lambda pair: _standard_order_key(pair[0]))
+    # The standard order of terms on the keys, as msort/2 (ISO 7.2), whatever
+    # the keys are; Python's ``<`` used to decide whenever it could.
+    order = _standard_order_key_for([k for k, _ in keyed])
+    keyed.sort(key=lambda pair: order(pair[0]))
     result = [e for _, e in keyed]
     if unify(sorted_lst, _seq_result(result, was_str), trail):
         yield (_proceed, None)
@@ -1708,10 +1709,8 @@ def _max_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, maximum, tr
     # falls back. Use the same standard-order key so max_by/min_by are
     # consistent with sort_by instead of crashing.
     if keyed:
-        try:
-            best_elem = max(keyed, key=lambda pair: pair[0])[1]
-        except TypeError:
-            best_elem = max(keyed, key=lambda pair: _standard_order_key(pair[0]))[1]
+        order = _standard_order_key_for([k for k, _ in keyed])
+        best_elem = max(keyed, key=lambda pair: order(pair[0]))[1]
     else:
         best_elem = None
     if best_elem is not None:
@@ -1751,10 +1750,8 @@ def _min_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, minimum, tr
     # A09-F012: same standard-order key as sort_by / max_by so incomparable
     # keys do not leak a raw TypeError.
     if keyed:
-        try:
-            best_elem = min(keyed, key=lambda pair: pair[0])[1]
-        except TypeError:
-            best_elem = min(keyed, key=lambda pair: _standard_order_key(pair[0]))[1]
+        order = _standard_order_key_for([k for k, _ in keyed])
+        best_elem = min(keyed, key=lambda pair: order(pair[0]))[1]
     else:
         best_elem = None
     if best_elem is not None:

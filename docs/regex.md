@@ -118,7 +118,7 @@ test("positional groups") <- (
 groups, `Groups` is a dict keyed by the named-group names, with each *unnamed*
 group added under its 1-based positional index (an integer key). For
 `"(?P<A>\\d+)-(\\d+)"` against `"1-2"`, `Groups` is the dict whose pairs are
-`['A'-"1", 2-"2"]` — a group name is an atom key, a captured value a string:
+`[2-"2", 'A'-"1"]` — a group name is an atom key, a captured value a string, and `dict_pairs/2` lists the keys in the standard order of terms (numbers before atoms):
 
 ```clausal
 :- set_prolog_flag(double_quotes, chars).
@@ -127,7 +127,7 @@ group added under its 1-based positional index (an integer key). For
 test("mixed groups") :-
     match("(?P<A>\\d+)-(\\d+)", "1-2", G),
     dict_pairs(G, PAIRS),
-    PAIRS == ['A'-"1", 2-"2"].
+    PAIRS == [2-"2", 'A'-"1"].
 ```
 
 > **Gotcha — an unmatched optional named group is Python `None`.** An optional

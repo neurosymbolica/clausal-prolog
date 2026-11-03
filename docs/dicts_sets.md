@@ -382,7 +382,7 @@ test("one answer, no choice point") :-
 ```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_keys_2"
 ```
-`Keys` is the sorted list of keys. Keys are sorted by `repr` for determinism across key types.
+`Keys` is the list of keys in the standard order of terms (ISO 7.2), as `msort/2`: numbers before atoms, `9` before `10`.
 
 ### `dict_values/2`
 ```text
@@ -630,7 +630,7 @@ test("set_add and set_remove") :-
 ```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:gen_set_2"
 ```
-Nondeterministic: on backtracking, enumerates all elements of `Set` in a deterministic order (sorted by `repr`).
+Nondeterministic: on backtracking, enumerates all elements of `Set` in the standard order of terms (ISO 7.2), as `msort/2`.
 
 ```clausal
 % ELEM = a; ELEM = b; ELEM = c (on backtracking)

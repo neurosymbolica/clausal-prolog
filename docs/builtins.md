@@ -1569,7 +1569,7 @@ it does for `dif_t/3`. It is a closure for library(reif)'s `if_/3`:
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:dict_keys_2"
 ```
-`Keys` is the sorted list of keys (sorted by `repr` for cross-type determinism).
+`Keys` is the list of keys in the standard order of terms (ISO 7.2), as `msort/2`.
 
 ---
 
@@ -1577,7 +1577,7 @@ it does for `dif_t/3`. It is a closure for library(reif)'s `if_/3`:
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:dict_values_2"
 ```
-`Values` is the list of values in key-sorted order.
+`Values` is the list of values, ordered by their keys in the standard order of terms (ISO 7.2).
 
 ---
 
@@ -1585,7 +1585,7 @@ it does for `dif_t/3`. It is a closure for library(reif)'s `if_/3`:
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:dict_pairs_2"
 ```
-Bidirectional: `Dict` ↔ list of `Key-Value` pairs (the `'-'(Key, Value)` cell, as `pairs_keys_values/3`). In dict→pairs direction, pairs are sorted by key.
+Bidirectional: `Dict` ↔ list of `Key-Value` pairs (the `'-'(Key, Value)` cell, as `pairs_keys_values/3`). In dict→pairs direction, pairs are ordered by key in the standard order of terms (ISO 7.2).
 
 ---
 
@@ -1665,7 +1665,7 @@ Succeeds if `Term` is a `SetTerm`.
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:set_list_2"
 ```
-Bidirectional: `Set` ↔ sorted list. In list→set direction, duplicates are removed.
+Bidirectional: `Set` ↔ sorted list. In list→set direction, duplicates are removed. Ordered by the standard order of terms (ISO 7.2: variables, then every float, then every other number by value, then atoms, then compound terms), as `msort/2`.
 
 ---
 
@@ -1737,7 +1737,7 @@ Succeeds if `S1` and `S2` share no elements.
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:gen_set_2"
 ```
-Nondeterministic enumeration of set elements. Order is deterministic (sorted by `repr`).
+Nondeterministic enumeration of set elements, in the standard order of terms (ISO 7.2), as `msort/2`.
 
 ---
 
@@ -1992,7 +1992,7 @@ Recursively flatten a nested list structure.
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:msort_2"
 ```
-sort `List` preserving duplicate elements (stable sort).
+sort `List` preserving duplicate elements (stable sort). Ordered by the standard order of terms (ISO 7.2: variables, then every float, then every other number by value, then atoms, then compound terms).
 
 ??? info "Implementation & tests"
     **Seam tests:** `tests/fixtures/builtins_lists.seam`
@@ -2004,7 +2004,7 @@ sort `List` preserving duplicate elements (stable sort).
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:sort_2"
 ```
-sort `List` removing duplicate elements.
+sort `List` removing duplicate elements. Ordered by the standard order of terms (ISO 7.2: variables, then every float, then every other number by value, then atoms, then compound terms), as `msort/2`.
 
 ??? info "Implementation & tests"
     **Seam tests:** `tests/fixtures/builtins_lists.seam`
@@ -2125,7 +2125,7 @@ sum_ all numeric elements of `List`.
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:max_list_2"
 ```
-Maximum element of a non-empty numeric list.
+Maximum element of a non-empty numeric list. Numeric order: elements compare by value, as arithmetic comparison does (`1 < 2.0`), not by the standard order of terms.
 
 ??? info "Implementation & tests"
     **Seam tests:** `tests/fixtures/builtins_lists.seam`
@@ -2137,7 +2137,7 @@ Maximum element of a non-empty numeric list.
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:min_list_2"
 ```
-Minimum element of a non-empty numeric list.
+Minimum element of a non-empty numeric list. Numeric order: elements compare by value, as arithmetic comparison does (`1 < 2.0`), not by the standard order of terms.
 
 ??? info "Implementation & tests"
     **Seam tests:** `tests/fixtures/builtins_lists.seam`
@@ -2494,7 +2494,7 @@ Group consecutive elements by key projected via `Goal(Elem, Key)`. Elements with
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:sort_by_3"
 ```
-sort `List` by key projected via `Goal(Elem, Key)`. Stable sort (preserves order of equal keys).
+sort `List` by key projected via `Goal(Elem, Key)`. Stable sort (preserves order of equal keys). Keys are compared in the standard order of terms (ISO 7.2: variables, then every float, then every other number by value, then atoms, then compound terms), as `msort/2` compares them.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_sort_by__3`)
@@ -2519,7 +2519,7 @@ SWI-Prolog's `predsort/3`: sort `List` as `sort/2` does, but order two elements 
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:max_by_3"
 ```
-element of `List` with the largest key projected via `Goal(Elem, Key)`. Fails on empty list.
+element of `List` with the largest key projected via `Goal(Elem, Key)`. Fails on empty list. Keys are compared in the standard order of terms (ISO 7.2), as `msort/2`: `max_by` of keys `1` and `2.0` is the element keyed `1`; for the largest number use `max_list/2`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_max_by__3`)
@@ -2532,7 +2532,7 @@ element of `List` with the largest key projected via `Goal(Elem, Key)`. Fails on
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:min_by_3"
 ```
-element of `List` with the smallest key projected via `Goal(Elem, Key)`. Fails on empty list.
+element of `List` with the smallest key projected via `Goal(Elem, Key)`. Fails on empty list. Keys are compared in the standard order of terms (ISO 7.2), as `msort/2`; for the smallest number use `min_list/2`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_min_by__3`)

@@ -196,6 +196,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `sort/4`, `keysort/2` and `setof/3` on lists that mix floats and
   integers. Integers, decimals and fractions still order among themselves
   by value. Scryer agrees.
+- **Clausal's own sorting builtins use the same standard order of terms**
+  (operator ruling 2026-11-03: conform with ISO Prolog). `sort_by/3`,
+  `max_by/3` and `min_by/3` compared keys with Python's `<` whenever it
+  worked, so `sort_by(id, [2, 1.5, 1], L)` sorted by value while the same
+  numbers with an atom added sorted in the standard order, and compound
+  keys went name before arity; they now order keys as `msort/2` does.
+  `dict_keys/2`, `dict_values/2`, `dict_pairs/2`, `set_list/2` and
+  `gen_set/2` sorted by Python's `repr` (`10` before `9`, atoms before
+  numbers); they now use the standard order too. `max_list/2`,
+  `min_list/2` and `aggregate_all(max(E)/min(E), ...)` stay numeric (by
+  value), as their documentation now says, and every sorting builtin's
+  entry names the order it uses.
 
 ## 1.4.0 (2026-11-03)
 

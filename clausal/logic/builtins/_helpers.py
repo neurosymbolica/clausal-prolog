@@ -1162,6 +1162,20 @@ def _standard_order_sorted(items: list) -> list:
         return sorted(items, key=_term_compare_key)
 
 
+def _standard_order_key_for(values) -> Any:
+    """The sort key that puts *values* in the standard order of terms: the
+    value itself when they are all of one known-safe type (Python's own
+    order is the standard order there, and the fast one), else
+    :func:`_standard_order_key`.  For sorts that key elements by a projected
+    value (sort_by/3, max_by/3, min_by/3): never Python's ``<`` on a mixed
+    list, which ordered ``[2, 1.5, 1]`` by value and ``[g(1), f(1, 2)]`` by
+    name, unlike msort/2."""
+    types = set(map(type, values))
+    if len(types) == 1 and types.pop() in _NATIVE_ORDER_SAFE:
+        return lambda v: v
+    return _standard_order_key
+
+
 def _check_nonneg_int_arg(val: Any, who: str) -> None:
     """ISO's argument check for an integer position that may be unbound.
 
