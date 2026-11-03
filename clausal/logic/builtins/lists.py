@@ -218,6 +218,32 @@ def _open_skeleton(val):
     return prefix, tail
 
 
+def _holed_pattern(val):
+    """``(known, holes)`` for a SegList *val* (dereferenced) with an unbound
+    hole that is not its tail (``[*A, 1]``, ``[*A, *B]``): the number of its
+    known elements and its unbound hole variables.  None for anything else
+    (:func:`_open_skeleton` takes a pattern whose only hole is its tail)."""
+    from clausal.terms import SegList, ConcreteSeg, VarSeg   # noqa: PLC0415
+    if not isinstance(val, SegList):
+        return None
+    walked = val._walk_raw()
+    if not isinstance(walked, SegList):
+        return None
+    known = 0
+    holes = []
+    for seg in walked.segments:
+        if isinstance(seg, ConcreteSeg):
+            known += len(seg.elements)
+        elif isinstance(seg, VarSeg):
+            h = deref(seg.var)
+            if not is_var(h):
+                return None
+            holes.append(h)
+        else:
+            return None
+    return (known, holes) if holes else None
+
+
 def _partial(prefix: list, tail):
     """The list ``[*prefix, *tail]``: *tail* itself when *prefix* is empty,
     a plain list when *tail* is ``[]``, else a partial list."""
@@ -814,8 +840,38 @@ def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
         _length_n_error(n_val)
     skel = _open_skeleton(lst_val)
     if skel is None:
-        yield (_fail, DONE)
-        return
+        holed = _holed_pattern(lst_val)
+        if holed is None:
+            yield (_fail, DONE)
+            return
+        # A hole that is not the tail (``[*A, *B]``, ``[*A, 1, *B]``): the
+        # list ISO's length/2 gives is N fresh elements, and unifying the
+        # pattern with it binds every split, in append/3 order (two or more
+        # holes queue the splits as a pending goal).  N unbound counts up
+        # from the pattern's known elements.
+        n_known, holes = holed
+        if not is_var(n_val):
+            if n_val >= n_known:
+                mark = trail.mark()
+                if unify(lst, [Var() for _ in range(n_val)], trail):
+                    yield (_proceed, None)
+                trail.undo(mark)
+            yield (_fail, DONE)
+            return
+        if any(h is n_val for h in holes):
+            # ``length([*N, 1], N)``: N would be a list and a number at once.
+            from clausal.logic.exceptions import LogicException, _error  # noqa: PLC0415
+            from clausal.logic.atoms import mint  # noqa: PLC0415
+            raise LogicException(_error(("resource_error", mint("finite_memory")),
+                                        "length/2"))
+        k = n_known
+        while True:
+            mark = trail.mark()
+            if (unify(lst, [Var() for _ in range(k)], trail)
+                    and unify(n, k, trail)):
+                yield (_proceed, None)
+            trail.undo(mark)
+            k += 1
     prefix, tail = skel
     if not is_var(n_val):
         # ``length([a, *T], 3)``: T is two fresh elements.

@@ -124,6 +124,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   next line in both, but the leftover then runs here; and `get_char(C).`
   at the end of input with no newline answers `end_of_file` here and
   `'\n'` in Scryer.
+- `length/2` of a list pattern with a hole that is not its tail
+  (`P is [*A, *B], length(P, 2)`, `[*A, 1, *B]`) had no answer.  It now
+  answers as ISO `length/2` on the equivalent partial list would: the
+  pattern is unified with N fresh elements, giving every split in
+  `append/3` order; with N unbound the lengths count up from the
+  pattern's known elements (Scryer agrees on each case).
 
 ## 1.4.0 (2026-11-03)
 

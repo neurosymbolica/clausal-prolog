@@ -1,5 +1,7 @@
 # length/2 of a pattern with a hole that is not its tail has no answer
 
+**Status: FIXED 2026-11-03 (f1485719).** Pinned by tests/test_length_non_tail_hole.py.
+
 Found 2026-10-11 by the security review of the split pending goal;
 reproduces on 1b717269 (before it) and on a6e2dae0.
 
