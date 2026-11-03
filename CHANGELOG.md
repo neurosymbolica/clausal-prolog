@@ -178,7 +178,7 @@ surface described in [docs/public-api.md](docs/public-api.md).
   answers `C = '%'`; they answered `C = end_of_file`. Scryer agrees on
   these, and on `read/1` and `peek_char/1` right after the end token.
   Clausal still differs from Scryer in what happens to the rest of the
-  line afterwards (open for a ruling): Clausal reads what the query left
+  line afterwards, kept by operator ruling 2026-11-03: Clausal reads what the query left
   unread as the next query (`X = 1. Y = 2.` answers both), where Scryer
   discards it (only `X = 1`); a goal that reads past the line reads the
   next line in both, but the leftover then runs here; and `get_char(C).`

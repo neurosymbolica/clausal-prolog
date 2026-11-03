@@ -695,8 +695,9 @@ def test_piped_rest_of_line_is_user_input(tmp_path):
 
 def test_piped_rest_of_line_left_unread_is_the_next_query(tmp_path):
     # Clausal's behaviour, NOT Scryer's: Scryer discards the rest of the line
-    # after the query (it answers only T here).  Open for an operator ruling
-    # (review 2026-11-03); pinned so a change is deliberate.
+    # after the query (it answers only T here).  Kept by operator ruling
+    # 2026-11-03, the behaviour the ISO conformity harness assumes; pinned so a
+    # change is deliberate.
     r = _piped(tmp_path, "read(T). foo(bar). X = 3.\nget_char(C).\n")
     assert r.stdout == "   T = foo(bar).\n   X = 3.\n   C = '\\n'.\n"
 

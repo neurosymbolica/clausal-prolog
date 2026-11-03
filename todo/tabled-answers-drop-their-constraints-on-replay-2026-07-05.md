@@ -32,7 +32,7 @@ Pinned in tests/test_clpq_tabled_answer_subsumption.py. Left:
   CLP(B) half); their answers still lose the constraint on replay, and
   answers from families with no hook are not refused (phase 4).
 - Subsumption keeps a stored answer when a more general one comes later
-  (sound, not minimal); replacing it would mean retracting a row that
+  (sound, not minimal; kept by operator ruling 2026-11-03); replacing it would mean retracting a row that
   consumers may already have read. A loosening recursion
   (`p(X) :- p(Y), {X >= Y - 1}`) does not terminate.
 - A stored residue over a variable outside its row (the port's slack of
