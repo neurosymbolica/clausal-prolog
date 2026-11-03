@@ -15,6 +15,7 @@ dispatch / bucket-ref state lives on ``CompilationContext``
 from __future__ import annotations
 
 import ast
+import contextlib
 import functools
 import warnings
 from typing import Any, Callable
@@ -48,6 +49,11 @@ from clausal.logic.predicate import (
     declare_head as _declare_head, keeps_predicate as _keeps_predicate,
 )
 from clausal.codegen import GeneratedCodeError, functiondef_to_function
+
+#: A clause a compiler pass could not walk within Python's recursion limit.
+_TOO_DEEP_TO_COMPILE = (
+    "it nests too deep for the compiler: Python's recursion limit was "
+    "reached -- resource_error(stack)")
 
 from clausal.logic.solve import _deref_walk as _deref_walk_fn
 from clausal.logic.builtins import (  # noqa: F401
@@ -1977,6 +1983,28 @@ def _compile_predicate_trampoline_impl(
 
 
 
+@contextlib.contextmanager
+def _too_deep_named(args, kwargs, globals_):
+    """A compiler pass that ran out of Python's recursion limit -> the
+    ``GeneratedCodeError`` naming the predicate and its clause's line, as
+    CPython's own refusal is named: ISO's resource_error(stack).  Such a
+    clause nests too deep (a long if-then-else chain, deep bracketed
+    nesting, a long conjunction held as data); a long conjunction or
+    disjunction in the body itself compiles without recursion."""
+    try:
+        yield
+    except RecursionError as exc:
+        functor = args[0] if args else kwargs.get("functor")
+        arity = args[1] if len(args) > 1 else kwargs.get("arity")
+        clauses = args[2] if len(args) > 2 else kwargs.get("clauses", ())
+        raise GeneratedCodeError(
+            _TOO_DEEP_TO_COMPILE, f"{functor}__{arity}", exc,
+            filename=(globals_ or {}).get("__file__"),
+        ).for_predicate(
+            f"{functor}/{arity}",
+            [getattr(c, "position", None) for c in clauses or ()]) from exc
+
+
 def compile_predicate_trampoline(*args, **kwargs) -> Callable:
     """Compile all clauses into a trampoline tuple-protocol generator.
 
@@ -1997,7 +2025,7 @@ def compile_predicate_trampoline(*args, **kwargs) -> Callable:
     globals_ = kwargs.get("globals_")
     if globals_ is None and len(args) > 5:
         globals_ = args[5]
-    with lowering_scope(globals_):
+    with lowering_scope(globals_), _too_deep_named(args, kwargs, globals_):
         return _compile_predicate_trampoline_impl(*args, **kwargs)
 
 
@@ -2654,7 +2682,7 @@ def compile_predicate_shallow(*args, **kwargs) -> Callable:
     globals_ = kwargs.get("globals_")
     if globals_ is None and len(args) > 5:
         globals_ = args[5]
-    with lowering_scope(globals_):
+    with lowering_scope(globals_), _too_deep_named(args, kwargs, globals_):
         return _compile_predicate_shallow_impl(*args, **kwargs)
 
 

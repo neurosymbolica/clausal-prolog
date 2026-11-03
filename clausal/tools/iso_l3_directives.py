@@ -236,61 +236,69 @@ class Uses:
                 stack.extend(t[1:])
 
     def goal(self, g) -> None:
-        if type(g) is str:
-            self.goal_names.add(g)
-            return
-        if not (type(g) is tuple and g and type(g[0]) is str):
-            return
-        name, args = g[0], g[1:]
-        if name == "\\+" and len(args) == 1:
-            self.transition["\\+/1"] += 1
-        if name in (",", ";", "->", "*->") and len(args) == 2 \
-                or name == "\\+" and len(args) == 1:
-            for a in args:
-                self.goal(a)
-            return
-        if name == ":" and len(args) == 2:
-            self.goal(args[1])
-            return
-        self.goal_names.add(name)
-        key = (name, len(args))
-        tkey = _TRANSITION_GOALS.get(key)
-        if tkey is not None and (key != ("findall", 3)
-                                 or args[2] == "[]" or args[2] == []):
-            self.transition[tkey] += 1
-        if key == ("if_", 3) and self.reif:
-            self._reif_condition(args[0])
-            self.goal(args[1])
-            self.goal(args[2])
-            return
-        from clausal.tools.iso_l3 import _META_GOAL_ARGS  # noqa: PLC0415
-        meta = _META_GOAL_ARGS.get(key, ())
-        for i, a in enumerate(args):
-            if i in meta:
-                while (type(a) is tuple and len(a) == 3 and a[0] == "^"):
-                    self.data(a[1])
-                    a = a[2]
-                self.goal(a)
-            elif i == 0 and key in _PROCEDURE_ARGS:
-                self._procedure(a)
-            elif i == 0 and name == "call":
-                # A closure names a procedure, not data.
-                self._closure(a)
-            else:
-                self.data(a)
+        # A work stack, not recursion: a clause body of 100k goals is a
+        # right-nested ','/2 chain that deep.  What is recorded (sets and
+        # counts) does not depend on the visiting order.
+        stack = [g]
+        while stack:
+            g = stack.pop()
+            if type(g) is str:
+                self.goal_names.add(g)
+                continue
+            if not (type(g) is tuple and g and type(g[0]) is str):
+                continue
+            name, args = g[0], g[1:]
+            if name == "\\+" and len(args) == 1:
+                self.transition["\\+/1"] += 1
+            if name in (",", ";", "->", "*->") and len(args) == 2 \
+                    or name == "\\+" and len(args) == 1:
+                stack.extend(reversed(args))
+                continue
+            if name == ":" and len(args) == 2:
+                stack.append(args[1])
+                continue
+            self.goal_names.add(name)
+            key = (name, len(args))
+            tkey = _TRANSITION_GOALS.get(key)
+            if tkey is not None and (key != ("findall", 3)
+                                     or args[2] == "[]" or args[2] == []):
+                self.transition[tkey] += 1
+            if key == ("if_", 3) and self.reif:
+                self._reif_condition(args[0])
+                stack.append(args[2])
+                stack.append(args[1])
+                continue
+            from clausal.tools.iso_l3 import _META_GOAL_ARGS  # noqa: PLC0415
+            meta = _META_GOAL_ARGS.get(key, ())
+            for i, a in enumerate(args):
+                if i in meta:
+                    while (type(a) is tuple and len(a) == 3 and a[0] == "^"):
+                        self.data(a[1])
+                        a = a[2]
+                    stack.append(a)
+                elif i == 0 and key in _PROCEDURE_ARGS:
+                    self._procedure(a)
+                elif i == 0 and name == "call":
+                    # A closure names a procedure, not data.
+                    self._closure(a)
+                else:
+                    self.data(a)
 
     def _reif_condition(self, c) -> None:
         """An ``if_/3`` condition: (',')/3 and (;)/3 over conditions, (=)/3
         and dif/3 over data, else a closure called with one more argument."""
-        if type(c) is tuple and len(c) == 3 and c[0] in (",", ";"):
-            self._reif_condition(c[1])
-            self._reif_condition(c[2])
-        elif type(c) is tuple and len(c) == 3 and c[0] in ("=", "dif"):
-            self.goal_names.add(c[0])
-            self.data(c[1])
-            self.data(c[2])
-        else:
-            self._closure(c)
+        stack = [c]
+        while stack:
+            c = stack.pop()
+            if type(c) is tuple and len(c) == 3 and c[0] in (",", ";"):
+                stack.append(c[2])
+                stack.append(c[1])
+            elif type(c) is tuple and len(c) == 3 and c[0] in ("=", "dif"):
+                self.goal_names.add(c[0])
+                self.data(c[1])
+                self.data(c[2])
+            else:
+                self._closure(c)
 
     def _procedure(self, t) -> None:
         """assertz(C), retract(C), clause(H, B): a CLAUSE, not data -- its
@@ -2295,21 +2303,52 @@ def _sequence(t, sp):
     return out
 
 
+class _Text(str):
+    """Literal text in :func:`_show`'s work stack (an atom is a plain
+    ``str``; ``type(t) is str`` tells the two apart)."""
+    __slots__ = ()
+
+
 def _show(t) -> str:
-    """A Prolog-ish rendering of a cell, for a message."""
-    if type(t) is VarRef:
-        return "_"
-    if type(t) is str:
-        return t
-    if type(t) is list:
-        return "[" + ", ".join(_show(x) for x in t) + "]"
-    if type(t) is tuple and t and type(t[0]) is str:
-        if t[0] == "$chars" and len(t) == 2:
-            return '"' + str(t[1]) + '"'
-        if len(t) == 3 and t[0] in ("/", "//", ":"):
-            return f"{_show(t[1])}{t[0]}{_show(t[2])}"
-        return f"{t[0]}(" + ", ".join(_show(a) for a in t[1:]) + ")"
-    return repr(t)
+    """A Prolog-ish rendering of a cell, for a message.
+
+    Iterative (a work stack of terms and literal text), so a clause of
+    100k goals -- a right-nested ','/2 chain -- renders instead of hitting
+    Python's recursion limit."""
+    out: list = []
+    todo: list = [t]
+    while todo:
+        t = todo.pop()
+        if type(t) is _Text:
+            out.append(t)
+        elif type(t) is VarRef:
+            out.append("_")
+        elif type(t) is str:
+            out.append(t)
+        elif type(t) is list:
+            todo.append(_Text("]"))
+            for k in range(len(t) - 1, -1, -1):
+                todo.append(t[k])
+                if k:
+                    todo.append(_Text(", "))
+            todo.append(_Text("["))
+        elif type(t) is tuple and t and type(t[0]) is str:
+            if t[0] == "$chars" and len(t) == 2:
+                out.append('"' + str(t[1]) + '"')
+            elif len(t) == 3 and t[0] in ("/", "//", ":"):
+                todo.append(t[2])
+                todo.append(_Text(t[0]))
+                todo.append(t[1])
+            else:
+                todo.append(_Text(")"))
+                for k in range(len(t) - 1, 0, -1):
+                    todo.append(t[k])
+                    if k > 1:
+                        todo.append(_Text(", "))
+                todo.append(_Text(f"{t[0]}("))
+        else:
+            out.append(repr(t))
+    return "".join(out)
 
 
 class DirectiveRefused(Exception):

@@ -7,6 +7,28 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Fixed
+
+- **A long `.pl` / `.clausal` clause body loads.** A body of ~500 goals
+  failed in the native reader and ~1000 in the parser with a bare
+  `RecursionError`. The parser's operator loop, the reader's term
+  transform, the lowering's walks (`Uses`, `_show`, clause/2's source
+  body, the DCG body translation), the compiler's `final_yields` pass and
+  the translator's goal collectors no longer recurse once per goal; each
+  produces what the recursive walk did. A `;` chain of 32 or more
+  disjuncts compiles as a balanced `Or` tree (same answers, same order:
+  disjunction is associative), and a chain of 32 or more operands of one
+  binary operator in a body as read or in a data term is built by
+  `$right_nested`/`$left_nested` over a flat list, so the generated
+  Python stays shallow. Conjunctions of 5000 goals and disjunctions of
+  100k now load. Still limited: a conjunction of ~10k goals exceeds
+  CPython's compiler in the engine's generated code (a
+  `GeneratedCodeError` naming the clause; it was already), and deep
+  bracketed nesting (`s(s(...))` ~250 deep), a long if-then-else chain
+  (~200) or a long conjunction held as data (`assertz((H :- ...))`, ~500)
+  now fails with a load error naming the line and `resource_error(stack)`,
+  not a bare `RecursionError`.
+
 ## 1.4.0 (2026-11-03)
 
 ### Changed

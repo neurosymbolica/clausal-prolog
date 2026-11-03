@@ -470,6 +470,14 @@ runtime_builtins["$unterminated_fact_error"] = _unterminated_fact_error
 # ``globals`` must not become the registry plumbing's ``globals``.
 from clausal.logic.generated_names import MODULE_CODE_BUILTINS  # noqa: E402
 runtime_builtins.update(MODULE_CODE_BUILTINS)
+# A long chain of one binary functor -- a clause body's ','/2 or ;/2 as
+# read, a data term ``1+2+...`` -- the native front end emits as one call
+# over a flat list (``iso_l3._source_goal``, ``_ClauseLowering.term``):
+# nested tuple displays that deep are past what ``compile()`` accepts.
+from clausal.logic.cells import left_nested as _left_nested  # noqa: E402
+from clausal.logic.cells import right_nested as _right_nested  # noqa: E402
+runtime_builtins["$right_nested"] = _right_nested
+runtime_builtins["$left_nested"] = _left_nested
 
 # Task 8 fix round 1 (RULING, reviewer-caught): the strictness check's
 # "already resolved" test must distrust ANY ``runtime_builtins`` entry, not

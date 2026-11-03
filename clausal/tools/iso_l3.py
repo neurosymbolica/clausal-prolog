@@ -67,8 +67,9 @@ import bisect
 import re
 from typing import Any
 
+from clausal.codegen import drive, fix_missing_locations
 from clausal.logic.special_forms import GOAL_POSITIONS
-from clausal.tools.prolog_reader import VarRef
+from clausal.tools.prolog_reader import TermTooDeep, VarRef
 from clausal.tools.iso_builtins import is_iso_builtin, static_procedure_refusal
 
 #: The front end's id: the value ``CLAUSAL_PL_FRONTEND`` selects it by, and the
@@ -369,6 +370,10 @@ class _ClauseLowering:
                 return self._constant(t[1], sp)
             if t[0] == "." and len(t) == 3:
                 return self._cons(t, sp)
+            if len(t) == 3:
+                chain = self._long_chain(t, sp)
+                if chain is not None:
+                    return chain
             spans = _arg_spans(sp, len(t) - 1)
             return ast.Tuple(
                 elts=[_const(t[0])]
@@ -377,6 +382,46 @@ class _ClauseLowering:
         if isinstance(t, _embedded_class()):
             return t.expr               # iso_l3_directives' prepared cell
         raise LoweringRefused(f"unsupported term {t!r}", _top_span(sp))
+
+    def _long_chain(self, t: tuple, sp) -> "ast.expr | None":
+        """A data term that is a chain of at least ``_FLAT_CHAIN`` operands
+        of one binary functor -- right-nested (``a-b-c`` under ``xfy``,
+        ``(a, b, c)``) or left-nested (``1+2+3`` under ``yfx``) -- ->
+        ``$right_nested(F, [...])`` / ``$left_nested(F, [...])`` over the
+        operands lowered in reading order, so the AST stays flat however
+        long the chain (``compile()`` refuses an expression nested some
+        thousands deep).  None for a shorter chain, lowered as before."""
+        f = t[0]
+
+        def link(x):
+            return type(x) is tuple and len(x) == 3 and x[0] == f
+
+        items: list = []
+        x, s = t, sp
+        while link(x):
+            s2 = _arg_spans(s, 2)
+            items.append((x[1], s2[0]))
+            x, s = x[2], s2[1]
+        if len(items) + 1 >= _FLAT_CHAIN:
+            items.append((x, s))
+            helper = "right_nested"
+        else:
+            items = []
+            x, s = t, sp
+            while link(x):
+                s2 = _arg_spans(s, 2)
+                items.append((x[2], s2[1]))
+                x, s = x[1], s2[0]
+            if len(items) + 1 < _FLAT_CHAIN:
+                return None
+            items.append((x, s))
+            items.reverse()
+            helper = "left_nested"
+        return ast.Call(func=_name(_DOLLAR + helper),
+                        args=[_const(f), ast.List(
+                            elts=[self.term(a, s) for a, s in items],
+                            ctx=ast.Load())],
+                        keywords=[])
 
     def _truth_value(self, t: str, sp) -> ast.expr:
         """D35 (operator ruling 2026-09-30): in a DATA position ``true``,
@@ -570,6 +615,9 @@ class _ClauseLowering:
                              elements=ast.List(elts=elts, ctx=ast.Load()),
                              position=_pos_expr(pos))
             if name == ";" and len(args) == 2:
+                flat = self._long_disjunction(g, sp, pos)
+                if flat is not None:
+                    return flat
                 left = args[0]
                 if (type(left) is tuple and len(left) == 3 and left[0] == "->"
                         and self._cut_allowed):
@@ -627,6 +675,46 @@ class _ClauseLowering:
         raise LoweringRefused(
             f"{g!r} is not callable (ISO type_error(callable, {g!r}))",
             _top_span(sp))
+
+    def _long_disjunction(self, g: Any, sp, pos) -> "ast.expr | None":
+        """A right-nested ``;`` chain of at least ``_FLAT_CHAIN`` disjuncts
+        -> a BALANCED tree of ``Or`` nodes, or None for a shorter chain
+        (lowered as before, one ``Or`` per ``;``).
+
+        Disjunction is associative -- ``(A ; B) ; C`` and ``A ; (B ; C)``
+        give the same answers in the same order, and a cut is transparent
+        to both -- so only the depth changes: log2(N) instead of N, which
+        every compiler pass that walks ``Or`` recursively can take for any
+        N.  The spine stops at a ``;`` whose left operand is ``->``/``*->``
+        (an if-then-else, whose else branch is the rest of the chain): that
+        node is the last disjunct, lowered as it always was.  Disjuncts are
+        lowered left to right, the reading order (a variable's first
+        occurrence binds it).  clause/2's source term is the chain as read
+        (``_source_goal``)."""
+        items: list = []
+        while (type(g) is tuple and len(g) == 3 and g[0] == ";"
+               and not (type(g[1]) is tuple and len(g[1]) == 3
+                        and g[1][0] in ("->", "*->"))):
+            s2 = _arg_spans(sp, 2)
+            items.append((g[1], s2[0]))
+            g, sp = g[2], s2[1]
+        items.append((g, sp))
+        if len(items) < _FLAT_CHAIN:
+            return None
+        lowered = [(self.goal(d, s), _top_span(s)) for d, s in items]
+
+        def tree(lo: int, hi: int):
+            """``(expr, span)`` of disjuncts ``lo .. hi-1``."""
+            if hi - lo == 1:
+                return lowered[lo]
+            mid = (lo + hi) // 2
+            left, ls = tree(lo, mid)
+            right, rs = tree(mid, hi)
+            span = (ls[0], rs[1]) if ls is not None and rs is not None else None
+            at = pos if (lo, hi) == (0, len(lowered)) else self._pos.of(span)
+            return (_node("Or", left=left, right=right,
+                          position=_pos_expr(at)), span)
+        return tree(0, len(lowered))[0]
 
     def _goal_args(self, name: str, args: tuple, spans: list,
                    imported: bool = False) -> list:
@@ -985,24 +1073,29 @@ class _ClauseLowering:
         In a ``.pl`` file a cut and ``->`` there are allowed: call/1's
         converter runs them, local to the call (ISO 7.8.3); ``*->`` stays
         refused on every surface, so ``->``'s arguments are still walked."""
-        if g == "!" and self._cut_allowed:
-            return
-        if (self._cut_allowed and type(g) is tuple and len(g) == 3
-                and g[0] == "->"):
-            for a, s in zip(g[1:], _arg_spans(sp, 2)):
-                self._refuse_control_in(a, s)
-            return
-        if type(g) is str and g in _REFUSED_CONTROL:
-            raise LoweringRefused(
-                f"{_REFUSED_CONTROL[g]} is refused: {_CUT_FREE}", _top_span(sp))
-        if type(g) is tuple and g and type(g[0]) is str:
-            if g[0] in _REFUSED_CONTROL and len(g) == 3:
+        # A work stack, left operand first, not recursion: a long body is
+        # a ','/2 chain that deep.  The first refusal in reading order is
+        # the one raised, as before.
+        stack = [(g, sp)]
+        while stack:
+            g, sp = stack.pop()
+            if g == "!" and self._cut_allowed:
+                continue
+            if (self._cut_allowed and type(g) is tuple and len(g) == 3
+                    and g[0] == "->"):
+                stack.extend(reversed(list(zip(g[1:], _arg_spans(sp, 2)))))
+                continue
+            if type(g) is str and g in _REFUSED_CONTROL:
                 raise LoweringRefused(
-                    f"{_REFUSED_CONTROL[g[0]]} is refused: {_CUT_FREE}",
-                    _top_span(sp))
-            if g[0] in (",", ";") and len(g) == 3 or g[0] == "\\+" and len(g) == 2:
-                for a, s in zip(g[1:], _arg_spans(sp, len(g) - 1)):
-                    self._refuse_control_in(a, s)
+                    f"{_REFUSED_CONTROL[g]} is refused: {_CUT_FREE}", _top_span(sp))
+            if type(g) is tuple and g and type(g[0]) is str:
+                if g[0] in _REFUSED_CONTROL and len(g) == 3:
+                    raise LoweringRefused(
+                        f"{_REFUSED_CONTROL[g[0]]} is refused: {_CUT_FREE}",
+                        _top_span(sp))
+                if g[0] in (",", ";") and len(g) == 3 or g[0] == "\\+" and len(g) == 2:
+                    stack.extend(reversed(
+                        list(zip(g[1:], _arg_spans(sp, len(g) - 1)))))
 
     def _check_goal_name(self, name: str, sp) -> None:
         if name in _UNREPRESENTABLE_NAMES:
@@ -1048,10 +1141,15 @@ def _cut_inside(g: Any) -> bool:
     through ``,``, ``;`` or ``->`` -- the constructs a cut is transparent
     to (ISO 7.8.4); a cut under any other goal (``\\+``, findall/3, a
     nested if_) is that goal's own."""
-    if g == "!":
-        return True
-    return (type(g) is tuple and len(g) == 3 and g[0] in (",", ";", "->")
-            and (_cut_inside(g[1]) or _cut_inside(g[2])))
+    stack = [g]                 # not recursion: a long body is that deep
+    while stack:
+        g = stack.pop()
+        if g == "!":
+            return True
+        if type(g) is tuple and len(g) == 3 and g[0] in (",", ";", "->"):
+            stack.append(g[2])
+            stack.append(g[1])
+    return False
 
 
 def _var_inside_body(g: Any) -> bool:
@@ -1060,13 +1158,17 @@ def _var_inside_body(g: Any) -> bool:
     when *g* is itself the variable, and not under ``\\+`` or any other
     predicate: each converts its own argument when it runs (``\\+``'s
     through ``_meta_goal`` too, ISO 8.15.1)."""
-    def walk(t):
+    if not (type(g) is tuple and len(g) == 3 and g[0] in (",", ";", "->")):
+        return False
+    stack = [g[2], g[1]]        # not recursion: a long body is that deep
+    while stack:
+        t = stack.pop()
         if type(t) is VarRef:
             return True
-        return (type(t) is tuple and len(t) == 3
-                and t[0] in (",", ";", "->") and (walk(t[1]) or walk(t[2])))
-    return (type(g) is tuple and len(g) == 3 and g[0] in (",", ";", "->")
-            and (walk(g[1]) or walk(g[2])))
+        if type(t) is tuple and len(t) == 3 and t[0] in (",", ";", "->"):
+            stack.append(t[2])
+            stack.append(t[1])
+    return False
 
 
 def _thunk(expr: ast.expr, pos) -> ast.expr:
@@ -1135,25 +1237,70 @@ _BODY_GOAL_CONTROL: dict[tuple[str, int], tuple[int, ...]] = {
 }
 
 
+#: A right-nested run of one binary control construct at least this long is
+#: built by ``$right_nested(F, [...])`` (``clausal.logic.cells.
+#: right_nested``) over a flat list, not as nested tuple displays: the
+#: generated AST stays shallow however long the body (``compile()`` refuses
+#: an expression nested some thousands deep).  Shorter runs keep the nested
+#: displays they always had.
+_FLAT_CHAIN = 32
+
+
 def _source_goal(lw: "_ClauseLowering", g: Any, sp) -> ast.expr:
     """A body goal lowered as DATA under ISO 7.6.2's body conversion: a
     variable at a goal position is ``call(X)`` -- the goal
     :meth:`_ClauseLowering.goal` compiles for it, and the term ISO and
     Scryer store (``p(X) :- X`` reads back as ``p(X) :- call(X)``).  Kept
     bare, ``X`` unified with ANY retract pattern, so ``retract((p(_) :-
-    foo))`` deleted ``p(X) :- X``.  Every other subterm is :meth:`term`."""
-    if type(g) is VarRef:
-        return ast.Tuple(elts=[_const("call"), lw.var(g)], ctx=ast.Load())
-    if type(g) is tuple and g and type(g[0]) is str:
-        goal_args = _BODY_GOAL_CONTROL.get((g[0], len(g) - 1))
-        if goal_args is not None:
-            spans = _arg_spans(sp, len(g) - 1)
-            return ast.Tuple(
-                elts=[_const(g[0])]
-                + [_source_goal(lw, a, s) if i in goal_args else lw.term(a, s)
-                   for i, (a, s) in enumerate(zip(g[1:], spans))],
-                ctx=ast.Load())
-    return lw.term(g, sp)
+    foo))`` deleted ``p(X) :- X``.  Every other subterm is :meth:`term`.
+
+    The right operands of ``,``/``;``/``->``/``*->`` are walked in a loop
+    (a body of 100k goals is a right-nested chain that deep); only a left
+    operand, which the text must bracket, recurses."""
+    # The right spine: (functor, lowered left operand), outermost first.
+    # Operands are lowered in reading order, left before right, as the
+    # nested displays evaluate them.
+    spine: list = []
+    while True:
+        if type(g) is VarRef:
+            last = ast.Tuple(elts=[_const("call"), lw.var(g)], ctx=ast.Load())
+            break
+        goal_args = (_BODY_GOAL_CONTROL.get((g[0], len(g) - 1))
+                     if type(g) is tuple and g and type(g[0]) is str
+                     else None)
+        if goal_args is None:
+            last = lw.term(g, sp)
+            break
+        spans = _arg_spans(sp, len(g) - 1)
+        if goal_args == (0, 1):
+            spine.append((g[0], _source_goal(lw, g[1], spans[0])))
+            g, sp = g[2], spans[1]
+            continue
+        last = ast.Tuple(
+            elts=[_const(g[0])]
+            + [_source_goal(lw, a, s) if i in goal_args else lw.term(a, s)
+               for i, (a, s) in enumerate(zip(g[1:], spans))],
+            ctx=ast.Load())
+        break
+    out = last
+    k = len(spine)
+    while k:
+        functor = spine[k - 1][0]
+        j = k - 1
+        while j and spine[j - 1][0] == functor:
+            j -= 1
+        run = [left for _, left in spine[j:k]]
+        if len(run) + 1 >= _FLAT_CHAIN:
+            out = ast.Call(func=_name(_DOLLAR + "right_nested"),
+                           args=[_const(functor),
+                                 ast.List(elts=run + [out], ctx=ast.Load())],
+                           keywords=[])
+        else:
+            for left in reversed(run):
+                out = ast.Tuple(elts=[_const(functor), left, out],
+                                ctx=ast.Load())
+        k = j
+    return out
 
 
 def _source_body_kw(lw: "_ClauseLowering", body: Any, body_sp) -> dict:
@@ -1423,6 +1570,16 @@ class _DcgTranslation:
     # ── the body (Scryer's dcg_body/4) ──
 
     def body(self, b: Any, sp, s0: VarRef, s: VarRef) -> tuple:
+        """The translated body and its span tree.  The translation is
+        recursive in form (:meth:`_body`) and run by ``drive``, so a
+        grammar body of 100k nonterminals -- a ','/2 chain that deep --
+        does not hit Python's recursion limit; the state variables are
+        numbered in the same order."""
+        return drive(self._body(b, sp, s0, s))
+
+    def _body(self, b: Any, sp, s0: VarRef, s: VarRef):
+        """A generator (see :meth:`body`): ``yield self._body(...)`` is the
+        recursive call."""
         top = _top_span(sp)
         if type(b) is VarRef:
             return ("phrase", b, s0, s), (top, sp, None, None)
@@ -1443,19 +1600,19 @@ class _DcgTranslation:
                 # it (and ``*->`` everywhere), alone or as a `;` condition.
                 a_sp, b_sp = _arg_spans(sp, 2)
                 mid = self.fresh()
-                g1, g1_sp = self.body(b[1], a_sp, s0, mid)
-                g2, g2_sp = self.body(b[2], b_sp, mid, s)
+                g1, g1_sp = yield self._body(b[1], a_sp, s0, mid)
+                g2, g2_sp = yield self._body(b[2], b_sp, mid, s)
                 return (name, g1, g2), (top, g1_sp, g2_sp)
             if name == "," and n == 2:
                 a_sp, b_sp = _arg_spans(sp, 2)
                 mid = self.fresh()
-                g1, g1_sp = self.body(b[1], a_sp, s0, mid)
-                g2, g2_sp = self.body(b[2], b_sp, mid, s)
+                g1, g1_sp = yield self._body(b[1], a_sp, s0, mid)
+                g2, g2_sp = yield self._body(b[2], b_sp, mid, s)
                 return (",", g1, g2), (top, g1_sp, g2_sp)
             if name in (";", "|") and n == 2:
                 a_sp, b_sp = _arg_spans(sp, 2)
-                g1, g1_sp = self.body(b[1], a_sp, s0, s)
-                g2, g2_sp = self.body(b[2], b_sp, s0, s)
+                g1, g1_sp = yield self._body(b[1], a_sp, s0, s)
+                g2, g2_sp = yield self._body(b[2], b_sp, s0, s)
                 return (";", g1, g2), (top, g1_sp, g2_sp)
             if name == "\\+" and n == 1:
                 raise _dcg_refused(
@@ -1705,6 +1862,12 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
         mod = _lower_all(items, refuse, ctx, uses, body, stats, source,
                          positions, singletons, surface, where_file,
                          directives_only)
+    except TermTooDeep as e:
+        # The reader gave up on an item (bracketed nesting too deep): the
+        # items stop there; reported with the refusals before it.
+        if not strict:
+            raise
+        errors.append(LoweringRefused(where(e.span) + str(e), e.span))
     except Exception as e:
         # A crash after a refusal is most likely its consequence (a
         # compiler's cascade): report what was found, the crash last.
@@ -1756,7 +1919,10 @@ def _lower_all(items, refuse, ctx, uses, body, stats, source, positions,
         if (after_query and kind == "Clause"
                 and is_answer_description(it.term)):
             try:
-                ctx.end_module.item(_item_shown(kind, it.term))
+                # Rendered only when it is refused: showing a clause of
+                # 100k goals for every item is wasted work.
+                if ctx.end_module.ended is not None:
+                    ctx.end_module.item(_item_shown(kind, it.term))
             except EndModuleError as e:
                 refuse(str(e), span)
                 continue
@@ -1772,7 +1938,10 @@ def _lower_all(items, refuse, ctx, uses, body, stats, source, positions,
             # end_module/1 is the file's last item (ISO 13211-2): nothing
             # but comments may follow it.
             try:
-                ctx.end_module.item(_item_shown(kind, it.term))
+                # Rendered only when it is refused: showing a clause of
+                # 100k goals for every item is wasted work.
+                if ctx.end_module.ended is not None:
+                    ctx.end_module.item(_item_shown(kind, it.term))
             except EndModuleError as e:
                 refuse(str(e), span)
                 continue
@@ -1802,6 +1971,9 @@ def _lower_all(items, refuse, ctx, uses, body, stats, source, positions,
             except LoweringRefused as e:
                 refuse(str(e), e.span or span)
                 continue
+            except RecursionError:
+                refuse(_TOO_DEEP.format(what="grammar rule"), span)
+                continue
             kind = "Clause"
         if kind != "Clause":
             # Every kind the reader gives is handled above; a new one is
@@ -1810,7 +1982,11 @@ def _lower_all(items, refuse, ctx, uses, body, stats, source, positions,
             continue
         defined.add(_head_indicator(it.term))
         uses.reif = ctx.reif
-        uses.clause(it.term)
+        try:
+            uses.clause(it.term)
+        except RecursionError:
+            refuse(_TOO_DEEP.format(what="clause"), span)
+            continue
         if directives_only:
             # The clause is not lowered, but the double_quotes modes its
             # literals were read under are module-item facts (the cross-mode
@@ -1824,6 +2000,9 @@ def _lower_all(items, refuse, ctx, uses, body, stats, source, positions,
                                    singletons, ctx)
         except LoweringRefused as e:
             refuse(str(e), e.span or span)
+            continue
+        except RecursionError:
+            refuse(_TOO_DEEP.format(what="clause"), span)
             continue
         body.extend(lowered)
         stats["lowered"] += 1
@@ -1851,7 +2030,7 @@ def _lower_all(items, refuse, ctx, uses, body, stats, source, positions,
         "functors": len({n for n, _a in ctx.auto_functors}),
         "functor_arities": len(ctx.auto_functors)}
     mod = ast.Module(body=body, type_ignores=[])
-    ast.fix_missing_locations(mod)
+    fix_missing_locations(mod)      # not recursive: an AST can be deep
     return mod
 
 
@@ -1864,6 +2043,19 @@ class _Item:
         self.term = term
         self.spans = spans
         self.var_names = var_names
+
+
+#: The refusal of an item whose lowering ran out of Python's recursion
+#: limit.  Conjunctions, disjunctions, lists and operator chains of any
+#: length lower without recursion; what still recurses is nesting the text
+#: brackets (``f(f(...))``, ``((...))``) and an if-then-else chain
+#: (``C1 -> T1 ; C2 -> T2 ; ...``), whose else branch nests the next one.
+#: ISO's term for it is ``resource_error(stack)`` (7.12.2 h), as for every
+#: RecursionError (``clausal.logic.exceptions``).
+_TOO_DEEP = ("the {what} nests too deep to compile: Python's recursion "
+             "limit was reached lowering it -- resource_error(stack). A "
+             "conjunction or disjunction of any length is fine; deep "
+             "bracketed nesting and long if-then-else chains are not")
 
 
 def _is_end_module(term) -> bool:
@@ -1985,12 +2177,15 @@ def _restore_special_form_args(call: ast.Call, ctx, refuse) -> None:
 
 
 def _has_chars(t) -> bool:
-    if type(t) is tuple:
-        if len(t) == 2 and t[0] == "$chars":
-            return True
-        return any(_has_chars(a) for a in t[1:])
-    if type(t) is list:
-        return any(_has_chars(a) for a in t)
+    stack = [t]                 # not recursion: a term can be 100k deep
+    while stack:
+        t = stack.pop()
+        if type(t) is tuple:
+            if len(t) == 2 and t[0] == "$chars":
+                return True
+            stack.extend(t[1:])
+        elif type(t) is list:
+            stack.extend(t)
     return False
 
 
@@ -2193,9 +2388,13 @@ def warn_singletons(singletons, source: str, filename: str) -> None:
         return
     import warnings  # noqa: PLC0415
     from clausal.lint_warnings import ClausalSingletonWarning  # noqa: PLC0415
+    # One line table for the file, not one per warning: a long clause can
+    # hold thousands of singletons.
+    positions = _Positions(source)
     for name, span in singletons:
+        line = positions.line(span) if span is not None else None
         warnings.warn(
-            f"{filename}:{line_of(source, span)}: singleton variable `{name}` "
+            f"{filename}:{line}: singleton variable `{name}` "
             f"-- a variable occurring once binds nothing. Misspelling? Rename "
             f"to `_{name}` (or `_`) if deliberate",
             ClausalSingletonWarning, stacklevel=3)

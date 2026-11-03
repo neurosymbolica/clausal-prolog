@@ -77,6 +77,7 @@ __all__ = [
     "DCGRule",
     "Query",
     "SyntaxIssue",
+    "TermTooDeep",
     "syntax_error_term",
     "transform_term",
     "PrologReader",
@@ -119,6 +120,18 @@ class Query:  # term = query body
     term: object
     spans: object
     var_names: dict
+
+
+class TermTooDeep(RecursionError):
+    """An item whose term nests too deep for the reader (Python's recursion
+    limit), raised by :meth:`PrologReader.read_term`: no syntax error, ISO's
+    ``resource_error(stack)`` (7.12.2 h; a RecursionError is that term
+    everywhere, ``clausal.logic.exceptions``).  *span* is the item's.  The
+    reader stays usable: the item is consumed, the next read goes on."""
+
+    def __init__(self, message: str, span) -> None:
+        super().__init__(message)
+        self.span = span
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,77 +232,131 @@ class _Transform:
             self._index_by_name[name] = i
         return i
 
-    def cell(self, node):
-        if isinstance(node, PAtom):
-            # THE FLIP (§9.7): an atom is the arity-0 cell.  Built inline
-            # rather than through ``clausal.logic.atoms.mint`` — this module
-            # is the §1c contract's data heart and must not grow an import
-            # edge into the engine — but it is the same term ``mint`` makes,
-            # interned spelling included.
-            if node.name == "[]":
-                # ISO 6.3.5 / D70: `'[]'` and `[]` are the same atom, and
-                # the empty list is carried as the Python empty list.
-                return []
-            return _sys.intern(node.name)   # STAGE 2: an atom IS the interned str
-        if isinstance(node, PNumber):
-            return node.value
-        if isinstance(node, PString):
-            # STAGE 2: a string is the chars CARRIER (``cells.chars``, spelled
-            # inline -- this module grows no import edge into the engine); it
-            # denotes the list of its char atoms and is equal to it everywhere.
-            return ("$chars", node.value)   # == clausal.logic.cells.CHARS_TAG; pinned by tests/test_atoms_as_str_stage2.py
-        if isinstance(node, PVar):
-            return VarRef(self.var_index(node.name))
-        if isinstance(node, PCompound):
-            return (node.functor, *(self.cell(a) for a in node.args))
-        if isinstance(node, PCurly):
-            return ("{}", self.cell(node.body))
-        if isinstance(node, PList):
-            if node.tail is None:
-                return [self.cell(e) for e in node.elements]
-            return self._cons_cell(node.elements, node.tail)
-        raise TypeError(f"transform_term: unsupported P-node {type(node)!r}")
+    # cell() and span() are iterative walks (an explicit stack of P-nodes
+    # and build markers), not recursive ones, so a clause body of 100k
+    # goals -- a right-nested ','/2 chain -- or a long operator chain or
+    # partial list does not hit Python's recursion limit.  Children are
+    # visited left to right, as the recursive walks did, so variables are
+    # numbered in the same first-occurrence order and the cells and span
+    # trees are the same (pinned against the recursive walks in
+    # tests/toklex/test_reader_transform_iterative.py).  A build marker is
+    # a tuple; a P-node never is.
 
-    def _cons_cell(self, elements, tail):
-        if not elements:
-            return self.cell(tail)
-        head, *rest = elements
-        return (".", self.cell(head), self._cons_cell(rest, tail))
+    def cell(self, root):
+        out: list = []
+        todo: list = [root]
+        while todo:
+            node = todo.pop()
+            if type(node) is tuple:
+                kind, a, n = node
+                if kind == "C":                         # compound a/n
+                    args = out[len(out) - n:]
+                    del out[len(out) - n:]
+                    out.append((a, *args))
+                elif kind == "L":                       # proper list of n
+                    items = out[len(out) - n:]
+                    del out[len(out) - n:]
+                    out.append(items)
+                else:                                   # n heads + a tail
+                    term = out.pop()
+                    heads = out[len(out) - n:]
+                    del out[len(out) - n:]
+                    for head in reversed(heads):
+                        term = (".", head, term)
+                    out.append(term)
+                continue
+            if isinstance(node, PAtom):
+                # THE FLIP (§9.7): an atom is the arity-0 cell.  Built
+                # inline rather than through ``clausal.logic.atoms.mint`` --
+                # this module is the §1c contract's data heart and must not
+                # grow an import edge into the engine -- but it is the same
+                # term ``mint`` makes, interned spelling included.
+                if node.name == "[]":
+                    # ISO 6.3.5 / D70: `'[]'` and `[]` are the same atom,
+                    # and the empty list is carried as the Python empty list.
+                    out.append([])
+                else:
+                    out.append(_sys.intern(node.name))   # STAGE 2: an atom IS the interned str
+            elif isinstance(node, PNumber):
+                out.append(node.value)
+            elif isinstance(node, PString):
+                # STAGE 2: a string is the chars CARRIER (``cells.chars``,
+                # spelled inline -- this module grows no import edge into
+                # the engine); it denotes the list of its char atoms and is
+                # equal to it everywhere.
+                out.append(("$chars", node.value))   # == clausal.logic.cells.CHARS_TAG; pinned by tests/test_atoms_as_str_stage2.py
+            elif isinstance(node, PVar):
+                out.append(VarRef(self.var_index(node.name)))
+            elif isinstance(node, PCompound):
+                todo.append(("C", node.functor, len(node.args)))
+                todo.extend(reversed(node.args))
+            elif isinstance(node, PCurly):
+                todo.append(("C", "{}", 1))
+                todo.append(node.body)
+            elif isinstance(node, PList):
+                if node.tail is None:
+                    todo.append(("L", None, len(node.elements)))
+                else:
+                    # '.'(E1, '.'(E2, ... Tail)): heads first, tail last.
+                    todo.append(("K", None, len(node.elements)))
+                    todo.append(node.tail)
+                todo.extend(reversed(node.elements))
+            else:
+                raise TypeError(f"transform_term: unsupported P-node {type(node)!r}")
+        return out[0]
 
-    def span(self, node):
-        if isinstance(node, (PAtom, PNumber, PVar)):
-            return _span_of(node)
-        if isinstance(node, PString):
-            return _span_of(node)
-        if isinstance(node, PCompound):
-            return (_span_of(node), *(self.span(a) for a in node.args))
-        if isinstance(node, PCurly):
-            return (_span_of(node), self.span(node.body))
-        if isinstance(node, PList):
-            if node.tail is None:
-                return (_span_of(node), [self.span(e) for e in node.elements])
-            return self._cons_span(node.elements, node.tail, _span_of(node),
-                                    outermost=True)
-        raise TypeError(f"transform_term: unsupported P-node {type(node)!r}")
-
-    def _cons_span(self, elements, tail, remaining_span, outermost=False):
-        """One level per remaining element; head span = remaining-list
-        extent (start of this element, end of the whole remaining list) --
-        EXCEPT the outermost level, whose span is the PList node's own
-        span verbatim (`remaining_span` unchanged), so it covers the
-        opening '[' too rather than starting at the first element. The
-        innermost level's tail span is just the tail P-node's span."""
-        if not elements:
-            return self.span(tail)
-        head, *rest = elements
-        head_start, _ = _span_of(head)
-        _, remaining_end = remaining_span
-        this_span = remaining_span if outermost else (head_start, remaining_end)
-        return (
-            this_span,
-            self.span(head),
-            self._cons_span(rest, tail, this_span),
-        )
+    def span(self, root):
+        """The span tree: a leaf's span, ``(span, *arg span trees)`` for a
+        compound, ``(span, [element span trees])`` for a proper list, and
+        for a partial list the '.'/2 chain ``(level span, head tree,
+        rest)`` whose outermost level span is the PList's own (it covers
+        the opening '[') and each inner level's runs from that element's
+        start to the end of the whole list; the innermost rest is the
+        tail's span tree."""
+        out: list = []
+        todo: list = [root]
+        while todo:
+            node = todo.pop()
+            if type(node) is tuple:
+                kind, a, n = node
+                if kind == "C":                         # (span, *args)
+                    args = out[len(out) - n:]
+                    del out[len(out) - n:]
+                    out.append((a, *args))
+                elif kind == "L":                       # (span, [elements])
+                    items = out[len(out) - n:]
+                    del out[len(out) - n:]
+                    out.append((a, items))
+                else:                                   # partial list a
+                    tree = out.pop()
+                    heads = out[len(out) - n:]
+                    del out[len(out) - n:]
+                    elements = a.elements
+                    _, end = _span_of(a)
+                    for k in range(n - 1, -1, -1):
+                        level = (_span_of(a) if k == 0
+                                 else (_span_of(elements[k])[0], end))
+                        tree = (level, heads[k], tree)
+                    out.append(tree)
+                continue
+            if isinstance(node, (PAtom, PNumber, PVar, PString)):
+                out.append(_span_of(node))
+            elif isinstance(node, PCompound):
+                todo.append(("C", _span_of(node), len(node.args)))
+                todo.extend(reversed(node.args))
+            elif isinstance(node, PCurly):
+                todo.append(("C", _span_of(node), 1))
+                todo.append(node.body)
+            elif isinstance(node, PList):
+                if node.tail is None:
+                    todo.append(("L", _span_of(node), len(node.elements)))
+                else:
+                    todo.append(("K", node, len(node.elements)))
+                    todo.append(node.tail)
+                todo.extend(reversed(node.elements))
+            else:
+                raise TypeError(f"transform_term: unsupported P-node {type(node)!r}")
+        return out[0]
 
 
 def transform_term(pterm) -> tuple[object, object, dict[int, str]]:
@@ -715,6 +782,9 @@ class PrologReader:
                              offset=end_off, end_offset=end_off))
         try:
             module = PrologParser(tokens, self._op_table).parse_program()
+            assert len(module.items) == 1, (
+                f"expected exactly one item, got {len(module.items)}")
+            return _classify_pitem(module.items[0])
         except ParseError as exc:
             # The 'end' token already bounds this item -- resync is
             # inherent, so drop it and keep reading (F5 recovery).
@@ -722,9 +792,17 @@ class PrologReader:
                                kind=exc.kind, line=exc.line or None,
                                column=exc.col or None, expected=exc.expected,
                                found=exc.found)
-        assert len(module.items) == 1, (
-            f"expected exactly one item, got {len(module.items)}")
-        return _classify_pitem(module.items[0])
+        except RecursionError:
+            # Operator chains and long bodies are read without recursion
+            # (``PrologParser._parse_term``, ``_Transform``); bracketed
+            # nesting -- ``f(f(...))``, ``[[...]]``, ``((...))`` -- still
+            # recurses, about four Python frames a level.
+            line, column = self.position(span[0])
+            where = f" (the item at {line}:{column})" if line is not None else ""
+            raise TermTooDeep(
+                f"a term nests too deep to read{where}: Python's recursion "
+                f"limit was reached in its bracketed arguments -- "
+                f"resource_error(stack)", span) from None
 
 
 def read_module(source: str, **kw) -> list:

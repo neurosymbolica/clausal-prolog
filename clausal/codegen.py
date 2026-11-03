@@ -7,6 +7,9 @@ import builtins as _builtins
 
 __all__ = [
     "GeneratedCodeError",
+    "copy_ast",
+    "drive",
+    "fix_missing_locations",
     "functiondef_to_function",
     "split_deep_nesting",
     "stmts_to_function",
@@ -633,6 +636,137 @@ def _fix_missing_locations(node: ast.AST) -> None:
                 end_col = n.end_col_offset
         for c in ast.iter_child_nodes(n):
             stack.append((c, lineno, col, end_lineno, end_col))
+
+
+# ── deep trees without Python recursion ──────────────────────────────────────
+#
+# A clause body of N goals compiles to a function whose AST nests about N
+# levels deep (each goal's continuation runs inside the loop over its
+# answers) until ``split_deep_nesting`` outlines it, so a pass over that AST
+# must not recurse once per level: 1000 levels is Python's recursion limit
+# (todo/done/pl-readers-recursion-limit-on-long-clause-bodies-2026-10-02.md).
+
+
+def drive(gen):
+    """Run a recursive walk written as generators, without Python recursion.
+
+    A walk function is a generator; where it would call itself (or another
+    walk function) it writes ``result = yield walk(args)`` instead.  The
+    driver keeps the suspended callers on an explicit stack, so the order
+    of every side effect, and every return value, is the recursive walk's;
+    only the Python stack stays flat.  An exception raised in a callee
+    propagates into its caller at the ``yield``, as a call's would."""
+    stack = [gen]
+    value = None
+    exc = None
+    while stack:
+        top = stack[-1]
+        try:
+            if exc is not None:
+                e, exc = exc, None
+                sub = top.throw(e)
+            else:
+                sub = top.send(value)
+        except StopIteration as stop:
+            stack.pop()
+            value = stop.value
+            continue
+        except BaseException as e:      # noqa: BLE001 -- re-raised in the caller
+            stack.pop()
+            if not stack:
+                raise
+            exc = e
+            continue
+        stack.append(sub)
+        value = None
+    return value
+
+
+def fix_missing_locations(node: ast.AST) -> ast.AST:
+    """:func:`ast.fix_missing_locations`, the same rule and the same visiting
+    order (pre-order, children in field order), with an explicit stack in
+    place of its recursion."""
+    stack = [(node, 1, 0, 1, 0)]
+    while stack:
+        n, lineno, col_offset, end_lineno, end_col_offset = stack.pop()
+        attrs = n._attributes
+        if "lineno" in attrs:
+            if not hasattr(n, "lineno"):
+                n.lineno = lineno
+            else:
+                lineno = n.lineno
+        if "end_lineno" in attrs:
+            if getattr(n, "end_lineno", None) is None:
+                n.end_lineno = end_lineno
+            else:
+                end_lineno = n.end_lineno
+        if "col_offset" in attrs:
+            if not hasattr(n, "col_offset"):
+                n.col_offset = col_offset
+            else:
+                col_offset = n.col_offset
+        if "end_col_offset" in attrs:
+            if getattr(n, "end_col_offset", None) is None:
+                n.end_col_offset = end_col_offset
+            else:
+                end_col_offset = n.end_col_offset
+        children = list(ast.iter_child_nodes(n))
+        for child in reversed(children):
+            stack.append((child, lineno, col_offset, end_lineno, end_col_offset))
+    return node
+
+
+def copy_ast(node, memo: "dict | None" = None):
+    """``copy.deepcopy`` of an AST, without its recursion: every AST node
+    and list is copied, sharing inside the copied tree is kept (one memo,
+    as deepcopy keeps it), and any other attribute value is deep-copied
+    with ``copy.deepcopy`` under the same memo."""
+    import copy  # noqa: PLC0415
+
+    if memo is None:
+        memo = {}
+
+    def shell(x):
+        """The copy of AST node or list *x*, made (empty) on first sight;
+        (copy, is_new)."""
+        got = memo.get(id(x))
+        if got is not None:
+            return got, False
+        new = [] if type(x) is list else x.__class__.__new__(x.__class__)
+        memo[id(x)] = new
+        # deepcopy keeps the original alive in the memo, so an id is never
+        # reused while the copy is being made.
+        memo.setdefault(id(memo), []).append(x)
+        return new, True
+
+    def is_tree(x):
+        return isinstance(x, ast.AST) or type(x) is list
+
+    root, _ = shell(node) if is_tree(node) else (copy.deepcopy(node, memo), False)
+    if not is_tree(node):
+        return root
+    stack = [(node, root)]
+    while stack:
+        old, new = stack.pop()
+        if type(old) is list:
+            for item in old:
+                if is_tree(item):
+                    c, fresh = shell(item)
+                    if fresh:
+                        stack.append((item, c))
+                    new.append(c)
+                else:
+                    new.append(copy.deepcopy(item, memo))
+            continue
+        for k, v in old.__dict__.items():
+            if is_tree(v):
+                c, fresh = shell(v)
+                if fresh:
+                    stack.append((v, c))
+                new.__dict__[k] = c
+            else:
+                new.__dict__[k] = copy.deepcopy(v, memo)
+    return root
 
 
 class GeneratedCodeError(SyntaxError):
