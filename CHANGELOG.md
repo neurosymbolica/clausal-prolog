@@ -29,6 +29,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **The CLP(Q) port unifies constrained variables with each other about
+  1.8 times faster** (`CLAUSAL_CLPQ=holzbaur`). Unifying a chain
+  `X1 =< ... =< Xn` with n variables `Yi >= 0` took 2.92 s at n = 200 and
+  25.1 s at n = 400; it takes 1.73 s and 13.8 s. Implementation only: the
+  merge of two rows looks each variable's order up once instead of at
+  every comparison. The remaining cubic growth is 1.3.3's own (n^2 rows
+  rewritten, each n/3 terms long), so legacy (0.11 s at n = 200) stays
+  faster on this shape (DEVIATIONS.md D24).
 - **CLP(Q)'s default solver refuses a non-linear constraint with an ISO
   error, not a Python `TypeError`.** `{X * Y = 10}`, and `inf/2`, `sup/2`,
   `minimize/1`, `maximize/1` and `bb_inf` on a non-linear objective, raise

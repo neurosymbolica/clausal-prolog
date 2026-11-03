@@ -54,6 +54,7 @@ from clausal.logic.clpq.linear_forms import (
     delete_factor, independent, isolate, multiply_homogeneous_part,
     multiply_linear_factor, normal_form_right_hand_side,
     normal_form_substitute, normal_form_to_sum, normalize_scalar)
+from clausal.logic.clpq.variable_ordering import order_keys
 from clausal.logic.variables import Var, deref, get_attr, is_var, unify
 from clausal.terms import ConcreteSeg, SegList, VarSeg
 
@@ -1593,6 +1594,7 @@ def back_substitute_variables(members, variable, form, trail):
     (inlined here: a search's every pivot comes this way, review N2)."""
     meter = _current_meter()
     node = deref(members)
+    keys = order_keys(form.terms)    # the definition's orders, looked up once
     if meter is None:
         while type(node) is ListCell:
             member = deref(node.head)
@@ -1601,7 +1603,7 @@ def back_substitute_variables(members, variable, form, trail):
             if state is None or state.linear_form is None:
                 continue
             new_form = normal_form_substitute(variable, form,
-                                              state.linear_form)
+                                              state.linear_form, keys)
             if new_form is not None:
                 put_state(member, with_changes(state, linear_form=new_form),
                           trail)
@@ -1622,7 +1624,8 @@ def back_substitute_variables(members, variable, form, trail):
         state = state_of(member)
         if state is None or state.linear_form is None:
             continue
-        new_form = normal_form_substitute(variable, form, state.linear_form)
+        new_form = normal_form_substitute(variable, form, state.linear_form,
+                                          keys)
         if new_form is None:
             written += 1                                # the row read
             continue
@@ -1651,6 +1654,7 @@ def back_substitute_collect_bindings(members, variable, form, bindings, trail):
     if meter is not None:
         return _metered_back_substitute(meter, members, variable, form,
                                         bindings, trail)
+    keys = order_keys(form.terms)    # the definition's orders, looked up once
     node = deref(members)
     while type(node) is ListCell:
         member = deref(node.head)
@@ -1658,7 +1662,8 @@ def back_substitute_collect_bindings(members, variable, form, bindings, trail):
         state = state_of(member)
         if state is None or state.linear_form is None:
             continue
-        new_form = normal_form_substitute(variable, form, state.linear_form)
+        new_form = normal_form_substitute(variable, form, state.linear_form,
+                                          keys)
         if new_form is not None:
             put_state(member, with_changes(state, linear_form=new_form), trail)
             back_substitute_collect_binding(new_form.terms, member,
@@ -1686,6 +1691,7 @@ def _metered_back_substitute(meter, members, variable, form, bindings,
                 big = True
                 break
     written = 0
+    keys = order_keys(form.terms)    # the definition's orders, looked up once
     node = deref(members)
     while type(node) is ListCell:
         member = deref(node.head)
@@ -1693,7 +1699,8 @@ def _metered_back_substitute(meter, members, variable, form, bindings,
         state = state_of(member)
         if state is None or state.linear_form is None:
             continue
-        new_form = normal_form_substitute(variable, form, state.linear_form)
+        new_form = normal_form_substitute(variable, form, state.linear_form,
+                                          keys)
         if new_form is None:
             written += 1                                # the row read
             continue
