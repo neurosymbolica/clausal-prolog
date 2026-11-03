@@ -348,8 +348,12 @@ def test_every_finding_is_listed_past_the_detail_bound(capsys, tmp_path):
     # their first line, and the report says which.
     assert out.count("N = 5") == 1                       # printed in full once
     assert out.count("N = (same as above)") == 5         # findings 2..6
-    assert ("note: descent findings 7 to 8 are shown by their first line "
-            "only") in out
+    assert "note: 2 more findings, shown by their first line only" in out
+    # Each finding names the clauses it came through, so the four outer
+    # routes into the same inner clause stay apart.
+    for line in (7, 8, 9, 10):         # fanout clauses; inner is at 4 and 5
+        assert f"(via fanout{SEAM}:{line} → 4)" in out
+        assert f"(via fanout{SEAM}:{line} → 5)" in out
 
 
 # A head listing over more than DIAG_MAX_DESCENT_CLAUSES (=4) clauses: every
@@ -1109,7 +1113,7 @@ def test_matching_clause_beyond_the_cap_is_walked_top_level(capsys, tmp_path):
     assert "no clause head" not in out and "none of the" not in out
     assert ("    the predicate has no solution for ANY arguments at this "
             "point; no clause body survives:\n"
-            f"      eng_top{CP}:7  P > 200\n"
+            f"      eng_top{CP}:7  P > 200  (via eng_top{CP}:7)\n"
             "          P = 5\n") in out
     assert "descent walked" not in out       # one route: nothing was capped
 
@@ -1119,7 +1123,7 @@ def test_matching_clause_beyond_the_cap_is_walked_nested(capsys, tmp_path):
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "no clause head" not in out and "none of the" not in out
-    assert (f"      eng_nest{CP}:7  P > 200\n"
+    assert (f"      eng_nest{CP}:7  P > 200  (via eng_nest{CP}:9 → 7)\n"
             "          P = 5\n") in out
 
 
@@ -1150,7 +1154,8 @@ def test_capped_listing_states_all_heads_checked_nested(capsys, tmp_path):
     p = _cp(tmp_path, "eng_nnest", "test(none) :- decide_other(5).\n")
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
-    assert (f"      eng_nnest{CP}:10  engagement(P, other)\n"
+    assert (f"      eng_nnest{CP}:10  engagement(P, other)  "
+            f"(via eng_nnest{CP}:10)\n"
             "          P = 5\n"
             "          " + CAPPED_LISTING.format(
                 i="            ", n="nnest", cp=CP)) in out
@@ -1254,7 +1259,7 @@ def test_fact_table_head_listing_checks_every_fact(capsys, tmp_path):
     out = capsys.readouterr().out
     heads = "".join(f"            facts{CP}:{i + 1}  fact({i}, v{i})\n"
                     for i in range(12))
-    assert (f"      facts{CP}:302  fact(X, zz)\n"
+    assert (f"      facts{CP}:302  fact(X, zz)  (via facts{CP}:302)\n"
             "          X = (same as above)\n"
             "          none of the 300 clause heads unifies with these "
             "arguments — the heads are:\n"
@@ -1284,7 +1289,8 @@ def test_partial_list_goal_keeps_its_bindings(capsys, tmp_path):
     p.write_text(PARTIAL_LIST_CP)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
-    assert (f"      cpairs{CP}:4  cpairs(Keys, [Key-Value|AccIn], Pairs)\n"
+    assert (f"      cpairs{CP}:4  cpairs(Keys, [Key-Value|AccIn], Pairs)  "
+            f"(via cpairs{CP}:7 → 2)\n"
             "          Keys = []\n"
             "          Key = k\n"
             "          Value = v\n") in out
@@ -1342,5 +1348,30 @@ def test_a_leaf_without_bound_variables_says_no_bindings(capsys, tmp_path):
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     # The descent reaches q/1's body: `1 > 2` has no variables at all.
-    assert (f"      nob{CP}:1  1 > 2\n"
+    assert (f"      nob{CP}:1  1 > 2  (via nob{CP}:2 → 1)\n"
             "          no bindings\n") in out
+
+
+def test_route_suffix_and_more_findings_note():
+    from clausal.testing import _cap_leaves, _route_suffix, _RoutedLine
+    assert _route_suffix((("a.clausal", 455), ("a.clausal", 234))) == \
+        "(via a.clausal:455 → 234)"
+    # A file is named again only when the route changes file.
+    assert _route_suffix((("a.clausal", 9), ("b.clausal", 3),
+                          ("b.clausal", 7))) == "(via a.clausal:9 → b.clausal:3 → 7)"
+    line = _RoutedLine("a.clausal:2  g(X)")
+    line.route = (("a.clausal", 1),)
+    groups = [[line, "    X = 1"]] + [[f"a.clausal:{i}  h", "    no bindings"]
+                                       for i in range(6)]
+    notes = []
+    out = _cap_leaves(groups, notes)
+    assert out[0] == ["a.clausal:2  g(X)  (via a.clausal:1)", "    X = 1"]
+    assert out[6] == ["a.clausal:5  h"]               # 7th: first line only
+    assert notes == ["1 more finding, shown by its first line only"]
+
+
+def test_unavailable_bindings_wording():
+    from clausal.testing import BINDINGS_UNAVAILABLE
+    assert BINDINGS_UNAVAILABLE == ("bindings unavailable — the goal's "
+                                    "variable names could not be read from "
+                                    "the source")

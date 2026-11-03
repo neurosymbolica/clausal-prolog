@@ -32,7 +32,7 @@ test('five is small') failed (no solutions)
       small(5)
     bindings at failure: (none — goal 1 is the first goal)
     the predicate has solutions with argument 1 freed, but none binds argument 1 to a concrete value; no clause body survives:
-      arith.seam:5  N < 3
+      arith.seam:5  N < 3  (via arith.seam:5)
           N = 5
 =========================== short test summary info ============================
 FAILED arith.seam::double of two is five - test('double of two is five') fail...

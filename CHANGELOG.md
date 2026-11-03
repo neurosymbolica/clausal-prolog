@@ -27,9 +27,13 @@ surface described in [docs/public-api.md](docs/public-api.md).
   binding repeated with the same printed text under the same name prints
   `Name = (same as above)`; identical notes print once.  Every descent
   finding is listed: the first 6 in full, the rest by their first line, with
-  a note saying which.  A leaf prints every bound variable (it printed at
-  most 4, unmarked), `no bindings` when none is bound, and `bindings
-  unavailable — ...` when its variables cannot be named.  A goal with a
+  a note ("4 more findings, shown by their first line only").  Each finding
+  names the clauses it came through, outermost first, by start line
+  (`(via request_basis.clausal:463 → 190)`), so findings that read alike stay
+  apart.  A leaf prints every bound variable (it printed at most 4,
+  unmarked), `no bindings` when none is bound, and `bindings unavailable —
+  the goal's variable names could not be read from the source` when they
+  cannot be named.  A goal with a
   partial-list argument (`[Key-Value|AccIn]`) in a Clausal Prolog file now
   shows its bindings: the pairing with its source refused the `'.'` list
   term, so the goal printed none.

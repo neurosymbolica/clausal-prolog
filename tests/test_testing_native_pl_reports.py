@@ -227,7 +227,9 @@ def test_translator_and_seam_reports_are_unchanged(runner, name, text,
     """Negative control, EXACT: the translator (no source map) and the seam
     report byte-for-byte as they did on 7c0379db, before this slice.  The
     goldens ``runner_unchanged_*.txt`` were recorded from that commit and
-    are never regenerated from this one."""
+    are never regenerated from this one.  One deliberate edit since, by hand:
+    a seam descent finding names the clause it came through (``  (via
+    arith.seam:5)``, 2026-11-03); the translator goldens are untouched."""
     import re
     (tmp_path / name).write_text(text)
     env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}

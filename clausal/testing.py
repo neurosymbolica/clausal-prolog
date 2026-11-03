@@ -1926,22 +1926,63 @@ def _goal_name(goal) -> str | None:
     return None
 
 
+class _RoutedLine(str):
+    """A finding's first line, carrying the clauses it came through.
+
+    ``route`` is ``((file label, clause start line), ...)``, outermost first:
+    each ``_descend`` level puts the clause it walked in front.  Anything
+    that rewrites the line (an f-string indent) gets a plain ``str`` back, so
+    only a finding that reaches :func:`_cap_leaves` shows its route."""
+    route: tuple = ()
+
+
+def _routed(line, clause, path):
+    """*line* with *clause* put in front of its route."""
+    if not isinstance(line, str):
+        return line
+    pos = getattr(clause, "position", None)
+    if not pos or path is None:
+        return line
+    if is_prolog_source(path) and not _NATIVE_REPORT.get():
+        # A translator-loaded .pl report: its positions are of the
+        # translation, and its shape is pinned unchanged.
+        return line
+    label = os.path.basename(str(path))
+    out = _RoutedLine(line)
+    out.route = ((label, pos[0]), *getattr(line, "route", ()))
+    return out
+
+
+def _route_suffix(route) -> str:
+    """``(via request_basis.clausal:455 → 190)``: the clause start lines a
+    finding came through, outermost first, a file named when it changes."""
+    parts, last = [], None
+    for label, line in route:
+        parts.append(f"{label}:{line}" if label != last else str(line))
+        last = label
+    return f"(via {' → '.join(parts)})" if parts else ""
+
+
+def _with_route(line) -> str:
+    suffix = _route_suffix(getattr(line, "route", ()))
+    return f"{line}  {suffix}" if suffix else str(line)
+
+
 def _cap_leaves(leaves, notes):
     """Every descent finding-GROUP, the first ``DIAG_MAX_DESCENT_LEAVES`` in
-    full and each further one by its first line, noting which.
+    full and each further one by its first line, noting how many.
 
     Nothing is dropped: a finding past the bound keeps its leaf line (where
     and what failed) and loses only its detail lines (bindings, a head
-    listing beneath it).  Shared by the rung-3 descent and the wrong-value
-    bridge."""
+    listing beneath it).  Each first line gets its route, the clauses the
+    finding came through, so findings that read alike stay apart.  Shared by
+    the rung-3 descent and the wrong-value bridge."""
+    leaves = [[_with_route(g[0]), *g[1:]] if g else g for g in leaves]
     if len(leaves) > DIAG_MAX_DESCENT_LEAVES:
-        first, last = DIAG_MAX_DESCENT_LEAVES + 1, len(leaves)
-        which = (f"finding {first} is" if first == last
-                 else f"findings {first} to {last} are")
+        more = len(leaves) - DIAG_MAX_DESCENT_LEAVES
         notes.append(
-            f"descent {which} shown by their first line only"
-            if first != last else
-            f"descent {which} shown by its first line only")
+            "1 more finding, shown by its first line only" if more == 1
+            else f"{more} more findings, shown by their first line only")
         leaves = (leaves[:DIAG_MAX_DESCENT_LEAVES]
                   + [group[:1] for group in leaves[DIAG_MAX_DESCENT_LEAVES:]])
     return leaves
@@ -2970,7 +3011,9 @@ def _descend(goal, logic_module, caller_path, deadline, depth, seen, notes):
         if state == "head_mismatch":
             mismatches += 1
         elif state == "leaves":
-            groups.extend(clause_groups)
+            groups.extend(
+                [_routed(g[0], clause, sub_path), *g[1:]] if g else g
+                for g in clause_groups)
     if mismatches == len(clauses) and clauses and all_walked:
         # Every clause of the predicate was walked and its head refused the
         # call: the listing's claim is exact.
@@ -3451,8 +3494,8 @@ def _leaf_bindings(leaf, reified_leaf, path=None,
 #: has none), so that an empty space never reads as a cut.
 NO_BINDINGS = "no bindings"
 #: ...and under one whose variables could not be named from its source.
-BINDINGS_UNAVAILABLE = ("bindings unavailable — could not recover the "
-                        "goal's source variable names")
+BINDINGS_UNAVAILABLE = ("bindings unavailable — the goal's variable names "
+                        "could not be read from the source")
 
 
 def _leaf_binding_lines(leaf, reified_leaf, path=None, native_leaf=None,
