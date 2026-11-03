@@ -34,7 +34,7 @@ from clausal.logic.builtins._registry import (
 )
 from clausal.logic.builtins.call_body import (
     is_body_term, body_goal_dispatch, body_with_extras_error,
-    is_special_form, special_form_dispatch,
+    is_special_form, own_definition_shadows, special_form_dispatch,
     non_callable_goal_error, iso_control_cell_dispatch, folded_existence_error,
     needs_meta_call, MetaCallGoal,
 )
@@ -328,7 +328,8 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         return _resolve_named_goal(
             target.db, inner, tuple(call_args[2:]), context)
     if (is_special_form(functor, len(call_args))
-            and not _import_shadows_special_form(db, functor)):
+            and not _import_shadows_special_form(db, functor)
+            and not own_definition_shadows(db, functor, len(call_args))):
         # A compiler SPECIAL FORM (findall/3, once/1, catch/3, throw/1 ...),
         # after the fold -- so ``call(findall(X), G, L)`` is findall/3 too.
         # No database defines these names (the compiler lowers them inline),
@@ -547,11 +548,12 @@ def _import_shadows_special_form(db, functor) -> bool:
 
     That is how the compiled body decides: ``-import_from`` rewrites every
     body call of an imported name to the dotted global (``py.re.findall``),
-    which is no special form, so the body runs the import; a module's OWN
-    predicate of that name is not rewritten, and its body still lowers the
-    special form.  ``call/N`` of the cell answers the same way: the import
-    wins, and the resolution below reaches it (the goal-object arm, or the
-    adopted row).  On every surface the import gets its arguments as
+    which is no special form, so the body runs the import.  A module's OWN
+    predicate of that name is :func:`call_body.own_definition_shadows`'s
+    question (a ``.pl`` or ``.clausal`` module's runs; a seam module's body
+    still lowers the special form).  ``call/N`` of the cell answers the
+    same way: the import wins, and the resolution below reaches it (the
+    goal-object arm, or the adopted row).  On every surface the import gets its arguments as
     written: the ISO front end lowers the arguments of an imported name as
     data, not as the special form's goals (``iso_l3._goal_args``).
     """

@@ -67,7 +67,7 @@ import bisect
 import re
 from typing import Any
 
-from clausal.logic.special_forms import GOAL_POSITIONS
+from clausal.logic.special_forms import GOAL_CONTROLS, GOAL_POSITIONS, SPECIAL_FORMS
 from clausal.tools.prolog_reader import VarRef
 from clausal.tools.iso_builtins import is_iso_builtin, static_procedure_refusal
 
@@ -146,6 +146,13 @@ _REFUSED_CONTROL = {
 #: catch_error/2 and catch_recover/3 too: without them their goal arguments
 #: lowered as DATA and the compiler refused the cell, 2026-10-20).
 _META_GOAL_ARGS: dict[tuple[str, int], tuple[int, ...]] = GOAL_POSITIONS
+
+#: The special forms and goal controls a Prolog text may DEFINE: those that
+#: are no ISO built-in (``forall/2``, ``call_cleanup/2``, ``findall/4`` ...;
+#: operator ruling 2026-10-24).  A goal of one is lowered both ways and
+#: settled once the file's procedures are known (:func:`_settle_own_forms`).
+DEFINABLE_SPECIAL_FORMS: frozenset = frozenset(
+    k for k in (*SPECIAL_FORMS, *GOAL_CONTROLS) if not is_iso_builtin(*k))
 
 #: clpq's ``{C}``: each comparison -> the seam's node for it (``=`` and
 #: ``=:=`` are both equality in library(clpq)).
@@ -609,15 +616,22 @@ class _ClauseLowering:
             # form it may share a name with: its arguments are data, as
             # call/N passes them (the seam's -import_from does the same).
             imported = resolved != name
-            as_special_form = (self._special_form_args(name, args, spans)
-                               if imported else None)
-            lowered = self._goal_args(name, args, spans, imported=imported)
-            if as_special_form is not None:
-                # Kept for a later ``use_module(M, [])`` that drops the
-                # import: the goal is then the special form again
-                # (``_drop_removed_imports``).
-                self._ctx.special_form_args[id(lowered)] = (
-                    lowered, as_special_form)
+            key = (name, len(args))
+            if (not imported and key in DEFINABLE_SPECIAL_FORMS
+                    and self._ctx is not None
+                    and hasattr(self._ctx, "own_form_args")):
+                lowered = self._own_form_args(key, args, spans)
+            else:
+                as_special_form = (self._special_form_args(name, args, spans)
+                                   if imported else None)
+                lowered = self._goal_args(name, args, spans,
+                                          imported=imported)
+                if as_special_form is not None:
+                    # Kept for a later ``use_module(M, [])`` that drops the
+                    # import: the goal is then the special form again
+                    # (``_drop_removed_imports``).
+                    self._ctx.special_form_args[id(lowered)] = (
+                        lowered, as_special_form)
             head_pos = self._pos.of(_functor_span(sp, name, self._pos.source))
             if (len(args) == 2 and resolved in _REGEX_AUTOBIND_GOALS
                     and not self._meta_depth):
@@ -669,19 +683,58 @@ class _ClauseLowering:
         if (self._ctx is None or not hasattr(self._ctx, "special_form_args")
                 or not _META_GOAL_ARGS.get((name, len(args)))):
             return None
-        saved = (set(self._bound), dict(self.occurrences),
-                 set(self.regex_group_names), self.reordered)
+        return self._aside(lambda: self._goal_args(name, args, spans))
+
+    def _own_form_args(self, key, args: tuple, spans: list) -> list:
+        """The arguments of a goal of a special form a file may define
+        (:data:`DEFINABLE_SPECIAL_FORMS`): whether the file defines it is
+        known only once the whole file is read, so they are lowered BOTH
+        ways -- as the special form's goals, and as written (the data a
+        definition of the name receives, as for an import) -- and the
+        choice is made by :func:`_settle_own_forms`.  The list returned
+        holds the goal lowering, or the data one when only that succeeds;
+        a refusal of both is raised now."""
+        name = key[0]
+        as_data = self._aside(
+            lambda: self._goal_args(name, args, spans, imported=True))
+        saved = self._state()
         try:
-            return self._goal_args(name, args, spans)
+            lowered = as_goals = self._goal_args(name, args, spans)
+            real = "goals"
+        except LoweringRefused as e:
+            if isinstance(as_data, LoweringRefused):
+                raise
+            self._restore(saved)
+            as_goals = e
+            lowered, real = (self._goal_args(name, args, spans,
+                                             imported=True), "data")
+        self._ctx.own_form_args[id(lowered)] = (
+            key, lowered, real, as_goals, as_data)
+        return lowered
+
+    def _aside(self, lower):
+        """``lower()``'s result, or the ``LoweringRefused`` it raised, with
+        the clause's lowering state restored afterwards, so the arguments
+        lowered next bind the same variables first."""
+        saved = self._state()
+        try:
+            return lower()
         except LoweringRefused as e:
             return e
         finally:
-            # (``_if_n`` is not rewound: a truth variable minted here keeps
-            # its name if these arguments are used after all.)
-            (self._bound, occurrences, self.regex_group_names,
-             self.reordered) = saved
-            self.occurrences.clear()
-            self.occurrences.update(occurrences)
+            self._restore(saved)
+
+    def _state(self):
+        return (set(self._bound), dict(self.occurrences),
+                set(self.regex_group_names), self.reordered)
+
+    def _restore(self, saved) -> None:
+        # (``_if_n`` is not rewound: a truth variable minted here keeps
+        # its name if these arguments are used after all.)
+        (self._bound, occurrences, self.regex_group_names,
+         self.reordered) = saved
+        self.occurrences.clear()
+        self.occurrences.update(occurrences)
 
     def _qualified(self, args: tuple, spans: list, sp, pos) -> ast.expr:
         """``m:G`` (D10) -> the seam's qualified call ``a.b.g(...)``: a name
@@ -1198,6 +1251,37 @@ def _var_names_kw(lw: "_ClauseLowering") -> "ast.expr | None":
                     values=[_name(lw.py_name(n)) for n in names])
 
 
+def _strip_own_qualifier(head, head_sp, own: "str | None"):
+    """``own:H`` (and ``own:own:H``) -> ``H`` with its span subtree, when
+    *own* is the file's module/2 name: Scryer adds such a clause to the
+    module named, which here is this one.  Any other head comes back as it
+    is."""
+    while (own is not None and type(head) is tuple and len(head) == 3
+           and head[0] == ":" and type(head[1]) is str and head[1] == own):
+        head = head[2]
+        head_sp = _arg_spans(head_sp, 2)[1]
+    return head, head_sp
+
+
+def _own_head_item(it, own: "str | None"):
+    """A reader ``Clause`` item with an ``own:`` qualifier stripped from its
+    head (:func:`_strip_own_qualifier`), so the procedure bookkeeping keys
+    it by H; the item itself when there is none to strip."""
+    term = it.term
+    rule = type(term) is tuple and len(term) == 3 and term[0] == ":-"
+    head, head_sp = (term[1], _arg_spans(it.spans, 2)[0]) if rule \
+        else (term, it.spans)
+    new_head, new_sp = _strip_own_qualifier(head, head_sp, own)
+    if new_head is head:
+        return it
+    if not rule:
+        return _Item(new_head, new_sp, it.var_names)
+    spans = it.spans
+    if type(spans) is tuple and len(spans) == 3 and not _is_leaf_span(spans):
+        spans = (spans[0], new_sp, spans[2])
+    return _Item((":-", new_head, term[2]), spans, it.var_names)
+
+
 def lower_clause(term: Any, spans=None, var_names=None,
                  positions: "_Positions | None" = None,
                  singletons: "list | None" = None, ctx=None,
@@ -1227,12 +1311,17 @@ def lower_clause(term: Any, spans=None, var_names=None,
     if type(head) is VarRef:
         raise LoweringRefused(
             "a clause head is a variable (ISO instantiation_error)", whole_span)
+    # ``own:H`` (the file's own module/2 name): a clause of H here, as in
+    # Scryer.
+    head, head_sp = _strip_own_qualifier(
+        head, head_sp, ctx.own_module if ctx is not None else None)
     inner = head
     while type(inner) is tuple and len(inner) == 3 and inner[0] == ":":
         inner = inner[2]
     if inner is not head:
         # ``M:H`` with H an ISO built-in: Scryer refuses it as it refuses
-        # ``H`` (7.5.1).  Any other qualified head is not checked here
+        # ``H`` (7.5.1).  A head qualified with another module is not
+        # checked here: it still lowers as a clause of (:)/2
         # (todo/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md).
         q_name = inner if type(inner) is str else (
             inner[0] if type(inner) is tuple and inner
@@ -1395,6 +1484,9 @@ class _DcgTranslation:
             # HEAD: as a body or phrase/2's first argument ``[]`` is still
             # the empty terminal list (Scryer agrees).
             lhs = "[]"
+        # ``own:g --> ...``: a rule of g//N here, as a clause's ``own:H``.
+        lhs, l_sp = _strip_own_qualifier(
+            lhs, l_sp, getattr(self._ctx, "own_module", None))
         if (type(lhs) is tuple and len(lhs) == 3 and lhs[0] == ":") or not (
                 type(lhs) is str or (type(lhs) is tuple and lhs
                                      and type(lhs[0]) is str
@@ -1808,6 +1900,7 @@ def _lower_all(items, refuse, ctx, uses, body, stats, source, positions,
             # refused, not half-handled (assert would vanish under -O).
             refuse(f"{kind} is not lowered", span)
             continue
+        it = _own_head_item(it, ctx.own_module)
         defined.add(_head_indicator(it.term))
         uses.reif = ctx.reif
         uses.clause(it.term)
@@ -1841,6 +1934,8 @@ def _lower_all(items, refuse, ctx, uses, body, stats, source, positions,
         refuse(*clash)
     if ctx.dead_stmts or ctx.dropped_keys:
         body = _drop_removed_imports(body, ctx, refuse)
+    if ctx.own_form_args:
+        _settle_own_forms(body, ctx, defined, refuse)
     try:
         body.extend(ctx.auto_declare(uses))
     except DirectiveRefused as e:
@@ -1949,6 +2044,46 @@ def _drop_removed_imports(body: list, ctx, refuse=None) -> list:
                         and kw.value.value in ctx.dropped_keys):
                     kw.value = _const(kw.value.value.rsplit(".", 1)[1])
     return body
+
+
+def _settle_own_forms(body: list, ctx, defined: set, refuse) -> None:
+    """Choose, for each goal of a special form a file may define
+    (``_ClauseLowering._own_form_args``), between its two lowerings, now
+    that the file's procedures are known: *defined* (every clause and
+    grammar-rule head, ``own:`` qualifier stripped) and its ``dynamic/1``
+    names.  A name the file defines is that definition, as in Scryer: its
+    arguments as written.  Otherwise it is the special form: its goals.  A
+    chosen lowering that was refused is reported through *refuse*.
+
+    Only the goals the final tree holds are settled (a goal inside an
+    argument lowering that was not chosen is not), and a settled
+    argument list is walked into, so nested goals settle too.  The
+    compiler (``terms_to_goalop``) makes the same choice from the same
+    facts (the clause heads before term expansion, and dynamic/1), and
+    refuses a definition only a ``term_expansion`` rule makes, whose goals
+    were lowered here as the special form's."""
+    own = {k for k in (*defined, *ctx.dynamic_pis)
+           if k in DEFINABLE_SPECIAL_FORMS}
+    for node in ast.walk(ast.Module(body=body, type_ignores=[])):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == _DOLLAR + "Call"):
+            continue
+        args = next((kw for kw in node.keywords if kw.arg == "args"), None)
+        if args is None or not isinstance(args.value, ast.List):
+            continue
+        elts = args.value.elts
+        entry = ctx.own_form_args.get(id(elts))
+        if entry is None or entry[1] is not elts:
+            continue
+        key, _lowered, real, as_goals, as_data = entry
+        want = "data" if key in own else "goals"
+        if want == real:
+            continue
+        alt = as_data if want == "data" else as_goals
+        if isinstance(alt, LoweringRefused):
+            refuse(str(alt), getattr(alt, "span", None))
+            continue
+        elts[:] = alt
 
 
 def _restore_special_form_args(call: ast.Call, ctx, refuse) -> None:

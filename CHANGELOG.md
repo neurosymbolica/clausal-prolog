@@ -7,6 +7,36 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Fixed
+
+- **A clause head qualified with the file's own module defines the
+  predicate** (`.pl` and `.clausal`): in a file whose `module/2` names `m`,
+  `m:foo(1).` and `m:bar(X) :- ...` are clauses of `foo/1` and `bar/1`, as
+  in Scryer; they loaded as clauses of `(:)/2`. A grammar rule
+  `m:g --> ...` there defines `g//0`; it was refused. A head qualified with any
+  other module is unchanged (still `(:)/2`, an open question in
+  `todo/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md`).
+
+- **A file's own definition of a special form's name runs in its own
+  bodies** (2026-11-03; follows operator ruling 2026-10-24). A `.pl` or
+  `.clausal` file may define a special form that is no ISO built-in
+  (`forall/2`, `call_cleanup/2`, `setup_call_cleanup/3`, `call_nth/2`,
+  `count_all/2`, `freeze/2`, `when/2`, `findall/4`, `catch_error/2`,
+  `catch_recover/3`, `eval_/2`), by clauses or `dynamic/1`. Its own body
+  goals of that name, and `call/N` from it, ran the special form and
+  ignored the definition: `forall(X, _) :- X = mine.` then
+  `findall(X, forall(X, true), L)` raised `instantiation_error`; it now
+  gives `L = [mine]`, as Scryer does. The arguments are passed as written
+  (data, not goals). Other modules keep the special form, and so does a
+  seam module that defines the name. Whether the file defines the name is
+  decided from its whole text however it is laid out (indented heads,
+  operators, `own:` qualified heads, dynamic/1). A definition that only a
+  `term_expansion` rule makes is refused when a body calls the name
+  (`UnseenSpecialFormDefinitionError`), where Scryer runs it. Scryer
+  refuses a file that defines `findall/4` (its own builtin); the engine's
+  refusal stays ISO's set. Pinned by
+  `tests/iso/test_own_special_form_names_scryer.py`.
+
 ## 1.4.0 (2026-11-03)
 
 ### Changed
