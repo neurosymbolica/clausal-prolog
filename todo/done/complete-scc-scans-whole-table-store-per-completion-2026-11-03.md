@@ -1,5 +1,7 @@
 # _complete_scc scans the whole table store on every completion, making bench_tabling O(n^2)
 
+**Status: FIXED 2026-11-03 (commit 98a0427d).** A database's table store is now a `TableStore` carrying `scc_candidates`, a registry of possible dormant SCC members filled where a leader leaves the stack dormant and pruned at use; `_complete_scc` walks it instead of the store, and `CLAUSAL_CHECK_SCC_MEMBERS=1` cross-checks it against the full scan. `bench_tabling` best of 3, same machine and load, before -> after: n=1000 0.155 -> 0.132 s, 2000 0.357 -> 0.226 s, 4000 1.12 -> 0.437 s, 8000 3.72 -> 0.972 s, 16000 13.4 -> 2.09 s; fitted exponent 1.62 -> 1.01. Pinned in tests/test_tabling_scc_registry.py::test_completion_does_not_walk_the_store (and the registry/scan agreement in ::test_the_registry_agrees_with_the_store_scan).
+
 Found 2026-11-03 while re-checking
 todo/done/on-leader-stack-linear-scan-2026-09-03.md. Performance only.
 
