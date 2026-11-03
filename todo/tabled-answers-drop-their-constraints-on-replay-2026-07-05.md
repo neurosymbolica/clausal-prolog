@@ -13,6 +13,26 @@ renamed-apart row prerequisite landed 2026-10-20 (see below).
 **Tests:** `tests/audit_2026_07_05/test_12_seams.py::TestF001TablingReplayDropsConstraints` (2 xfail — flip to pass)
 **Design:** A12-D001 (parked) — store-residue vs refuse-to-table vs document
 
+**CLP(Q) part done 2026-11-03 (commit b4d1c592).** `TableEntry.add_answer`
+(given the trail) stores an answer whose variables carry CLP(Q) state with
+its residue, the selected solver's dump/3 over the stored row
+(`tabling._answer_residue`), keys the answer on row and residue, and
+`TableEntry.unify_row` re-posts it on each replay (plan steps 1, 2 and 4,
+phase 3's CLP(Q) half). Pinned in tests/test_clpq_tabled_answers.py. Left:
+- dif/2, freeze/2, CLP(FD), CLP(B): no residue yet (phases 1, 2, 3's
+  CLP(B) half); their answers still lose the constraint on replay, and
+  answers from families with no hook are not refused (phase 4).
+- The D68 stopgap stays: a constrained answer, CLP(Q) included, is still
+  handed over live before its table completes (`_has_attributed_var`).
+  For an answer whose only constraints are CLP(Q) it could now wait for
+  completion like the rest; not done.
+- A judging leader (`seam.judged_answers`) adds its conditional
+  derivations with no trail, after the solve has undone them: no residue
+  there.
+- A united variable (units side channel) in a tabled CLP(Q) answer:
+  dump/3 projects onto its shadow, and the re-posted residue is on a
+  plain fresh variable; untested.
+
 ## Bug
 
 `-table(td/1)` with `td(X) <- (X is not 1)`:
