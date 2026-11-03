@@ -156,7 +156,14 @@ def verify_attributes(state, other, trail, later):
             components.append(other_component)
         stand_ins = _stand_in_for_bound_members(components, state, trail)
         if stand_ins is None:
-            return True         # an earlier hook of this unification did it
+            # X is bound, in no member list and has no turn: its work would
+            # be skipped in silence.  An earlier hook that does a member's
+            # work leaves it a turn (_wait_for_turns), so this cannot
+            # happen; if it does, it is the port's fault, not the
+            # program's (DEVIATIONS.md D3).
+            raise LogicException(system_error(
+                "clpq_lost_turn", "=/2: a bound constrained variable has "
+                "neither a turn nor a place in its component"))
         turn = stand_ins[0]
         _wait_for_turns(stand_ins[1:], trail)
     if not _verify_turn(turn, trail, later, bindings):
