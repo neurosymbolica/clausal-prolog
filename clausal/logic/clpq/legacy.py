@@ -2314,10 +2314,13 @@ def ordering(spec: Any, trail: Trail) -> bool:
     return not is_var(deref(spec))
 
 
-def residual_q(target_vars: list, trail: Trail, name_of) -> list[str]:
+def residual_q(target_vars: list, trail: Trail, name_of,
+               attributed=()) -> list[str]:
     """The CLP(Q) constraints on *target_vars* as a toplevel prints them
     (:func:`dump_q` with ``toplevel=True``); ``[]`` without creating a
-    store when this trail never posted one."""
+    store when this trail never posted one.  *attributed* (the port's
+    call_residue_vars/2 variables) is accepted and not used: legacy
+    projects onto *target_vars* only."""
     if id(trail) not in _tableaux:
         return []
     return dump_q(target_vars, trail, name_of, toplevel=True)

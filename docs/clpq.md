@@ -312,10 +312,13 @@ solver each term holds dump_q/2's bounds; under the port, 1.3.3's.
 `ordering(Spec)` says which variables an answer defines in terms of which
 (`Spec` a list, the first defined by the rest, or `A < B` / `A > B`); the
 port's projection honours it, the default solver accepts it without
-effect, and an unbound `Spec` fails. The residual a `-g` goal prints is
-dump/3 over the goal's variables in the order it lists them, which is an
-ordering too: an `ordering/1` that contradicts it raises
-`system_error(unsatisfiable_ordering)` on the port.
+effect, and an unbound `Spec` fails. dump/3 reads its `Vars` as an
+ordering too, so an `ordering/1` that contradicts their order raises
+`system_error(unsatisfiable_ordering)` on the port. The residual a `-g`
+goal prints is not dump/3: on the port it is the projection clp(Q,R)'s
+toplevel prints, which imposes no order of its own, so
+`ordering(Y < X), {X + Y = 10}` prints `{Y = 10 - X}` whatever order the
+goal names X and Y in.
 
 ## Units
 

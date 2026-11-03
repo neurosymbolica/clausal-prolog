@@ -5,8 +5,11 @@
 """dump/3 and the residual constraints of an answer: dump.pl.
 
 Every predicate of dump.pl is a function here, in file order, named by
-NAMES.md, then residual_strings, the port's printer of a dump in the form
-the `-g` printer shows (`{X + Y = 3}`).
+NAMES.md, then the toplevel's own projection (toplevel_goals: project.pl's
+project_attributes/2 and the attribute_goal/2 hooks of itf3.pl and geler.pl,
+called as the SICStus toplevel calls them), then toplevel_strings, the
+`-g` printer's text (`{X + Y = 3}`), and residual_strings, a dump/3 in the
+same text.
 
 findall/3.  dump/3 runs vars_constraints/2 inside findall/3, so the
 projection, which is destructive, is undone and the answer is a copy.  The
@@ -30,6 +33,7 @@ from clausal.logic.exceptions import LogicException, _error, system_error
 from clausal.logic.variables import PlainVar, Var, deref, is_var, unify
 from decimal import Decimal
 from fractions import Fraction
+from functools import cmp_to_key
 
 
 # dump( +Target, ?NewVars, ?CodedAnswer)
@@ -271,6 +275,182 @@ def all_attribute_goals(variables):
     return result
 
 
+# ---------------------------------------------------------------- the toplevel
+#
+# The SICStus 3 toplevel answers a query that leaves attributed variables
+# through two hooks of each module that has attributes (the atts protocol,
+# not 1.3.3 text): Module:project_attributes(QueryVars, AttrVars), then
+# Module:attribute_goal(V, Goal) for each attributed variable, in a failure
+# loop that undoes the projection.  clp(Q,R) 1.3.3's project_attributes/2
+# is project.pl's ("interface predicate"); its attribute_goal/2 is
+# itf3.pl's (dump_linear//2, dump_nonzero//2 in the toplevel context) and
+# geler.pl's (the delayed goals, and the `all_nonlinear/1` goals
+# project_nonlinear/3 collected).  Unlike dump/3 the toplevel calls no
+# ordering/1 on the query variables, so the order the query names them in
+# imposes no variable ordering (DEVIATIONS.md D28).
+
+def toplevel_goals(query_variables, trail, attributed=()):
+    """The goals the toplevel shows for *query_variables*: the projection
+    of the store onto them (project.pl project_attributes/2), then for each
+    related variable itf3.pl's attribute_goal/2 (dump_linear//2,
+    dump_nonzero//2, toplevel context), then geler.pl's attribute_goal/2
+    on the sorted `all_nonlinear/1` goals.  Copied as dump/3 copies, each
+    query variable standing for itself; the store is left as it was.  None
+    where the projection fails.
+
+    AttrVars, which the SICStus toplevel gathers itself, is the variables
+    with CLP(Q) state reachable from the query variables and from
+    *attributed* (the caller's attributed variables of the query that no
+    query variable reaches: the `-g` printer's call_residue_vars/2), see
+    attributed_variables.  The goals are shown for the members of their
+    components after the projection, component by component as dump.pl's
+    related_linear_vars/2 lists them (DEVIATIONS.md D28).  Runs with
+    `trail.defer` off, each trial post running what it wakes, as dump/3
+    does (D3)."""
+    refuse_inside_attribute_hooks(
+        trail, ("toplevel_goals", query_variables), "toplevel_goals", 1)
+    targets = _unbound_targets(query_variables)
+    saved_defer = trail.defer
+    trail.defer = False
+    try:
+        mark = trail.mark()
+        try:
+            trail.take_pending()        # the outer queue, back at the undo
+            roots = targets + list(attributed)
+            all_nonlinear = []
+            if not project_attributes(targets, attributed_variables(roots),
+                                      trail, all_nonlinear):
+                return None
+            shown = related_linear_variables(attributed_variables(roots))
+            if shown is None:
+                return None
+            goals = all_attribute_goals(shown)
+            if goals is None:
+                return None
+            # geler.pl's attribute_goal/2, second clause: the goals of
+            # all_nonlinear(Ls), Ls = sort(L).  Its first clause shows the
+            # goals still not run on a variable: project_nonlinear/3 ran
+            # every goal of AttrVars, so there are none.
+            nonlinear = nonlinear_strip(sort_goals(all_nonlinear),
+                                        SOLVER_MODULE)
+            if nonlinear is None:
+                return None
+            renaming = {}
+            for variable in targets:
+                renaming.setdefault(variable._id, variable)
+            copied = _copy_terms(goals + nonlinear, renaming)
+        finally:
+            trail.undo(mark)
+    finally:
+        trail.defer = saved_defer
+    return copied
+
+
+def attributed_variables(variables):
+    """The variables with CLP(Q) state reachable from *variables* through
+    their attributes: a component's members, the variables of a linear form
+    and of the delayed goals, transitively; in creation order (the sort/2
+    of project_attributes/2, DEVIATIONS.md D4).  An explicit stack."""
+    seen = set()
+    found = []
+    stack = list(variables)
+    while stack:
+        variable = deref(stack.pop())
+        if not is_var(variable) or variable._id in seen:
+            continue
+        seen.add(variable._id)
+        state = state_of(variable)
+        if state is None:
+            continue
+        found.append(variable)
+        if state.component is not None:
+            members = component_all_variables(deref(state.component))
+            if members is not None:
+                node = deref(members)
+                while type(node) is ListCell:
+                    stack.append(node.head)
+                    node = deref(node.rest)
+        if state.linear_form is not None:
+            stack.extend(_term_variables([state.linear_form]))
+        if state.delayed_goals is not None:
+            stack.extend(_term_variables([state.delayed_goals]))
+    found.sort(key=_creation)
+    return found
+
+
+def _creation(variable):
+    return variable._id
+
+
+def sort_goals(goals):
+    """sort/2 on goal terms: the standard order of terms, two unbound
+    variables in creation order (DEVIATIONS.md D4), identical goals once."""
+    keyed = sorted(goals, key=cmp_to_key(compare_terms))
+    result = []
+    for goal in keyed:
+        if not result or compare_terms(result[-1], goal) != 0:
+            result.append(goal)
+    return result
+
+
+_ORDER_VARIABLE, _ORDER_NUMBER, _ORDER_ATOM, _ORDER_COMPOUND = 0, 1, 3, 4
+
+
+def _order_class(term):
+    if is_var(term):
+        return _ORDER_VARIABLE
+    kind = type(term)
+    if kind is int or kind is Fraction or kind is float:
+        return _ORDER_NUMBER
+    if kind is str:
+        return _ORDER_ATOM
+    return _ORDER_COMPOUND
+
+
+def _compound_parts(term):
+    """(name, arguments) of a compound: a cell `(Name, Args...)`, or a
+    non-empty list as '.'(Head, Tail)."""
+    if type(term) is list:
+        return ".", (term[0], term[1:] if len(term) > 1 else "[]")
+    return term[0], term[1:]
+
+
+def compare_terms(first, second):
+    """compare/3 on two goal terms: -1, 0 or 1.  Variables (creation
+    order) before numbers (by value) before atoms (by text) before
+    compounds (arity, name, then arguments left to right).  A work stack,
+    no recursion."""
+    work = [(first, second)]
+    while work:
+        first, second = work.pop()
+        first, second = deref(first), deref(second)
+        if first is second:
+            continue
+        if type(first) is list and not first:
+            first = "[]"
+        if type(second) is list and not second:
+            second = "[]"
+        class_a, class_b = _order_class(first), _order_class(second)
+        if class_a != class_b:
+            return -1 if class_a < class_b else 1
+        if class_a == _ORDER_VARIABLE:
+            if first._id != second._id:
+                return -1 if first._id < second._id else 1
+        elif class_a == _ORDER_NUMBER or class_a == _ORDER_ATOM:
+            if first != second:
+                return -1 if first < second else 1
+        else:
+            name_a, arguments_a = _compound_parts(first)
+            name_b, arguments_b = _compound_parts(second)
+            if len(arguments_a) != len(arguments_b):
+                return -1 if len(arguments_a) < len(arguments_b) else 1
+            if name_a != name_b:
+                return -1 if str(name_a) < str(name_b) else 1
+            for index in range(len(arguments_a) - 1, -1, -1):
+                work.append((arguments_a[index], arguments_b[index]))
+    return 0
+
+
 # ---------------------------------------------------------------- the copy
 
 def _copy_terms(terms, renaming):
@@ -359,6 +539,49 @@ def residual_strings(target_variables, trail, name_of):
     if goals is None:
         raise LogicException(system_error(
             "clpq_dump_failed", "dump/3: dump/3 failed on a store that holds"))
+    return goal_strings(goals, name_of)
+
+
+def toplevel_strings(query_variables, trail, name_of, attributed=()):
+    """The `-g` printer's residual constraints on *query_variables* (and
+    the constraints of *attributed* the projection keeps, see
+    toplevel_goals): toplevel_goals's goals in residual_strings's text.
+    The targets are chosen as residual_strings chooses them, and without
+    any CLP(Q) state on them or on *attributed* the answer is [] at once.  Raises
+    system_error(clpq_projection_failed) where the projection fails, so an
+    answer's constraints are never dropped in silence
+    (test_a_failing_projection_raises_a_system_error)."""
+    targets = []
+    seen = set()
+    stateful = False
+    for variable in query_variables:
+        variable = deref(variable)
+        if not is_var(variable) or type(variable) is PlainVar:
+            continue
+        if variable._id in seen:
+            continue
+        seen.add(variable._id)
+        targets.append(variable)
+        if state_of(variable) is not None:
+            stateful = True
+    others = []
+    for variable in attributed:
+        variable = deref(variable)
+        if is_var(variable) and state_of(variable) is not None:
+            others.append(variable)
+            stateful = True
+    if not stateful:
+        return []
+    goals = toplevel_goals(targets, trail, others)
+    if goals is None:
+        raise LogicException(system_error(
+            "clpq_projection_failed",
+            "project_attributes/2: the projection failed on a store that holds"))
+    return goal_strings(goals, name_of)
+
+
+def goal_strings(goals, name_of):
+    """Each goal as format_term writes it, a constraint in braces."""
     result = []
     for goal in goals:
         text = format_term(goal, name_of)

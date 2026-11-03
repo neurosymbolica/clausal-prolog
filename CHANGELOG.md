@@ -28,6 +28,22 @@ surface described in [docs/public-api.md](docs/public-api.md).
   a too-deep argument, and a too-deep comparison of quantities, raise
   `resource_error(stack)`.  An error whose culprit is too deep to print
   no longer raises while building its message.  clpq DEVIATIONS.md D27.
+- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`): the `-g` printer's residual is
+  the toplevel projection, not dump/3** (todo of 2026-10-23, deferred by
+  the operator ruling of that date). It projects through project.pl's
+  `project_attributes/2` and prints with the `attribute_goal/2` hooks of
+  itf3.pl and geler.pl, as SICStus's toplevel calls them, so the order
+  the goal names its variables in imposes no variable ordering:
+  `ordering(Y < X), {X + Y = 10}` prints `{Y = 10 - X}` instead of
+  raising `system_error(unsatisfiable_ordering)`. Answers print as
+  Scryer's toplevel prints them: `{X + Y = 3}` is `{Y = 3 - X}` (was
+  `{X = 3 - Y}`), `{X =\= 2}` stays `{X =\= 2}` (was
+  `{X = 2 + _Q1}, {_Q1 =\= 0}`). A non-linear goal on a variable no
+  answer variable reaches now shows (`{X >= 10}, {sin(Z) > 3}` prints
+  `{X >= 10}, {3 - sin(_Q1) < 0}`, as the SICStus manual's toplevel
+  does), and a variable a non-linear residual mentions keeps its
+  equation. dump/3 itself is unchanged. The default solver is
+  unaffected. DEVIATIONS.md D28.
 
 - **A `.clausal` or `.pl` file that fails to load reports every error,
   not the first** (operator ruling 2026-11-02: like a compiler). The
