@@ -95,6 +95,41 @@ Profiles of the builds alone (`--profile TAIL N`), tottime:
   calls, `inc__2` 2.48 s.
 * improper, 16k (0.87 s): nothing over 0.15 s; linear.
 
+### Option 2, landed 2026-11-03
+
+Operator ruling, 2026-11-03: "yeah 2 first, 1 after benchmarks. but use a
+benchmark that actually hits it".
+
+For a `SegList` star, `_head_list_unify_output` (C) and its Python twin read
+the rest with `_walk_raw(False)` instead of `__walk__`: the elements are
+spliced as they are, as a list star's always were, and whoever reads the
+list reads them through their bindings (a `findall/3` copy walks them then,
+so commit f60e3211's fix holds: tests/test_findall_partial_list_snapshot.py
+and tests/iso/test_findall_partial_list_scryer.py pass).  A ground result is
+still promoted to text by `maybe_promote_to_str`, as after the walk.
+Pinned in tests/test_head_list_build_scaling.py (the calls a whole build
+makes grow x4 for x4 the length on every tail; the open tail was x13 before;
+answers, findall snapshots, chars, and the C and Python outputs agreeing on
+every star shape).
+
+Same command, after:
+
+| row | N=1k | 4k | 16k | 64k |
+|---|---|---|---|---|
+| nil: build | 0.014 | 0.147 | 1.93 | over 8 GB |
+| open: build | **0.020** | **0.139** | **2.02** | over 8 GB |
+| open: recurse | 0.327 | 5.06 | 86.6 | -- |
+| open: peak RSS (MB) | 64 | 260 | 3 124 | -- |
+| improper: build | 0.011 | 0.047 | 0.260 | 1.20 |
+
+The open build drops from 54.5 s to 2.0 s at 16k and now matches the `[]`
+build: still quadratic, in C list copies and in memory (it now stops at the
+8 GB cap at 64k instead of the 300 s one).  Every reader is within noise of
+the baseline (the largest moves: open `==` at 16k 0.024 -> 0.003 s, nil
+`compare` at 16k 2.2 -> 2.6 s, both a collection over the 3 GB heap; open
+`=` at 16k is 1.35 s in both runs, also a collection).  The open list's
+`walk([_|T])` recursion is still quadratic; that is a reader, untouched here.
+
 ## Options (need a ruling: they change the representation a head builds)
 
 1. Build `SegList([ConcreteSeg(before), VarSeg(star)])` instead of copying

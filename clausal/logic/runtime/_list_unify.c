@@ -921,7 +921,17 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
              * would produce. A walked still-non-ground SegString has its
              * str segments converted to ConcreteSeg(list(seg)) before
              * being spliced into the rebuilt SegList. */
-            PyObject *walked = PyObject_CallMethod(s, "__walk__", NULL);
+            /* A SegList is read SHALLOWLY (_walk_raw(False)): its elements
+             * are spliced as they are, as a list star's are, and read
+             * through their bindings by whoever reads the list.  The deep
+             * __walk__ walked every element of the rest at every level of
+             * a list a clause head builds after its body with an open
+             * tail: N^2/2 walk calls.  A ground result is promoted below
+             * (maybe_promote_to_str), as after the walk.  Twin:
+             * list_unify._head_list_unify_output_py. */
+            PyObject *walked = PyObject_TypeCheck(s, SegListType)
+                ? PyObject_CallMethod(s, "_walk_raw", "O", Py_False)
+                : PyObject_CallMethod(s, "__walk__", NULL);
             Py_DECREF(s);
             if (!walked) goto error;
 

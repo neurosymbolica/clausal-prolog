@@ -361,17 +361,19 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
                     segs.append(ConcreteSeg(after_result))
                 return unify(d, SegList(segs), trail)
         elif isinstance(s, SegList):
-            # Star derefs to a SegList — walk it first.
-            # Review fix (fix round 1): SegList.__walk__ itself applies
-            # maybe_promote_to_str to a fully-ground result (terms.py),
-            # so a ground SegList of all chars walks to a STR, not
-            # a list — mirror the C twin's ``PyList_Check(walked) ||
-            # PyUnicode_Check(walked)`` gate exactly (_list_unify.c, the
-            # SegList/SegString ground-walk branch) rather than only
-            # handling ``list``. A walked str splats through ``str_chars``
-            # (the C twin's per-char ``PyUnicode_Substring`` splice, now
-            # wrapped in ``char_atom_obj``).
-            walked = s.__walk__()
+            # Star derefs to a SegList -- read it SHALLOWLY
+            # (``_walk_raw(False)``), as the C twin does: its elements are
+            # spliced as they are, as a list star's always were, and are
+            # read through their bindings by whoever reads the list (a
+            # findall/3 copy walks them then; commit f60e3211).  The deep
+            # ``__walk__`` it used walked every element of the rest at
+            # every level of a list built in a clause head after its body
+            # (``mk(N, Z, [N|T]) :- ..., mk(N1, Z, T)`` with Z unbound):
+            # N^2/2 ``walk`` calls.  The ground result is not promoted to
+            # text here; ``maybe_promote_to_str`` below promotes the whole
+            # list, as it did after the walk.
+            # todo/a-list-a-clause-head-builds-after-its-body-copies-the-tail-quadratic-2026-11-03.md
+            walked = s._walk_raw(False)
             if is_chars(walked):
                 # A char SegList walks to the carrier: TEXT, its chars (the
                 # C twin's is_chars_carrier arm).  Read it here, before the

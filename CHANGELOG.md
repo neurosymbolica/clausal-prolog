@@ -7,6 +7,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Changed
+
+- A list a clause head builds after its body with an unbound tail
+  (`mk(N, Z, [N|T]) :- ..., mk(N1, Z, T)` with `Z` unbound) builds about
+  27 times faster at 16 000 elements (54.5 s to 2.0 s): the head's output
+  reads the rest of the list shallowly instead of walking every element of
+  it again at every level.  Answers are unchanged; it is still quadratic in
+  the copy, as the `[]`-tailed build is
+  (todo/a-list-a-clause-head-builds-after-its-body-copies-the-tail-quadratic-2026-11-03.md).
+
 ## 1.4.0 (2026-11-03)
 
 ### Changed
