@@ -1391,6 +1391,37 @@ static PyTypeObject TrailType = {
 
 #define MAX_DEPTH 50000
 
+/* The depth a recursive term walker starts from when it is entered from
+ * Python.  A walker that calls into Python (a Seg*'s ``__walk__``, a term
+ * instance's field getter, a hook lookup) raises it to the depth it has
+ * reached plus PY_LAYER_COST for the length of that call, so a walk the
+ * Python code starts -- ``SegList.__walk__`` walks its elements with
+ * ``walk``; a field getter may key a tabled call -- resumes counting there,
+ * and MAX_DEPTH bounds the C stack of the WHOLE nest of walks rather than
+ * each layer of it.  Restarting at 0 let a partial list nested as an
+ * element 49,000 x 2 deep overflow the C stack.  Per thread; shared with
+ * the other extensions through the capsule (``depth_base``), so the
+ * tabling key and these walkers count one budget.  PY_LAYER_COST is what
+ * one round trip through Python costs in C stack, in walker frames. */
+static CLAUSAL_THREAD_LOCAL int walk_depth_base = 0;
+#define PY_LAYER_COST 50
+
+/* Raise the base for a call into Python made at *depth*; returns the old
+ * base for py_call_end. */
+static inline int
+py_call_begin(int depth)
+{
+    int saved = walk_depth_base;
+    walk_depth_base = depth + PY_LAYER_COST;
+    return saved;
+}
+
+static inline void
+py_call_end(int saved)
+{
+    walk_depth_base = saved;
+}
+
 /* ================================================================
  * UIntSet — minimal open-addressing hash set over uintptr_t keys.
  * Used by c_collect_vars to deduplicate Var pointers without
@@ -2972,6 +3003,9 @@ static PyObject *py_term_field_names(PyObject *module, PyObject *obj);
 /*
  * walk(term) -> term  — deep substitution
  */
+static PyObject *do_walk_owned(PyObject *term, int depth);
+static PyObject *do_walk_python(PyObject *term, int depth);
+
 static PyObject *
 do_walk(PyObject *term, int depth)
 {
@@ -2985,6 +3019,17 @@ do_walk(PyObject *term, int depth)
         Py_INCREF(term);
         return term;
     }
+    /* Held for the walk: Python code it runs (a ``__walk__``, a field
+     * getter) can undo the binding that was the term's only reference. */
+    Py_INCREF(term);
+    PyObject *r = do_walk_owned(term, depth);
+    Py_DECREF(term);
+    return r;
+}
+
+static PyObject *
+do_walk_owned(PyObject *term, int depth)
+{
     if (PyTuple_Check(term)) {
         Py_ssize_t n = PyTuple_GET_SIZE(term);
         PyObject *result = PyTuple_New(n);
@@ -3001,7 +3046,16 @@ do_walk(PyObject *term, int depth)
         PyObject *result = PyList_New(n);
         if (!result) return NULL;
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyObject *elem = do_walk(PyList_GET_ITEM(term, i), depth + 1);
+            /* an element's walk may run Python code that mutates the
+             * list: hold the element, re-check the size */
+            if (PyList_GET_SIZE(term) != n) {
+                Py_DECREF(result);
+                PyErr_SetString(PyExc_RuntimeError, "walk: list changed size");
+                return NULL;
+            }
+            PyObject *item = Py_NewRef(PyList_GET_ITEM(term, i));
+            PyObject *elem = do_walk(item, depth + 1);
+            Py_DECREF(item);
             if (!elem) { Py_DECREF(result); return NULL; }
             PyList_SET_ITEM(result, i, elem);
         }
@@ -3010,25 +3064,33 @@ do_walk(PyObject *term, int depth)
     /* A04-F005: plain dict / set — deep-substitute so walk() stays consistent
      * with _deref_walk (both must cover the same container types). */
     if (PyDict_Check(term)) {
+        /* an owned snapshot: walking an entry may run Python code that
+         * mutates the dict under PyDict_Next's borrowed references */
+        PyObject *items = PyDict_Items(term);
+        if (!items) return NULL;
         PyObject *result = PyDict_New();
-        if (!result) return NULL;
-        PyObject *k, *v;
-        Py_ssize_t pos = 0;
-        while (PyDict_Next(term, &pos, &k, &v)) {
-            PyObject *wk = do_walk(k, depth + 1);
-            if (!wk) { Py_DECREF(result); return NULL; }
-            PyObject *wv = do_walk(v, depth + 1);
-            if (!wv) { Py_DECREF(wk); Py_DECREF(result); return NULL; }
+        if (!result) { Py_DECREF(items); return NULL; }
+        for (Py_ssize_t i = 0; i < PyList_GET_SIZE(items); i++) {
+            PyObject *kv = PyList_GET_ITEM(items, i);   /* items owns it */
+            PyObject *wk = do_walk(PyTuple_GET_ITEM(kv, 0), depth + 1);
+            if (!wk) { Py_DECREF(result); Py_DECREF(items); return NULL; }
+            PyObject *wv = do_walk(PyTuple_GET_ITEM(kv, 1), depth + 1);
+            if (!wv) { Py_DECREF(wk); Py_DECREF(result); Py_DECREF(items); return NULL; }
+            int saved = py_call_begin(depth);    /* a key's __hash__/__eq__ */
             int rc = PyDict_SetItem(result, wk, wv);
+            py_call_end(saved);
             Py_DECREF(wk); Py_DECREF(wv);
-            if (rc < 0) { Py_DECREF(result); return NULL; }
+            if (rc < 0) { Py_DECREF(result); Py_DECREF(items); return NULL; }
         }
+        Py_DECREF(items);
         return result;
     }
     if (PyAnySet_Check(term)) {
         PyObject *walked = PyList_New(0);
         if (!walked) return NULL;
+        int saved = py_call_begin(depth);        /* a set subclass's __iter__ */
         PyObject *iter = PyObject_GetIter(term);
+        py_call_end(saved);
         if (!iter) { Py_DECREF(walked); return NULL; }
         PyObject *item;
         while ((item = PyIter_Next(iter))) {
@@ -3041,11 +3103,24 @@ do_walk(PyObject *term, int depth)
         }
         Py_DECREF(iter);
         if (PyErr_Occurred()) { Py_DECREF(walked); return NULL; }
+        saved = py_call_begin(depth);            /* the elements' __hash__ */
         PyObject *result = PyFrozenSet_Check(term)
             ? PyFrozenSet_New(walked) : PySet_New(walked);
+        py_call_end(saved);
         Py_DECREF(walked);
         return result;
     }
+    /* Everything below can run Python code (a hook lookup, ``__walk__``, a
+     * field getter, a constructor): a walk it starts resumes from here. */
+    int saved = py_call_begin(depth);
+    PyObject *r = do_walk_python(term, depth);
+    py_call_end(saved);
+    return r;
+}
+
+static PyObject *
+do_walk_python(PyObject *term, int depth)
+{
     /* __walk__ protocol: delegate to Python method if present.
      * The Seg types and DictTerm supply __walk__
      * (A01-F008). */
@@ -3116,7 +3191,7 @@ do_walk(PyObject *term, int depth)
 static PyObject *
 py_walk(PyObject *Py_UNUSED(module), PyObject *arg)
 {
-    return do_walk(arg, 0);
+    return do_walk(arg, walk_depth_base);
 }
 
 /*
@@ -3668,6 +3743,9 @@ seg_flattened(PyObject *term)
 /*
  * _is_ground(term) -> bool — recursive groundness check
  */
+static int c_is_ground_owned(PyObject *term, int depth);
+static int c_is_ground_python(PyObject *term, int depth);
+
 static int
 c_is_ground(PyObject *term, int depth)
 {
@@ -3683,11 +3761,23 @@ c_is_ground(PyObject *term, int depth)
     if (term == Py_None || PyBool_Check(term) || PyLong_Check(term) ||
         PyFloat_Check(term) || PyUnicode_Check(term) || PyBytes_Check(term))
         return 1;
+    /* Held for the walk (see do_walk). */
+    Py_INCREF(term);
+    int r = c_is_ground_owned(term, depth);
+    Py_DECREF(term);
+    return r;
+}
+
+static int
+c_is_ground_owned(PyObject *term, int depth)
+{
     /* Lists */
     if (PyList_Check(term)) {
-        Py_ssize_t n = PyList_GET_SIZE(term);
-        for (Py_ssize_t i = 0; i < n; i++) {
-            int r = c_is_ground(PyList_GET_ITEM(term, i), depth + 1);
+        for (Py_ssize_t i = 0; i < PyList_GET_SIZE(term); i++) {
+            /* hold the element: its walk may run Python that mutates the list */
+            PyObject *item = Py_NewRef(PyList_GET_ITEM(term, i));
+            int r = c_is_ground(item, depth + 1);
+            Py_DECREF(item);
             if (r <= 0) return r;
         }
         return 1;
@@ -3718,6 +3808,17 @@ c_is_ground(PyObject *term, int depth)
         }
         return 1;
     }
+    /* Everything below can run Python code: a walk it starts resumes from
+     * here (see walk_depth_base). */
+    int saved = py_call_begin(depth);
+    int r = c_is_ground_python(term, depth);
+    py_call_end(saved);
+    return r;
+}
+
+static int
+c_is_ground_python(PyObject *term, int depth)
+{
     /* Partial list / string / byte string, dict term, plain dict (see
      * walk_container_kind): ground iff every segment element, VarSeg hole
      * and dict value is. */
@@ -3803,7 +3904,7 @@ rational_walk_fallback(const char *name, PyObject *a1, PyObject *a2, PyObject *a
 static PyObject *
 py_is_ground(PyObject *Py_UNUSED(module), PyObject *arg)
 {
-    int r = c_is_ground(arg, 0);
+    int r = c_is_ground(arg, walk_depth_base);
     if (r < 0) return rational_walk_fallback("is_ground_iterative", arg, NULL, NULL);
     return PyBool_FromLong(r);
 }
@@ -4129,6 +4230,11 @@ py_is_compound(PyObject *Py_UNUSED(module), PyObject *term)
  * var_map is a PyDict mapping id(original_var) -> fresh_var (as PyLong keys).
  * Sharing is preserved: two references to the same Var get the same fresh copy.
  */
+static PyObject *c_copy_term_owned(PyObject *term, PyObject *var_map, int depth,
+                                   PyObject *attvars);
+static PyObject *c_copy_term_python(PyObject *term, PyObject *var_map, int depth,
+                                    PyObject *attvars);
+
 static PyObject *
 c_copy_term(PyObject *term, PyObject *var_map, int depth, PyObject *attvars)
 {
@@ -4179,14 +4285,32 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth, PyObject *attvars)
         Py_INCREF(term);
         return term;
     }
+    /* Held for the walk (see do_walk). */
+    Py_INCREF(term);
+    PyObject *r = c_copy_term_owned(term, var_map, depth, attvars);
+    Py_DECREF(term);
+    return r;
+}
 
+static PyObject *
+c_copy_term_owned(PyObject *term, PyObject *var_map, int depth, PyObject *attvars)
+{
     /* List: copy element-by-element */
     if (PyList_Check(term)) {
         Py_ssize_t n = PyList_GET_SIZE(term);
         PyObject *result = PyList_New(n);
         if (!result) return NULL;
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyObject *elem = c_copy_term(PyList_GET_ITEM(term, i), var_map, depth + 1, attvars);
+            /* hold the element, re-check the size: its copy may run Python
+             * that mutates the list */
+            if (PyList_GET_SIZE(term) != n) {
+                Py_DECREF(result);
+                PyErr_SetString(PyExc_RuntimeError, "_copy_term: list changed size");
+                return NULL;
+            }
+            PyObject *item = Py_NewRef(PyList_GET_ITEM(term, i));
+            PyObject *elem = c_copy_term(item, var_map, depth + 1, attvars);
+            Py_DECREF(item);
             if (!elem) { Py_DECREF(result); return NULL; }
             PyList_SET_ITEM(result, i, elem);  /* steals ref */
         }
@@ -4237,8 +4361,17 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth, PyObject *attvars)
         }
         return result;
     }
+    /* Everything below can run Python code: a walk it starts resumes from
+     * here (see walk_depth_base). */
+    int saved = py_call_begin(depth);
+    PyObject *r = c_copy_term_python(term, var_map, depth, attvars);
+    py_call_end(saved);
+    return r;
+}
 
-
+static PyObject *
+c_copy_term_python(PyObject *term, PyObject *var_map, int depth, PyObject *attvars)
+{
     /* Partial list / string / byte string, dict term, plain dict (see
      * walk_container_kind).  A Seg* is rebuilt from its copied segment list:
      * a ConcreteSeg / VarSeg is a @dataclass, so the term-instance branch
@@ -4372,7 +4505,7 @@ py_copy_term_impl(PyObject *Py_UNUSED(module), PyObject *args)
                           &PyList_Type, &attvars))
         return NULL;
     Py_ssize_t reported_before = attvars ? PyList_GET_SIZE(attvars) : 0;
-    PyObject *r = c_copy_term(term, var_map, 0, attvars);
+    PyObject *r = c_copy_term(term, var_map, walk_depth_base, attvars);
     if (!r) {
         /* The aborted descent may have reported attributed variables
          * already: those reports go (only THIS call's -- the list is a
@@ -4400,6 +4533,11 @@ py_copy_term_impl(PyObject *Py_UNUSED(module), PyObject *args)
  * in left-to-right traversal order.  seen is a C-level UIntSet
  * tracking pointer-based ids for O(1) dedup without PyLong allocation.
  */
+static int c_collect_vars_owned(PyObject *term, UIntSet *seen, PyObject *result,
+                                int depth);
+static int c_collect_vars_python(PyObject *term, UIntSet *seen, PyObject *result,
+                                 int depth);
+
 static int
 c_collect_vars(PyObject *term, UIntSet *seen, PyObject *result, int depth)
 {
@@ -4424,13 +4562,24 @@ c_collect_vars(PyObject *term, UIntSet *seen, PyObject *result, int depth)
     if (term == Py_None || PyBool_Check(term) || PyLong_Check(term) ||
         PyFloat_Check(term) || PyUnicode_Check(term) || PyBytes_Check(term))
         return 0;
+    /* Held for the walk (see do_walk). */
+    Py_INCREF(term);
+    int r = c_collect_vars_owned(term, seen, result, depth);
+    Py_DECREF(term);
+    return r;
+}
 
+static int
+c_collect_vars_owned(PyObject *term, UIntSet *seen, PyObject *result, int depth)
+{
     /* List */
     if (PyList_Check(term)) {
-        Py_ssize_t n = PyList_GET_SIZE(term);
-        for (Py_ssize_t i = 0; i < n; i++) {
-            if (c_collect_vars(PyList_GET_ITEM(term, i), seen, result, depth + 1) < 0)
-                return -1;
+        for (Py_ssize_t i = 0; i < PyList_GET_SIZE(term); i++) {
+            /* hold the element: its walk may run Python that mutates the list */
+            PyObject *item = Py_NewRef(PyList_GET_ITEM(term, i));
+            int r = c_collect_vars(item, seen, result, depth + 1);
+            Py_DECREF(item);
+            if (r < 0) return -1;
         }
         return 0;
     }
@@ -4452,8 +4601,17 @@ c_collect_vars(PyObject *term, UIntSet *seen, PyObject *result, int depth)
         }
         return 0;
     }
+    /* Everything below can run Python code: a walk it starts resumes from
+     * here (see walk_depth_base). */
+    int saved = py_call_begin(depth);
+    int r = c_collect_vars_python(term, seen, result, depth);
+    py_call_end(saved);
+    return r;
+}
 
-
+static int
+c_collect_vars_python(PyObject *term, UIntSet *seen, PyObject *result, int depth)
+{
     /* Partial list / string / byte string, dict term, plain dict (see
      * walk_container_kind): segment elements and VarSeg holes left to
      * right, dict values in key order. */
@@ -4525,7 +4683,7 @@ py_collect_vars_impl(PyObject *Py_UNUSED(module), PyObject *args)
     UIntSet seen;
     if (uint_set_init(&seen) < 0) return NULL;
     Py_ssize_t before = PyList_GET_SIZE(result);
-    int ok = c_collect_vars(term, &seen, result, 0);
+    int ok = c_collect_vars(term, &seen, result, walk_depth_base);
     uint_set_free(&seen);
     if (ok < 0) {
         /* The aborted descent appended some variables; the twin collects
@@ -4542,6 +4700,14 @@ py_collect_vars_impl(PyObject *Py_UNUSED(module), PyObject *args)
 /* ================================================================
  * C API capsule — exported for other C extensions
  * ================================================================ */
+
+/* The calling thread's walk_depth_base, for another extension's walker to
+ * start from and raise around its own calls into Python. */
+static int *
+capi_depth_base(void)
+{
+    return &walk_depth_base;
+}
 
 /* Wrapper: is_var(term) → 1 if term dereferences to unbound Var */
 static int
@@ -5230,6 +5396,7 @@ PyInit__variables(void)
     capi_table.term_field_names = capi_term_field_names;
     capi_table.unify            = capi_unify;
     capi_table.hook_dispatch_depth = capi_hook_dispatch_depth;
+    capi_table.depth_base       = capi_depth_base;
 
     {
         PyObject *cap = PyCapsule_New(

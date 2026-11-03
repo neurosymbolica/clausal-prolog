@@ -69,11 +69,30 @@ static PyObject *VAR_sentinel = NULL;
 
 #define MAX_DEPTH 50000
 
-/* The depth reached when do_normalize hands a Seg* to tabling._seg_key,
- * which re-enters _normalize_for_key for its elements.  The re-entry
- * resumes counting from here, so MAX_DEPTH bounds the WHOLE term and not
- * each partial-list layer.  Per thread: the callback runs Python code. */
-static CLAUSAL_THREAD_LOCAL int seg_depth_base = 0;
+/* The depth a key walk entered from Python starts at is the C walkers'
+ * shared base (VarAPI->depth_base(), walk_depth_base in _variables.c).
+ * Around every call into Python -- tabling._seg_key, which re-enters
+ * _normalize_for_key for a partial list's elements; a term instance's field
+ * getter, which may table a call; a key's __hash__ -- do_normalize raises it
+ * to the depth reached plus the layer's cost, so a key (or a walk) the
+ * Python code starts resumes counting there and MAX_DEPTH bounds the WHOLE
+ * term, not each layer.  Per thread: the callbacks run Python code. */
+#define PY_LAYER_COST 50
+
+static inline int
+py_call_begin(int depth, int cost)
+{
+    int *base = VarAPI->depth_base();
+    int saved = *base;
+    *base = depth + cost;
+    return saved;
+}
+
+static inline void
+py_call_end(int saved)
+{
+    *VarAPI->depth_base() = saved;
+}
 
 /* _seg_key walks its Seg* (the engine's own deep C walk) before keying it.
  * Started under thousands of do_normalize frames, that walk overflowed the
@@ -208,6 +227,11 @@ var_key(PyObject *var)
  * _normalize_for_key — recursive variant-key normalisation
  * ================================================================ */
 
+static PyObject *do_normalize_owned(PyObject *term, int depth);
+static PyObject *normalize_dict(PyObject *term, int depth);
+static PyObject *normalize_set(PyObject *term, int depth);
+static PyObject *normalize_term_instance(PyObject *term, int depth, int *handled);
+
 static PyObject *
 do_normalize(PyObject *term, int depth)
 {
@@ -230,6 +254,18 @@ do_normalize(PyObject *term, int depth)
         return var_key(term);
     }
 
+    /* The dereferenced term is borrowed from the binding chain: held for
+     * the walk, since Python code it runs (a field getter, a Seg* key, a
+     * hostile __hash__) can undo the binding that was its only reference. */
+    Py_INCREF(term);
+    PyObject *key = do_normalize_owned(term, depth);
+    Py_DECREF(term);
+    return key;
+}
+
+static PyObject *
+do_normalize_owned(PyObject *term, int depth)
+{
     /* None */
     if (term == Py_None) {
         Py_INCREF(term);
@@ -269,10 +305,11 @@ do_normalize(PyObject *term, int depth)
         PyTypeObject *tp = Py_TYPE(term);
         if (tp == (PyTypeObject *)decimal_type
                 || PyType_IsSubtype(tp, (PyTypeObject *)decimal_type)) {
+            int saved = py_call_begin(depth, PY_LAYER_COST);  /* a subclass's as_tuple */
             PyObject *tup = PyObject_CallMethod(term, "as_tuple", NULL);
-            if (!tup) return NULL;
-            PyObject *exp = PyObject_GetAttrString(tup, "exponent");
-            Py_DECREF(tup);
+            PyObject *exp = tup ? PyObject_GetAttrString(tup, "exponent") : NULL;
+            py_call_end(saved);
+            Py_XDECREF(tup);
             if (!exp) return NULL;
             PyObject *key = PyTuple_Pack(3, decimal_type, term, exp);
             Py_DECREF(exp);
@@ -440,6 +477,69 @@ do_normalize(PyObject *term, int depth)
     /* A04-F005: dict → ("__dict__", frozenset{(nk, nv), ...}) — order-free so
      * a rebuilt answer dict keys identically regardless of insertion order. */
     if (PyDict_Check(term)) {
+        /* sorting and hashing the entries' keys can run Python code */
+        int saved = py_call_begin(depth, PY_LAYER_COST);
+        PyObject *key = normalize_dict(term, depth);
+        py_call_end(saved);
+        return key;
+    }
+
+    /* A04-F005: set/frozenset → ("__set__", frozenset{ne, ...}) */
+    if (PyAnySet_Check(term)) {
+        /* iterating a set subclass and hashing its keys can run Python code */
+        int saved = py_call_begin(depth, PY_LAYER_COST);
+        PyObject *key = normalize_set(term, depth);
+        py_call_end(saved);
+        return key;
+    }
+
+    /* A partial list/string (SegList/SegString/SegBytes): tabling._seg_key
+     * builds the key in Python, so the two twins share one definition. */
+    if (seg_types && seg_key_fn) {
+        /* an exact type test: PyObject_IsInstance would consult a hostile
+         * object's __class__ and run Python code mid-scan */
+        int is_seg = 0;
+        for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(seg_types); i++) {
+            if (PyObject_TypeCheck(term,
+                    (PyTypeObject *)PyTuple_GET_ITEM(seg_types, i))) {
+                is_seg = 1;
+                break;
+            }
+        }
+        if (is_seg) {
+            if (depth > SEG_MAX_DEPTH) {
+                PyErr_SetString(PyExc_RecursionError,
+                                "_normalize_for_key: partial list nested too deep");
+                return NULL;
+            }
+            int saved = py_call_begin(depth, SEG_LAYER_COST);
+            PyObject *key = PyObject_CallOneArg(seg_key_fn, term);
+            py_call_end(saved);
+            return key;
+        }
+    }
+
+    /* Term instance (a @dataclass instance) → (class_name, field0, ...):
+     * the class probe, its name and the field getters can run Python code,
+     * and a getter that tables a call re-enters the key here */
+    {
+        int saved = py_call_begin(depth, PY_LAYER_COST);
+        int handled = 0;
+        PyObject *key = normalize_term_instance(term, depth, &handled);
+        py_call_end(saved);
+        if (handled) return key;
+    }
+
+    /* Fallback: return as-is */
+    Py_INCREF(term);
+    return term;
+}
+
+/* The dict branch of do_normalize. */
+static PyObject *
+normalize_dict(PyObject *term, int depth)
+{
+    {
         /* iterate an owned snapshot: keying an entry may run Python code
          * (a field, a Seg* key) that mutates the dict under PyDict_Next's
          * borrowed references */
@@ -497,8 +597,12 @@ do_normalize(PyObject *term, int depth)
         return result;
     }
 
-    /* A04-F005: set/frozenset → ("__set__", frozenset{ne, ...}) */
-    if (PyAnySet_Check(term)) {
+}
+
+/* The set branch of do_normalize. */
+static PyObject *
+normalize_set(PyObject *term, int depth)
+{
         PyObject *elems = PySet_New(NULL);
         if (!elems) return NULL;
         PyObject *iter = PyObject_GetIter(term);
@@ -520,81 +624,42 @@ do_normalize(PyObject *term, int depth)
         PyObject *result = PyTuple_Pack(2, str___set__, frozen);
         Py_DECREF(frozen);
         return result;
-    }
+}
 
-    /* A partial list/string (SegList/SegString/SegBytes): tabling._seg_key
-     * builds the key in Python, so the two twins share one definition. */
-    if (seg_types && seg_key_fn) {
-        /* an exact type test: PyObject_IsInstance would consult a hostile
-         * object's __class__ and run Python code mid-scan */
-        int is_seg = 0;
-        for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(seg_types); i++) {
-            if (PyObject_TypeCheck(term,
-                    (PyTypeObject *)PyTuple_GET_ITEM(seg_types, i))) {
-                is_seg = 1;
-                break;
-            }
-        }
-        if (is_seg) {
-            if (depth > SEG_MAX_DEPTH) {
-                PyErr_SetString(PyExc_RecursionError,
-                                "_normalize_for_key: partial list nested too deep");
-                return NULL;
-            }
-            int saved = seg_depth_base;
-            seg_depth_base = depth + SEG_LAYER_COST;
-            PyObject *key = PyObject_CallOneArg(seg_key_fn, term);
-            seg_depth_base = saved;
-            return key;
-        }
+/* The term-instance branch of do_normalize: *handled* is set when *term* is
+ * a term instance or the probe failed (the result is then its key, or NULL
+ * with an exception); otherwise NULL and *handled* stays 0. */
+static PyObject *
+normalize_term_instance(PyObject *term, int depth, int *handled)
+{
+    int ti = VarAPI->is_term_instance(term);
+    if (ti == 0) return NULL;
+    *handled = 1;
+    if (ti < 0) return NULL;
+    PyObject *cls_name = PyObject_GetAttr((PyObject *)Py_TYPE(term), str___name__);
+    if (!cls_name) return NULL;
+    PyObject *fields = VarAPI->term_field_names(term);
+    if (!fields) { Py_DECREF(cls_name); return NULL; }
+    if (!PyTuple_Check(fields)) {
+        Py_DECREF(cls_name);
+        Py_DECREF(fields);
+        PyErr_SetString(PyExc_TypeError, "term_field_names did not return a tuple");
+        return NULL;
     }
-
-    /* Term instance (a @dataclass instance) → (class_name, field0, ...) */
-    {
-        int ti = VarAPI->is_term_instance(term);
-        if (ti < 0) return NULL;
-        if (ti) {
-            PyObject *cls_name = PyObject_GetAttr(
-                (PyObject *)Py_TYPE(term), str___name__);
-            if (!cls_name) return NULL;
-            PyObject *fields = VarAPI->term_field_names(term);
-            if (!fields) { Py_DECREF(cls_name); return NULL; }
-            if (!PyTuple_Check(fields)) {
-                Py_DECREF(cls_name);
-                Py_DECREF(fields);
-                PyErr_SetString(PyExc_TypeError,
-                                "term_field_names did not return a tuple");
-                return NULL;
-            }
-            Py_ssize_t n = PyTuple_GET_SIZE(fields);
-            PyObject *result = PyTuple_New(n + 1);
-            if (!result) { Py_DECREF(cls_name); Py_DECREF(fields); return NULL; }
-            PyTuple_SET_ITEM(result, 0, cls_name);  /* steals ref */
-            for (Py_ssize_t i = 0; i < n; i++) {
-                PyObject *val = PyObject_GetAttr(
-                    term, PyTuple_GET_ITEM(fields, i));
-                if (!val) {
-                    Py_DECREF(fields);
-                    Py_DECREF(result);
-                    return NULL;
-                }
-                PyObject *normed = do_normalize(val, depth + 1);
-                Py_DECREF(val);
-                if (!normed) {
-                    Py_DECREF(fields);
-                    Py_DECREF(result);
-                    return NULL;
-                }
-                PyTuple_SET_ITEM(result, i + 1, normed);
-            }
-            Py_DECREF(fields);
-            return result;
-        }
+    Py_ssize_t n = PyTuple_GET_SIZE(fields);
+    PyObject *result = PyTuple_New(n + 1);
+    if (!result) { Py_DECREF(cls_name); Py_DECREF(fields); return NULL; }
+    PyTuple_SET_ITEM(result, 0, cls_name);  /* steals ref */
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *val = PyObject_GetAttr(term, PyTuple_GET_ITEM(fields, i));
+        if (!val) { Py_DECREF(fields); Py_DECREF(result); return NULL; }
+        PyObject *normed = do_normalize(val, depth + 1);
+        Py_DECREF(val);
+        if (!normed) { Py_DECREF(fields); Py_DECREF(result); return NULL; }
+        PyTuple_SET_ITEM(result, i + 1, normed);
     }
-
-    /* Fallback: return as-is */
-    Py_INCREF(term);
-    return term;
+    Py_DECREF(fields);
+    return result;
 }
 
 static PyObject *
@@ -609,7 +674,7 @@ py_normalize_for_key(PyObject *Py_UNUSED(module), PyObject *term)
     vm_init(&local);
     VarMap *saved = vm_cur;
     vm_cur = &local;
-    PyObject *key = do_normalize(term, seg_depth_base);
+    PyObject *key = do_normalize(term, *VarAPI->depth_base());
     vm_cur = saved;
     vm_release(&local);
     return key;
@@ -623,7 +688,7 @@ py_normalize_for_key_continue(PyObject *module, PyObject *term)
 {
     if (!vm_cur)
         return py_normalize_for_key(module, term);
-    return do_normalize(term, seg_depth_base);
+    return do_normalize(term, *VarAPI->depth_base());
 }
 
 /* ================================================================
@@ -658,8 +723,9 @@ py_make_subgoal_key(PyObject *Py_UNUSED(module), PyObject *args)
     vm_init(&local);
     VarMap *saved = vm_cur;
     vm_cur = &local;
+    int base = *VarAPI->depth_base();
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *normed = do_normalize(PyTuple_GET_ITEM(snap, i), seg_depth_base);
+        PyObject *normed = do_normalize(PyTuple_GET_ITEM(snap, i), base);
         if (!normed) {
             vm_cur = saved;
             vm_release(&local);
@@ -677,6 +743,9 @@ py_make_subgoal_key(PyObject *Py_UNUSED(module), PyObject *args)
 /* ================================================================
  * _deref_walk — deep dereference, preserving structure
  * ================================================================ */
+
+static PyObject *do_deref_walk_owned(PyObject *term, int depth);
+static PyObject *do_deref_walk_python(PyObject *term, int depth);
 
 static PyObject *
 do_deref_walk(PyObject *term, int depth)
@@ -703,13 +772,32 @@ do_deref_walk(PyObject *term, int depth)
         return term;
     }
 
+    /* Held for the walk, as in do_normalize. */
+    Py_INCREF(term);
+    PyObject *r = do_deref_walk_owned(term, depth);
+    Py_DECREF(term);
+    return r;
+}
+
+static PyObject *
+do_deref_walk_owned(PyObject *term, int depth)
+{
     /* List → [deref_walk(e) for e in term] */
     if (PyList_Check(term)) {
         Py_ssize_t n = PyList_GET_SIZE(term);
         PyObject *result = PyList_New(n);
         if (!result) return NULL;
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyObject *elem = do_deref_walk(PyList_GET_ITEM(term, i), depth + 1);
+            /* hold the element, re-check the size: its walk may run Python
+             * code that mutates the list */
+            if (PyList_GET_SIZE(term) != n) {
+                Py_DECREF(result);
+                PyErr_SetString(PyExc_RuntimeError, "_deref_walk: list changed size");
+                return NULL;
+            }
+            PyObject *item = Py_NewRef(PyList_GET_ITEM(term, i));
+            PyObject *elem = do_deref_walk(item, depth + 1);
+            Py_DECREF(item);
             if (!elem) { Py_DECREF(result); return NULL; }
             PyList_SET_ITEM(result, i, elem);
         }
@@ -743,22 +831,40 @@ do_deref_walk(PyObject *term, int depth)
     /* A04-F005: plain dict → {deref_walk(k): deref_walk(v)} so a frozen answer
      * holding a dict does not share live inner Vars that unbind on backtrack. */
     if (PyDict_Check(term)) {
+        /* an owned snapshot: walking an entry may run Python code that
+         * mutates the dict under PyDict_Next's borrowed references */
+        PyObject *items = PyDict_Items(term);
+        if (!items) return NULL;
         PyObject *result = PyDict_New();
-        if (!result) return NULL;
-        PyObject *k, *v;
-        Py_ssize_t pos = 0;
-        while (PyDict_Next(term, &pos, &k, &v)) {
-            PyObject *wk = do_deref_walk(k, depth + 1);
-            if (!wk) { Py_DECREF(result); return NULL; }
-            PyObject *wv = do_deref_walk(v, depth + 1);
-            if (!wv) { Py_DECREF(wk); Py_DECREF(result); return NULL; }
+        if (!result) { Py_DECREF(items); return NULL; }
+        for (Py_ssize_t i = 0; i < PyList_GET_SIZE(items); i++) {
+            PyObject *kv = PyList_GET_ITEM(items, i);   /* items owns it */
+            PyObject *wk = do_deref_walk(PyTuple_GET_ITEM(kv, 0), depth + 1);
+            if (!wk) { Py_DECREF(result); Py_DECREF(items); return NULL; }
+            PyObject *wv = do_deref_walk(PyTuple_GET_ITEM(kv, 1), depth + 1);
+            if (!wv) { Py_DECREF(wk); Py_DECREF(result); Py_DECREF(items); return NULL; }
+            int saved = py_call_begin(depth, PY_LAYER_COST);   /* a key's __hash__ */
             int rc = PyDict_SetItem(result, wk, wv);
+            py_call_end(saved);
             Py_DECREF(wk); Py_DECREF(wv);
-            if (rc < 0) { Py_DECREF(result); return NULL; }
+            if (rc < 0) { Py_DECREF(result); Py_DECREF(items); return NULL; }
         }
+        Py_DECREF(items);
         return result;
     }
 
+    /* Everything below can run Python code (a set subclass's __iter__, the
+     * elements' __hash__, ``__walk__``, a field getter, a constructor): a
+     * walk it starts resumes from here. */
+    int saved = py_call_begin(depth, PY_LAYER_COST);
+    PyObject *r = do_deref_walk_python(term, depth);
+    py_call_end(saved);
+    return r;
+}
+
+static PyObject *
+do_deref_walk_python(PyObject *term, int depth)
+{
     /* A04-F005: set/frozenset → walk each element, preserving the exact type. */
     if (PyAnySet_Check(term)) {
         PyObject *walked = PyList_New(0);
@@ -862,7 +968,7 @@ do_deref_walk(PyObject *term, int depth)
 static PyObject *
 py_deref_walk(PyObject *Py_UNUSED(module), PyObject *term)
 {
-    PyObject *r = do_deref_walk(term, 0);
+    PyObject *r = do_deref_walk(term, *VarAPI->depth_base());
     if (!r && PyErr_ExceptionMatches(PyExc_RecursionError)) {
         /* A cyclic term (``X = f(X)``) or one nested past MAX_DEPTH: the
          * iterative, cycle-aware twin answers instead (2026-10-24; see
@@ -903,17 +1009,21 @@ py_freeze_args(PyObject *Py_UNUSED(module), PyObject *args)
         return NULL;
     }
 
+    /* an owned tuple snapshot: walking an argument may run Python code that
+     * mutates a list of arguments under a borrowed reference */
+    PyObject *snap = is_tuple ? Py_NewRef(py_args) : PyList_AsTuple(py_args);
+    if (!snap) return NULL;
+    n = PyTuple_GET_SIZE(snap);
     PyObject *result = PyTuple_New(n);
-    if (!result) return NULL;
+    if (!result) { Py_DECREF(snap); return NULL; }
 
+    int base = *VarAPI->depth_base();
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *item = is_tuple
-            ? PyTuple_GET_ITEM(py_args, i)
-            : PyList_GET_ITEM(py_args, i);
-        PyObject *walked = do_deref_walk(item, 0);
-        if (!walked) { Py_DECREF(result); return NULL; }
+        PyObject *walked = do_deref_walk(PyTuple_GET_ITEM(snap, i), base);
+        if (!walked) { Py_DECREF(result); Py_DECREF(snap); return NULL; }
         PyTuple_SET_ITEM(result, i, walked);
     }
+    Py_DECREF(snap);
     return result;
 }
 

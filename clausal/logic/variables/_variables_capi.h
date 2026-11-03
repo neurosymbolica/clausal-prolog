@@ -127,6 +127,13 @@ typedef struct {
      * built against an older header never reads it. */
     int (*hook_dispatch_depth)(void);
 
+    /* depth_base: the calling thread's term-walk depth base (see
+     * walk_depth_base in _variables.c).  A recursive walker entered from
+     * Python starts at *depth_base(), and raises it to its own depth plus a
+     * layer cost while it calls into Python, so every C walker in the nest
+     * counts one MAX_DEPTH budget of C stack.  Appended last. */
+    int *(*depth_base)(void);
+
 } VariablesCAPI;
 
 
