@@ -617,9 +617,11 @@ def entailed(constraint_type, l, r, trail):
 
 # ---------------------------------------------------------------- residuals
 
-def _named_targets(target_vars, context, name_of):
+def _named_targets(target_vars, context, name_of, known=()):
     """The targets with each united variable as its shadow, and a namer
-    that names a shadow as the variable the program wrote."""
+    that names a shadow as the variable the program wrote, and each
+    variable of *known* (the caller's other named variables) by
+    *name_of* too."""
     target_vars = list(target_vars)
     shadows = _labels(target_vars, context)
     names = {}
@@ -627,12 +629,16 @@ def _named_targets(target_vars, context, name_of):
         variable, shadow = deref(variable), deref(shadow)
         if is_var(shadow):
             names.setdefault(shadow._id, variable)
+    for variable in known:
+        variable = deref(variable)
+        if is_var(variable):
+            names.setdefault(variable._id, variable)
     internal = {}
 
     def name(variable):
-        # A variable dump/3 keeps that is not a target (a slack of a
-        # disequation) is named _Q1, _Q2, ... as legacy names its internal
-        # variables: name_of is asked about targets only.
+        # A variable dump/3 keeps that is neither a target nor known (a
+        # slack of a disequation) is named _Q1, _Q2, ... as legacy names
+        # its internal variables: name_of is asked about the others only.
         original = names.get(variable._id)
         if original is None:
             if variable._id not in internal:
@@ -675,16 +681,19 @@ def residual_q(target_vars, trail, name_of, attributed=()):
     and the attribute_goal/2 hooks, not dump/3, so the order of
     *target_vars* imposes no variable ordering (DEVIATIONS.md D28).
     *attributed* are the query's attributed variables no query variable
-    reaches (call_residue_vars/2); the projection takes in their
-    constraints too, as the SICStus toplevel does.  ``[]`` when none of
+    reaches (call_residue_vars/2); the projection takes in those that
+    carry a delayed goal, as the SICStus toplevel shows such a goal, and
+    names each of them by *name_of*, as the caller's other printers do.  ``[]`` when none of
     them carries CLP(Q) state."""
     refuse_inside_attribute_hooks(
         trail, ("residual_q", target_vars), "residual_q", 1)
     target_vars = _proper_list(target_vars, "residual_q/1")
-    shadows, name = _named_targets(target_vars, "residual_q/1", name_of)
+    attributed = list(attributed)
+    shadows, name = _named_targets(target_vars, "residual_q/1", name_of,
+                                   attributed)
     return _without_a_queue(
         trail, lambda: _residual_constraints.toplevel_strings(
-            shadows, trail, name, list(attributed)))
+            shadows, trail, name, attributed))
 
 
 # ---------------------------------------------------------------- ordering

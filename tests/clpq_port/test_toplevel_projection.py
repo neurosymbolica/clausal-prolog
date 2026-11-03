@@ -14,6 +14,11 @@ variables in an order ordering/1 admits; the port's `-g` answers, with the
 variables in every order, must have the same solution set (z3).
 """
 import itertools
+import os
+import pathlib
+import re
+import subprocess
+import tempfile
 
 import pytest
 
@@ -21,7 +26,17 @@ from clausal.logic.clpq import holzbaur as h
 from clausal.logic.variables import Trail, Var
 from clausal.pythonic_ast.nodes import Add, Lt, Mult, Sub
 from tests.clpq_oracle import (
-    clausal_answers, oracle_answers, same_solution_sets)
+    _ROOT, clausal_answers, clausal_argv, oracle_answers, same_solution_sets)
+
+_ENVIRONMENT = dict(os.environ, CLAUSAL_PL_FRONTEND="native",
+                    CLAUSAL_CLPQ="holzbaur", PYTHONPATH=str(_ROOT))
+
+
+def _write(program):
+    """A fresh directory holding *program* as program.pl."""
+    directory = tempfile.mkdtemp()
+    pathlib.Path(directory, "program.pl").write_text(program)
+    return directory
 
 _HEAD = ":- use_module(library(clpq)).\n"
 
@@ -169,9 +184,81 @@ def test_a_nonlinear_goal_no_query_variable_reaches_shows():
     # AttrVars, so project_nonlinear/3 collects the goal on _Z.
     [answer] = clausal_answers(_GLOBAL, "q_sin(X)", ["X"], "holzbaur")
     assert answer.bindings == {}
-    assert answer.residual == ["X >= 10", "3 - sin(_Q1) < 0"], answer
+    assert answer.residual == ["X >= 10", "3 - sin(_B) < 0"], answer
 
 
 def test_a_linear_constraint_no_query_variable_reaches_is_projected_away():
     [answer] = clausal_answers(_GLOBAL, "q_bound(X)", ["X"], "holzbaur")
     assert answer.residual == ["X >= 10"], answer
+
+
+def _hidden_store(count):
+    """`count` hidden variables with pairwise inequalities and bounds, then
+    {X >= 1}: Fourier-Motzkin over them is exponential."""
+    constraints = []
+    for i in range(count):
+        for j in range(i + 1, count):
+            constraints.append(f"H{i} + H{j} >= {i + j}")
+            constraints.append(f"H{i} - H{j} =< {3 * (j - i)}")
+    constraints += [f"H{i} =< 100" for i in range(count)]
+    return (_HEAD + "blow(X) :- {" + ", ".join(constraints) + "}, {X >= 1}.\n")
+
+
+def test_a_hidden_linear_store_is_not_projected():
+    # A component no query variable reaches and no delayed goal reaches
+    # cannot print (project_attributes/2 eliminates every non-target of it),
+    # so the printer leaves it out of AttrVars instead of running
+    # Fourier-Motzkin over it: 14 such variables raised
+    # resource_error(clpq_projection) after seconds.
+    [answer] = clausal_answers(_hidden_store(14), "blow(X)", ["X"], "holzbaur")
+    assert answer.bindings == {} and answer.residual == ["X >= 1"], answer
+
+
+def test_a_hidden_component_a_delayed_goal_reaches_is_projected():
+    program = _HEAD + "q_mix(X) :- {X >= 10}, {Z*Z = W, W + V =< 2, V >= 1}.\n"
+    [answer] = clausal_answers(program, "q_mix(X)", ["X"], "holzbaur")
+    assert answer.residual[0] == "X >= 10", answer
+    assert len(answer.residual) == 3, answer
+    assert any("^2" in r for r in answer.residual), answer
+    assert any(r.startswith("_") and "=" in r and "^" not in r
+               for r in answer.residual), answer
+
+
+_NAMED = _HEAD + """
+n1(X) :- {X >= 10}, {sin(Z) > 3}, freeze(Z, true).
+n2(X) :- {X >= 10}, {sin(Z) > 3}, dif(Z, 1).
+"""
+
+
+@pytest.mark.parametrize("goal, other", [("n1(X)", "freeze("),
+                                         ("n2(X)", "dif(")])
+def test_a_hidden_variable_has_one_name_in_every_printer(goal, other):
+    result = subprocess.run(
+        [*clausal_argv(goal), "program.pl"], cwd=_write(_NAMED),
+        env=_ENVIRONMENT, capture_output=True, text=True, timeout=300)
+    line = result.stdout.strip()
+    assert result.returncode == 0, result.stderr
+    named = re.search(re.escape(other) + r"(_[A-Z]\w*)", line)
+    assert named, line
+    assert f"sin({named.group(1)})" in line, line
+
+
+def test_a_hidden_disequation_no_goal_reaches_is_not_shown():
+    # A component AttrVars leaves out because no query variable and no
+    # delayed goal reaches it is not shown even where projecting it would
+    # print something: its disequations (dump_nonzero//2 shows a non-target's
+    # nonzero row).  DEVIATIONS.md D28.
+    program = _HEAD + "q_ne(X) :- {X >= 1}, {Z =\\= 1, Z + W >= 2}.\n"
+    [answer] = clausal_answers(program, "q_ne(X)", ["X"], "holzbaur")
+    assert answer.residual == ["X >= 1"], answer
+
+
+def test_with_no_query_variable_a_goal_shows_without_its_bound():
+    # project.pl: Tvs == [] drops every linear attribute (drop_lin_atts/1),
+    # so {X*X = Z, Z =< -1}, which has no solution, prints only the
+    # product.  DEVIATIONS.md D28.
+    program = _HEAD + "h2 :- {X*X = Z, Z =< -1}.\n"
+    result = subprocess.run(
+        [*clausal_argv("h2"), "program.pl"], cwd=_write(program),
+        env=_ENVIRONMENT, capture_output=True, text=True, timeout=300)
+    assert result.stdout.strip() == "{_A^2 - _B = 0}.", result.stderr

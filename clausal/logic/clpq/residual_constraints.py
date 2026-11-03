@@ -25,7 +25,8 @@ from clausal.logic.clpq.attributes import refuse_inside_attribute_hooks
 from clausal.logic.clpq.attribute_hooks import dump_linear, dump_nonzero
 from clausal.logic.clpq.attributes import state_of
 from clausal.logic.clpq.components import ListCell, component_all_variables
-from clausal.logic.clpq.delayed_goals import _term_variables, collect_nonlinear
+from clausal.logic.clpq.delayed_goals import (
+    _term_variables, collect_nonlinear, nonexhausted)
 from clausal.logic.clpq.normal_form import SOLVER_MODULE
 from clausal.logic.clpq.projection import project_attributes
 from clausal.logic.clpq.variable_ordering import ordering
@@ -299,10 +300,15 @@ def toplevel_goals(query_variables, trail, attributed=()):
     where the projection fails.
 
     AttrVars, which the SICStus toplevel gathers itself, is the variables
-    with CLP(Q) state reachable from the query variables and from
+    with CLP(Q) state reachable from the query variables and from those of
     *attributed* (the caller's attributed variables of the query that no
-    query variable reaches: the `-g` printer's call_residue_vars/2), see
-    attributed_variables.  The goals are shown for the members of their
+    query variable reaches: the `-g` printer's call_residue_vars/2) that
+    carry a delayed goal not yet run, see attributed_variables.  A
+    component of *attributed* that neither reaches can show nothing:
+    project_attributes/2 eliminates every non-target of it, so it is not
+    projected at all (DEVIATIONS.md D28).  In the copy each variable of
+    *attributed* stands for itself too, so the caller names it as its
+    other printers do.  The goals are shown for the members of their
     components after the projection, component by component as dump.pl's
     related_linear_vars/2 lists them (DEVIATIONS.md D28).  Runs with
     `trail.defer` off, each trial post running what it wakes, as dump/3
@@ -316,7 +322,8 @@ def toplevel_goals(query_variables, trail, attributed=()):
         mark = trail.mark()
         try:
             trail.take_pending()        # the outer queue, back at the undo
-            roots = targets + list(attributed)
+            roots = targets + [variable for variable in attributed
+                               if carries_delayed_goals(variable)]
             all_nonlinear = []
             if not project_attributes(targets, attributed_variables(roots),
                                       trail, all_nonlinear):
@@ -338,12 +345,27 @@ def toplevel_goals(query_variables, trail, attributed=()):
             renaming = {}
             for variable in targets:
                 renaming.setdefault(variable._id, variable)
+            for variable in attributed:
+                variable = deref(variable)
+                if is_var(variable):
+                    renaming.setdefault(variable._id, variable)
             copied = _copy_terms(goals + nonlinear, renaming)
         finally:
             trail.undo(mark)
     finally:
         trail.defer = saved_defer
     return copied
+
+
+def carries_delayed_goals(variable):
+    """*variable* holds a delayed goal not yet run (geler.pl's goals/1 with
+    a nonexhausted run/2)."""
+    variable = deref(variable)
+    if not is_var(variable):
+        return False
+    state = state_of(variable)
+    return (state is not None and state.delayed_goals is not None
+            and bool(nonexhausted(state.delayed_goals)))
 
 
 def attributed_variables(variables):
@@ -569,7 +591,8 @@ def toplevel_strings(query_variables, trail, name_of, attributed=()):
         variable = deref(variable)
         if is_var(variable) and state_of(variable) is not None:
             others.append(variable)
-            stateful = True
+            if carries_delayed_goals(variable):
+                stateful = True
     if not stateful:
         return []
     goals = toplevel_goals(targets, trail, others)

@@ -1804,15 +1804,58 @@ What is not 1.3.3 text, or not known, and so is the port's choice:
   the query's attributed variables whether the query variables reach them
   or not.  The port's AttrVars is every variable with CLP(Q) state
   reachable (component members, linear forms, delayed goals, transitively;
-  `attributed_variables`) from the query variables and from the
+  `attributed_variables`) from the query variables and from those of the
   attributed variables the `-g` printer collects for call_residue_vars/2
   (`trail.attvars_since(0)`, the `attributed` argument of `residual_q`)
-  (`test_a_nonlinear_goal_no_query_variable_reaches_shows`,
+  that carry a delayed goal not yet run (`carries_delayed_goals`)
+  (`test_a_nonlinear_goal_no_query_variable_reaches_shows`).  So a goal's
+  left-over non-linear constraint on internal variables shows in its
+  answer (`rep(4)` in `test_a_product_repaired_a_binding_at_a_time_raises`),
+  where dump/3 over the answer variables showed nothing.
+- A hidden component (one no query variable and no such goal reaches) is
+  left out of AttrVars, not projected.  Projecting it costs
+  Fourier-Motzkin over it at print time: 14 hidden variables with
+  pairwise inequalities and `{X >= 1}` raised
+  `resource_error(clpq_projection)` after 6 s where legacy prints
+  `{X >= 1}` (`test_a_hidden_linear_store_is_not_projected`).  It has no
+  target, so project_attributes/2 eliminates every variable of it, and
+  its inequalities and equations never print: over 2,000 random hidden
+  stores of `<`, `=<`, `>`, `>=` and `=` (1 to 5 hidden variables,
+  1 to 7 constraints, beside `{X >= C}`) projecting the hidden components
+  and leaving them out print the same, every time
+  (`scratchpad` check, not a pinned test;
   `test_a_linear_constraint_no_query_variable_reaches_is_projected_away`).
-  So a goal's left-over non-linear constraint on internal variables now
-  shows in its answer (`rep(4)` in
-  `test_a_product_repaired_a_binding_at_a_time_raises`), where dump/3
-  over the answer variables showed nothing.
+  Disequations are the exception: itf3.pl's `dump_nonzero//2` shows a
+  non-target's nonzero row, so projecting a hidden component holding a
+  disequation prints it (`{Z =\= 1}` as `{_A =\= 1}`; 743 of 2,000
+  random stores with `=\=` added), and the port does not
+  (`test_a_hidden_disequation_no_goal_reaches_is_not_shown`).  Whether
+  the SICStus toplevel shows such a disequation is not known: it depends
+  on AttrVars holding variables nothing reaches, which only the manual's
+  non-linear example shows.  Scryer's toplevel, which prints what the
+  query variables reach, shows neither a hidden linear component nor a
+  hidden goal (`q(X) :- {X >= 10}, {Z >= 3, Z + W =< 7}` prints
+  `X>=10`).  A store that holds is consistent, so a hidden component's
+  linear constraints and disequations say nothing about whether the
+  answer has a solution; a hidden non-linear goal can (the manual's
+  `sin(Z) > 3`), and it still shows.
+- Names.  Each attributed variable the printer is given stands for
+  itself in the copy and is named by the printer's `name_of`, so a hidden
+  variable has one name across the `-g` printers: `{X >= 10},
+  {sin(Z) > 3}, freeze(Z, true)` prints `freeze(_B,true), {X >= 10},
+  {3 - sin(_B) < 0}` (it printed `_Q1` for Z in the constraint, so the
+  answer read weaker than the store)
+  (`test_a_hidden_variable_has_one_name_in_every_printer`).  A variable
+  the copy reaches that the printer was not given (a slack) is `_Q1`,
+  `_Q2`, ... as before.
+- No query variable.  With `Tvs == []` project.pl's first branch drops
+  every linear attribute of AttrVars (`drop_lin_atts/1`), so a
+  non-linear goal prints without the linear constraints it depends on:
+  `h2 :- {X*X = Z, Z =< -1}`, which has no solution, prints
+  `{_A^2 - _B = 0}`
+  (`test_with_no_query_variable_a_goal_shows_without_its_bound`).  That is
+  1.3.3's text, kept; it is not known whether the SICStus toplevel calls
+  `project_attributes/2` with no query variables at all.
 - Which variables `attribute_goal/2` is asked about, and in what order:
   the members of the components of AttrVars after the projection,
   component by component as dump.pl's `related_linear_vars/2` lists them
@@ -1860,10 +1903,9 @@ query text, which names B first (`_ORDERING_TIES`,
 checked against SICStus.  The other three manual `ordering/1` queries
 give the manual's answer in every variable order.
 
-Cost: the projection now covers every component AttrVars reaches, not
-only the query variables' components, so a program that leaves
-unrelated constraints projects them too (and they count on the
-projection meter, D24).
+Cost: the projection covers the query variables' components and the
+components a hidden delayed goal reaches; those count on the projection
+meter (D24).  A hidden component nothing reaches is not projected (above).
 
 ## D29: an FD variable brings its bounds to in_q and to an objective
 
