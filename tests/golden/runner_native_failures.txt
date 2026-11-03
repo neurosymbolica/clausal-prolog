@@ -34,7 +34,7 @@ FAILURES:
       small(5)
     bindings at failure: (none — goal 1 is the first goal)
     the predicate has no solution for ANY arguments at this point; no clause body survives:
-      arith.pl:15  N < 3
+      arith.pl:15  N < 3  (via arith.pl:15)
           N = 5
 
 8 tests: 2 passed, 6 failed [FAILED]

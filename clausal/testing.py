@@ -63,6 +63,7 @@ import contextlib
 import contextvars
 import io
 import os
+import re
 import signal
 import sys
 import threading
@@ -116,12 +117,21 @@ DIAG_MAX_DESCENT_DEPTH = 2
 #: recurses into calls that already solved.  When this bound stops the scan it
 #: says so in a note (see _note_depth_stop) instead of going silent.
 DIAG_MAX_COLLAPSE_DEPTH = 5
-#: ...how many clauses per descended predicate.
+#: ...how many clauses per descended predicate are WALKED (their bodies
+#: re-run, recursively).  Head unification is checked for every clause --
+#: it is cheap -- so the walk takes the first clauses whose heads unify, and
+#: a head listing's claim covers every clause.
 DIAG_MAX_DESCENT_CLAUSES = 4
-#: ...how many leaf findings in total.
+#: A clause head in a head listing is printed from its source, its brackets
+#: nested at most this deep (deeper content becomes ``…``) ...
+DIAG_MAX_HEAD_DEPTH = 4
+#: ...and at most this many characters long (cut, ending in ``…``).
+DIAG_MAX_HEAD_CHARS = 160
+#: A head listing names this many heads, then "and N more heads".
+DIAG_MAX_HEAD_LISTING = 12
+#: ...how many findings are printed in full; every further finding is still
+#: listed, by its first line (see _cap_leaves).
 DIAG_MAX_DESCENT_LEAVES = 6
-#: ...how many bindings per leaf.
-DIAG_MAX_DESCENT_BINDINGS = 4
 
 
 def _diag_budget() -> float:
@@ -180,6 +190,13 @@ def _watchdog(seconds: float):
         signal.signal(signal.SIGALRM, previous)
 
 
+#: A binding line of a descent report: ``<indent>Name = value``.  Every other
+#: descent line starts with a ``file:line`` label or with lower-case prose.
+_BINDING_LINE = re.compile(r"^(\s*)([A-Z_][A-Za-z0-9_]*) = (.*)$")
+#: What a repeated binding (same name, same printed value) prints instead.
+SAME_AS_ABOVE = "(same as above)"
+
+
 @dataclass
 class GoalDiagnostic:
     """Why a test failed, at conjunct granularity.
@@ -228,9 +245,20 @@ class GoalDiagnostic:
             out.extend(_wrap_goal(self.nearest, indent + "  "))
         for example in self.nearest_examples:
             out.extend(_wrap_goal(example, indent + "  "))
+        # A binding printed once is not printed again with the same text:
+        # per variable name, within this report (a nested descent shows the
+        # same 1 KB input under every leaf otherwise).
+        printed = {name: value for name, value in self.bindings}
         for line in self.descent:
+            m = _BINDING_LINE.match(line)
+            if m is not None:
+                lead, name, value = m.groups()
+                if printed.get(name) == value:
+                    line = f"{lead}{name} = {SAME_AS_ABOVE}"
+                else:
+                    printed[name] = value
             out.append(f"{indent}  {line}")
-        for note in self.notes:
+        for note in dict.fromkeys(self.notes):     # identical notes once
             out.append(f"{indent}note: {note}")
         return out
 
@@ -767,10 +795,11 @@ def _native_source_text(node, path) -> "str | None":
     if lines is None or not 1 <= line <= end_line <= len(lines):
         return None
     if line == end_line:
-        text = lines[line - 1][col:end_col]
+        text = _strip_comments(lines[line - 1][col:end_col])
     else:
         parts = ([lines[line - 1][col:]] + lines[line:end_line - 1]
                  + [lines[end_line - 1][:end_col]])
+        parts = _strip_comments("\n".join(parts)).split("\n")
         text = " ".join(p.strip() for p in parts if p.strip())
     text = text.strip()
     if not text:
@@ -783,12 +812,14 @@ def _native_source_text(node, path) -> "str | None":
     return text
 
 
-#: Re-read clauses of native Prolog files, by path: ``{start line: item}``.
+#: Re-read clauses of native Prolog files, by path:
+#: ``{(start line, start column): item}``.
 _NATIVE_ITEMS_CACHE: dict[str, dict] = {}
 
 
 def _native_items(path) -> "dict | None":
-    """``{start line: reader Clause item}`` for the Prolog file at *path*.
+    """``{(start line, start column): reader Clause item}`` for the Prolog
+    file at *path* (1-based line, 0-based column, as a clause's position).
 
     Read with the loader's own table (``iso_l3.reader_op_table``), applying
     each ``op/3`` directive and a library import's operators as the loader
@@ -807,12 +838,14 @@ def _native_items(path) -> "dict | None":
         if lines is not None:
             source = "\n".join(lines)
             items, table = iso_l3.iter_iso(source)
+            positions = iso_l3._Positions(source)
             out = {}
             for it in items:
                 if isinstance(it, ReaderClause):
-                    line = iso_l3.line_of(source, iso_l3._top_span(it.spans))
-                    if line is not None:
-                        out.setdefault(line, it)
+                    span = iso_l3._top_span(it.spans)
+                    if span is not None and span[0] >= 0:
+                        # (line, column): two clauses can share a line.
+                        out.setdefault(positions.line_col(span[0]), it)
                     continue
                 t = getattr(it, "term", None)
                 if type(t) is not tuple or not t:
@@ -835,13 +868,20 @@ def _native_items(path) -> "dict | None":
     return out
 
 
+def _native_item(path, clause):
+    """The re-read reader item of *clause*, found by its start line AND
+    column, or ``None``."""
+    pos = getattr(clause, "position", None)
+    if path is None or not (isinstance(pos, (tuple, list)) and len(pos) >= 2):
+        return None
+    items = _native_items(path)
+    return items.get((pos[0], pos[1])) if items else None
+
+
 def _native_twins(path, clause, arity):
     """``[(reader goal, var_names)]`` per body conjunct of a native clause,
     or ``None`` when the re-read clause does not have *arity* conjuncts."""
-    if path is None or not clause.position:
-        return None
-    items = _native_items(path)
-    it = items.get(clause.position[0]) if items else None
+    it = _native_item(path, clause)
     if it is None:
         return None
     t = it.term
@@ -895,6 +935,23 @@ def _pair_native(runtime, t, var_names, out) -> bool:
         return (isinstance(runtime, list) and len(runtime) == len(t)
                 and all(_pair_native(a, x, var_names, out)
                         for a, x in zip(runtime, t)))
+    if type(t) is tuple and len(t) == 3 and t[0] == "." \
+            and isinstance(runtime, list):
+        # A partial list: the reader's '.' cons chain, the runtime's list
+        # whose last element is the tail splat (``[H|T]`` is ``[H, *T]``).
+        from clausal.pythonic_ast.nodes import StarUnpack  # noqa: PLC0415
+        elems = []
+        while type(t) is tuple and len(t) == 3 and t[0] == ".":
+            elems.append(t[1])
+            t = t[2]
+        if type(t) is list:
+            return _pair_native(runtime, elems + t, var_names, out)
+        if not (runtime and isinstance(runtime[-1], StarUnpack)
+                and len(runtime) - 1 == len(elems)):
+            return False
+        return (all(_pair_native(a, x, var_names, out)
+                    for a, x in zip(runtime, elems))
+                and _pair_native(runtime[-1].value, t, var_names, out))
     if type(t) is tuple and t:
         if t[0] == "$chars":
             return True
@@ -1881,18 +1938,65 @@ def _goal_name(goal) -> str | None:
     return None
 
 
-def _cap_leaves(leaves, notes):
-    """Trim descent finding-GROUPS to ``DIAG_MAX_DESCENT_LEAVES``, noting the cut.
+class _RoutedLine(str):
+    """A finding's first line, carrying the clauses it came through.
 
-    The cap counts findings (groups) across the whole descent including fan-out,
-    so a finding and its binding sub-lines are shown or dropped as a unit — never
-    split.  Shared by the rung-3 descent and the wrong-value bridge."""
+    ``route`` is ``((file label, clause start line), ...)``, outermost first:
+    each ``_descend`` level puts the clause it walked in front.  Anything
+    that rewrites the line (an f-string indent) gets a plain ``str`` back, so
+    only a finding that reaches :func:`_cap_leaves` shows its route."""
+    route: tuple = ()
+
+
+def _routed(line, clause, path):
+    """*line* with *clause* put in front of its route."""
+    if not isinstance(line, str):
+        return line
+    pos = getattr(clause, "position", None)
+    if not pos or path is None:
+        return line
+    if is_prolog_source(path) and not _NATIVE_REPORT.get():
+        # A translator-loaded .pl report: its positions are of the
+        # translation, and its shape is pinned unchanged.
+        return line
+    label = os.path.basename(str(path))
+    out = _RoutedLine(line)
+    out.route = ((label, pos[0]), *getattr(line, "route", ()))
+    return out
+
+
+def _route_suffix(route) -> str:
+    """``(via request_basis.clausal:455 → 190)``: the clause start lines a
+    finding came through, outermost first, a file named when it changes."""
+    parts, last = [], None
+    for label, line in route:
+        parts.append(f"{label}:{line}" if label != last else str(line))
+        last = label
+    return f"(via {' → '.join(parts)})" if parts else ""
+
+
+def _with_route(line) -> str:
+    suffix = _route_suffix(getattr(line, "route", ()))
+    return f"{line}  {suffix}" if suffix else str(line)
+
+
+def _cap_leaves(leaves, notes):
+    """Every descent finding-GROUP, the first ``DIAG_MAX_DESCENT_LEAVES`` in
+    full and each further one by its first line, noting how many.
+
+    Nothing is dropped: a finding past the bound keeps its leaf line (where
+    and what failed) and loses only its detail lines (bindings, a head
+    listing beneath it).  Each first line gets its route, the clauses the
+    finding came through, so findings that read alike stay apart.  Shared by
+    the rung-3 descent and the wrong-value bridge."""
+    leaves = [[_with_route(g[0]), *g[1:]] if g else g for g in leaves]
     if len(leaves) > DIAG_MAX_DESCENT_LEAVES:
+        more = len(leaves) - DIAG_MAX_DESCENT_LEAVES
         notes.append(
-            f"only the first {DIAG_MAX_DESCENT_LEAVES} of {len(leaves)} "
-            f"descent findings are shown"
-        )
-        leaves = leaves[:DIAG_MAX_DESCENT_LEAVES]
+            "1 more finding, shown by its first line only" if more == 1
+            else f"{more} more findings, shown by their first line only")
+        leaves = (leaves[:DIAG_MAX_DESCENT_LEAVES]
+                  + [group[:1] for group in leaves[DIAG_MAX_DESCENT_LEAVES:]])
     return leaves
 
 
@@ -2321,8 +2425,8 @@ def _findall_collapse_finding(goal, logic_module, path, deadline,
 
     Runs the findall body's conjuncts through ``_first_failing`` (with the outer
     bindings live); when the body has no solution the first-failing conjunct is
-    the culprit, rendered as one leaf group (source line + up to
-    ``DIAG_MAX_DESCENT_BINDINGS`` bindings), prefixed with the findall it hid
+    the culprit, rendered as one leaf group (source line + its bindings),
+    prefixed with the findall it hid
     behind.
 
     A body that DOES have a solution is not automatically healthy: the measured
@@ -2391,8 +2495,7 @@ def _findall_collapse_finding(goal, logic_module, path, deadline,
                 reified_leaf = None
         lines.append(
             f"  {_descent_leaf_line(leaf, reified_leaf, _NO_CLAUSE, path)}")
-        for name, value in _leaf_bindings(leaf, reified_leaf, path):
-            lines.append(f"    {name} = {value}")
+        lines.extend(_leaf_binding_lines(leaf, reified_leaf, path))
         # The failing body conjunct may be a call whose own failing route lies
         # deeper (the measured chain: stay_is_valid_for_length → its inner
         # collapsed findall → window_days_used).  Follow it while the depth
@@ -2714,26 +2817,12 @@ def _report_descent(diag, goal, logic_module, deadline, path,
         diag.notes.extend(notes)
         return True
     elif kind == "head_listing" and leaves:
-        # If the clause cap tripped for this descent, only the first N clause
-        # heads were examined, so the headline must not claim ALL heads
-        # mismatch — soften it to state the bound.  The cap note carries a
-        # distinctive prefix (see _descend); its presence means truncation.
-        cap_prefix = (
-            f"descent walked only the first {DIAG_MAX_DESCENT_CLAUSES} of "
-        )
-        truncated = any(n.startswith(cap_prefix) for n in notes)
-        if truncated:
-            diag.nearest_note = (
-                f"{intro}; no clause head among the first "
-                f"{DIAG_MAX_DESCENT_CLAUSES} unifies with these arguments "
-                "— the heads are:"
-            )
-        else:
-            diag.nearest_note = (
-                f"{intro}; no clause head unifies with these arguments — the "
-                "heads are:"
-            )
-        diag.descent = leaves[:DIAG_MAX_DESCENT_LEAVES]
+        # ``leaves`` is ``[headline, *head lines]`` (see _descend): the
+        # headline states how many heads were checked -- all of them -- and
+        # how many are listed.
+        headline, leaves = leaves[0], leaves[1:]
+        diag.nearest_note = f"{intro}; {headline}"
+        diag.descent = leaves
         diag.notes.extend(notes)
         return True
     return False
@@ -2861,8 +2950,11 @@ def _descend(goal, logic_module, caller_path, deadline, depth, seen, notes):
       into a deeper predicate, so the number of groups can exceed the clause
       count; each group is capped/dropped as a unit so a finding is never split
       from its bindings.  (Returned as ``(groups, "leaves")``.)
-    - ``(lines, "head_listing")`` where ``lines`` is ``list[str]`` — one line
-      per clause head (Task 5), a single finding rendered flat.
+    - ``(lines, "head_listing")`` where ``lines`` is ``list[str]`` — a
+      headline, then one line per listed clause head (Task 5), a single
+      finding rendered flat.  Returned only when NO clause head of the
+      predicate unifies with the call (every head checked; see
+      ``_head_listing``).
     - ``([], "none")`` — could not resolve / nothing to say; caller keeps its
       own rendering.
     """
@@ -2880,12 +2972,35 @@ def _descend(goal, logic_module, caller_path, deadline, depth, seen, notes):
     seen = seen | {key}
     clauses = list(row.clauses)          # non-empty: filtered on it above
     total = len(clauses)
+    all_walked = True
     if total > DIAG_MAX_DESCENT_CLAUSES:
-        notes.append(
-            f"descent walked only the first {DIAG_MAX_DESCENT_CLAUSES} of "
-            f"{total} clauses of {row.key[0]}"
-        )
-        clauses = clauses[:DIAG_MAX_DESCENT_CLAUSES]
+        # Too many clauses to walk them all, but checking a head is cheap
+        # (the head-argument unifications alone, no body): keep the clauses
+        # whose heads unify -- the routes the call can take -- and walk the
+        # first of THOSE.  The cap bounds the recursive descent, never what
+        # a headline claims about the heads.  A head probe that raises is
+        # not evidence of a mismatch: that clause stays a route.
+        routes = []
+        for clause in clauses:
+            if time.monotonic() > deadline:
+                raise _DiagBudgetExceeded()
+            if _head_unifies(clause, goal, sub_lm, sub_path) is not False:
+                routes.append(clause)
+        if not routes:
+            return _head_listing(row, clauses, path=sub_path), "head_listing"
+        if len(routes) > DIAG_MAX_DESCENT_CLAUSES:
+            in_all = (f" ({total} clauses in all)"
+                      if len(routes) != total else "")
+            notes.append(
+                f"descent walked only the first {DIAG_MAX_DESCENT_CLAUSES} of "
+                f"{len(routes)} clauses of {row.key[0]} whose heads unify "
+                f"with these arguments{in_all}"
+            )
+            routes = routes[:DIAG_MAX_DESCENT_CLAUSES]
+            all_walked = False
+        elif len(routes) != total:
+            all_walked = False
+        clauses = routes
     # One group per FINDING (a leaf line + its bindings).  A single clause
     # route can fan out into several findings when it recurses into a deeper
     # predicate, so ``_clause_leaves`` returns a LIST of groups and we extend.
@@ -2908,30 +3023,30 @@ def _descend(goal, logic_module, caller_path, deadline, depth, seen, notes):
         if state == "head_mismatch":
             mismatches += 1
         elif state == "leaves":
-            groups.extend(clause_groups)
-    if mismatches == len(clauses) and clauses:
+            groups.extend(
+                [_routed(g[0], clause, sub_path), *g[1:]] if g else g
+                for g in clause_groups)
+    if mismatches == len(clauses) and clauses and all_walked:
+        # Every clause of the predicate was walked and its head refused the
+        # call: the listing's claim is exact.
         return _head_listing(row, clauses, path=sub_path), "head_listing"
     return (groups, "leaves") if groups else ([], "none")
 
 
-def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, notes):
-    """Findings for one clause route: ``(groups, state)``.
+def _head_goals(clause, goal, path):
+    """``(pre, body, rgoals, k)`` for matching *goal* onto *clause*'s head,
+    or ``None`` when the shapes cannot correspond.
 
-    ``groups`` is ``list[list[str]]`` — one group per finding (a leaf line plus
-    its binding sub-lines).  A route usually yields ONE group, but when it
-    recurses into a deeper predicate the deeper findings fan out and this route
-    returns several groups (so the total-finding cap sees every fan-out
-    finding).  ``state`` is ``"leaves"``, ``"head_mismatch"`` (head or hoisted
-    structural arg failed to unify — this clause was never a route) or
-    ``"skip"`` (probe artifact or re-run disagreement — say nothing); for the
-    non-``"leaves"`` states ``groups`` is empty."""
+    ``pre`` unifies each head argument with the goal's; the first ``k`` goals
+    of ``body`` are the head-argument unifications the compiler hoisted into
+    the body, so ``pre + body[:k]`` IS head unification.  ``rgoals`` are the
+    reified source conjuncts, tail-aligned to ``body`` (or ``None``)."""
     from clausal.reflection import vfield  # noqa: PLC0415
-    from clausal.logic.variables import Trail
     from clausal.pythonic_ast.nodes import Unify
 
     pre = _head_prefix(clause.head, goal)
     if pre is None:
-        return [], "head_mismatch"
+        return None
     body = list(clause.body or ())[:DIAG_MAX_GOALS]
 
     # Tail-align source conjuncts: _normalize_structural_head_args PREPENDS
@@ -2954,6 +3069,109 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
         if not (0 <= k <= len(body)
                 and all(isinstance(g, Unify) for g in body[:k])):
             k = 0
+    return pre, body, rgoals, k
+
+
+def _head_unifies(clause, goal, logic_module, path) -> "bool | None":
+    """Does *clause*'s head unify with *goal*?  Only the head-argument
+    unifications run, never the body.  ``None`` when the probe raised."""
+    from clausal.logic.variables import Trail
+
+    head = _head_goals(clause, goal, path)
+    if head is None:
+        return False
+    pre, body, _rgoals, k = head
+    goals = pre + body[:k]
+    if not goals:
+        return True
+    if _heads_clash(pre, body[:k]):
+        return False
+    trail = Trail()
+    try:
+        return _has_solution(_conjunction(goals), logic_module, trail)
+    except (_DiagBudgetExceeded, RecursionError, *_FATAL):
+        raise
+    except BaseException:  # noqa: BLE001 - a broken probe is not a finding
+        return None
+    finally:
+        _undo(trail)
+
+
+def _heads_clash(pre, hoisted) -> bool:
+    """A cheap, conservative head-mismatch test that runs no query.
+
+    True only when two sides are certainly different terms: atoms or
+    integers that differ, or compounds whose name or arity differs (checked
+    argument by argument).  A head argument the compiler hoisted into the
+    body (``Unify(V, met(a))``) is compared with the goal argument the head
+    variable ``V`` meets.  Anything else -- a variable, a float, a shape not
+    named here -- is "may unify", left to the query probe.  This keeps the
+    every-clause head check cheap on a large fact table."""
+    from clausal.logic.variables import deref, is_var  # noqa: PLC0415
+
+    def clash(a, b, depth=0) -> bool:
+        if depth > DIAG_MAX_DEPTH:
+            return False
+        a, b = deref(a), deref(b)
+        if is_var(a) or is_var(b):
+            return False
+        ta, tb = type(a), type(b)
+        if ta in (str, int) and tb in (str, int):
+            return ta is not tb or a != b
+        if ta is tuple and tb is tuple:
+            if len(a) < 2 or len(b) < 2 or type(a[0]) is not str \
+                    or type(b[0]) is not str:
+                return False
+            if a[0] == "$chars" or b[0] == "$chars":
+                return False
+            if len(a) != len(b) or a[0] != b[0]:
+                return True
+            return any(clash(x, y, depth + 1) for x, y in zip(a[1:], b[1:]))
+        if ta is list and tb is list and len(a) == len(b):
+            return any(clash(x, y, depth + 1) for x, y in zip(a, b))
+        if (ta is list and tb in (str, int)) or (tb is list and ta in (str, int)):
+            return a != "[]" and b != "[]"
+        if (ta is tuple and tb in (str, int)) or (tb is tuple and ta in (str, int)):
+            cell = a if ta is tuple else b
+            return len(cell) >= 2 and type(cell[0]) is str and cell[0] != "$chars"
+        return False
+
+    try:
+        meets: dict[int, object] = {}
+        for u in pre:
+            left, right = getattr(u, "left", None), getattr(u, "right", None)
+            if clash(left, right):
+                return True
+            if is_var(left):
+                meets.setdefault(id(deref(left)), right)
+        for u in hoisted:
+            left, right = getattr(u, "left", None), getattr(u, "right", None)
+            for v, t in ((left, right), (right, left)):
+                if is_var(v) and id(deref(v)) in meets:
+                    if clash(t, meets[id(deref(v))]):
+                        return True
+        return False
+    except Exception:  # noqa: BLE001 - unsure is "may unify"
+        return False
+
+
+def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, notes):
+    """Findings for one clause route: ``(groups, state)``.
+
+    ``groups`` is ``list[list[str]]`` — one group per finding (a leaf line plus
+    its binding sub-lines).  A route usually yields ONE group, but when it
+    recurses into a deeper predicate the deeper findings fan out and this route
+    returns several groups (so the total-finding cap sees every fan-out
+    finding).  ``state`` is ``"leaves"``, ``"head_mismatch"`` (head or hoisted
+    structural arg failed to unify — this clause was never a route) or
+    ``"skip"`` (probe artifact or re-run disagreement — say nothing); for the
+    non-``"leaves"`` states ``groups`` is empty."""
+    from clausal.logic.variables import Trail
+
+    head = _head_goals(clause, goal, path)
+    if head is None:
+        return [], "head_mismatch"
+    pre, body, rgoals, k = head
 
     goals_list = pre + body
     failing, raised = _first_failing(goals_list, logic_module, deadline)
@@ -3015,18 +3233,16 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
                 # A head listing beneath this parent leaf is ONE finding: the
                 # parent conjunct, its bindings, and the heads, all one group.
                 lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
-                for name, value in _leaf_bindings(
-                        leaf, reified_leaf, path, native_leaf):
-                    lines.append(f"    {name} = {value}")
-                lines.append("    no clause head unifies with these arguments; "
-                             "the heads are:")
-                lines.extend(f"      {line}" for line in deeper)
+                lines.extend(_leaf_binding_lines(
+                    leaf, reified_leaf, path, native_leaf))
+                # deeper = [headline, *head lines] (see _descend).
+                lines.append(f"    {deeper[0]}")
+                lines.extend(f"      {line}" for line in deeper[1:])
                 return [lines], "leaves"
             # "none" falls through to render this conjunct as the leaf.
         lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
-        for name, value in _leaf_bindings(
-                leaf, reified_leaf, path, native_leaf):
-            lines.append(f"    {name} = {value}")
+        lines.extend(_leaf_binding_lines(
+            leaf, reified_leaf, path, native_leaf))
         # A failing leaf that CONSUMES a collapsed findall's bag (`length(
         # VALID_DAYS, LENGTH)` with `VALID_DAYS = []`) is only the symptom;
         # the swallowed failure inside the findall is the cause.  Name it
@@ -3087,12 +3303,25 @@ def _collapsed_findall_feeding(leaf, earlier, logic_module, path, deadline,
 
 
 def _head_listing(row, clauses, path) -> list[str]:
-    """One ``file:line  <head source>`` line per clause, source-faithful."""
-    lines = []
+    """``[headline, *head lines]`` for a call that NO clause head unifies with.
+
+    *clauses* are all of the predicate's clauses -- every head was checked --
+    and one ``file:line  <head source>`` line is listed for each of the first
+    ``DIAG_MAX_HEAD_LISTING``, then "and N more heads" for the rest.  The headline (shared by the top-level and
+    the nested report) says how many were checked and how many are listed."""
+    total = len(clauses)
+    shown = clauses[:DIAG_MAX_HEAD_LISTING]
+    if len(shown) == total:
+        headline = ("no clause head unifies with these arguments "
+                    "— the heads are:")
+    else:
+        headline = (f"none of the {total} clause heads unifies with these "
+                    "arguments — the heads are:")
+    lines = [headline]
     label = os.path.basename(str(path)) if path else row.db.module_name()
-    for clause in clauses:
-        text = None
-        reified = _reified_clause(path, clause)
+    for clause in shown:
+        text = _native_head_text(clause, path)
+        reified = None if text is not None else _reified_clause(path, clause)
         if reified is not None:
             try:
                 from clausal.reflection import render_source, is_v, vfield
@@ -3107,10 +3336,140 @@ def _head_listing(row, clauses, path) -> list[str]:
                 text = term_str(clause.head)
             except Exception:  # noqa: BLE001
                 text = repr(clause.head)
+        text = _bound_text(text)
         line = clause.position[0] if clause.position else None
         lines.append(f"{label}:{line}  {text}" if line is not None
                      else f"{label}  {text}")
+    more = total - len(shown)
+    if more:
+        lines.append(f"and {more} more head{'s' if more != 1 else ''}")
     return lines
+
+
+def _native_head_text(clause, path) -> "str | None":
+    """The source text of a natively loaded clause's head, or ``None``.
+
+    The runtime head cannot stand in for it: the native front end hoists a
+    structural head argument (``engagement(P, met(a))``) into the body, so
+    the runtime head prints as ``engagement(_, _)``."""
+    if (not _NATIVE_REPORT.get() or path is None
+            or not is_prolog_source(path) or not clause.position):
+        return None
+    try:
+        from clausal.tools import iso_l3  # noqa: PLC0415
+
+        it = _native_item(path, clause)
+        lines = _source_lines(path)
+        if it is None or lines is None:
+            return None
+        t, spans = it.term, it.spans
+        if type(t) is tuple and len(t) == 3 and t[0] == ":-":
+            t, spans = t[1], iso_l3._arg_spans(spans, 2)[0]
+        span = iso_l3._top_span(spans)
+        if span is None:
+            return None
+        text = _strip_comments("\n".join(lines)[span[0]:span[1]])
+        text = " ".join(p.strip() for p in text.split("\n") if p.strip())
+        name = t if type(t) is str else (t[0] if type(t) is tuple and t else None)
+        if not text or (type(name) is str and name not in text):
+            return None
+        return text
+    except Exception:  # noqa: BLE001 - quoting is a nicety
+        return None
+
+
+def _quoted_end(text: str, i: int) -> int:
+    """Index just past the quoted item (or ``0'c`` character code) that
+    starts at ``text[i]``, a quote character."""
+    n, c = len(text), text[i]
+    if (c == "'" and i > 0 and text[i - 1] == "0"
+            and (i < 2 or not text[i - 2].isalnum())):
+        j = i + 2 if i + 1 < n and text[i + 1] != "\\" else i + 3
+        return j + 1 if text[i + 1:i + 3] == "''" else j
+    j = i + 1
+    while j < n:
+        if text[j] == "\\":
+            j += 2
+            continue
+        if text[j] == c:
+            if j + 1 < n and text[j + 1] == c:
+                j += 2
+                continue
+            return j + 1
+        j += 1
+    return n
+
+
+def _strip_comments(text: str) -> str:
+    """Prolog source *text* without its ``% ...`` and ``/* ... */``
+    comments (a ``%`` comment's line break is kept); quoted items and
+    ``0'%`` character codes are left alone."""
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c in "'\"`":
+            j = _quoted_end(text, i)
+            out.append(text[i:j])
+            i = j
+        elif c == "%":
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+        elif text.startswith("/*", i):
+            j = text.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            if i < n and (text[i] in " \t,)]}|"):
+                # ``a /* c */, b``: no stray blank where the comment was.
+                out = ["".join(out).rstrip(" \t")]
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+_OPENERS = {"(": ")", "[": "]", "{": "}"}
+_CLOSERS = frozenset(_OPENERS.values())
+
+
+def _bound_text(text: str, max_chars: int = DIAG_MAX_HEAD_CHARS,
+                max_depth: int = DIAG_MAX_HEAD_DEPTH) -> str:
+    """*text* (Prolog or seam source) with brackets nested deeper than
+    *max_depth* elided to ``…`` and the result cut to *max_chars* (its last
+    character then ``…``).  Brackets inside quotes, and the character code
+    ``0'(``, do not count."""
+    out: list[str] = []
+    depth = 0
+    eliding = False
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c in "'\"`":
+            j = _quoted_end(text, i)
+            if not eliding:
+                out.append(text[i:j])
+            i = j
+            continue
+        if c in _OPENERS:
+            depth += 1
+            if depth == max_depth + 1:
+                out.append(c + "…")
+                eliding = True
+            elif not eliding:
+                out.append(c)
+        elif c in _CLOSERS:
+            if depth == max_depth + 1:
+                out.append(c)
+                eliding = False
+            elif not eliding:
+                out.append(c)
+            depth = max(depth - 1, 0)
+        elif not eliding:
+            out.append(c)
+        i += 1
+    result = "".join(out)
+    if len(result) > max_chars:
+        result = result[:max_chars - 1] + "…"
+    return result
 
 
 def _descent_leaf_line(leaf, reified_leaf, clause, path) -> str:
@@ -3141,19 +3500,23 @@ def _descent_leaf_line(leaf, reified_leaf, clause, path) -> str:
 
 
 def _leaf_bindings(leaf, reified_leaf, path=None,
-                   native_leaf=None) -> list[tuple[str, str]]:
-    """Up to DIAG_MAX_DESCENT_BINDINGS named, bound variables of the leaf.
+                   native_leaf=None) -> "list[tuple[str, str]] | None":
+    """Every named, bound variable of the leaf, as ``(name, rendered value)``.
 
-    *native_leaf* is the ``(reader goal, var_names)`` twin of a native
-    Prolog leaf (:func:`_native_twins`), used when there is no reified one."""
+    ``None`` when the leaf's variables cannot be named: no source twin, or
+    one whose shape does not match.  *native_leaf* is the ``(reader goal,
+    var_names)`` twin of a native Prolog leaf (:func:`_native_twins`), used
+    when there is no reified one."""
     from clausal.logic.variables import deref, is_var
 
     if reified_leaf is not None:
-        named = _collect_named([leaf], [reified_leaf]) or []
+        named = _collect_named([leaf], [reified_leaf])
     elif native_leaf is not None:
-        named = _collect_native_named([leaf], [native_leaf]) or []
+        named = _collect_native_named([leaf], [native_leaf])
     else:
-        return []
+        return None
+    if named is None:
+        return None
     out: list[tuple[str, str]] = []
     seen_ids: set[int] = set()
     for name, var in named:
@@ -3166,10 +3529,37 @@ def _leaf_bindings(leaf, reified_leaf, path=None,
         try:
             out.append((name, _render_value(value, path)))
         except Exception:  # noqa: BLE001
-            continue
-        if len(out) >= DIAG_MAX_DESCENT_BINDINGS:
-            break
+            # Bound, but its value cannot be printed: never let the leaf
+            # read as having no bindings.
+            out.append((name, UNPRINTABLE_VALUE))
     return out
+
+
+#: Printed for a bound variable whose value cannot be rendered.
+UNPRINTABLE_VALUE = "(its value could not be printed)"
+#: The line under a descent leaf whose variables are all unbound (or that
+#: has none), so that an empty space never reads as a cut.
+NO_BINDINGS = "no bindings"
+#: ...and under one whose variables could not be named from its source.
+BINDINGS_UNAVAILABLE = ("bindings unavailable — the goal's variable names "
+                        "could not be read from the source")
+
+
+def _leaf_binding_lines(leaf, reified_leaf, path=None, native_leaf=None,
+                        indent: str = "    ") -> list[str]:
+    """The binding lines printed under a descent leaf: one per bound
+    variable, else one line saying there are none or they are unknown."""
+    bindings = _leaf_bindings(leaf, reified_leaf, path, native_leaf)
+    if bindings is None:
+        if (path is not None and is_prolog_source(path)
+                and not _NATIVE_REPORT.get()):
+            # A translator-loaded .pl report keeps its pinned shape (its
+            # positions are of a translation; it never names variables).
+            return []
+        return [f"{indent}{BINDINGS_UNAVAILABLE}"]
+    if not bindings:
+        return [f"{indent}{NO_BINDINGS}"]
+    return [f"{indent}{name} = {value}" for name, value in bindings]
 
 
 # ── Report formatting ────────────────────────────────────────────────────────
