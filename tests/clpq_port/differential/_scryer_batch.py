@@ -132,6 +132,122 @@ def queries(full=False):
     return [query(seed, sizes[seed % len(sizes)]) for seed in range(count)]
 
 
+def _unification(rng, pairs):
+    """``[A, B] = [C, D]`` or ``f(A, B) = f(C, D)`` over *pairs* of texts,
+    each pair's sides swapped at random."""
+    lefts, rights = [], []
+    for left, right in pairs:
+        if rng.random() < 0.25:
+            left, right = right, left
+        lefts.append(left)
+        rights.append(right)
+    if rng.random() < 0.5:
+        return f"[{', '.join(lefts)}] = [{', '.join(rights)}]"
+    return f"f({', '.join(lefts)}) = f({', '.join(rights)})"
+
+
+def _ordered(rng, indices):
+    indices = sorted(indices)
+    k = rng.random()
+    if k < 0.35:
+        return indices
+    if k < 0.65:
+        return indices[::-1]
+    rng.shuffle(indices)
+    return indices
+
+
+def multibind_query(seed, size):
+    """(id, text, shown) of one seeded query that binds SEVERAL variables
+    of one store in ONE unification (DEVIATIONS.md D3: the order of the
+    bound variables' work): a chain X0 =< X1 =< ... (some links strict
+    or equations), a path of equations Xi + X(i+1) = c (bindings imply
+    others), or sparse rows at a hidden point; then one unification of a
+    list or a cell f(...) binding a subset to numbers (on or off the
+    point), to other variables, or both, with a variable on both sides
+    sometimes; sometimes sup/inf afterwards.  Shown: every variable."""
+    rng = random.Random(f"scryer-multibind:{size}:{seed}")
+    shape = rng.choice(["chain", "chain", "path", "rows", "rows"])
+    goals, point = [], []
+    if shape == "chain":
+        value = rng.randint(-2, 2)
+        for i in range(size):
+            point.append(value)
+            if i + 1 < size:
+                k = rng.random()
+                if k < 0.08:
+                    step = rng.randint(0, 2)
+                    goals.append(f"{{X{i + 1} = X{i} + {step}}}")
+                elif k < 0.2:
+                    step = rng.randint(1, 2)
+                    goals.append(f"{{X{i} < X{i + 1}}}")
+                else:
+                    step = rng.randint(0, 2)
+                    goals.append(f"{{X{i} =< X{i + 1}}}")
+                value += step
+        if rng.random() < 0.5:
+            goals.append(f"{{X0 >= {point[0] - rng.randint(0, 2)}}}")
+    else:
+        point = [rng.randint(0, 5) for _ in range(size)]
+        for i in range(size):
+            if rng.random() < 0.6:
+                goals.append(f"{{X{i} >= {point[i] - rng.randint(0, 2)}, "
+                             f"X{i} =< {point[i] + rng.randint(0, 3)}}}")
+        if shape == "path":
+            for i in range(size - 1):
+                if rng.random() < 0.6:
+                    goals.append(f"{{X{i} + X{i + 1} = {point[i] + point[i + 1]}}}")
+                else:
+                    goals.append(f"{{X{i} - X{i + 1} >= "
+                                 f"{point[i] - point[i + 1] - rng.randint(0, 1)}}}")
+        else:
+            for _ in range(size + rng.randint(0, size // 2)):
+                indices = sorted(rng.sample(range(size), rng.randint(2, min(3, size))))
+                terms = [(i, _coefficient(rng)) for i in indices]
+                at = sum(c * point[i] for i, c in terms)
+                relation = rng.choice(["=<", "<", ">=", ">", "=:="])
+                slack = 0 if relation == "=:=" else (
+                    rng.randint(0, 3) + (1 if relation in ("<", ">") else 0))
+                constant = at + (slack if relation in ("=<", "<") else -slack)
+                goals.append(f"{{{_linear(terms)} {relation} {_number_text(constant)}}}")
+    most = size * 2 // 3 if rng.random() < 0.4 else size // 3
+    chosen = _ordered(rng, rng.sample(range(size), rng.randint(2, max(2, most))))
+    pairs = []
+    for i in chosen:
+        k = rng.random()
+        if k < 0.7:
+            pairs.append((f"X{i}", str(point[i])))
+        elif k < 0.8:
+            pairs.append((f"X{i}", str(point[i] + rng.choice([-1, 1]))))
+        else:
+            twins = [j for j in range(size) if j != i and point[j] == point[i]]
+            j = rng.choice(twins) if twins else rng.choice(
+                [j for j in range(size) if j != i])
+            pairs.append((f"X{i}", f"X{j}"))
+            if rng.random() < 0.3:
+                pairs.append((f"X{j}", str(point[j])))
+    goals.append(_unification(rng, pairs))
+    text = ", ".join(goals)
+    shown = [f"X{i}" for i in range(size) if re.search(rf"\bX{i}\b", text)]
+    if rng.random() < 0.25:
+        terms = [(i, _coefficient(rng)) for i in
+                 sorted(rng.sample(range(size), rng.randint(1, 3)))]
+        goals.append(f"{rng.choice(['sup', 'inf'])}({_linear(terms)}, S)")
+        shown.append("S")
+    return f"scryer-multibind-{size}-{seed}", ", ".join(goals), shown
+
+
+def multibind_queries(full=False):
+    """The default set: 40 queries of 3 to 20 variables; the full set
+    (CLPQ_DIFFERENTIAL=full): 300 of 3 to 40."""
+    if full:
+        sizes, count = (3, 4, 6, 8, 10, 15, 20, 30, 40), 300
+    else:
+        sizes, count = (3, 4, 6, 10, 20), 40
+    return [multibind_query(seed, sizes[seed % len(sizes)])
+            for seed in range(count)]
+
+
 def scryer_batch(batch, timeout=900):
     """Scryer's answers to each (id, text, shown) of *batch*, one process
     for the lot: {id: [Answer, ...]} or {id: ("error", text)} for a query

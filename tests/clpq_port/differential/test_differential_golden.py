@@ -71,7 +71,7 @@ def test_the_corpus_is_deterministic_and_reaches_every_step_kind():
     kinds = {step[0] for w in workloads for step in w["steps"]}
     assert kinds == {"post", "nonlinear", "bind", "alias", "mark", "undo",
                      "sup", "inf", "maximize", "minimize", "bb_inf",
-                     "entailed", "dump"}
+                     "entailed", "dump", "unify"}
     assert max(w["variables"] for w in workloads) >= 100
     assert corpus(full=False) == workloads
 

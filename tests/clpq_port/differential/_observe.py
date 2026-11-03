@@ -128,6 +128,12 @@ class _Run:
     def event(self, *event):
         self.trace.append(canon(list(event), self.namer))
 
+    def term(self, shape, elements):
+        """The list or the cell f(...) of a ``unify`` step's elements."""
+        items = [self.variables[e[1]] if e[0] == "x" else _constant(e[1])
+                 for e in elements]
+        return items if shape == "list" else ("f", *items)
+
     # ---- one step: (ok, data)
     def step(self, step):
         kind = step[0]
@@ -144,6 +150,10 @@ class _Run:
             return unify(xs[step[1]], _constant(step[2]), trail), None
         if kind == "alias":
             return unify(xs[step[1]], xs[step[2]], trail), None
+        if kind == "unify":
+            _, shape, lefts, rights = step
+            left, right = self.term(shape, lefts), self.term(shape, rights)
+            return unify(left, right, trail), None
         if kind in ("sup", "inf"):
             result = Var()
             optimum = holzbaur.sup if kind == "sup" else holzbaur.inf
