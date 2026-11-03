@@ -344,3 +344,65 @@ def test_the_store_keeps_its_indexes_right_through_bindings_and_undo(
     assert h.q_ge(xs[0], 3, t)
     s = Var()
     assert h.inf(xs[-1], s, t) and deref(s) == 3
+
+
+# ------------------------------------------ deleting the first term (R2)
+#
+# store.pl's delete_factor_hom/4 deletes the first term of [T|Ts] by
+# answering Ts itself: the rest of the row is shared, not copied.  A
+# binding that substitutes into every row of a chain deletes the first
+# term of almost every row, and the trail keeps every row it replaced, so
+# a copy there kept n^3 terms alive (survey R2).  delete_factor shares the
+# rest of a long row the same way; reading the terms gives the same list
+# as a copy would.
+
+def _long_row(trail, count=40):
+    xs = _constrained(count, trail)
+    return xs, LinearForm(ZERO, ZERO, [(x, (i + 1, 1)) for i, x in enumerate(xs)])
+
+
+def test_deleting_the_first_term_of_a_long_row_shares_the_rest():
+    t = Trail()
+    xs, form = _long_row(t)
+    original = list(form.terms)
+    got, coefficient = delete_factor(xs[0], form)
+    assert coefficient == (1, 1)
+    assert linear_forms.shares_terms(got, form.terms)       # no copy made
+    again, coefficient = delete_factor(xs[1], got)
+    assert coefficient == (2, 1)
+    assert linear_forms.shares_terms(again, form.terms)
+    assert again.terms == original[2:]
+    assert form.terms == original                            # left alone
+
+
+def test_a_shared_row_answers_every_reader_as_a_copy_would():
+    t = Trail()
+    xs, form = _long_row(t)
+    got, _ = delete_factor(xs[0], form)
+    assert linear_forms.term_count(got) == 39
+    assert not linear_forms.has_no_terms(got)
+    assert row_variable_ids(got) == {id(x) for x in xs[1:]}
+    middle, coefficient = delete_factor(xs[20], got)          # not the first
+    assert coefficient == (21, 1)
+    assert middle.terms == form.terms[1:20] + form.terms[21:]
+    assert got.terms == form.terms[1:]
+    assert delete_factor(xs[0], got) is None
+
+
+def test_a_short_row_is_copied_as_before():
+    t = Trail()
+    xs, form = _long_row(t, count=3)
+    got, _ = delete_factor(xs[0], form)
+    assert not linear_forms.shares_terms(got, form.terms)
+    assert got.terms == form.terms[1:]
+
+
+def test_substituting_a_number_keeps_the_shared_rest():
+    from clausal.logic.clpq.linear_forms import normal_form_substitute
+    t = Trail()
+    xs, form = _long_row(t)
+    number = LinearForm((7, 1), ZERO, [])
+    got = normal_form_substitute(xs[0], number, form)
+    assert got.constant == (7, 1)
+    assert linear_forms.shares_terms(got, form.terms)
+    assert got.terms == form.terms[1:]

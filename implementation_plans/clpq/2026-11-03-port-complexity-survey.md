@@ -55,7 +55,7 @@ sizes is in brackets.
 | the same after R3 (`dense_rows`, 2026-11-03) | 5..80 | before (this run) .0012 .0054 .018 .079 .41; after .00097 .0040 .012 .038 .14 | 1.87 (1.71) | 2.26 | - | **R3 done**: 2.9x at n = 80 |
 | post disequations on a chain (`diseq`) | 100..1600 | .014 .044 .17 .81 3.7 | 2.2 (2.0) | 1.9 (manual run, 100..400) | python_calls 1.95 | inherent |
 | post the path LP (`lp_post`) | 25..800 | .002 .. .075 | 1.0 | - | - | linear |
-| bind a chain to numbers in one unification (`bind_numbers`) | 50..800 | .011 .042 .18 1.0 7.9 | **3.0** (2.35) | **1.96** | terms_scanned 3.0, terms_read 2.0 | **unclear: the port does more work than Scryer's copy** (R2). **After R1b: n = 50..1600 .010 .033 .14 .59 2.9 13.5, slope 2.10 (top 2.2)**: the cubic term was the scan. **Binding order (D3, ruling 2026-11-03)**: the same rows as Scryer's copy, n(n-1)/2 + n - 1 rewritten (work exponent 2.0), but n = 100..800 .039 .17 .90 10.0 s (slope 2.65; the old order, after the stand-in row skip: .032 .12 .58 2.7): GC and row copies per rewritten row, see R2 |
+| bind a chain to numbers in one unification (`bind_numbers`) | 50..800 | .011 .042 .18 1.0 7.9 | **3.0** (2.35) | **1.96** | terms_scanned 3.0, terms_read 2.0 | **unclear: the port does more work than Scryer's copy** (R2). **After R1b: n = 50..1600 .010 .033 .14 .59 2.9 13.5, slope 2.10 (top 2.2)**: the cubic term was the scan. **Binding order (D3, ruling 2026-11-03)**: the same rows as Scryer's copy, n(n-1)/2 + n - 1 rewritten (work exponent 2.0), but n = 100..800 .039 .17 .90 10.0 s (slope 2.65; the old order, after the stand-in row skip: .032 .12 .58 2.7): GC and row copies per rewritten row, see R2. **After the shared tail (R2, implementation only)**: n = 100..1600 .034 .12 .57 2.8 13.3 s (slope 2.25 top; GC off .031 .11 .43 1.7 6.9, slope 2.0) |
 | var-var binding of a chain (`bind_varvar`) | 25..400 | .012 .061 .39 3.4 33.9 | 3.3 (2.9) | 2.85 | terms_read 3.0 | inherent (D24, Low 8); overhead partly removed on r32-varvar (7a573135). After R1b and R4: unchanged within noise (paired n = 200: 1.64 s against 1.60 s): its rows almost all hold the variable, so there is nothing to skip |
 | `sup` of a sum over a bounded chain (`sup_chain`) | 50..1600 | .005 .020 .074 .31 1.5 6.8 | 2.2 (2.1) | 1.98 | terms_read 2.0, 1 pivot | inherent |
 | `inf(Xn - X1)` (`inf_chain`) | 50..1600 | 0.0001 .. 0.003 | 1.25 | - | - | linear |
@@ -209,19 +209,56 @@ time it costs at sizes people use.
   binding order, as 1.3.3 under SICStus and Scryer. The decision traces
   now match Scryer's at n = 6 and 10. Measured (min of 3, loaded box):
 
-  | case, n = 100/200/400/800 | before | stand-in row skip | binding order |
-  |---|---|---|---|
-  | `bind_numbers` (one unification) | .038 .26 .70 3.45 s | .032 .12 .58 2.68 s | .039 .17 .90 10.0 s (slope 2.65) |
-  | `bind_numbers_each` (first to last) | .065 .35 2.18 21.1 s | .041 .19 1.11 11.2 s | .041 .20 1.11 11.0 s |
-  | `bind_varvar` | .29 2.14 25.8 - s | .21 1.45 11.5 142 s | .22 1.46 11.9 130 s |
+  | case, n = 100/200/400/800 | before | stand-in row skip | binding order | shared tail |
+  |---|---|---|---|---|
+  | `bind_numbers` (one unification) | .038 .26 .70 3.45 s | .032 .12 .58 2.68 s | .039 .17 .90 10.0 s (slope 2.65) | .034 .12 .57 2.8 s |
+  | `bind_numbers_each` (first to last) | .065 .35 2.18 21.1 s | .041 .19 1.11 11.2 s | .041 .20 1.11 11.0 s | .035 .13 .67 3.0 s |
+  | `bind_varvar` | .29 2.14 25.8 - s | .21 1.45 11.5 142 s | .22 1.46 11.9 130 s | .23 1.58 12.9 - s |
 
   In binding order the port rewrites the n^2/2 rows Scryer's copy does
   (work exponent 2.0, Scryer 1.96 by inferences), but each rewrite is a
   new Python row: with the GC off `bind_numbers` takes .039 .15 .68 3.7
   37 s at n = 100..1600, so the GC is about two thirds of the time at
   800 and the row copies of `delete_factor_homogeneous` (1.3.3 shares the
-  tail) set the exponent above 2 past n = 400. Not addressed: both need a
-  change of representation or GC policy.
+  tail) set the exponent above 2 past n = 400.
+- **The GC cost, diagnosed 2026-11-03** (gc.callbacks, gc.get_objects
+  deltas over one binding). Not reference cycles: no collection of any
+  generation freed an object (`collected` 0 throughout). The cost was
+  what the trail keeps alive. Each rewrite made a new row by
+  `terms[:i] + terms[i+1:]`, and the trail keeps the replaced row, so in
+  binding order the kept rows held n^3/6 term references: 1.35M at
+  n = 200, 10.7M at 400, 85.6M at 800 (old order 0.06M, 0.24M, 0.96M).
+  Each full collection walks every one of them: at n = 800, 7 full
+  collections took 6.2 s and the young ones 2.5 s of a 12.2 s run. In
+  `delete_factor_homogeneous` the deleted term was the row's first in
+  20,498 of 20,697 hits at n = 200, so 1.3.3 shares the tail `Ts` there.
+- **Fixed (implementation only).** `delete_factor` deletes a first term
+  by sharing the rest of the list (`linear_forms._SharedTail`, the terms
+  `base[start:]`, copied only when something reads `.terms`; rows of 8
+  terms or fewer are copied as before). A back substitution by a number
+  keeps the share (`add_linear_forms_first_scaled` with a constant
+  definition), and `bs_collect_binding` tests the row without reading
+  its terms. Also: `with_changes` copies the 12 slots directly (3.9M
+  `getattr` calls at n = 800), and `delete_first` inlines the first step
+  of `_identical_variable`. Kept term references at n = 800: 0.34M.
+  Measured (min of 3, loaded box, fresh process each; GC on / GC off):
+
+  | case | before the order (9aa533dc) | binding order (25f4ae1f) | shared tail |
+  |---|---|---|---|
+  | `bind_numbers` 100..1600 | .032 .13 .56 2.9 13.6 / .032 .12 .51 2.3 9.3 | .039 .17 1.13 11.5 95.5 / .034 .15 .65 3.4 20.5 | .034 .12 .57 2.8 13.3 / .031 .11 .43 1.7 6.9 |
+  | `bind_numbers_each` 100..1600 | .044 .18 1.26 12.3 100.5 / .037 .15 .62 3.7 21.4 | .044 .19 1.33 13.5 - / .040 .16 .69 3.2 - | .035 .13 .67 3.0 14.8 / .033 .12 .47 1.8 8.0 |
+  | `bind_varvar` 100..400 | .24 1.56 13.4 / .22 1.58 10.6 | .24 1.58 13.7 / .22 1.53 12.4 | .23 1.58 12.9 / .21 1.37 11.6 |
+
+  With the GC off `bind_numbers` is now quadratic (slopes 1.9, 2.0, 2.0
+  up to 1600). With it on the slope is 2.25 to 2.3: what is left is the
+  GC over objects 1.3.3's algorithm keeps through the trail too, about
+  2.3M at n = 800 (a state and a row for each of the n^2/2 rewrites, the
+  2n^2 list cells of `delete_first`'s copied prefixes). Fewer of them
+  would need the trail to keep one old value per variable per choice
+  point (an engine change, not made), or a GC policy change, which is
+  the owner's (not made: no threshold, `gc.disable` or `gc.freeze` in the
+  library). `bind_varvar` is unchanged: its rows almost all hold the
+  variable and merge two non-constant forms, where nothing is shared.
 
 ### R3. Merging normal forms (`normal_form_add`, `_standard_order`): quadratic left-leaning sums (inherent in 1.3.3's text, removable by implementation)
 

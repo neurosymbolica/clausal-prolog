@@ -300,3 +300,11 @@ unification are processed in binding order.
   the port's: the cyclic GC walking the n^2/2 long-lived term tuples, and
   the row copy of `delete_factor_homogeneous`, where 1.3.3 shares the tail.
   Both need a change of representation or of GC policy, not of algorithm.
+
+**Follow-up (same day, implementation only).** The GC cost was not
+cycles: the trail kept every replaced row, each a full copy, n^3/6 term
+references in all, which every full collection walked. `delete_factor`
+now shares the rest of a row when it deletes its first term, as
+`delete_factor_hom/4` shares `Ts`: `bind_numbers` 2.8 s at n = 800 and
+13.3 s at 1600 (GC off: 1.7 s and 6.9 s, slope 2.0), with goldens
+unchanged. Details and numbers: the survey's R2.

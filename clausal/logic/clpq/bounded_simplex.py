@@ -51,9 +51,10 @@ from clausal.logic.clpq.components import (
     list_elements, open_list)
 from clausal.logic.clpq.linear_forms import (
     MINUS_ONE, LinearForm, add_linear_forms, add_linear_forms_scaled,
-    delete_factor, independent, isolate, multiply_homogeneous_part,
+    delete_factor, has_no_terms, independent, isolate,
+    multiply_homogeneous_part,
     multiply_linear_factor, normal_form_right_hand_side,
-    normal_form_substitute, normal_form_to_sum, normalize_scalar)
+    normal_form_substitute, normal_form_to_sum, normalize_scalar, term_count)
 from clausal.logic.clpq.variable_ordering import order_keys
 from clausal.logic.variables import Var, deref, get_attr, is_var, unify
 from clausal.terms import ConcreteSeg, SegList, VarSeg
@@ -1023,8 +1024,7 @@ def solve_step(terms, form, constant, bindings, trail):
         return _SOLVE_FAILED, None
     if category == 1:
         _put_attributes(selected, trail, linear_form=form_1)
-        back_substitute_collect_binding(form_1.terms, selected,
-                                        form_1.constant, bindings)
+        back_substitute_collect_binding(form_1, selected, bindings)
         if not equate_components(new_variables, components, trail):
             return _SOLVE_FAILED, None
         return _SOLVE_FINISHED, None
@@ -1055,8 +1055,7 @@ def solve_step(terms, form, constant, bindings, trail):
             return _SOLVE_FAILED, None
         if not undetermined_active(form_1, trail):
             return _SOLVE_FAILED, None
-        back_substitute_collect_binding(form_1.terms, selected,
-                                        form_1.constant, bindings)
+        back_substitute_collect_binding(form_1, selected, bindings)
         return _SOLVE_RECONSIDER, new_basis
     # category 4
     state = state_of(selected)
@@ -1117,8 +1116,7 @@ def solve_for_variable_homogeneous(terms, form, constant, selected, bindings,
             back_substitute_variables(dependents, selected, form_1, trail)
         return equate_components(new_variables, components, trail)
     _put_attributes(selected, trail, linear_form=form_1)
-    back_substitute_collect_binding(form_1.terms, selected, form_1.constant,
-                                    bindings)
+    back_substitute_collect_binding(form_1, selected, bindings)
     return equate_components(new_variables, components, trail)
 
 
@@ -1660,7 +1658,7 @@ def back_substitute_variables(members, variable, form, trail):
         if big or abs(c0) + c1 + abs(r0) + r1 >= word:
             written += 1 + row_size(new_form)
         else:
-            written += 4 + len(new_form.terms)
+            written += 4 + term_count(new_form)
     used = meter.used + written
     meter.used = used
     if used > meter.threshold:
@@ -1690,8 +1688,7 @@ def back_substitute_collect_bindings(members, variable, form, bindings, trail):
                                           keys)
         if new_form is not None:
             put_state(member, with_changes(state, linear_form=new_form), trail)
-            back_substitute_collect_binding(new_form.terms, member,
-                                            new_form.constant, bindings)
+            back_substitute_collect_binding(new_form, member, bindings)
     return True
 
 
@@ -1729,15 +1726,14 @@ def _metered_back_substitute(meter, members, variable, form, bindings,
             written += 1                                # the row read
             continue
         put_state(member, with_changes(state, linear_form=new_form), trail)
-        back_substitute_collect_binding(new_form.terms, member,
-                                        new_form.constant, bindings)
+        back_substitute_collect_binding(new_form, member, bindings)
         # the row read, and the row written: small_row_size, inlined
         c0, c1 = new_form.constant
         r0, r1 = new_form.rest
         if big or abs(c0) + c1 + abs(r0) + r1 >= word:
             written += 1 + row_size(new_form)
         else:
-            written += 4 + len(new_form.terms)
+            written += 4 + term_count(new_form)
     used = meter.used + written
     meter.used = used
     if used > meter.threshold:
@@ -1745,11 +1741,12 @@ def _metered_back_substitute(meter, members, variable, form, bindings,
     return True
 
 
-def back_substitute_collect_binding(homogeneous, variable, constant, bindings):
+def back_substitute_collect_binding(form, variable, bindings):
     """bv.pl, back_substitute_collect_binding//3 (bs_collect_binding//3): a
-    row with no variables left binds its variable."""
-    if not homogeneous:
-        bindings.append((variable, constant))
+    row with no variables left binds its variable.  It takes the row, not
+    its terms, so a shared tail is not copied to be tested (has_no_terms)."""
+    if has_no_terms(form):
+        bindings.append((variable, form.constant))
 
 
 # ------------------------------ reconsider the basis --------------------------

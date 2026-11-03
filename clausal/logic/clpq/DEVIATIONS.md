@@ -1659,7 +1659,14 @@ found are.  Timed at a load average of 9 to 11 on 8 cores:
   The chain with numbers then took 0.14 s at n = 200 and 2.9 s at
   n = 800 (7.1 s before), with load 8 to 12 on 32 cores.  The var-var
   unification above was unchanged (1.64 s against 1.60 s at n = 200),
-  because nearly every row it reads holds the variable.
+  because nearly every row it reads holds the variable.  D3's binding
+  order (ruling 2026-11-03) then made the chain with numbers rewrite
+  1.3.3's n(n - 1)/2 rows, 10 to 11.5 s at n = 800, because each rewrite
+  copied the row and the trail kept every copy (n^3 terms, which the
+  cyclic GC walked on each full collection).  Deleting a row's first
+  term now shares the rest of the list, as delete_factor_hom/4 shares
+  `Ts` (implementation only; survey R2): 2.8 s at n = 800, 13.3 s at
+  1600, the same rows and decisions.
 - **Deep terms raised RecursionError in shared clpfd code** (Medium 7):
   a sum nested 100,000 deep (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`,
   then `{Y >= T}`) raised `RecursionError` from clpfd's cell walk before

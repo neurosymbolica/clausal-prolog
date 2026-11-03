@@ -38,6 +38,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `X1 =< ... =< Xn` as a list now does 1.3.3's n^2/2 row rewrites instead
   of about 2n, which costs more in the port (n = 800: 2.7 s to 10 s;
   one variable at a time, 11 s, is unchanged).
+- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: a back
+  substitution no longer copies each row it rewrites.** Deleting the
+  first term of a row now shares the rest of the row's list, as 1.3.3's
+  `delete_factor_hom/4` shares the tail `Ts` of `[T|Ts]`, instead of
+  copying it.  The trail keeps every row a binding replaces, so the
+  copies kept n^3 terms alive when a chain was bound to numbers, and
+  every full run of Python's cyclic garbage collector walked them all
+  (85.6M kept terms at n = 800; the collector did not free any of them,
+  because none were garbage).  Binding a chain of 800 to numbers in one
+  unification: 11.5 s to 2.8 s (1600: 95.5 s to 13.3 s); one variable at a time:
+  13.5 s to 3.0 s.  The rows, answers and decisions are the same (the
+  differential goldens are identical).
 - **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: binding a
   dependent variable no longer reads every row of its store.** The
   unification hook's stand-in pass (DEVIATIONS.md D3) read every row of

@@ -91,12 +91,32 @@ def state_of(variable):
     return get_attr(variable, CLPQ_KEY)
 
 
+_FIELD_SET = frozenset(_FIELDS)
+_new_state = SolverState.__new__
+
+
 def with_changes(state, **fields):
-    values = {}
-    for name in _FIELDS:
-        values[name] = getattr(state, name)
-    values.update(fields)
-    return SolverState(**values)        # an unknown field raises TypeError
+    """A copy of *state* with *fields* changed; an unknown field raises
+    TypeError.  Copies the slots one by one: a back substitution makes
+    one for every row it rewrites (complexity survey R2)."""
+    new = _new_state(SolverState)
+    new.linear_form = state.linear_form
+    new.bounds = state.bounds
+    new.lower_strict = state.lower_strict
+    new.upper_strict = state.upper_strict
+    new.component = state.component
+    new.variable_order = state.variable_order
+    new.nonzero = state.nonzero
+    new.delayed_goals = state.delayed_goals
+    new.forward = state.forward
+    new.target = state.target
+    new.keep_independent = state.keep_independent
+    new.keep = state.keep
+    for name, value in fields.items():
+        if name not in _FIELD_SET:
+            raise TypeError(f"with_changes() got an unexpected field {name!r}")
+        setattr(new, name, value)
+    return new
 
 
 def put_state(variable, state, trail):

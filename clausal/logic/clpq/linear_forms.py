@@ -10,11 +10,14 @@ is the record `LinearForm(constant, rest, terms)`; `terms` is a list of
 `(variable, coefficient)` pairs in the same order.  Coefficients and
 constants are rationals (arithmetic.py).  A function may hand back a list
 it was given, as 1.3.3 shares list tails (test_multiply_linear_factor shows
-the form itself coming back for a factor of 1).
+the form itself coming back for a factor of 1), and deleting the first
+term of a long row shares the rest of its list (_SharedTail).  No list a
+form holds is ever changed.
 
 A predicate that can fail returns None where it fails.
 """
 import os
+from itertools import islice
 from operator import itemgetter
 
 from clausal.logic.clpq.arithmetic import (
@@ -54,6 +57,79 @@ class LinearForm:
 
     def __repr__(self):
         return f"LinearForm({self.constant!r}, {self.rest!r}, {self.terms!r})"
+
+
+_TERMS = LinearForm.__dict__["terms"]   # the slot, under _SharedTail's property
+
+#: delete_factor shares the rest of a row of at least this many terms
+#: when it deletes the first (_SharedTail); a shorter rest is copied.
+SHARE_AT = 8
+
+
+class _SharedTail(LinearForm):
+    """A form whose terms are `base[start:]` of another form's list,
+    not copied until something reads `terms` (store.pl's delete_factor_hom/4
+    answers the tail Ts of [T|Ts] itself).
+
+    delete_factor makes one when it deletes the first term of a long row,
+    which a back substitution does to almost every row it rewrites, so the
+    rows the trail keeps share one list instead of each keeping a copy
+    (complexity survey R2: the copies kept n^3 terms alive in a chain
+    bound to numbers, and the cyclic GC walked them all).  The terms read
+    are the same list a copy would give; the base list is never changed
+    (a form is never changed once made)."""
+    __slots__ = ("base", "start")
+
+    def __init__(self, constant, rest, base, start):
+        self.constant = constant
+        self.rest = rest
+        self.variable_ids = None
+        self.base = base
+        self.start = start
+
+    @property
+    def terms(self):
+        try:
+            return _TERMS.__get__(self)
+        except AttributeError:
+            terms = self.base[self.start:]
+            _TERMS.__set__(self, terms)
+            self.base = None
+            return terms
+
+
+def _terms_from(form):
+    """(list, start): *form*'s terms are list[start:], read without a
+    copy."""
+    if type(form) is _SharedTail:
+        base = form.base
+        if base is not None:
+            return base, form.start
+    return form.terms, 0
+
+
+def term_count(form):
+    """len(form.terms), without copying a shared tail."""
+    base, start = _terms_from(form)
+    return len(base) - start
+
+
+def has_no_terms(form):
+    """*form* is a constant: its homogeneous part is []."""
+    base, start = _terms_from(form)
+    return len(base) <= start
+
+
+def shares_terms(form, terms):
+    """*form*'s terms are a tail of the list *terms*, not a copy."""
+    return type(form) is _SharedTail and form.base is terms
+
+
+def with_constant(form, constant, rest):
+    """A form with *form*'s terms, shared, and *constant* and *rest*."""
+    if type(form) is _SharedTail and form.base is not None:
+        return _SharedTail(constant, rest, form.base, form.start)
+    return LinearForm(constant, rest, form.terms)
 
 
 def normalize_scalar(scalar):
@@ -186,12 +262,14 @@ def add_homogeneous_parts_scaled(terms_a, factor_a, terms_b, factor_b):
 def add_linear_forms_first_scaled(form_a, factor_a, form_b, keys_a=None):
     """store.pl, add_linear_f1/4: factor_a*form_a + form_b.  *keys_a* as
     add_homogeneous_parts_first_scaled takes it."""
+    constant = add(multiply(form_a.constant, factor_a), form_b.constant)
+    rest = add(multiply(form_a.rest, factor_a), form_b.rest)
+    if not form_a.terms:                    # add_linear_f1h/4: B's terms, shared
+        return with_constant(form_b, constant, rest)
     terms = add_homogeneous_parts_first_scaled(form_a.terms, factor_a,
                                                form_b.terms, keys_a)
     if terms is None:
         return None
-    constant = add(multiply(form_a.constant, factor_a), form_b.constant)
-    rest = add(multiply(form_a.rest, factor_a), form_b.rest)
     return LinearForm(constant, rest, terms)
 
 
@@ -336,7 +414,8 @@ def row_variable_ids(form):
     variables as they are, and as they dereference now."""
     ids = form.variable_ids
     if ids is None or ids is False:
-        variables = list(map(_first, form.terms))
+        base, start = _terms_from(form)
+        variables = list(map(_first, islice(base, start, None)))
         ids = set(map(id, variables))
         ids.update(map(id, map(deref, variables)))
         form.variable_ids = ids
@@ -368,10 +447,34 @@ def delete_factor(variable, form):
             if CHECK_ROW_INDEX:
                 _check_skip(variable, form)
             return None
-    deleted = delete_factor_homogeneous(variable, form.terms)
+    base, start = _terms_from(form)
+    if start:
+        return _delete_factor_from_tail(variable, form, base, start)
+    if base and len(base) > SHARE_AT and (
+            base[0][0] is variable or deref(base[0][0]) is variable):
+        # delete_factor_hom/4, its first clause: the rest, shared
+        return _SharedTail(form.constant, form.rest, base, 1), base[0][1]
+    deleted = delete_factor_homogeneous(variable, base)
     if deleted is None:
         return None
     return LinearForm(form.constant, form.rest, deleted[0]), deleted[1]
+
+
+def _delete_factor_from_tail(variable, form, base, start):
+    """delete_factor_homogeneous on base[start:] (a _SharedTail's terms):
+    the same scan, and the rest shared where the first term goes."""
+    length = len(base)
+    i = start
+    while i < length:
+        term = base[i]
+        if term[0] is variable or deref(term[0]) is variable:
+            if i == start and length - start > SHARE_AT:
+                return (_SharedTail(form.constant, form.rest, base, start + 1),
+                        term[1])
+            return (LinearForm(form.constant, form.rest,
+                               base[start:i] + base[i + 1:]), term[1])
+        i += 1
+    return None
 
 
 def _check_skip(variable, form):
