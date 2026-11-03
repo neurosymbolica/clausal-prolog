@@ -888,11 +888,21 @@ so a leaf whose value is within Eps of -1 gets the vertex 1.
 The port rounds correctly, as for D17 (correctness first, ruling R25):
 the nearest integer, a half away from zero, so `-1/2` and `-3/4` give
 `-1` (`test_round_rational_is_nearest_with_half_away_from_zero`, over
--3/2, -1, -3/4, -1/2, -1/4, 0, 1/2 and 3/2).  Scryer agrees with the port:
+-3/2, -1, -3/4, -1/2, -1/4, 0, 1/2 and 3/2).
+
+`roundq/4` itself, run on 2026-11-03 under Scryer (its copy in Scryer's
+clpq.pl is 1.3.3's text, and Scryer's `//` truncates toward zero, as
+SICStus's does), gives `round(-3/2) = -2`, `round(-1) = -1`,
+`round(-3/4) = 1`, `round(-1/2) = 1`, `round(-1/4) = 0`, and the nearest
+integer for 0, 1/4, 1/2, 3/4 and 3/2, as read above.
+
+Scryer's clpq answers
 `{X >= -1, Y >= 0, X + Y >= -3/4}, bb_inf([X], X + 2*Y, I, [V], 1/2)`
-gives `I = -3/4, V = -1` on both (`test_bb_inf_answers_as_the_oracle`,
-`test_the_vertex_rounds_a_value_in_minus_one_to_minus_a_half_down`).
-Not checked against SICStus.
+with `I = -3/4, V = -1`, as the port does (`test_bb_inf_answers_as_the_oracle`,
+`test_the_vertex_rounds_a_value_in_minus_one_to_minus_a_half_down`).  That
+is not independent evidence: Scryer's copy does not expand `arith_eval`,
+so `round` there is Scryer's native `round/1`, not `roundq`.  Not checked
+against SICStus.
 
 ## D19: a binding checks that its strict bounds can still hold
 

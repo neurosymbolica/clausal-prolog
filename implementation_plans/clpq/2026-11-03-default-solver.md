@@ -7,7 +7,7 @@ the modules it drives. Its departures from 1.3.3 are D1-D25 in
 
 ## Recommendation
 
-Not yet. Flip once the three items under "Before a flip" are closed. Each one
+Not yet. Flip once the two items under "Before a flip" are closed. Each one
 is small. Nothing in the suite blocks the flip: under the two solvers the gate
 fails the same tests.
 
@@ -35,8 +35,8 @@ Most of D1-D25 are representation or presentation: rationals as int pairs,
 creation-order variables, error shapes, and residual output. Three change
 answers. Each was ruled a correctness fix (R25, R26). None has been checked
 against SICStus: 1.3.3 runs only there, SICStus is not available here (todo
-MORNING-SICSTUS), and the 1.3.3 sources are no longer on this box. All three
-rest on a reading of the 1.3.3 text made when it was available.
+MORNING-SICSTUS), and the original 1.3.3 sources are no longer on this box (Scryer's clpq.pl keeps an adapted copy). All three
+rest on a reading of the 1.3.3 text; D18's has also been run (below).
 
 **D19, a binding checks that its strict bounds can still hold.** This is the
 strongest of the three. bv.pl's `rcbl/3` does not re-examine a variable that a
@@ -74,17 +74,16 @@ takes `I is N//D` and tests the sign of I, not of x. For x in (-1, -1/2], I is
 0, so x rounds to +1: `round(-3/4) = 1`. bb.pl rounds the vertex of a leaf with
 it.
 
-- **Weakness, and a correction to D18's own text:** D18 says "Scryer agrees
-  with the port". That agreement is not independent evidence. In the Scryer
-  copy, the goal expansion of `arith_eval` is disabled. So it evaluates
-  `round` with Scryer's native `round/1`, not with `roundq`.
-- **What is left as evidence:** the arithmetic of the `roundq` text under a
-  `//` that truncates toward zero, as SICStus's `//` does. Nobody has run that
-  text. A five-line `roundq` run under Scryer or Clausal, with `//`
-  truncating, would confirm or refute it.
+- **Evidence, confirmed 2026-11-03:** Scryer's clpq.pl keeps 1.3.3's
+  `roundq/4` text. Run directly under Scryer, whose `//` truncates toward
+  zero as SICStus's does, it gives `round(-3/4) = 1` and `round(-1/2) = 1`.
+  D18 now records this run.
+- **Not evidence:** D18 used to say "Scryer agrees with the port" on a
+  `bb_inf` query. Scryer's copy does not expand `arith_eval`, so its `bb_inf`
+  rounds with Scryer's native `round/1`, never with `roundq`. D18 now says so.
 
-For D19 and D18 we cannot say for certain that 1.3.3 itself answers this
-way, as opposed to Scryer's copy. Ruling R25 puts correctness first, so the
+For D19 we cannot say for certain that 1.3.3 itself answers this way, as
+opposed to Scryer's copy. Ruling R25 puts correctness first, so the
 port answers correctly either way.
 
 The other deviations do not change which answers are found, but D24's caps
@@ -120,10 +119,7 @@ The per-solver branches in the tests pin each of these.
 1. **Var-var unification speed (D24, deferred under R34).** Profile it and fix
    it, or accept it and record the acceptance. 16× at n = 200 is the one
    regression a user would notice.
-2. **D18's evidence.** Run `roundq`'s text with a truncating `//` and record
-   the result in D18. Also replace the "Scryer agrees" sentence. This is
-   a few minutes of work.
-3. **Gate the default.** After a flip the gate's `holzbaur` default matches
+2. **Gate the default.** After a flip the gate's `holzbaur` default matches
    the shipped default again. Until then, run `GATE_CLPQ=legacy` before a
    release. A workflow that runs the CLP(Q) tests under both solvers would
    make this permanent.
