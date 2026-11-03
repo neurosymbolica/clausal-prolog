@@ -1273,24 +1273,28 @@ def _promote_fd_in_expr(expr: Any, trail: Trail) -> None:
     inf/2, maximize, minimize and bb_inf, and the targets of in_q, enter
     CLP(Q) with their FD bounds (docs/clpq.md, FD<->Q coexistence).  A
     variable with neither state stays unknown to the store, so it is
-    unbounded, as in clp(q,r) 1.3.3."""
-    expr = deref(expr)
-    if is_var(expr):
-        if get_attr(expr, Q_KEY) is None:
-            from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
-            if get_attr(expr, FD_KEY) is not None:
-                _promote_fd_to_q(expr, trail)
-        return
-    if isinstance(expr, list):
-        for element in expr:
-            _promote_fd_in_expr(element, trail)
-        return
-    _ensure_term_imports()
-    if isinstance(expr, (_Add, _Sub, _Mult, _Div)):
-        _promote_fd_in_expr(expr.left, trail)
-        _promote_fd_in_expr(expr.right, trail)
-    elif isinstance(expr, _Negate):
-        _promote_fd_in_expr(expr.operand, trail)
+    unbounded, as in clp(q,r) 1.3.3.
+
+    Left to right, depth first, on an explicit stack (DEVIATIONS.md
+    D27)."""
+    stack = [expr]
+    while stack:
+        expr = deref(stack.pop())
+        if is_var(expr):
+            if get_attr(expr, Q_KEY) is None:
+                from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+                if get_attr(expr, FD_KEY) is not None:
+                    _promote_fd_to_q(expr, trail)
+            continue
+        if isinstance(expr, list):
+            stack.extend(reversed(expr))
+            continue
+        _ensure_term_imports()
+        if isinstance(expr, (_Add, _Sub, _Mult, _Div)):
+            stack.append(expr.right)
+            stack.append(expr.left)
+        elif isinstance(expr, _Negate):
+            stack.append(expr.operand)
 
 
 def _ensure_q_for_expr(expr: Any, trail: Trail) -> None:
