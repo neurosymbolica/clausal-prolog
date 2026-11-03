@@ -97,7 +97,8 @@ class(reserved,  ['\x1f\']).
 def(escape,   bslash then ( octdig then octdig* then bslash?
                           | 'x' then hexdig then hexdig* then bslash?
                           | (any - reserved - nl) )).
-def(udigits,  digit then (digit | '_')*).
+% Kept in sync with iso.toklex.pl's `udigits`: one `_` between two digits.
+def(udigits,  digit then ('_'? then digit)*).
 % Kept in sync with iso.toklex.pl's `exp`: ISO 6.4.5's exponent char is
 % "e" | "E", so 'E' stays (2026-10-16; the 10-15 pass had wrongly removed
 % it). The number grammar is not a deliberate Clausal-surface difference

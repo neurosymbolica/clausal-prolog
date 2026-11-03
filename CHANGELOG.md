@@ -51,6 +51,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `{}/1` from `clausal/stdlib/clpq_braces.clausal`, which posts through
   `clpq.rational/1`; a file's own `{}/1` still wins, and without the import
   `{}/1` stays undefined, as in Scryer.
+### Changed
+
+- **A digit group separator is one `_` between two digits** in an ISO
+  reader number (`1_000`, `1_0.5`). `1_000_` and `1__000`, which read as
+  1000, are now `syntax_error(cannot_parse_big_int)`, as in Scryer. The
+  `0x`/`0o`/`0b` rules are unchanged. Pinned in
+  `tests/iso/test_syntax_error_terms_scryer.py` and
+  `tests/toklex/test_iso_spec.py`.
 
 ## 1.4.0 (2026-11-03)
 
@@ -526,7 +534,7 @@ trees, Scryer's syntax-error terms, the stream and `read_term` builtins and
   `tests/iso/test_syntax_error_terms_scryer.py` (96 malformed texts) and
   `tests/iso_l3/test_l3_syntax_error_messages.py`; the two digit-group
   rows Scryer refuses and the lexer accepts are recorded in
-  `todo/reader-digit-group-trailing-underscore-2026-10-24.md`. Q3 of
+  `todo/done/reader-digit-group-trailing-underscore-2026-10-24.md`. Q3 of
   `docs/iso_questions_for_ulrich.md` asks whether a common vocabulary
   exists beyond Scryer's.
 

@@ -141,6 +141,11 @@ ROWS = [
     ('float_inf_spelling', 'X = 1.0Inf.\n', 'incomplete_reduction'),
     ('digit_group_trailing', 'X = 1_000_.\n', 'cannot_parse_big_int'),
     ('digit_group_double', 'X = 1__000.\n', 'cannot_parse_big_int'),
+    ('digit_group_before_dot', 'X = 1_.5.\n', 'cannot_parse_big_int'),
+    ('digit_group_ok', 'X = 1_000.\n', None),
+    ('digit_group_float_ok', 'X = 1_0.5.\n', None),
+    ('fraction_group_trailing', 'X = 1.0_.\n', 'incomplete_reduction'),
+    ('fraction_group', 'X = 1.0_0.\n', 'incomplete_reduction'),
     ('leading_dot_float', 'X = .5.\n', 'incomplete_reduction'),
     ('big_int_ok', 'X = 123456789012345678901234567890.\n', None),
     ('control_char', 'X = a\x01.\n', 'unexpected_char'),
@@ -153,13 +158,14 @@ ROWS = [
     ('valid_sanity', 'foo(X) :- bar(X, \'a b\', "s", 0\'c, 1.5e3).\n', None),
 ]
 
-#: Rows where the reader reads a term Scryer refuses, by a lexical rule of
-#: its own: the digit-group rule ``digit then (digit | '_')*`` of
-#: ``clausal/tools/toklex/specs/iso.toklex.pl`` takes a trailing or doubled
-#: ``_`` (``1_000_``, ``1__000`` read as 1000); Scryer's number reader
-#: refuses both (``cannot_parse_big_int``).  A lexer question, not an error
-#: term one (todo/reader-digit-group-trailing-underscore-2026-10-24.md).
-KNOWN_DIFFERENCES = {"digit_group_trailing", "digit_group_double"}
+#: Rows where the reader reads a term Scryer refuses.  The lexer's digit
+#: group is one ``_`` between two digits in the integer part and the
+#: fraction alike, so ``1.0_0`` reads as 1.0; Scryer's number reader takes
+#: no ``_`` in a fraction (``incomplete_reduction``).  The trailing and
+#: doubled integer-group rows (``1_000_``, ``1__000``) left this set when
+#: the rule was tightened
+#: (todo/done/reader-digit-group-trailing-underscore-2026-10-24.md).
+KNOWN_DIFFERENCES = {"fraction_group"}
 
 _IDS = [r[0] for r in ROWS]
 
