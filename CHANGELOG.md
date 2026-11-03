@@ -7,6 +7,23 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Fixed
+
+- **The test runner's "no clause head unifies" is now true as stated, and
+  heads keep their arguments.**  The failure descent looked at only the first
+  4 clauses of a predicate, yet a nested finding said "no clause head unifies
+  with these arguments" -- for a call whose matching clause was the 7th.  Head
+  unification (no body) is now checked for every clause; the descent walks the
+  first 4 clauses whose heads unify, and its note counts those ("descent
+  walked only the first 4 of 6 clauses of engagement whose heads unify with
+  these arguments (8 clauses in all)").  A head listing says "no clause head
+  unifies with these arguments — the heads are:" or, past 4 clauses, "none of
+  the N clause heads unifies with these arguments — the first 4 are:", with
+  the same words at the top level and nested.  A head of a natively loaded
+  file prints from its source (`engagement(P, met(a))`, not
+  `engagement(_, _)`), bracket depth past 4 elided to `…` and cut at 160
+  characters.
+
 ## 1.4.0 (2026-11-03)
 
 ### Changed

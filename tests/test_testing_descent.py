@@ -299,7 +299,9 @@ def test_clause_cap_is_applied_and_noted(capsys, tmp_path):
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert out.count("N > 100") == 4          # DIAG_MAX_DESCENT_CLAUSES leaves
-    assert "first 4 of 6 clauses" in out      # the truncation is stated
+    # The truncation is stated; all six heads unify, so no "in all" count.
+    assert ("descent walked only the first 4 of 6 clauses of sixway whose "
+            "heads unify with these arguments\n") in out
 
 
 # The DIAG_MAX_DESCENT_LEAVES cap bounds TOTAL findings across the whole
@@ -345,13 +347,14 @@ def test_leaves_cap_bounds_total_findings_across_fanout(capsys, tmp_path):
     assert "only the first 6 of 8 descent findings are shown" in out
 
 
-# When the head listing itself is truncated by the clause cap, the headline must
-# not claim ALL heads mismatch — only the first DIAG_MAX_DESCENT_CLAUSES (=4)
-# were examined.  Same rung-3 requirement as the other head-listing fixtures:
-# each head carries a DISTINCT atom literal so no head unifies with the concrete
-# goal atom ``zzz``, and each body is a non-recursive ``1 > 2`` so the all-holes
-# probe fails cleanly (rung 2 does not intercept) and descent runs.  Verified
-# against the live engine: softened headline + cap note, only 4 heads listed.
+# A head listing over more than DIAG_MAX_DESCENT_CLAUSES (=4) clauses lists
+# only the first 4 heads, but every head WAS checked, so the headline states
+# exactly that: none of the 6 unifies, the first 4 are shown.  (It used to say
+# "no clause head among the first 4 unifies": only 4 heads were checked.)
+# Same rung-3 requirement as the other head-listing fixtures: each head
+# carries a DISTINCT atom literal so no head unifies with the concrete goal
+# atom ``zzz``, and each body is a non-recursive ``1 > 2`` so the all-holes
+# probe fails cleanly (rung 2 does not intercept) and descent runs.
 SIX_HEADS_SRC = """
 -double_quotes(atom)
 -private([a, b, c, d, e, f, zzz])
@@ -369,17 +372,16 @@ test("six clause heads all mismatch") <- (
 """
 
 
-def test_capped_head_listing_softens_headline_and_notes_cap(capsys, tmp_path):
+def test_capped_head_listing_states_every_head_was_checked(capsys, tmp_path):
     p = write(tmp_path, f"sixhead{SEAM}", SIX_HEADS_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
-    # Softened headline bounds the claim to the first N heads examined.
-    assert "no clause head among the first 4 unifies" in out
-    # ...and the unsoftened "ALL heads mismatch" wording is NOT used here.
-    assert "no clause head unifies with these arguments" not in out
-    # The truncation is stated as a note.
-    assert "first 4 of 6 clauses" in out
-    # Only the first 4 heads are listed (5th/6th were never examined).
+    assert ("none of the 6 clause heads unifies with these arguments "
+            "— the first 4 are:") in out
+    # Nothing was left unchecked, so there is no cap note and no bound claim.
+    assert "descent walked" not in out
+    assert "among the first" not in out
+    # Only the first 4 heads are listed.
     assert "sixhead(a, N)" in out
     assert "sixhead(d, N)" in out
     assert "sixhead(e, N)" not in out
@@ -1054,3 +1056,197 @@ def test_collapse_scan_depth_exhaustion_is_noted(capsys, tmp_path):
     # ...but the exhaustion is STATED, never silent.
     assert (f"stopped at its {DIAG_MAX_COLLAPSE_DEPTH}-level depth bound"
             in out)
+
+
+# ── head listings state exactly what was checked; heads keep their arguments ──
+#
+# A downstream harness feeds these lines to a model as feedback.  It used to
+# be told "no clause head unifies with these arguments" for a call whose
+# matching clause was the 7th: the descent looked only at the first
+# DIAG_MAX_DESCENT_CLAUSES heads, and printed each as ``engagement(_, _)``
+# because the native front end hoists a structural head argument
+# (``met(a)``) into the body.  Head unification is now checked for EVERY
+# clause (it is cheap; the cap bounds the recursive descent), the descent
+# walks the clauses whose heads unify, and a head is printed from its source,
+# bounded in depth and length.
+
+from clausal._suffixes import CLAUSAL_PROLOG_SUFFIXES  # noqa: E402
+
+CP = CLAUSAL_PROLOG_SUFFIXES[0]
+
+# Lines 1..8 are the clauses of engagement/2; the 7th is the only one whose
+# head unifies with engagement(5, unmet).  Every body is a contradictory pair,
+# so the all-holes probe fails and rung 3 descends.
+ENGAGEMENT_CP = textwrap.dedent("""\
+    engagement(P, met(a)) :- P > 100, P < 0.
+    engagement(P, met(b)) :- P > 100, P < 0.
+    engagement(P, met(c)) :- P > 100, P < 0.
+    engagement(P, met(d)) :- P > 100, P < 0.
+    engagement(P, met(e)) :- P > 100, P < 0.
+    engagement(P, met(f)) :- P > 100, P < 0.
+    engagement(P, unmet) :- P > 200, P < 0.
+    engagement(P, open(x)) :- P > 300, P < 0.
+    decide(P, ok) :- engagement(P, unmet).
+    decide_other(P) :- engagement(P, other).
+""")
+
+
+def _cp(tmp_path, name, tests):
+    p = tmp_path / f"{name}{CP}"
+    p.write_text(ENGAGEMENT_CP + textwrap.dedent(tests))
+    return p
+
+
+def test_matching_clause_beyond_the_cap_is_walked_top_level(capsys, tmp_path):
+    p = _cp(tmp_path, "eng_top", "test(top) :- engagement(5, unmet).\n")
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "no clause head" not in out and "none of the" not in out
+    assert ("    the predicate has no solution for ANY arguments at this "
+            "point; no clause body survives:\n"
+            f"      eng_top{CP}:7  P > 200\n"
+            "          P = 5\n") in out
+    assert "descent walked" not in out       # one route: nothing was capped
+
+
+def test_matching_clause_beyond_the_cap_is_walked_nested(capsys, tmp_path):
+    p = _cp(tmp_path, "eng_nest", "test(nested) :- decide(5, ok).\n")
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "no clause head" not in out and "none of the" not in out
+    assert (f"      eng_nest{CP}:7  P > 200\n"
+            "          P = 5\n") in out
+
+
+CAPPED_LISTING = (
+    "none of the 8 clause heads unifies with these arguments "
+    "— the first 4 are:\n"
+    "{i}eng_{n}{cp}:1  engagement(P, met(a))\n"
+    "{i}eng_{n}{cp}:2  engagement(P, met(b))\n"
+    "{i}eng_{n}{cp}:3  engagement(P, met(c))\n"
+    "{i}eng_{n}{cp}:4  engagement(P, met(d))\n"
+)
+
+
+def test_capped_listing_states_all_heads_checked_top_level(capsys, tmp_path):
+    p = _cp(tmp_path, "eng_none", "test(none) :- engagement(5, other).\n")
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert ("    the predicate has no solution for ANY arguments at this "
+            "point; " + CAPPED_LISTING.format(i="      ", n="none", cp=CP)
+            ) in out
+    assert "descent walked" not in out       # every head WAS checked
+
+
+def test_capped_listing_states_all_heads_checked_nested(capsys, tmp_path):
+    p = _cp(tmp_path, "eng_nnest", "test(none) :- decide_other(5).\n")
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert (f"      eng_nnest{CP}:10  engagement(P, other)\n"
+            "          P = 5\n"
+            "          " + CAPPED_LISTING.format(
+                i="            ", n="nnest", cp=CP)) in out
+    assert "descent walked" not in out
+
+
+def test_uncapped_listing_wording_matches_top_level_and_nested(
+        capsys, tmp_path):
+    p = tmp_path / f"few{CP}"
+    p.write_text(textwrap.dedent("""\
+        few(P, met(a)) :- P > 100, P < 0.
+        few(P, met(b)) :- P > 100, P < 0.
+        few_caller(P) :- few(P, other).
+        test(top) :- few(5, other).
+        test(nested) :- few_caller(5).
+    """))
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    listing = ("no clause head unifies with these arguments — the heads are:\n"
+               "{i}few{cp}:1  few(P, met(a))\n"
+               "{i}few{cp}:2  few(P, met(b))\n")
+    assert ("point; " + listing.format(i="      ", cp=CP)) in out
+    assert ("          P = 5\n"
+            "          " + listing.format(i="            ", cp=CP)) in out
+
+
+def test_descent_cap_counts_the_routes_whose_heads_unify(capsys, tmp_path):
+    # Six of eight heads unify with engagement(5, met(_)); four are walked.
+    p = _cp(tmp_path, "eng_cap", "test(capped) :- engagement(5, met(_)).\n")
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert ("note: descent walked only the first 4 of 6 clauses of "
+            "engagement whose heads unify with these arguments "
+            "(8 clauses in all)") in out
+    assert out.count("P > 100") == 4
+
+
+def test_long_and_deep_head_arguments_are_truncated(capsys, tmp_path):
+    long_atom = "x" * 200
+    p = tmp_path / f"deep{CP}"
+    p.write_text(textwrap.dedent(f"""\
+        deep(f(g(h(i(j(k)))))) :- 1 > 2.
+        deep({long_atom}) :- 1 > 2.
+        test(deep) :- deep(zz).
+    """))
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert f"      deep{CP}:1  deep(f(g(h(i(…)))))\n" in out
+    from clausal.testing import DIAG_MAX_HEAD_CHARS
+    expected = ("deep(" + long_atom)[:DIAG_MAX_HEAD_CHARS - 1] + "…"
+    assert f"      deep{CP}:2  {expected}\n" in out
+    assert long_atom not in out
+
+
+def test_bound_text_helper():
+    from clausal.testing import _bound_text
+    assert _bound_text("p(a, b)", max_chars=80, max_depth=2) == "p(a, b)"
+    assert _bound_text("p(f(g(x)), [1, [2, [3]]])", max_chars=80,
+                       max_depth=2) == "p(f(g(…)), [1, […]])"
+    # Brackets inside quoted atoms and strings do not count as depth.
+    assert _bound_text("p('a(b(c', \"[[\")", max_chars=80,
+                       max_depth=1) == "p('a(b(c', \"[[\")"
+    # 0'( is a character code, not a bracket.
+    assert _bound_text("p(0'(, x)", max_chars=80, max_depth=1) == "p(0'(, x)"
+    assert _bound_text("p(abcdefgh)", max_chars=6, max_depth=4) == "p(abc…"
+
+
+def test_heads_clash_is_conservative():
+    # Only certainly-different terms clash; anything unsure is left to the
+    # query probe, so the cheap check can never make a head look refused.
+    from clausal.logic.variables import Var
+    from clausal.pythonic_ast.nodes import Unify
+    from clausal.testing import _heads_clash
+
+    def clash(a, b):
+        return _heads_clash([Unify(left=a, right=b)], [])
+
+    assert clash("a", "b") and clash(1, 2) and clash("a", 1)
+    assert clash(("met", "a"), "unmet") and clash(("f", 1), ("g", 1))
+    assert clash(("f", 1), ("f", 1, 2)) and clash(("f", "a"), ("f", "b"))
+    assert not clash("a", "a") and not clash(Var(), "a")
+    assert not clash(1, 1.0) and not clash([], "[]")
+    assert not clash(("$chars", "ab"), "ab") and not clash(True, 1)
+    # A hoisted head argument is compared with the goal argument it meets.
+    v = Var()
+    assert _heads_clash([Unify(left=v, right="unmet")],
+                        [Unify(left=v, right=("met", "a"))])
+    assert not _heads_clash([Unify(left=v, right=Var())],
+                            [Unify(left=v, right=("met", "a"))])
+
+
+def test_fact_table_head_listing_checks_every_fact(capsys, tmp_path):
+    # outer/1 has no solution at all, so rung 3 descends into fact/2, a
+    # 300-fact table no head of which unifies with fact(5, zz).
+    p = tmp_path / f"facts{CP}"
+    p.write_text("\n".join(f"fact({i}, v{i})." for i in range(300)) + "\n"
+                 + "outer(X) :- X > 100, X < 0.\n"
+                 + "outer(X) :- fact(X, zz).\n"
+                 + "test(hit) :- outer(5).\n")
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert (f"      facts{CP}:302  fact(X, zz)\n"
+            "          X = 5\n"
+            "          none of the 300 clause heads unifies with these "
+            "arguments — the first 4 are:\n"
+            f"            facts{CP}:1  fact(0, v0)\n") in out
+    assert "descent walked" not in out
