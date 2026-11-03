@@ -363,9 +363,12 @@ succeeds on a ground difference, and otherwise suspends (`X = f(X),
 dif(Y, X)` leaves `dif(Y,f(...))`; a goal woken by `freeze/2` that posts
 such a `dif` too), and since its trial unify has no occurs check
 `dif(X, f(X))` suspends and a later `X = f(X)` fails
-(`tests/iso/test_dif_cyclic_scryer.py`).  One open gap is filed:
-`=`/2 and `==`/2 on two hole-built lists are quadratic
-(todo/hole-built-list-unify-and-eq-are-quadratic-2026-10-24.md).
+(`tests/iso/test_dif_cyclic_scryer.py`).  `=`/2 and `==`/2 on two
+hole-built lists are linear (`tests/test_hole_list_unify_scaling.py`).  One
+open gap is filed: a list a clause head builds after its body (`mk(N, L,
+[N|T]) :- ..., mk(N1, L, T)`) copies its tail at every level, so building
+it is quadratic
+(todo/a-list-a-clause-head-builds-after-its-body-copies-the-tail-quadratic-2026-11-03.md).
 
 ---
 

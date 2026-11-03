@@ -164,10 +164,12 @@ WRITE_ROWS = [
 
 # ``findall/3`` over ``between/3`` builds the 100k-element list as one flat list
 # in both engines (Scryer has no ``numlist/3``); ``mk/3``
-# builds a list through its open tail, one partial-list link per element,
-# whose pairwise walks are quadratic in this engine today (32k elements take
-# 20 s), so the improper-list row -- the one shape that needs ``mk`` -- is
-# shorter.  Both nest far past the walkers' recursion threshold (1000).
+# builds its list in the clause head after the body, which this engine does
+# slowly (about 2.5 s per 100k-element improper list, linear; a PROPER list
+# is quadratic,
+# todo/a-list-a-clause-head-builds-after-its-body-copies-the-tail-quadratic-2026-11-03.md;
+# ``=``/``==`` on the result are linear), so the improper-list row -- the
+# one shape that needs ``mk`` -- is shorter.  Both nest far past the walkers' recursion threshold (1000).
 
 DEEP_ROWS = [
     ("d1", f"yn((findall(I, between(1, {DEEP_N}, I), L), findall(I, between(1, {DEEP_N}, I), L2), L = L2), R)", "yes"),
@@ -336,9 +338,10 @@ def test_an_uncaught_cyclic_ball_renders(mod):
     assert render_error_term(exc.term) == "f(...)"
     assert "f(...)" in str(exc)
     # Thrown by a clause (``throw_cyclic``): the ball reaches Python as
-    # the same text.  (A cyclic term handed to ``solve()`` from Python is
-    # the open Python-entry gap of
-    # todo/hole-built-list-unify-and-eq-are-quadratic-2026-10-24.md.)
+    # the same text.  (A cyclic term handed to ``solve()`` from Python was
+    # the Python-entry gap recorded in
+    # todo/done/hole-built-list-unify-and-eq-are-quadratic-2026-10-24.md,
+    # fixed 2026-10-24: tests/test_python_entry_cyclic_deep.py.)
     with pytest.raises(LogicException) as info:
         list(solve("throw_cyclic", mod))
     assert render_error_term(info.value.term) == "f(...)"

@@ -290,6 +290,22 @@ def _carrier_star_concat(before, s, after_vals):
     return (CHARS_TAG, text_concat(text_concat("".join(before), text), "".join(after)))
 
 
+def _promote_through_deref(result):
+    """``maybe_promote_to_str`` reading each element through ONE
+    dereference: a variable bound to a char counts as that char.  Stops at
+    the first element that is not a char.  C twin:
+    ``maybe_promote_to_str_deref`` in ``_list_unify.c``."""
+    if not result:
+        return result
+    derefed = []
+    for e in result:
+        e = deref(e)
+        if not is_char_atom(e):
+            return result
+        derefed.append(e)
+    return maybe_promote_to_str(derefed)
+
+
 def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
     """Output-mode list pattern unification: construct list from bound vars.
 
@@ -361,17 +377,22 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
                     segs.append(ConcreteSeg(after_result))
                 return unify(d, SegList(segs), trail)
         elif isinstance(s, SegList):
-            # Star derefs to a SegList — walk it first.
-            # Review fix (fix round 1): SegList.__walk__ itself applies
-            # maybe_promote_to_str to a fully-ground result (terms.py),
-            # so a ground SegList of all chars walks to a STR, not
-            # a list — mirror the C twin's ``PyList_Check(walked) ||
-            # PyUnicode_Check(walked)`` gate exactly (_list_unify.c, the
-            # SegList/SegString ground-walk branch) rather than only
-            # handling ``list``. A walked str splats through ``str_chars``
-            # (the C twin's per-char ``PyUnicode_Substring`` splice, now
-            # wrapped in ``char_atom_obj``).
-            walked = s.__walk__()
+            # Star derefs to a SegList -- read it SHALLOWLY
+            # (``_walk_raw(False)``), as the C twin does: its elements are
+            # spliced as they are, as a list star's always were, and are
+            # read through their bindings by whoever reads the list (a
+            # findall/3 copy walks them then; commit f60e3211).  The
+            # promotion to text reads each through one dereference
+            # (``_promote_through_deref``), so a variable bound to a char
+            # is a char there, as it was after the walk.  The deep
+            # ``__walk__`` it used walked every element of the rest at
+            # every level of a list built in a clause head after its body
+            # (``mk(N, Z, [N|T]) :- ..., mk(N1, Z, T)`` with Z unbound):
+            # N^2/2 ``walk`` calls.  The ground result is not promoted to
+            # text here; ``maybe_promote_to_str`` below promotes the whole
+            # list, as it did after the walk.
+            # todo/a-list-a-clause-head-builds-after-its-body-copies-the-tail-quadratic-2026-11-03.md
+            walked = s._walk_raw(False)
             if is_chars(walked):
                 # A char SegList walks to the carrier: TEXT, its chars (the
                 # C twin's is_chars_carrier arm).  Read it here, before the
@@ -382,8 +403,10 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
                 result.extend(deref(v) for v in after_vals)
                 # F033: promote list-of-1-char-strs back to str under the
                 # Liskov "strings-as-lists" rule (default output is list;
-                # str only when provable from the elements themselves).
-                return unify(d, maybe_promote_to_str(result), trail)
+                # str only when provable from the elements themselves) --
+                # through one dereference of each element, which the
+                # shallow read left in place.
+                return unify(d, _promote_through_deref(result), trail)
             elif not isinstance(walked, SegList):
                 # The star walks to an IMPROPER list (D50): it is the tail.
                 # A bare ``str`` here is an ATOM tail (``[*T]`` with
