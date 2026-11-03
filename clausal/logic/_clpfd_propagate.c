@@ -214,12 +214,23 @@ FDVar_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     return (PyObject *)self;
 }
 
+/* Deallocs of the GC types in this file (FDVar and the constraint types)
+ * follow CPython's rules: untrack first, so code run while the fields drop
+ * (a __del__, a collection) cannot reach the dying object; then the
+ * trashcan, since every type here can hold another of its own kind directly
+ * (FDVar(FDVar(...)), AllDiffConstraint(AllDiffConstraint(...)), ...) and a
+ * long chain would otherwise recurse once per link.  See Var_dealloc in
+ * variables/_variables.c and todo/done/c-dealloc-untrack-and-bdd-free-
+ * recursion-2026-10-13.md. */
 static void
 FDVar_dealloc(FDVarObject *self)
 {
+    PyObject_GC_UnTrack(self);
+    Py_TRASHCAN_BEGIN(self, FDVar_dealloc)
     Py_XDECREF(self->domain);
     Py_XDECREF(self->constraints);
     Py_TYPE(self)->tp_free((PyObject *)self);
+    Py_TRASHCAN_END
 }
 
 static int
@@ -286,8 +297,11 @@ typedef struct {
 static void
 ConstraintBase_dealloc(ConstraintBaseObject *self)
 {
+    PyObject_GC_UnTrack(self);
+    Py_TRASHCAN_BEGIN(self, ConstraintBase_dealloc)
     Py_XDECREF(self->vars);
     Py_TYPE(self)->tp_free((PyObject *)self);
+    Py_TRASHCAN_END
 }
 
 static int
@@ -342,10 +356,13 @@ typedef struct {
 static void
 BinaryConstraint_dealloc(BinaryConstraintObject *self)
 {
+    PyObject_GC_UnTrack(self);
+    Py_TRASHCAN_BEGIN(self, BinaryConstraint_dealloc)
     Py_XDECREF(self->lhs);
     Py_XDECREF(self->rhs);
     Py_XDECREF(self->base.vars);
     Py_TYPE(self)->tp_free((PyObject *)self);
+    Py_TRASHCAN_END
 }
 
 static int
@@ -409,9 +426,12 @@ typedef struct {
 static void
 AllDiffConstraint_dealloc(AllDiffConstraintObject *self)
 {
+    PyObject_GC_UnTrack(self);
+    Py_TRASHCAN_BEGIN(self, AllDiffConstraint_dealloc)
     Py_XDECREF(self->all_vars);
     Py_XDECREF(self->base.vars);
     Py_TYPE(self)->tp_free((PyObject *)self);
+    Py_TRASHCAN_END
 }
 
 static int
@@ -448,10 +468,13 @@ typedef struct {
 static void
 SumConstraint_dealloc(SumConstraintObject *self)
 {
+    PyObject_GC_UnTrack(self);
+    Py_TRASHCAN_BEGIN(self, SumConstraint_dealloc)
     Py_XDECREF(self->sum_vars);
     Py_XDECREF(self->total);
     Py_XDECREF(self->base.vars);
     Py_TYPE(self)->tp_free((PyObject *)self);
+    Py_TRASHCAN_END
 }
 
 static int
@@ -492,11 +515,14 @@ typedef struct {
 static void
 ScalarProductConstraint_dealloc(ScalarProductConstraintObject *self)
 {
+    PyObject_GC_UnTrack(self);
+    Py_TRASHCAN_BEGIN(self, ScalarProductConstraint_dealloc)
     Py_XDECREF(self->coeffs);
     Py_XDECREF(self->sum_vars);
     Py_XDECREF(self->total);
     Py_XDECREF(self->base.vars);
     Py_TYPE(self)->tp_free((PyObject *)self);
+    Py_TRASHCAN_END
 }
 
 static int

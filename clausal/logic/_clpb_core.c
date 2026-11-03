@@ -103,12 +103,88 @@ BDDNode_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     return (PyObject *)self;
 }
 
+/* Freeing a node drops high and low, which may free their nodes in turn:
+ * one C frame per BDD level, so a BDD over enough variables would overflow
+ * the C stack.  BDDNode is not a GC type, so CPython's trashcan does not
+ * apply; this is the same scheme by hand.  Up to BDD_FREE_DEPTH nested
+ * frees recurse as usual; deeper ones park the dying node (refcount 0,
+ * fields intact) on a pending stack, which the outermost free drains.  The
+ * state is per thread: a field's __del__ may run Python code that switches
+ * threads.  See todo/done/c-dealloc-untrack-and-bdd-free-recursion-
+ * 2026-10-13.md. */
+#define BDD_FREE_DEPTH 1000
+
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L \
+        && !defined(__STDC_NO_THREADS__)
+#  define BDD_THREAD_LOCAL _Thread_local
+#elif defined(_MSC_VER)
+#  define BDD_THREAD_LOCAL __declspec(thread)
+#else
+#  define BDD_THREAD_LOCAL __thread
+#endif
+/* On ELF, initial-exec makes the per-thread state one register-relative
+ * load instead of a __tls_get_addr call per access (the state is a few
+ * words, well inside the static TLS reserve). */
+#if defined(__GNUC__) && defined(__ELF__)
+#  define BDD_TLS_MODEL __attribute__((tls_model("initial-exec")))
+#else
+#  define BDD_TLS_MODEL
+#endif
+
+typedef struct {
+    int depth;                   /* nested BDDNode_dealloc frames */
+    Py_ssize_t len, cap;
+    BDDNodeObject **pending;     /* dying nodes parked past BDD_FREE_DEPTH */
+} BDDFreeState;
+
+static BDD_THREAD_LOCAL BDDFreeState bdd_free_state BDD_TLS_MODEL;
+
+static int
+bdd_pending_push(BDDFreeState *st, BDDNodeObject *node)
+{
+    if (st->len == st->cap) {
+        Py_ssize_t cap = st->cap ? st->cap * 2 : 256;
+        BDDNodeObject **grown = PyMem_RawRealloc(
+            st->pending, (size_t)cap * sizeof(*grown));
+        if (!grown)
+            return -1;
+        st->pending = grown;
+        st->cap = cap;
+    }
+    st->pending[st->len++] = node;
+    return 0;
+}
+
 static void
 BDDNode_dealloc(BDDNodeObject *self)
 {
+    BDDFreeState *st = &bdd_free_state;
+    if (st->depth >= BDD_FREE_DEPTH && bdd_pending_push(st, self) == 0)
+        return;
+    /* (If the push failed for want of memory, free it here: one frame
+     * deeper beats leaking the node.) */
+    st->depth++;
     Py_XDECREF(self->high);
     Py_XDECREF(self->low);
     Py_TYPE(self)->tp_free((PyObject *)self);
+    if (st->depth == 1) {
+        /* Outermost: drain.  Each pending node's own free starts again at
+         * depth 1 and may park more nodes; the loop runs until none are
+         * left. */
+        while (st->len > 0) {
+            BDDNodeObject *node = st->pending[--st->len];
+            Py_XDECREF(node->high);
+            Py_XDECREF(node->low);
+            Py_TYPE(node)->tp_free((PyObject *)node);
+        }
+        if (st->cap > 4096) {
+            /* Give back the memory a very deep free needed. */
+            PyMem_RawFree(st->pending);
+            st->pending = NULL;
+            st->cap = 0;
+        }
+    }
+    st->depth--;
 }
 
 static Py_hash_t
