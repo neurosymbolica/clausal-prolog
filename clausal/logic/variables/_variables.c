@@ -906,7 +906,21 @@ trail_undo_to(TrailObject *trail, Py_ssize_t mark)
      * callback that records itself again.)  `top` is the end of the entries
      * still to undo; everything above it was pushed during this undo.  A
      * nested undo below `top` lowers it.  Each step lowers it by one, so
-     * the loop ends. */
+     * the loop ends.
+     *
+     * This is the contract (operator ruling 2026-11-03; documented in
+     * docs/python_integration.md, "Entries pushed while an undo runs";
+     * pinned by tests/test_trail_undo_pushed_entries.py):
+     *   - an entry pushed during the undo survives it, with what it did (a
+     *     binding stays bound), and its saved old value is the mid-undo
+     *     state; the next undo past it restores that state;
+     *   - a nested undo releases everything on the trail when it begins
+     *     (above its mark), including entries pushed earlier in this undo,
+     *     and keeps what is pushed while it runs; when it returns, `top`
+     *     drops to the shortened length, so this undo releases the entries
+     *     the nested one kept if they lie above `mark`.  An entry pushed in
+     *     a nested undo is therefore undone here; one pushed at this level
+     *     is not. */
     Py_ssize_t top = trail->length;
     for (;;) {
         if (top > trail->length)

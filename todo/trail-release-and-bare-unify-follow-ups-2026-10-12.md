@@ -4,7 +4,10 @@ Found by the reviews of the hook-error / bare-unify candidate (landed 9b38a0f1).
 from code in the tree today; each needs a hook, finaliser or undo callback that does something
 unusual, or direct Python use of the runtime helpers.
 
-1. **Entries pushed during an undo survive the backtrack.** `trail_undo_to` releases only the entries
+1. **RULED 2026-11-03 (operator ruling: the current behaviour is the contract; documented in
+   docs/python_integration.md, "Entries pushed while an undo runs", and in `trail_undo_to`'s comment;
+   pinned in tests/test_trail_undo_pushed_entries.py).**
+   **Entries pushed during an undo survive the backtrack.** `trail_undo_to` releases only the entries
    present at entry. An entry pushed mid-undo stays live above the mark, and its "old value" is a
    mid-undo state:
 
@@ -17,7 +20,9 @@ unusual, or direct Python use of the runtime helpers.
 
    A binding made inside an undo callback also survives `undo(0)`. Either document it as the contract,
    or undo pushed entries in the same pass and bound only the re-arming case.
-2. **Nested undo vs pushed entries is inconsistent.** An entry pushed by a callback inside a nested
+2. **RULED 2026-11-03 (operator ruling: the current treatment is the contract, documented and pinned
+   with item 1: a nested undo keeps what is pushed during it and the outer undo releases it).**
+   **Nested undo vs pushed entries is inconsistent.** An entry pushed by a callback inside a nested
    `undo(1)` is undone by the outer `undo(0)`. One pushed at the outer level stays live.
 3. **The `Trail_clear` test hard-codes the type layout.** In tests/test_trail_undo_never_grows.py it
    uses `8 * i` and the default object header. Use `ctypes.sizeof(ctypes.c_void_p)`, and skip on

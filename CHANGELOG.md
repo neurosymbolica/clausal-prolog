@@ -114,6 +114,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **Entries pushed onto a trail while an undo runs are ruled the contract**
+  (operator ruling 2026-11-03; no behaviour change). `trail.undo(mark)`
+  releases only the entries present when it began; an entry an undo
+  callback or finaliser pushes survives the backtrack, with what it did,
+  until the next undo past it. A nested undo keeps what is pushed during it,
+  and the outer undo then releases those. Documented in
+  `docs/python_integration.md` ("Entries pushed while an undo runs"); pinned
+  in `tests/test_trail_undo_pushed_entries.py`.
+
 - **A digit group separator is one `_` between two digits** in an ISO
   reader number (`1_000`, `1_0.5`). `1_000_` and `1__000`, which read as
   1000, are now `syntax_error(cannot_parse_big_int)`, as in Scryer. The

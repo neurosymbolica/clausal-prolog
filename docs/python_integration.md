@@ -1121,6 +1121,44 @@ A rule's body is a list of compiled goal nodes, not cells — write rules in a
         d[key] = value
     ```
 
+    ### Entries pushed while an undo runs
+
+    An undo can run Python: an undo callback, a finaliser (`__del__`) of a
+    value it releases, a weakref callback.  If that Python pushes onto the
+    same trail (`trail.record`, `put_attr`, `unify`, `push_pending`), the
+    rule is (operator ruling 2026-11-03):
+
+    - **`trail.undo(mark)` releases exactly the entries that were above
+      `mark` when it began**, newest first.  An entry pushed while it runs
+      is not released by it: it stays on the trail, above `mark`, and the
+      next undo past it undoes it.  So the undo always ends, even for a
+      callback that records itself again.
+    - **A pushed entry survives the backtrack, and so does what it did.**
+      A binding made inside an undo callback is still in force after the
+      `undo(0)` that ran the callback.  A pushed attribute entry's "old
+      value" is the state at the moment it was pushed, part-way through the
+      undo: if the trail held `put_attr(av, k, 1)`, a callback that does
+      `put_attr(av, k, 'cb')`, and `put_attr(av, k, 2)`, then a first
+      `undo(0)` leaves `k` absent with one entry live, and a second
+      `undo(0)` sets `k` back to `1`, a value it had only during the first
+      undo.
+    - **A nested undo is an undo of its own.**  When Python run by an undo
+      calls `trail.undo(m)` on the same trail, that nested undo releases
+      everything above `m` that is on the trail when it begins (entries the
+      outer undo has not reached yet, and entries pushed earlier during the
+      outer undo), and keeps the entries pushed while it runs.  The outer
+      undo then carries on from the shortened trail, and counts every entry
+      still on it as one of its own: an entry pushed inside the nested undo
+      is released by the outer one when the outer mark is below it, while
+      an entry pushed at the outer level is not.
+
+    No engine code pushes during an undo today.  An undo callback should restore
+    its state directly, as `undo` above does, not through the trail.
+
+    **Implementation:** `trail_undo_to` in
+    `clausal/logic/variables/_variables.c`; pinned by
+    `tests/test_trail_undo_pushed_entries.py`.
+
     ### Dispatch Lookup Order
 
     `call(functor, *args, module=…)` resolves predicates in this order:
