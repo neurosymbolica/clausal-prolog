@@ -114,14 +114,9 @@ BDDNode_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
  * 2026-10-13.md. */
 #define BDD_FREE_DEPTH 1000
 
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L \
-        && !defined(__STDC_NO_THREADS__)
-#  define BDD_THREAD_LOCAL _Thread_local
-#elif defined(_MSC_VER)
-#  define BDD_THREAD_LOCAL __declspec(thread)
-#else
-#  define BDD_THREAD_LOCAL __thread
-#endif
+/* MSVC rejects C11's keyword; _ft_compat.h spells it for every compiler. */
+#include "variables/_ft_compat.h"
+#define BDD_THREAD_LOCAL CLAUSAL_THREAD_LOCAL
 /* On ELF, initial-exec makes the per-thread state one register-relative
  * load instead of a __tls_get_addr call per access (the state is a few
  * words, well inside the static TLS reserve). */
