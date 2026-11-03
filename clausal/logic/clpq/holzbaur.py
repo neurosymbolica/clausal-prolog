@@ -385,6 +385,9 @@ def _declare(target, lower, upper, trail):
         constraints.append(GtE(left=target, right=present_number(lower)))
     if upper is not None:
         constraints.append(LtE(left=target, right=present_number(upper)))
+    if state_of(target) is None and not _promote_fd_variables(target, 0,
+                                                              trail):
+        return False                    # an FD variable keeps its bounds
     if not constraints:
         if state_of(target) is not None:
             return True
@@ -486,15 +489,26 @@ def _optimum(port_call, expr, result_var, dims, trail):
 
 
 def _objective(expr, context, trail):
+    """The objective *expr* of an optimum as the port reads it, and its
+    dimension; (None, None) where an FD variable in it could not take its
+    FD bounds.  An FD variable with no CLP(Q) state
+    enters with them (``_promote_fd_variables``, DEVIATIONS.md D29), as
+    it does in a comparison post; a variable with neither state stays
+    unknown to the store, so unbounded, as in 1.3.3."""
     _normal_form.refuse_cyclic_term(expr)
     expr = _cell_as_node(deref(expr), context)
-    return _units_strip_expr(expr, context, trail)
+    expr, dims = _units_strip_expr(expr, context, trail)
+    if not _promote_fd_variables(expr, 0, trail):
+        return None, None
+    return expr, dims
 
 
 def sup(expr, result_var, trail):
     """bv.pl sup/2: the supremum of *expr*; fails where it is unbounded."""
     refuse_inside_attribute_hooks(trail, ("sup", expr, result_var), "sup", 2)
     expr, dims = _objective(expr, "sup/2", trail)
+    if expr is None:
+        return False
     return _optimum(_bounded_simplex.sup, expr, deref(result_var), dims,
                     trail)
 
@@ -503,6 +517,8 @@ def inf(expr, result_var, trail):
     """bv.pl inf/2: the infimum of *expr*; fails where it is unbounded."""
     refuse_inside_attribute_hooks(trail, ("inf", expr, result_var), "inf", 2)
     expr, dims = _objective(expr, "inf/2", trail)
+    if expr is None:
+        return False
     return _optimum(_bounded_simplex.inf, expr, deref(result_var), dims,
                     trail)
 
@@ -513,6 +529,8 @@ def maximize(expr, result_var, trail):
     refuse_inside_attribute_hooks(
         trail, ("maximize", expr, result_var), "maximize", 2)
     expr, dims = _objective(expr, "maximize/2", trail)
+    if expr is None:
+        return False
     value = Var()
     if not _without_a_queue(
             trail, lambda: _bounded_simplex.sup(expr, value, trail)):
@@ -528,6 +546,8 @@ def minimize(expr, result_var, trail):
     refuse_inside_attribute_hooks(
         trail, ("minimize", expr, result_var), "minimize", 2)
     expr, dims = _objective(expr, "minimize/2", trail)
+    if expr is None:
+        return False
     value = Var()
     if not _without_a_queue(
             trail, lambda: _bounded_simplex.inf(expr, value, trail)):
@@ -562,7 +582,14 @@ def bb_inf(int_vars, expr, result_var, trail, vertex=None, epsilon=None):
             "bb_inf", 5)
     int_vars = _proper_list(int_vars, context)
     expr, dims = _objective(expr, context, trail)
+    if expr is None:
+        return False
     integers = _labels(int_vars, context)
+    # Only the integers that are variables: an element that is a term (a
+    # cyclic one, test_bb_inf_of_a_cyclic_term_raises) is bb.pl's to refuse.
+    if not _promote_fd_variables(
+            [v for v in integers if is_var(deref(v))], 0, trail):
+        return False
     return _optimum(
         lambda objective, value, trail: _branch_and_bound.bb_inf(
             integers, objective, value, trail, vertex, epsilon),

@@ -631,7 +631,8 @@ def _simplify_disjuncts(disjuncts: frozenset) -> frozenset:
 class TableEntry:
     """Stores status, answers, and suspended consumers for one subgoal."""
     __slots__ = ("status", "answers", "answer_set", "_answer_index",
-                 "nonground", "suspended", "conditions", "_current_delays",
+                 "nonground", "residues", "suspended", "conditions",
+                 "_current_delays",
                  "scc_deps", "_sources", "owner", "lead", "pi")
 
     def __init__(self, pi: "tuple[str, int] | None" = None):
@@ -651,6 +652,12 @@ class TableEntry:
         # renamed apart and replayed as a fresh copy (``row``).  Empty for
         # the common all-ground table, so the replay check is one truth test.
         self.nonground: set[int] = set()
+        # Index -> the CLP(Q) residue of that row: the constraints on its
+        # variables, as the goals the solver's dump/3 writes over the
+        # stored row's own variables (``_answer_residue``).  ``unify_row``
+        # re-posts them on each replay's copy.  Empty unless an answer
+        # carried CLP(Q) state.
+        self.residues: dict[int, list] = {}
         self.suspended: list = []             # list of SuspendedConsumer
         # Parallel to answers. Each element is a DISJUNCTION of delay sets —
         # frozenset[frozenset[DelayedNegation]] — one inner set per derivation
@@ -669,7 +676,8 @@ class TableEntry:
         # delay set that row happened to hold at the moment of consumption.
         self._sources: dict | None = None
 
-    def add_answer(self, answer: tuple, delay_set: frozenset | None = None) -> int | None:
+    def add_answer(self, answer: tuple, delay_set: frozenset | None = None,
+                   trail=None) -> int | None:
         """Add a frozen answer tuple.  Returns its INDEX if the tuple was new.
 
         The index is never a bare bool (index 0 is falsy, so callers test
@@ -711,13 +719,28 @@ class TableEntry:
         2026-10-16.md).  ``row`` hands each replay its own copy.  A ground
         row (the common case) is stored as received, so interning keeps
         its identity and a replay costs nothing extra.
+
+        With *trail* (the trail the answer was derived on, its constraints
+        still posted), an answer whose variables carry CLP(Q) state is
+        stored with its residue (``_answer_residue``), and the residue is
+        part of the answer's key: two answers that differ only in their
+        constraints (``X >= 1``, ``X >= 2``) are two answers.  The key is a
+        variant check on the residue as the solver writes it, so the same
+        constraints written two ways are kept twice (sound, not minimal).
         """
         if is_intern_enabled():
             answer = tuple(
                 intern_cell(a) if is_cell(a) else a for a in answer
             )
         ds = delay_set if delay_set is not None else frozenset()
-        key = make_subgoal_key(answer, None)
+        residue = None
+        if trail is not None:
+            residue = _answer_residue(answer, trail)
+        if residue is not None:
+            row, goals = residue
+            key = make_subgoal_key((*row, goals), None)
+        else:
+            key = make_subgoal_key(answer, None)
         idx = self._answer_index.get(key)
         if idx is not None:
             conds = self.conditions[idx]
@@ -734,7 +757,11 @@ class TableEntry:
         self.answer_set.add(key)
         idx = len(self.answers)
         self._answer_index[key] = idx
-        if not _is_ground(answer):
+        if residue is not None:
+            answer = row
+            self.residues[idx] = goals
+            self.nonground.add(idx)
+        elif not _is_ground(answer):
             answer = _rename_row(answer)
             self.nonground.add(idx)
         self.answers.append(answer)
@@ -750,6 +777,21 @@ class TableEntry:
         if self.nonground and i in self.nonground:
             return _rename_row(self.answers[i])
         return self.answers[i]
+
+    def unify_row(self, i: int, args, trail) -> bool:
+        """Unify *args* with the i-th answer, as a replay does: the row
+        (``row``), then, for a row stored with a CLP(Q) residue, the
+        residue re-posted on the same copy -- the head unification and
+        then the body's constraints, as the clause that derived it ran.
+        Every replay goes through here; ``row`` alone would drop the
+        residue."""
+        if self.residues:
+            goals = self.residues.get(i)
+            if goals is not None:
+                row, goals = _rename_row((self.answers[i], goals))
+                return (_unify_answer(args, row, trail)
+                        and _post_residue(goals, trail))
+        return _unify_answer(args, self.row(i), trail)
 
     def truth_value(self, i: int):
         """Return the i-th answer's WFS truth value: True, False, or ``Undefined``.
@@ -1005,6 +1047,60 @@ def _rename_row(answer: tuple) -> tuple:
     return _copy_term(answer, {})
 
 
+def _answer_residue(answer: tuple, trail):
+    """``(row, goals)`` for an answer whose variables carry CLP(Q) state,
+    else None.  *row* is a copy of *answer* renamed apart; *goals* are the
+    constraints of the store projected onto the answer's variables, as the
+    selected solver's dump/3 writes them (relation cells), over *row*'s
+    variables (and fresh ones of the solver's own, such as the slack of a
+    disequation).  The store is left as it was (dump/3).
+
+    This is clp(q,r)'s own way to keep an answer's constraints beyond the
+    store's life: dump.pl's projecting_assert/1 asserts a clause with the
+    projection of its constraints as a first goal.  A table row is that
+    clause's head, the goals its body (``TableEntry.unify_row`` re-posts
+    them).  Projection onto the answer's variables is exact for linear
+    constraints over Q, and nonlinear goals the port keeps waiting are
+    dumped as they wait.
+
+    Only CLP(Q) is carried: dif/2, freeze/2 and CLP(FD) constraints on an
+    answer are still dropped on replay (todo/tabled-answers-drop-their-
+    constraints-on-replay-2026-07-05.md)."""
+    import sys  # noqa: PLC0415
+    clpq = sys.modules.get("clausal.logic.clpq")
+    if clpq is None:            # nothing posted to CLP(Q) in this process
+        return None
+    global _collect_vars
+    if _collect_vars is None:
+        from clausal.logic.builtins.inspection import _collect_vars_impl  # noqa: PLC0415
+        _collect_vars = _collect_vars_impl
+    variables: list = []
+    _collect_vars(answer, variables)
+    if not any(getattr(v, "attrs", None) for v in variables):
+        return None
+    names = [Var() for _ in variables]
+    goals = clpq.dump(variables, names, trail)
+    if goals is None:
+        # dump/3 fails only on a target named twice with names that do not
+        # unify; the targets here are distinct.
+        from clausal.logic.exceptions import LogicException, system_error  # noqa: PLC0415
+        raise LogicException(system_error("tabled_answer_residue", "dump/3"))
+    if not goals:
+        return None
+    global _copy_term
+    if _copy_term is None:
+        from clausal.logic.builtins.inspection import _copy_term_impl  # noqa: PLC0415
+        _copy_term = _copy_term_impl
+    row = _copy_term(answer, {id(v): name for v, name in zip(variables, names)})
+    return row, goals
+
+
+def _post_residue(goals: list, trail) -> bool:
+    """Post a stored CLP(Q) residue (``_answer_residue``) as ``{Goals}``."""
+    from clausal.logic.clpq import clpq_constraint_block  # noqa: PLC0415
+    return clpq_constraint_block(goals, trail)
+
+
 _is_ground_impl = None   # builtins._helpers._is_ground, bound on first use
 _copy_term = None        # inspection._copy_term_impl, bound on first use
 
@@ -1071,7 +1167,7 @@ def _scan_complete_answers(entry, args):
         if entry.conditions[i] is _FAILED:
             continue
         mark = scratch.mark()
-        matched = _unify_answer(list(args), list(entry.row(i)), scratch)
+        matched = entry.unify_row(i, list(args), scratch)
         scratch.undo(mark)
         if matched:
             if entry.truth_value(i) is True:
@@ -1707,7 +1803,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
                 if entry.conditions[i] is _FAILED:
                     continue
                 mark = trail.mark()
-                if _unify_answer(args, entry.row(i), trail):
+                if entry.unify_row(i, args, trail):
                     _propagate_answer_delays(entry, i, table_store, trail)
                     yield None
                 trail.undo(mark)
@@ -1719,7 +1815,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
             while i < len(entry.answers):
                 if entry.conditions[i] is not _FAILED:
                     mark = trail.mark()
-                    if _unify_answer(args, entry.row(i), trail):
+                    if entry.unify_row(i, args, trail):
                         _propagate_answer_delays(entry, i, table_store, trail)
                         yield None
                     trail.undo(mark)
@@ -1751,7 +1847,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
                     # should drop this clear too.
                     delay_set = frozenset(entry._current_delays)
                     entry._current_delays.clear()
-                    if entry.add_answer(answer, delay_set) is not None:
+                    if entry.add_answer(answer, delay_set, trail=trail) is not None:
                         # New tuple OR a revived _FAILED row — both change
                         # the visible answer set, so run another pass.
                         changed = True
@@ -1778,7 +1874,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
             if entry.conditions[i] is _FAILED:
                 continue
             mark = trail.mark()
-            if _unify_answer(args, entry.row(i), trail):
+            if entry.unify_row(i, args, trail):
                 _propagate_answer_delays(entry, i, table_store, trail)
                 yield None
             trail.undo(mark)
@@ -1814,7 +1910,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                 if entry.conditions[i] is _FAILED:
                     continue
                 mark = trail.mark()
-                if _unify_answer(args, entry.row(i), trail):
+                if entry.unify_row(i, args, trail):
                     _propagate_answer_delays(entry, i, table_store, trail)
                     yield (_proceed, None)
                 trail.undo(mark)
@@ -1865,7 +1961,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                 while i < len(entry.answers):
                     if entry.conditions[i] is not _FAILED:
                         mark = trail.mark()
-                        if _unify_answer(args, entry.row(i), trail):
+                        if entry.unify_row(i, args, trail):
                             _propagate_answer_delays(entry, i, table_store,
                                                      trail)
                             yield (_proceed, None)
@@ -1977,7 +2073,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     if c is not _FAILED:
                         streamed.add(i)
                         mark = trail.mark()
-                        if _unify_answer(args, entry.row(i), trail):
+                        if entry.unify_row(i, args, trail):
                             if consumer is not None and c is not _UNCONDITIONAL:
                                 delays = entry.delays_for(i)
                                 if delays:
@@ -2020,7 +2116,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     delay_set = frozenset(entry._current_delays)
                     if delay_set:
                         pass_delays = True
-                    new_idx = entry.add_answer(answer, delay_set)
+                    new_idx = entry.add_answer(answer, delay_set, trail=trail)
                     if new_idx is not None:
                         # New tuple OR a revived _FAILED row — both change the
                         # visible answer set: run another pass.  Nothing is
@@ -2166,7 +2262,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                 c = entry.conditions[i]
                 if c is not _FAILED and i not in streamed:
                     mark = trail.mark()
-                    if _unify_answer(args, entry.row(i), trail):
+                    if entry.unify_row(i, args, trail):
                         if consumer is not None and c is not _UNCONDITIONAL:
                             delays = entry.delays_for(i)
                             if delays:

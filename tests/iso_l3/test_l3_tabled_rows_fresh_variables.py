@@ -247,10 +247,10 @@ def test_a_left_recursive_closure_reads_rows_appended_mid_pass(native, ans, monk
     calls = 0
     original = tabling.TableEntry.add_answer
 
-    def counting(self, answer, delay_set=None):
+    def counting(self, answer, delay_set=None, trail=None):
         nonlocal calls
         calls += 1
-        return original(self, answer, delay_set)
+        return original(self, answer, delay_set, trail=trail)
 
     monkeypatch.setattr(tabling.TableEntry, "add_answer", counting)
     mod = native.load("l3_rows_chain", CHAIN.format(n=n))

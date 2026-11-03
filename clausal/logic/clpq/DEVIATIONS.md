@@ -1808,3 +1808,23 @@ Cost: the projection now covers every component AttrVars reaches, not
 only the query variables' components, so a program that leaves
 unrelated constraints projects them too (and they count on the
 projection meter, D24).
+
+## D29: an FD variable brings its bounds to in_q and to an objective
+
+An extension of D20's promotion (ruling R4), outside 1.3.3, which has no
+CLP(FD) to promote from; no algorithm of the port changes.  D20 gives an
+FD variable that has no CLPQ_KEY state its FD bounds as `{Lo =< X, X =<
+Hi}` before a comparison post (`_promote_fd_variables`).  in_q/1,3 and the
+objectives of sup/2, inf/2, maximize, minimize and bb_inf (and bb_inf's
+integer variables) did not promote, so with `X in 1..5` and no CLP(Q)
+state, `sup(X, S)` failed (X was a variable the store did not know, hence
+unbounded) and `in_q(X, 0, 20), sup(X, S)` gave 20.  They now promote
+first (`_declare` and `_objective`): `sup(X, S)` gives 5, and so does the
+second (`tests/test_clpq_fd_promotion_optima.py`, both solvers).  The
+promotion is the same trailed post as D20's and stays after an optimum,
+as it does after a comparison post.  A variable with neither state is
+untouched: sup/2 of it fails, as in 1.3.3, and an FD variable whose domain
+has an infinite end brings only its finite end (`X #\= 3`: none, so sup/2
+of it fails too).  Legacy promotes at the same points; its promotion of a
+domain with an infinite end raised OverflowError and now leaves that end
+open, as the port's does.

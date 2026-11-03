@@ -1232,14 +1232,18 @@ def _promote_fd_to_q(var: Var, trail: Trail) -> None:
     so that both hooks fire independently — FD enforces integrality and
     domain holes, Q handles rational constraint propagation.
 
-    Unlike float conversion, ``Fraction(int)`` is always exact.
+    Unlike float conversion, ``Fraction(int)`` is always exact.  An
+    infinite end of the domain (``X #\\= 3``) is no bound: it was
+    ``Fraction(inf)``, an OverflowError.
     """
     from clausal.logic.clpfd import FD_KEY, domain_min, domain_max  # noqa: PLC0415
     fd_state = get_attr(var, FD_KEY)
     if fd_state is None:
         return
-    lo = Fraction(domain_min(fd_state.domain))
-    hi = Fraction(domain_max(fd_state.domain))
+    lo = domain_min(fd_state.domain)
+    hi = domain_max(fd_state.domain)
+    lo = Fraction(lo) if type(lo) is int else None
+    hi = Fraction(hi) if type(hi) is int else None
     tableau = _get_tableau(trail)
     _snapshot_tableau(trail)
     tab_id = tableau.register_var(var, lo, hi)
@@ -1261,6 +1265,32 @@ def sync_fd_bounds(var: Var, lo: Any, hi: Any, trail: Trail) -> bool:
     if new_q_lo != q_state.lo or new_q_hi != q_state.hi:
         put_attr(var, Q_KEY, QVar(new_q_lo, new_q_hi, q_state.tab_id), trail)
     return True
+
+
+def _promote_fd_in_expr(expr: Any, trail: Trail) -> None:
+    """Promote each FD variable of *expr* that has no Q state
+    (``_promote_fd_to_q``), and nothing else: the objective of sup/2,
+    inf/2, maximize, minimize and bb_inf, and the targets of in_q, enter
+    CLP(Q) with their FD bounds (docs/clpq.md, FD<->Q coexistence).  A
+    variable with neither state stays unknown to the store, so it is
+    unbounded, as in clp(q,r) 1.3.3."""
+    expr = deref(expr)
+    if is_var(expr):
+        if get_attr(expr, Q_KEY) is None:
+            from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+            if get_attr(expr, FD_KEY) is not None:
+                _promote_fd_to_q(expr, trail)
+        return
+    if isinstance(expr, list):
+        for element in expr:
+            _promote_fd_in_expr(element, trail)
+        return
+    _ensure_term_imports()
+    if isinstance(expr, (_Add, _Sub, _Mult, _Div)):
+        _promote_fd_in_expr(expr.left, trail)
+        _promote_fd_in_expr(expr.right, trail)
+    elif isinstance(expr, _Negate):
+        _promote_fd_in_expr(expr.operand, trail)
 
 
 def _ensure_q_for_expr(expr: Any, trail: Trail) -> None:
@@ -1528,6 +1558,7 @@ def _post_q_domain(target: Any, lo: Fraction | None,
     if lo is not None and hi is not None and lo > hi:
         return False
 
+    _promote_fd_in_expr(target, trail)   # an FD variable keeps its bounds
     tableau = _get_tableau(trail)
     _snapshot_tableau(trail)
 
@@ -1962,6 +1993,7 @@ def sup(expr: Any, result_var: Any, trail: Trail) -> bool:
     expr = _cell_as_node(expr, "sup/2")   # ruling R9 A1: a cell objective is its node
     expr, dims = _units_strip_expr(expr, "sup/2", trail)
     result_var = deref(result_var)
+    _promote_fd_in_expr(expr, trail)
     lc = _linearize(expr, trail)
     if lc is None:
         if _zero_divisor(expr):
@@ -1987,6 +2019,7 @@ def inf(expr: Any, result_var: Any, trail: Trail) -> bool:
     expr = _cell_as_node(expr, "inf/2")   # ruling R9 A1: a cell objective is its node
     expr, dims = _units_strip_expr(expr, "inf/2", trail)
     result_var = deref(result_var)
+    _promote_fd_in_expr(expr, trail)
     lc = _linearize(expr, trail)
     if lc is None:
         if _zero_divisor(expr):
@@ -2150,6 +2183,7 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
     expr = _cell_as_node(expr, "maximize/2")   # ruling R9 A1: a cell objective is its node
     expr, dims = _units_strip_expr(expr, "maximize/2", trail)
     result_var = deref(result_var)
+    _promote_fd_in_expr(expr, trail)
     lc = _linearize(expr, trail)
     if lc is None:
         if _zero_divisor(expr):
@@ -2176,6 +2210,7 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
     expr = _cell_as_node(expr, "minimize/2")   # ruling R9 A1: a cell objective is its node
     expr, dims = _units_strip_expr(expr, "minimize/2", trail)
     result_var = deref(result_var)
+    _promote_fd_in_expr(expr, trail)
     lc = _linearize(expr, trail)
     if lc is None:
         if _zero_divisor(expr):
@@ -2585,6 +2620,8 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
             # infinity raises (bb_inf([nan], X, I) used to succeed).
             return False
 
+    _promote_fd_in_expr(expr, trail)
+    _promote_fd_in_expr([v for v in shadows if is_var(deref(v))], trail)
     lc = _linearize(expr, trail)
     if lc is None:
         if _zero_divisor(expr):

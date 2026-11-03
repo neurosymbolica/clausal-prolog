@@ -152,7 +152,7 @@ not_implied :- {A =< 4}, entailed(A =\= 3).
     ("implied", True), ("implied_disequality", True), ("not_implied", False)])
 def test_prolog_entailed_relation(tmp_path, goal, expected):
     # The .pl front end passes the relation as a cell too
-    # (todo/clpq-prolog-surface-gaps-entailed-dump-tabling-2026-10-12.md, 1).
+    # (todo/done/clpq-prolog-surface-gaps-entailed-dump-tabling-2026-10-12.md, 1).
     path = tmp_path / "entailed_cells.pl"
     path.write_text(PROLOG_PROGRAM)
     module = load_clausal_module(path)
