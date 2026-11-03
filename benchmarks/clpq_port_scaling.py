@@ -528,12 +528,26 @@ ls(N) :- lsum(N, 0, E), time({T = E}).
 """
 
 
-@case([250, 500, 1000, 2000, 4000, 8000], scryer=(_LSUM_PL, "ls({n})"))
+@case([250, 500, 1000, 2000, 4000, 8000, 32000],
+      scryer=(_LSUM_PL, "ls({n})"))
 def left_sum(n):
     """{S = X1 + X2 + ... + Xn}, the sum left-leaning as the reader builds it."""
     h, drain, Trail, Var, deref, unify = _api()
     t = Trail()
     expression = _sum([Var() for _ in range(n)])
+    return lambda: h.q_eq(Var(), expression, t)
+
+
+@case([250, 500, 1000, 2000, 4000, 8000, 32000])
+def right_sum(n):
+    """{S = X1 + (X2 + (... + Xn))}, the sum right-leaning."""
+    h, drain, Trail, Var, deref, unify = _api()
+    from clausal.pythonic_ast.nodes import Add
+    t = Trail()
+    xs = [Var() for _ in range(n)]
+    expression = xs[-1]
+    for x in reversed(xs[:-1]):
+        expression = Add(left=x, right=expression)
     return lambda: h.q_eq(Var(), expression, t)
 
 

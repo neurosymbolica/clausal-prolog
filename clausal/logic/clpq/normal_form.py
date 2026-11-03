@@ -841,7 +841,7 @@ def normal_form(term):
                 Monomial(MINUS_ONE, []), values.pop()))
         elif action == _ADD:
             right = values.pop()
-            values.append(normal_form_add(values.pop(), right))
+            values.append(_normal_form_add_fresh(values.pop(), right))
         elif action == _MULTIPLY:
             right = values.pop()
             left = values.pop()
@@ -1116,6 +1116,90 @@ def normal_form_add(first, second):
     result.extend(first[i:])
     result.extend(second[j:])
     return result
+
+
+def _normal_form_add_fresh(first, second):
+    """normal_form_add on two normal forms normal_form has just built:
+    the same list, the same monomials and the same new ones.  Where one
+    side is a single monomial and the other is longer, the merge would
+    walk the longer one until the monomial's place; this finds that place
+    by binary search, trying the two ends first (a left-leaning sum adds
+    each new variable at the end), so a sum of n variables makes O(n log
+    n) comparisons, not n^2/2
+    (test_a_long_sum_compares_each_new_term_a_few_times).
+
+    Why the result is the merge's: normal_form binds nothing, and every
+    base in its lists is an unbound variable it dereferenced, or a
+    NonlinearBase it made, so the comparison is a fixed total order on
+    them (it raises only on a base bound to a non-number) and each list
+    is strictly increasing in it (normal_form_add, normal_form_add_two
+    and merge_power_products keep that).  The comparisons of the single
+    monomial against the longer list are therefore all on one side of its
+    place, then 0 or the other side; binary search finds the same place,
+    and at an equal power product the coefficients add (first's then
+    second's) into a new monomial with first's powers, dropped when zero,
+    as normal_form_add does (test_inserting_one_monomial_is_the_two_way_merge).
+    Other callers of normal_form_add (repair, products) keep the merge."""
+    if len(second) == 1 and len(first) > 1:
+        # The merge keeps first[k] while compare(first[k], single) < 0.
+        single = second[0]
+        powers = single.powers
+        last = len(first) - 1
+        relation = compare_power_products(first[last].powers, powers)
+        if relation < 0:
+            return first + second
+        high, high_relation = last, relation
+        relation = compare_power_products(first[0].powers, powers)
+        if relation >= 0:
+            high, high_relation = 0, relation
+        low = 1 if high else 0
+        while low < high:
+            middle = (low + high) >> 1
+            relation = compare_power_products(first[middle].powers, powers)
+            if relation >= 0:
+                high, high_relation = middle, relation
+            else:
+                low = middle + 1
+        if high_relation > 0:
+            return first[:high] + second + first[high:]
+        kept = first[high]
+        coefficient = add(kept.coefficient, single.coefficient)
+        if is_zero(coefficient):
+            return first[:high] + first[high + 1:]
+        return first[:high] + [Monomial(coefficient, kept.powers)] \
+            + first[high + 1:]
+    if len(first) == 1 and len(second) > 1:
+        # The merge keeps second[k] while compare(single, second[k]) > 0.
+        single = first[0]
+        powers = single.powers
+        relation = compare_power_products(powers, second[0].powers)
+        if relation <= 0:
+            high, high_relation = 0, relation
+        else:
+            last = len(second) - 1
+            relation = compare_power_products(powers, second[last].powers)
+            if relation > 0:
+                return second + first
+            high, high_relation = last, relation
+            low = 1
+            while low < high:
+                middle = (low + high) >> 1
+                relation = compare_power_products(powers,
+                                                  second[middle].powers)
+                if relation <= 0:
+                    high, high_relation = middle, relation
+                else:
+                    low = middle + 1
+        if high_relation < 0:
+            if not high:
+                return first + second
+            return second[:high] + first + second[high:]
+        coefficient = add(single.coefficient, second[high].coefficient)
+        if is_zero(coefficient):
+            return second[:high] + second[high + 1:]
+        return second[:high] + [Monomial(coefficient, powers)] \
+            + second[high + 1:]
+    return normal_form_add(first, second)
 
 
 def normal_form_multiply(first, second):
@@ -1902,14 +1986,48 @@ _INTEGERS = 3
 
 
 def compare_power_products(first, second):
-    """compare/3 on two power products: -1, 0 or 1."""
-    return _standard_order(_POWER_PRODUCTS, first, second)
+    """compare/3 on two power products: -1, 0 or 1.
+
+    _standard_order's comparison, the pairs in its order (each base, then
+    its exponent, then the lengths), with the common pairs decided here:
+    the same base, and two unbound variables (by creation order, as
+    _standard_order does).  Any other pair of bases goes to _standard_order,
+    so a base bound to a non-number raises exactly where it did
+    (test_the_power_product_comparison_is_the_standard_order)."""
+    for (base_a, exponent_a), (base_b, exponent_b) in zip(first, second):
+        if base_a is not base_b:
+            base_a = deref(base_a)
+            base_b = deref(base_b)
+            if base_a is not base_b:
+                if is_var(base_a) and is_var(base_b):
+                    if base_a._id != base_b._id:
+                        return -1 if base_a._id < base_b._id else 1
+                else:
+                    relation = _standard_order(_BASES, base_a, base_b)
+                    if relation:
+                        return relation
+        if exponent_a != exponent_b:
+            return -1 if exponent_a < exponent_b else 1
+    length_a = len(first)
+    length_b = len(second)
+    if length_a != length_b:
+        return -1 if length_a < length_b else 1
+    return 0
 
 
 def compare_bases(first, second):
     """compare/3 on two bases.  Two unbound variables are in creation order
     (DEVIATIONS.md D11); a base bound to a number before repair compares as
-    the number."""
+    the number.  Two variables are compared here, anything else by
+    _standard_order."""
+    first = deref(first)
+    second = deref(second)
+    if first is second:
+        return 0
+    if is_var(first) and is_var(second):
+        if first._id != second._id:
+            return -1 if first._id < second._id else 1
+        return 0
     return _standard_order(_BASES, first, second)
 
 

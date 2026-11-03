@@ -52,6 +52,7 @@ sizes is in brackets.
 | post chain `X1 =< ... =< Xn` (`chain_le`; `chain_lt` the same) | 100..1600 | .035 .15 .91 5.5 49.7 | 3.2 (2.6) | 2.91 | rows_read 2.0, **terms_scanned 3.0** | inherent, but removable by implementation (R1) |
 | post equalities `Xi + Xi+1 = 1` (`chain_eq`) | 100..3200 | .006 .. .20 | 1.0 | 1.0 | - | inherent, linear |
 | post n dense rows of n terms (`dense_rows`) | 5..80 | .001 .0044 .016 .069 .37 | 2.4 (2.1) | 2.26 | python_calls 2.6 (normal_form_add merges) | inherent, partly removable (R3) |
+| the same after R3 (`dense_rows`, 2026-11-03) | 5..80 | before (this run) .0012 .0054 .018 .079 .41; after .00097 .0040 .012 .038 .14 | 1.87 (1.71) | 2.26 | - | **R3 done**: 2.9x at n = 80 |
 | post disequations on a chain (`diseq`) | 100..1600 | .014 .044 .17 .81 3.7 | 2.2 (2.0) | 1.9 (manual run, 100..400) | python_calls 1.95 | inherent |
 | post the path LP (`lp_post`) | 25..800 | .002 .. .075 | 1.0 | - | - | linear |
 | bind a chain to numbers in one unification (`bind_numbers`) | 50..800 | .011 .042 .18 1.0 7.9 | **3.0** (2.35) | **1.96** | terms_scanned 3.0, terms_read 2.0 | **unclear: the port does more work than Scryer's copy** (R2) |
@@ -70,6 +71,8 @@ sizes is in brackets.
 | n rounds of mark, `Xi >= 50`, undo (`backtrack_rounds`) | 50..400 | .098 .76 6.5 56 | 3.1 | 2.9 (manual, 25..100) | terms_read 3.0 | inherent; the undo itself is negligible |
 | chain with a mark per link, then undo all (`backtrack_deep`) | 100..1600 | as `chain_le` | 3.0 | - | as `chain_le` | marks and undos cost nothing measurable |
 | `{S = X1 + ... + Xn}`, left-leaning (`left_sum`) | 250..8000 | .033 .12 .48 1.9 7.5 29.8 | 2.0 | 1.99 | python_calls 2.0 | inherent, but removable by implementation (R3) |
+| the same after R3 (`left_sum`, 2026-11-03) | 250..32000 | .0075 .018 .036 .071 .18 .40 2.4 | 1.3 (1.17) | 1.99 | comparisons about n | **fixed** (R3): 473 s at 32,000 before |
+| `{S = X1 + (X2 + ...)}`, right-leaning (`right_sum`, R3 run) | 250..32000 | before .0099 .021 .045 .091 .21 .67 7.5; after .0076 .016 .036 .085 .18 .39 3.4 | after 1.55 (1.23) | - | list copies | R3; the rest is the copying of the list (C) |
 | n independent components, then `sup` (`components`) | 100..3200 | .011 .. .33 | 0.9 | - | 1 back substitution | linear |
 | engine path: `go(N, S)` from a `.clausal` file (`engine_chain`) against the bare API (`engine_chain_bare`) | 100..1600 | engine .057 .23 1.17 7.5 51.5; bare .045 .18 1.01 6.6 46.4 | 2.8 against 2.8 | - | same | engine overhead 1.27x at n = 100, 1.11x at 1600: additive per goal, same exponent |
 | engine `{_ = 0 + _ + ...}` (`engine_left_sum`) | 250..4000 | .037 .. 7.6 | 2.0 | - | - | same as bare `left_sum` |
@@ -183,6 +186,22 @@ time it costs at sizes people use.
 - **Risk.** Low. Equal keys must combine exactly as now; the existing
   normal_form tests pin the output order. Monomial order is the
   sorted order either way.
+- **Done 2026-11-03** (implementation only; the differential identity
+  gate is byte-identical). (b) `compare_power_products` and
+  `compare_bases` decide the same base and two unbound variables
+  themselves and pass every other pair to `_standard_order`, in the same
+  order (left_sum n = 2,000: 2.23 s to 1.14 s). (a) normal_form's own
+  sums (`_normal_form_add_fresh`, only there: every base in its lists is
+  one it dereferenced or made, and nothing binds during it) place a
+  single monomial by binary search, trying both ends first; other
+  callers keep the merge. Tests: `tests/clpq_port/test_normal_form_merge.py`.
+  Measured (minimum of 3 runs, load 11 to 17 on 32 cores, before and
+  after in the same conditions): left_sum 2.23 / 33.5 / 473 s at
+  n = 2,000 / 8,000 / 32,000 before, 0.071 / 0.40 / 2.4 s after;
+  right_sum 7.5 s to 3.4 s at 32,000; dense_rows 0.41 s to 0.14 s at
+  n = 80. What is left in the sums is the copy of the list at each
+  insertion (in C, quadratic in principle, about 1.3 s of left_sum's
+  32,000 profile).
 
 ### R4. Merge kernel constant factors (`add_homogeneous_parts*`, `compare_variable_order`) (overhead per unit, not asymptotic)
 

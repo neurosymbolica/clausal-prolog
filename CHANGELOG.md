@@ -9,6 +9,13 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **CLP(Q) (`CLAUSAL_CLPQ=holzbaur`): a long sum no longer takes
+  quadratic time to read.** `{S = X1 + ... + Xn}` took 2.2 s at
+  n = 2,000 and 473 s at 32,000; now 0.07 s and 2.4 s.  The normal form
+  places each new term of a sum by binary search and compares two
+  variables directly; the answers, residuals and variable order are
+  unchanged (the differential goldens are identical).  Posting dense
+  rows is about 3 times faster at 80 rows of 80 terms.
 - **CLP(Q) (`CLAUSAL_CLPQ=holzbaur`): a hook body that reaches the store
   through a fresh `Trail()` is refused too.** The port's entry points
   refused inside an attribute hook only when the trail they were given had
