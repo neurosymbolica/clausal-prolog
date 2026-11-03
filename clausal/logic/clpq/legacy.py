@@ -1268,6 +1268,26 @@ def sync_fd_bounds(var: Var, lo: Any, hi: Any, trail: Trail) -> bool:
     return True
 
 
+#: On a walk's stack, the marker that the compound whose id is the next
+#: item is left: it is off the path from the root.
+_LEAVE = object()
+
+
+def _enter(x: Any, on_path: set) -> int:
+    """Put the compound *x* on the path of a walk (its id, returned).  One
+    met again while on the path closes a cycle (``X = 1 + X``), which
+    raises ``type_error(evaluable, F/A)`` as the port's normal_form/2
+    does (DEVIATIONS.md D23, D27); a subterm two branches share is no
+    cycle.  The posts refuse a cyclic term in the cell walk first, so this
+    guards the walks themselves."""
+    key = id(x)
+    if key in on_path:
+        from clausal.logic.clpfd import _refuse_cycle  # noqa: PLC0415
+        _refuse_cycle(x, "normal_form/2")
+    on_path.add(key)
+    return key
+
+
 def _promote_fd_in_expr(expr: Any, trail: Trail,
                         exact: str | None = None) -> None:
     """Promote each FD variable of *expr* that has no Q state
@@ -1286,9 +1306,14 @@ def _promote_fd_in_expr(expr: Any, trail: Trail,
     Left to right, depth first, on an explicit stack (DEVIATIONS.md
     D27)."""
     from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+    on_path: set = set()
     stack = [expr]
     while stack:
-        expr = deref(stack.pop())
+        expr = stack.pop()
+        if expr is _LEAVE:
+            on_path.discard(stack.pop())
+            continue
+        expr = deref(expr)
         if is_var(expr):
             fd_state = get_attr(expr, FD_KEY)
             if (exact is not None and fd_state is not None
@@ -1299,13 +1324,19 @@ def _promote_fd_in_expr(expr: Any, trail: Trail,
                 _promote_fd_to_q(expr, trail)
             continue
         if isinstance(expr, list):
+            stack.append(_enter(expr, on_path))
+            stack.append(_LEAVE)
             stack.extend(reversed(expr))
             continue
         _ensure_term_imports()
         if isinstance(expr, (_Add, _Sub, _Mult, _Div)):
+            stack.append(_enter(expr, on_path))
+            stack.append(_LEAVE)
             stack.append(expr.right)
             stack.append(expr.left)
         elif isinstance(expr, _Negate):
+            stack.append(_enter(expr, on_path))
+            stack.append(_LEAVE)
             stack.append(expr.operand)
 
 
@@ -1319,9 +1350,14 @@ def _ensure_q_for_expr(expr: Any, trail: Trail) -> None:
     a sum nested 100,000 deep raises no RecursionError (DEVIATIONS.md
     D27).
     """
+    on_path: set = set()
     stack = [expr]
     while stack:
-        expr = deref(stack.pop())
+        expr = stack.pop()
+        if expr is _LEAVE:
+            on_path.discard(stack.pop())
+            continue
+        expr = deref(expr)
         if is_var(expr):
             if get_attr(expr, Q_KEY) is None:
                 from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
@@ -1332,9 +1368,13 @@ def _ensure_q_for_expr(expr: Any, trail: Trail) -> None:
             continue
         _ensure_term_imports()
         if isinstance(expr, (_Add, _Sub, _Mult, _Div)):
+            stack.append(_enter(expr, on_path))
+            stack.append(_LEAVE)
             stack.append(expr.right)
             stack.append(expr.left)
         elif isinstance(expr, _Negate):
+            stack.append(_enter(expr, on_path))
+            stack.append(_LEAVE)
             stack.append(expr.operand)
 
 
@@ -1373,14 +1413,18 @@ def _linearize(expr: Any, trail: Trail,
     A post-order walk on an explicit stack (a sum nested 100,000 deep
     raises no RecursionError; DEVIATIONS.md D27): both operands of a
     node are flattened, left first, before the node combines them, as
-    the recursive walk it replaces did.
+    the recursive walk it replaces did.  A node is on the path from its
+    entry to its combination; one met again on it closes a cycle and
+    raises (:func:`_enter`).
     """
     _ensure_term_imports()
+    on_path: set = set()
     results: list = []
     stack: list = [(expr, False)]
     while stack:
         expr, ready = stack.pop()
         if ready:
+            on_path.discard(id(expr))
             if isinstance(expr, _Negate):
                 inner = results.pop()
                 if inner is None:
@@ -1405,10 +1449,12 @@ def _linearize(expr: Any, trail: Trail,
         elif is_var(expr):
             results.append(({expr._id: ONE}, ZERO))
         elif isinstance(expr, (_Add, _Sub, _Mult, _Div)):
+            _enter(expr, on_path)
             stack.append((expr, True))
             stack.append((expr.right, False))
             stack.append((expr.left, False))
         elif isinstance(expr, _Negate):
+            _enter(expr, on_path)
             stack.append((expr, True))
             stack.append((expr.operand, False))
         else:
@@ -1835,7 +1881,7 @@ def _units_strip(l, r, context, trail):
     run time) and before the ground fast paths, which read plain numbers."""
     if _strip_for_solver is None:
         _ensure_units_imports()
-    stripped = _strip_for_solver(l, r, context, trail)
+    stripped = _strip_for_solver(l, r, context, trail, strict=True)
     return (l, r) if stripped is None else stripped
 
 
