@@ -52,6 +52,66 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `clpq.rational/1`; a file's own `{}/1` still wins, and without the import
   `{}/1` stays undefined, as in Scryer.
 
+- **The CLP(Q) port unifies constrained variables with each other about
+  1.8 times faster** (`CLAUSAL_CLPQ=holzbaur`). Unifying a chain
+  `X1 =< ... =< Xn` with n variables `Yi >= 0` took 2.92 s at n = 200 and
+  25.1 s at n = 400; it takes 1.73 s and 13.8 s. Implementation only: the
+  merge of two rows looks each variable's order up once instead of at
+  every comparison. The remaining cubic growth is 1.3.3's own (n^2 rows
+  rewritten, each n/3 terms long), so legacy (0.11 s at n = 200) stays
+  faster on this shape (DEVIATIONS.md D24).
+
+- **A tabled answer keeps its CLP(Q) constraints.** With `p(X) :- {X >= 1,
+  X =< 5}` tabled, an answer handed out from the table (a second call, or a
+  call in the first one's continuation) was an unconstrained variable:
+  `(p(X), sup(X, S))` failed and `(p(X), X = 6)` succeeded. The table now
+  stores each such answer with the constraints projected onto its
+  variables (the selected solver's `dump/3`) and posts them again on every
+  replay, under either solver, including a negation's scan of a complete
+  table (on the caller's trail, so `{X >= 10}, \+ p(X)` holds under the
+  default solver too) and a conditional answer of `query_wfs`. CLP(Q)
+  answers are kept **modulo entailment**: a new answer whose constraints
+  entail those of a stored answer of the same shape is not new. So
+  `p(X) :- {X >= 0}. p(X) :- p(Y), {X >= Y + 1}.` completes (it did not
+  while answers were compared by their text), and the same constraints
+  written two ways are one answer. Termination is not guaranteed in
+  general: a recursion whose answers keep getting more general does not
+  complete (docs/tabling.md). An answer whose constraints are all CLP(Q)
+  waits for its table to complete, so `findall(X-Y, (c(X), c(Y)), L)` with
+  `c(X) :- {X >= 1}. c(1). c(2).` gives all 9 pairs. `dif/2`, `freeze/2`
+  and CLP(FD) constraints on a tabled answer are still lost on replay
+  (todo/tabled-answers-drop-their-constraints-on-replay-2026-07-05.md).
+
+- **A CLP(FD) variable brings its bounds to `in_q/1,3` and to the
+  objective of `sup/2`, `inf/2`, `maximize`, `minimize` and `bb_inf`.**
+  With `X in 1..5` and no CLP(Q) state, `sup(X, S)` failed (unbounded) and
+  `in_q(X, 0, 20), sup(X, S)` gave 20; both give 5 now, on both solvers
+  (DEVIATIONS.md D29). The default solver's promotion of an FD variable
+  whose domain has an infinite end (`X #\= 3, {X =< 7}`) raised
+  `OverflowError`; that end is left open now.
+  `maximize`, `minimize` and `bb_inf` raise
+  `representation_error(fd_domain_with_holes)` when a variable of the
+  objective (or of `bb_inf`'s integers) is an FD variable whose domain has
+  a hole (`X in 1..3 \/ 7..9`): the store holds only the domain's hull,
+  so `bb_inf` gave 5, a value in the hole, and `maximize`/`minimize` failed
+  where a value exists. `sup/2` and `inf/2` answer on the hull (a
+  relaxation: `inf(X, I)` gives 4 there with `{X >= 4}`).
+
+- **CLP(Q)'s default solver refuses a non-linear constraint with an ISO
+  error, not a Python `TypeError`.** `{X * Y = 10}`, and `inf/2`, `sup/2`,
+  `minimize/1`, `maximize/1` and `bb_inf` on a non-linear objective, raise
+  `domain_error(linear_expression, Operand)`; an operand that is no
+  arithmetic expression raises `type_error(expression, Culprit)`, as
+  `entailed/1` and the `CLAUSAL_CLPQ=holzbaur` port do. The port still
+  delays a non-linear constraint. A program that caught `TypeError` here
+  catches the error term now.
+
+- **The CLP(Q) port's errors name a non-linear base by its expression.**
+  `bb_inf([sin(X)], X, I)` under `CLAUSAL_CLPQ=holzbaur` raised
+  `type_error(expression, NonlinearBase('sin', ...))`, a Python object in
+  the error term; it raises `type_error(expression, sin(_))`. Error
+  reporting only, the algorithm is 1.3.3's (DEVIATIONS.md D25).
+
 ### Changed
 
 - **A digit group separator is one `_` between two digits** in an ISO
@@ -208,10 +268,6 @@ surface described in [docs/public-api.md](docs/public-api.md).
   value), as their documentation now says, and every sorting builtin's
   entry names the order it uses.
 
-## 1.4.0 (2026-11-03)
-
-### Changed
-
 - **CLP(Q) (`CLAUSAL_CLPQ=holzbaur`): a long sum no longer takes
   quadratic time to read.** `{S = X1 + ... + Xn}` took 2.2 s at
   n = 2,000 and 473 s at 32,000; now 0.07 s and 2.4 s.  The normal form
@@ -219,6 +275,7 @@ surface described in [docs/public-api.md](docs/public-api.md).
   variables directly; the answers, residuals and variable order are
   unchanged (the differential goldens are identical).  Posting dense
   rows is about 3 times faster at 80 rows of 80 terms.
+
 - **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: the back
   substitution skips the rows that do not hold its variable.** Each row
   keeps an index of its variables, so `delete_factor_hom/4` no longer
@@ -228,6 +285,7 @@ surface described in [docs/public-api.md](docs/public-api.md).
   The merges `add_linear_ffh/7` and `add_linear_11h/5` look each term's
   order up once, as `add_linear_f1h/6` already did (survey R4).  The
   same rows, the same answers, the same pivots.
+
 - **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`): the variables one unification
   binds are verified in the order of the bindings, as 1.3.3 does under
   SICStus and Scryer** (ruling 2026-11-03; DEVIATIONS.md D3).  The first
@@ -241,6 +299,7 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `X1 =< ... =< Xn` as a list now does 1.3.3's n^2/2 row rewrites instead
   of about 2n, which costs more in the port (n = 800: 2.7 s to 10 s;
   one variable at a time, 11 s, is unchanged).
+
 - **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: a back
   substitution no longer copies each row it rewrites.** Deleting the
   first term of a row now shares the rest of the row's list, as 1.3.3's
@@ -253,6 +312,7 @@ surface described in [docs/public-api.md](docs/public-api.md).
   unification: 11.5 s to 2.8 s (1600: 95.5 s to 13.3 s); one variable at a time:
   13.5 s to 3.0 s.  The rows, answers and decisions are the same (the
   differential goldens are identical).
+
 - **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: binding a
   dependent variable no longer reads every row of its store.** The
   unification hook's stand-in pass (DEVIATIONS.md D3) read every row of
@@ -273,6 +333,7 @@ surface described in [docs/public-api.md](docs/public-api.md).
   do clpfd's posts into CLP(Q) made on a trail other than the one whose
   hooks are running (on the hook's own trail they are queued, as before)
   (clausal/logic/clpq/DEVIATIONS.md D26).
+
 - **CLP(Q) posts a term nested 100,000 deep** under both solvers
   (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`, then `{Y >= T}`): the cell
   walk shared by every CLP post, the units scan, CLP(R)'s variable walk
@@ -289,6 +350,7 @@ surface described in [docs/public-api.md](docs/public-api.md).
   or off, and `resource_error(finite_memory)` under clpfd with the units
   channel on (`X > 0`, `all_different/1`, `sum/3`, `scalar_product/4`,
   `element/3`, `global_cardinality/2` hung).  clpq DEVIATIONS.md D27.
+
 - **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`): the `-g` printer's residual is
   the toplevel projection, not dump/3** (todo of 2026-10-23, deferred by
   the operator ruling of that date). It projects through project.pl's
@@ -309,6 +371,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   nothing but hidden disequations, and projecting a large hidden store
   could exhaust the projection cap). dump/3 itself is unchanged. The
   default solver is unaffected. DEVIATIONS.md D28.
+
+## 1.4.0 (2026-11-03)
+
+### Changed
 
 - **A `.clausal` or `.pl` file that fails to load reports every error,
   not the first** (operator ruling 2026-11-02: like a compiler). The
@@ -341,61 +407,6 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `tools/wheel_smoke.py` now runs every shipped example's tests and fails
   on a relative link that leaves the package. It runs every check and names
   each failure, instead of stopping at the first.
-- **The CLP(Q) port unifies constrained variables with each other about
-  1.8 times faster** (`CLAUSAL_CLPQ=holzbaur`). Unifying a chain
-  `X1 =< ... =< Xn` with n variables `Yi >= 0` took 2.92 s at n = 200 and
-  25.1 s at n = 400; it takes 1.73 s and 13.8 s. Implementation only: the
-  merge of two rows looks each variable's order up once instead of at
-  every comparison. The remaining cubic growth is 1.3.3's own (n^2 rows
-  rewritten, each n/3 terms long), so legacy (0.11 s at n = 200) stays
-  faster on this shape (DEVIATIONS.md D24).
-- **A tabled answer keeps its CLP(Q) constraints.** With `p(X) :- {X >= 1,
-  X =< 5}` tabled, an answer handed out from the table (a second call, or a
-  call in the first one's continuation) was an unconstrained variable:
-  `(p(X), sup(X, S))` failed and `(p(X), X = 6)` succeeded. The table now
-  stores each such answer with the constraints projected onto its
-  variables (the selected solver's `dump/3`) and posts them again on every
-  replay, under either solver, including a negation's scan of a complete
-  table (on the caller's trail, so `{X >= 10}, \+ p(X)` holds under the
-  default solver too) and a conditional answer of `query_wfs`. CLP(Q)
-  answers are kept **modulo entailment**: a new answer whose constraints
-  entail those of a stored answer of the same shape is not new. So
-  `p(X) :- {X >= 0}. p(X) :- p(Y), {X >= Y + 1}.` completes (it did not
-  while answers were compared by their text), and the same constraints
-  written two ways are one answer. Termination is not guaranteed in
-  general: a recursion whose answers keep getting more general does not
-  complete (docs/tabling.md). An answer whose constraints are all CLP(Q)
-  waits for its table to complete, so `findall(X-Y, (c(X), c(Y)), L)` with
-  `c(X) :- {X >= 1}. c(1). c(2).` gives all 9 pairs. `dif/2`, `freeze/2`
-  and CLP(FD) constraints on a tabled answer are still lost on replay
-  (todo/tabled-answers-drop-their-constraints-on-replay-2026-07-05.md).
-- **A CLP(FD) variable brings its bounds to `in_q/1,3` and to the
-  objective of `sup/2`, `inf/2`, `maximize`, `minimize` and `bb_inf`.**
-  With `X in 1..5` and no CLP(Q) state, `sup(X, S)` failed (unbounded) and
-  `in_q(X, 0, 20), sup(X, S)` gave 20; both give 5 now, on both solvers
-  (DEVIATIONS.md D29). The default solver's promotion of an FD variable
-  whose domain has an infinite end (`X #\= 3, {X =< 7}`) raised
-  `OverflowError`; that end is left open now.
-  `maximize`, `minimize` and `bb_inf` raise
-  `representation_error(fd_domain_with_holes)` when a variable of the
-  objective (or of `bb_inf`'s integers) is an FD variable whose domain has
-  a hole (`X in 1..3 \/ 7..9`): the store holds only the domain's hull,
-  so `bb_inf` gave 5, a value in the hole, and `maximize`/`minimize` failed
-  where a value exists. `sup/2` and `inf/2` answer on the hull (a
-  relaxation: `inf(X, I)` gives 4 there with `{X >= 4}`).
-- **CLP(Q)'s default solver refuses a non-linear constraint with an ISO
-  error, not a Python `TypeError`.** `{X * Y = 10}`, and `inf/2`, `sup/2`,
-  `minimize/1`, `maximize/1` and `bb_inf` on a non-linear objective, raise
-  `domain_error(linear_expression, Operand)`; an operand that is no
-  arithmetic expression raises `type_error(expression, Culprit)`, as
-  `entailed/1` and the `CLAUSAL_CLPQ=holzbaur` port do. The port still
-  delays a non-linear constraint. A program that caught `TypeError` here
-  catches the error term now.
-- **The CLP(Q) port's errors name a non-linear base by its expression.**
-  `bb_inf([sin(X)], X, I)` under `CLAUSAL_CLPQ=holzbaur` raised
-  `type_error(expression, NonlinearBase('sin', ...))`, a Python object in
-  the error term; it raises `type_error(expression, sin(_))`. Error
-  reporting only, the algorithm is 1.3.3's (DEVIATIONS.md D25).
 - **The tooling's operator tables match Scryer's** (2026-10-28). The ISO
   table lacked `div` (400 yfx, ISO Cor.2). The `scryer` dialect (Scryer
   with library(clpz) loaded) lacked Scryer's built-in `+` (fy 200), `div`
