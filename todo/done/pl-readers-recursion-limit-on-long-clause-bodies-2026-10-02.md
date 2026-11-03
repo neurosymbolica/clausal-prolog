@@ -1,6 +1,6 @@
 # .pl readers hit Python's recursion limit on long clause bodies
 
-**Status: FIXED 2026-11-03 (commit see git log of this file).** The parser's operator loop, the reader's term transform, the lowering's walks (Uses, _show, clause/2's source body, DCG bodies), the compiler's final_yields pass and the translator's collectors are iterative and produce what the recursive walks did; long `;` chains compile as a balanced Or tree and long one-operator chains are built over flat lists, so the generated AST stays shallow. Pinned in tests/test_long_pl_bodies_no_recursion.py.
+**Status: FIXED 2026-11-03 (commit dcc1a5fb).** The parser's operator loop, the reader's term transform, the lowering's walks (Uses, _show, clause/2's source body, DCG bodies), the compiler's final_yields pass and the translator's collectors are iterative and produce what the recursive walks did; long `;` chains compile as a balanced Or tree and long one-operator chains are built over flat lists, so the generated AST stays shallow. Pinned in tests/test_long_pl_bodies_no_recursion.py.
 
 What is left (not this todo's walks):
 
@@ -17,6 +17,13 @@ What is left (not this todo's walks):
   ~33 s at 100k goals. Fixing it means generating long bodies without
   nesting (or splitting them into auxiliary predicates): a codegen design
   question, not a recursive walk.
+- A long disjunction compiles (a balanced Or tree) but the load is
+  superlinear: 3000 disjuncts 4.9 s, 10000 27 s, 30000 170 s (1 GB);
+  a 100000-way disjunction did not finish on the 3.9 GB box (the process
+  was killed after ~25 min, cause not established). Most of the time is
+  in the engine compiler, not the front end (lower_source: 9 s at 30000);
+  `final_yields._walk_block` slices and rescans each statement list
+  (quadratic in a long block) -- an unrelated pre-existing cost.
 - Bracketed nesting the text writes (`s(s(...))`, `[[...]]`, `((...))`)
   still recurses in the parser (~4 frames a level: ~250 deep), and an
   if-then-else chain `C1 -> T1 ; C2 -> T2 ; ...` nests by meaning (~200).
