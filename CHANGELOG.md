@@ -98,10 +98,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `{X = 3 - Y}`), `{X =\= 2}` stays `{X =\= 2}` (was
   `{X = 2 + _Q1}, {_Q1 =\= 0}`). A non-linear goal on a variable no
   answer variable reaches now shows (`{X >= 10}, {sin(Z) > 3}` prints
-  `{X >= 10}, {3 - sin(_Q1) < 0}`, as the SICStus manual's toplevel
-  does), and a variable a non-linear residual mentions keeps its
-  equation. dump/3 itself is unchanged. The default solver is
-  unaffected. DEVIATIONS.md D28.
+  `{X >= 10}, {3 - sin(_B) < 0}`, as the SICStus manual's toplevel
+  does), named as the `-g` printer's other residuals name that variable
+  (`freeze(_B,true)`), and a variable a non-linear residual mentions
+  keeps its equation. Constraints on variables that neither an answer
+  variable nor such a goal reaches are not projected (they would print
+  nothing but hidden disequations, and projecting a large hidden store
+  could exhaust the projection cap). dump/3 itself is unchanged. The
+  default solver is unaffected. DEVIATIONS.md D28.
 
 - **A `.clausal` or `.pl` file that fails to load reports every error,
   not the first** (operator ruling 2026-11-02: like a compiler). The

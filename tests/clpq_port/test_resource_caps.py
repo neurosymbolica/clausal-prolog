@@ -1292,10 +1292,11 @@ def test_a_product_repaired_a_binding_at_a_time_raises(tmp_path):
     # sum in; the constraint's count runs over its wake-ups.  4 sums
     # answer; 17 (52 s and 265 MB before) raise.  rep(4)'s product of four
     # sums, on variables no answer variable reaches, shows as the SICStus
-    # toplevel shows such a goal (DEVIATIONS.md D28): 2^4 products.
+    # toplevel shows such a goal (DEVIATIONS.md D28): 2^4 products, its
+    # variables named as the `-g` printer names any hidden variable.
     result = _clausal(tmp_path, "rep(4), caught(rep(17), R)")
     line = result.stdout.strip()
-    assert line.startswith("R = clpq_expansion, {_Q1 - "), result.stderr
+    assert line.startswith("R = clpq_expansion, {_A - "), result.stderr
     assert line.endswith(" = 0}.") and line.count(" - ") == 16, line
 
 
