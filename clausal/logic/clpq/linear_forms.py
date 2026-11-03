@@ -15,7 +15,7 @@ the form itself coming back for a factor of 1).
 A predicate that can fail returns None where it fails.
 """
 import os
-from operator import indexOf, itemgetter
+from operator import itemgetter
 
 from clausal.logic.clpq.arithmetic import (
     ONE, ZERO, add, arithmetic_normalize, compare, divide, is_zero,
@@ -379,16 +379,18 @@ def delete_factor_homogeneous(variable, terms):
     *variable* by identity (test_delete_factor_removes_one_variable).
     Returns (terms without it, its coefficient), or None.
 
-    The scan runs in C: the first term whose variable, dereferenced, is
-    *variable*, found by comparing ids, so no __eq__ is consulted.  Every
-    object compared is alive (held by the row or by a binding), so equal
-    ids are the same object (test_row_scans.py)."""
+    A Python loop: a C loop over the dereferenced ids (operator.indexOf)
+    was no faster on long rows, about 45 ns a term either way, and twice
+    as slow on the short rows of a pivot, where a miss raised ValueError
+    (complexity survey R1a, measured).  What saves the scans is the row
+    index (delete_factor)."""
     variable = deref(variable)
-    try:
-        i = indexOf(map(id, map(deref, map(_first, terms))), id(variable))
-    except ValueError:
-        return None
-    return terms[:i] + terms[i + 1:], terms[i][1]
+    i = 0
+    for term in terms:
+        if term[0] is variable or deref(term[0]) is variable:
+            return terms[:i] + terms[i + 1:], term[1]
+        i += 1
+    return None
 
 
 def normal_form_coefficient_of(form, variable):

@@ -4,8 +4,9 @@ without changing what they answer (complexity survey R1 and R4,
 implementation_plans/clpq/2026-11-03-port-complexity-survey.md).
 
 - delete_factor_hom/4 finds a variable by identity after dereferencing
-  each term's variable, the first such term, as the Python loop did; the
-  scan now runs in C, comparing ids, so no term's __eq__ is consulted.
+  each term's variable, the first such term; no term's __eq__ is
+  consulted.  (A C scan was tried and measured no faster; these tests
+  pin the scan's answers whatever runs it.)
 - add_linear_ffh/7 and add_linear_11h/5 compare by order keys looked up
   once a term (variable_ordering.order_key), as add_linear_f1h/6 does since
   the var-var fix: the same comparisons with the same outcomes.

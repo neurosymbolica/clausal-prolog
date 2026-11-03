@@ -10,17 +10,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
 ### Changed
 
 - **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: the back
-  substitution's row scan runs in C.** `delete_factor_hom/4`'s search
-  of a row for the substituted variable compares ids over the
-  dereferenced variables in one C loop instead of a Python loop; the
-  same rows, the same answers, the same pivots (complexity survey R1).
+  substitution skips the rows that do not hold its variable.** Each row
+  keeps an index of its variables, so `delete_factor_hom/4` no longer
+  scans a row without the substituted variable: posting a chain
+  `X1 =< ... =< Xn` grows as n^2, not n^3 (complexity survey R1).
+  `CLAUSAL_CLPQ_CHECK_ROW_INDEX=1` checks every skip against a full scan.
   The merges `add_linear_ffh/7` and `add_linear_11h/5` look each term's
-  order up once, as `add_linear_f1h/6` already did: the same comparisons
-  with the same outcomes (survey R4).  Each row now keeps an index of
-  its variables, so a row without the substituted variable is skipped
-  without a scan: posting a chain `X1 =< ... =< Xn` grows as n^2, not n^3
-  (survey R1b).  `CLAUSAL_CLPQ_CHECK_ROW_INDEX=1` checks every skip
-  against a full scan.
+  order up once, as `add_linear_f1h/6` already did (survey R4).  The
+  same rows, the same answers, the same pivots.
+
 - **CLP(Q) (`CLAUSAL_CLPQ=holzbaur`): a hook body that reaches the store
   through a fresh `Trail()` is refused too.** The port's entry points
   refused inside an attribute hook only when the trail they were given had
