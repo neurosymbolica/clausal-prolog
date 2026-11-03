@@ -1,5 +1,14 @@
 # `{}`/1 is not callable: `call({X > 1})` is an existence error
 
+**Status: FIXED 2026-11-03 (commit 711e08d0).** On the native front end
+(`.pl` and Clausal Prolog) an import of library(clpq) brings in `{}/1` from
+`clausal/stdlib/clpq_braces.clausal`, which posts through `clpq.rational/1`
+as the written form does, under both solvers; Scryer answers the same.
+Pinned in tests/iso_l3/test_l3_clpq_brace_meta_call.py. Not covered: the
+legacy translator (`CLAUSAL_PL_FRONTEND=translator`) and the seam, where a
+brace term in DATA position is a set literal; filed as
+todo/brace-term-as-data-is-a-set-in-the-seam-and-translator-2026-11-03.md.
+
 Found 2026-10-11.
 
 ```prolog
