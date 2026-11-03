@@ -185,7 +185,6 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (~200) or a long conjunction held as data (`assertz((H :- ...))`, ~500)
   now fails with a load error naming the line and `resource_error(stack)`,
   not a bare `RecursionError`.
-### Changed
 
 - **Every float comes before every integer in the standard order of
   terms**, whatever their values, as ISO 7.2.1 says (operator ruling
