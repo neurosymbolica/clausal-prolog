@@ -62,7 +62,28 @@ def inside_attribute_hooks(trail):
             or hook_dispatch_depth() > 0)
 
 
-def refuse_inside_attribute_hooks(trail, culprit, name, arity):
+def dispatching_on_another_trail(trail):
+    """True while a dispatch on some trail other than *trail* is in
+    progress in this thread: the depth counts more dispatches than
+    *trail*'s own counter.  Work queued on *trail* then may run at a goal
+    boundary of *trail* that comes while that other dispatch is still
+    running (a driver on *trail*, or a drain of it, in a hook body), so it
+    cannot be queued there (DEVIATIONS.md D26)."""
+    return hook_dispatch_depth() > trail.hooks_running
+
+
+#: The message of a post refused by dispatching_on_another_trail.
+ON_ANOTHER_TRAIL = (
+    "a CLP(Q) post cannot be queued on a trail other than the one whose "
+    "attribute hooks are running; make it on the hook's own trail")
+
+
+_QUEUE_IT = ("a CLP(Q) entry point cannot run while attribute hooks are "
+             "running; queue it with trail.push_pending(goal)")
+
+
+def refuse_inside_attribute_hooks(trail, culprit, name, arity,
+                                  message=_QUEUE_IT):
     """Ruling R30: a public entry point of the port does not run while the
     engine is dispatching attribute hooks (``inside_attribute_hooks``).
     A hook body runs while other variables of the same unification are
@@ -83,8 +104,7 @@ def refuse_inside_attribute_hooks(trail, culprit, name, arity):
             LogicException, permission_error)
         raise LogicException(
             permission_error("call", "goal", culprit, ("/", name, arity)),
-            "a CLP(Q) entry point cannot run while attribute hooks are "
-            "running; queue it with trail.push_pending(goal)")
+            message)
 
 
 def state_of(variable):

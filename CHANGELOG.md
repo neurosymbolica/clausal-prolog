@@ -66,8 +66,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   refused inside an attribute hook only when the trail they were given had
   hooks running, so a hook could bypass the rule with a fresh trail and get
   a wrong answer.  The checks now also read `hook_dispatch_depth()`: the
-  entry points raise `permission_error(call, goal, Goal)` there, and
-  clpfd's posts into CLP(Q) are queued on the trail they were given
+  entry points raise `permission_error(call, goal, Goal)` there, and so
+  do clpfd's posts into CLP(Q) made on a trail other than the one whose
+  hooks are running (on the hook's own trail they are queued, as before)
   (clausal/logic/clpq/DEVIATIONS.md D26).
 - **CLP(Q) posts a term nested 100,000 deep** under both solvers
   (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`, then `{Y >= T}`): the cell

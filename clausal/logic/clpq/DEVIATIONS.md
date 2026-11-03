@@ -198,7 +198,12 @@ a later member's stand-in before that member's turn; its turn then
 unifies the implied value with its own and wakes its delayed goals
 (`test_a_binding_implied_by_an_earlier_one_is_checked_against_its_own`).
 An undo past the first hook (a later hook failed) drops the kept
-stand-ins (`trail.record`).  Until this ruling the first hook did every
+stand-ins (`trail.record`).  A bound member whose own hook finds neither
+a turn nor itself in its component would have its work skipped; that
+cannot happen, and the hook raises `system_error(clpq_lost_turn)`
+rather than return
+(`test_a_member_with_no_turn_and_no_stand_in_is_an_internal_error`;
+never raised by tests/clpq_port/ or the full differential corpus).  Until this ruling the first hook did every
 member's work itself, in the order of the component's member list,
 newest first: X1, then Xn, ..., X2 for a chain bound as a list.  That
 selected other variables in `solve/5` from the second binding on, and
@@ -1108,7 +1113,8 @@ differently from 1.3.3 itself:
   (`{-X =< -2}` vs `{X >= 2}`), so `dump_q/2`'s spelling changes under the
   switch (`test_dump_q_projection.py`, `test_strict_bounds`).
 - A post from clpfd is queued iff `trail.hooks_running` or
-  `hook_dispatch_depth()` is above 0 (ruling R28c, D26), O(1) reads of
+  `hook_dispatch_depth()` is above 0 (ruling R28c; refused instead when
+  the depth is above the trail's own counter, D26), O(1) reads of
   the engine's counters (a750f58c, 47ba2e0a).  It
   replaced Task 14's scan of the components a post reads for an unhooked
   binding, which was linear in their size per post under a driver.
@@ -1700,16 +1706,32 @@ trail dumped `[W =< 20]` and left Q unbound.  Now every entry point
 raises `permission_error(call, goal, Culprit)` there
 (`test_a_fresh_trail_inside_a_hook_is_refused_too`,
 `test_an_entry_point_called_from_a_hook_on_a_fresh_trail_is_refused`),
-and a post from clpfd through a fresh trail inside a hook is queued on
-that trail, to run when that trail reaches a goal boundary, instead of
-being made in place
-(`test_a_clpfd_post_from_a_hook_on_a_fresh_trail_is_queued`).  A caller
-that drives that trail with `solve`/`call` gets the boundary; a hook
-body that posts on a fresh trail through the Python API and never drains
-it leaves the post on that trail's queue.  The engine's `solve`/`call`
-still refuse only on the same trail (docs/coroutining.md); a driver on a
-fresh trail inside a hook runs with the depth above 0, so the port's
-entry points it reaches refuse.  The cost is one C call per check.
+and so does a post from clpfd (`q_eq` and the others, `sync_fd_bounds`)
+made on a trail other than the one being dispatched
+(`attributes.dispatching_on_another_trail`: the depth is above that
+trail's own counter), with the culprit `{}(Comparison)`, `{}/1`, and a
+message that says to post on the hook's own trail
+(`test_a_clpfd_post_from_a_hook_on_a_fresh_trail_is_refused`,
+`test_a_clpfd_post_inside_a_nested_dispatch_on_a_fresh_trail_is_refused`).
+It is not queued: that trail's next goal boundary can come while the
+outer dispatch still runs (a drain of it in the hook body, a driver on
+it with `solve`/`call`, the end of its own dispatch nested in the outer
+one), where the queued post would read R27's unhooked bindings or be
+refused by `{}/1` with an error for a goal the caller never made; a
+trail never drained would drop it.  (An earlier form of this entry
+queued it there; a hook that drained the fresh trail got
+`permission_error` out of `drain/1`,
+`test_a_fresh_trail_drained_inside_the_hook_raises_no_queued_post`.)
+A post made inside the dispatch of its own trail, nested or not, is
+queued as R28c says and runs after the outermost hook
+(`test_a_clpfd_post_inside_the_trail_s_own_dispatch_is_still_queued`).
+A `QueuedPost` is only made then; one still on its trail's queue when
+a program drives that trail from inside another trail's hook runs
+there, and `{}/1` refuses it, as it refuses every entry point in such a
+driver.  The engine's `solve`/`call` still refuse only on the same trail
+(docs/coroutining.md); a driver on a fresh trail inside a hook runs with
+the depth above 0, so the port's entry points and clpfd's posts into
+CLP(Q) that it reaches refuse.  The cost is one C call per check.
 
 ## D27: deep terms are walked on an explicit stack
 

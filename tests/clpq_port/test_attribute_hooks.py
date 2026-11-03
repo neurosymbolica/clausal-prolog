@@ -845,6 +845,23 @@ def test_a_binding_within_one_component_makes_one_stand_in():
     assert _inf(x, trail) == Fraction(3, 2) and _sup(y, trail) == Fraction(3, 2)
 
 
+def test_a_member_with_no_turn_and_no_stand_in_is_an_internal_error(
+        monkeypatch):
+    # A bound member that is not in its component any more and has no
+    # turn recorded would have its work skipped in silence; that cannot
+    # happen (an earlier hook of the unification that did its work left a
+    # turn), so it is a system_error, not `return True`.
+    monkeypatch.setattr(hooks, "_stand_in_for_bound_members",
+                        lambda components, state, trail: None)
+    trail = Trail()
+    x, y = Var(), Var()
+    assert _post(trail, ("=", ("+", x, y), 3))
+    with pytest.raises(LogicException) as caught:
+        unify(x, 1, trail)
+    assert caught.value.term[1][0] == "system_error"
+    assert is_var(deref(x))
+
+
 # ---------------------------------------------------------------- goals another key wakes
 
 def _woken_by_another_key(order, make_goal, mode):

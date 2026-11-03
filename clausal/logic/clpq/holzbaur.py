@@ -35,13 +35,17 @@ reads rows and member lists that hold those bindings.  clpfd calls
 ``q_eq``, ``q_ne``, ``q_le``, ``q_lt`` (and ``q_gt``, ``q_ge`` through
 them) and ``sync_fd_bounds`` from its propagation, which runs inside the
 FD hook, from its reified comparisons and from the units hook.  So while
-``trail.hooks_running`` or ``hook_dispatch_depth()`` is above 0 (the
-engine is dispatching attribute hooks, on this trail or on any other in
-this thread, docs/coroutining.md "Inside a hook or at a goal" and "On any
-trail"; ``attributes.inside_attribute_hooks``) these functions
-queue the post on the trail's pending queue (``trail.push_pending`` of a
-``QueuedPost``) and return True; the post runs at the goal boundary after
-every hook of the unification.  At a goal (``hooks_running == 0``) they
+the engine is dispatching the hooks of the trail they are given
+(``trail.hooks_running`` above 0, docs/coroutining.md "Inside a hook or
+at a goal") these functions queue the post on the trail's pending queue
+(``trail.push_pending`` of a ``QueuedPost``) and return True; the post
+runs at the goal boundary after every hook of the unification.  While a
+dispatch on ANOTHER trail is in progress in this thread
+(``hook_dispatch_depth()`` above the trail's counter, docs/coroutining.md
+"On any trail"; a fresh trail inside a hook) they refuse, as the entry
+points do: that trail's goal boundary can come inside the other
+dispatch, where the queued post could not run (DEVIATIONS.md D26).  At a
+goal (``hooks_running == 0``) they
 post in place, bare or under a driver: the engine's goal boundary after
 an inline comparison runs what the post wakes before the next goal
 (test_switch.py, test_a_comparison_from_clpfd_inside_a_hook_is_queued,
@@ -80,7 +84,8 @@ from clausal.logic.clpq import variable_ordering as _variable_ordering
 from clausal.logic.clpq.arithmetic import (
     arithmetic_normalize, is_exact_decimal, is_number)
 from clausal.logic.clpq.attributes import (
-    CLPQ_KEY, culprit_argument, inside_attribute_hooks,
+    CLPQ_KEY, ON_ANOTHER_TRAIL, culprit_argument,
+    dispatching_on_another_trail, inside_attribute_hooks,
     refuse_inside_attribute_hooks, state_of)
 from clausal.logic.clpq.legacy import (
     _block_cell_as_node, _cell_as_node, _cells_as_nodes, _units_result,
@@ -263,6 +268,13 @@ def _post_from_library(node_class, left, right, trail):
     form): queued while the engine is dispatching attribute hooks, posted
     in place at a goal (ruling R28c as the module docstring states it)."""
     if inside_attribute_hooks(trail):
+        if dispatching_on_another_trail(trail):
+            # Queued here, the post could run inside that other dispatch
+            # and be refused by {}/1 there, or be lost if the trail is
+            # never driven: refuse it now (DEVIATIONS.md D26).
+            refuse_inside_attribute_hooks(
+                trail, ("{}", node_class(left=left, right=right)), "{}", 1,
+                ON_ANOTHER_TRAIL)
         trail.push_pending(QueuedPost(node_class, left, right, trail))
         return True
     return _post_now(node_class, left, right, trail)
@@ -320,6 +332,17 @@ def sync_fd_bounds(variable, lower, upper, trail):
     if not is_var(variable):
         return True
     if inside_attribute_hooks(trail):
+        if dispatching_on_another_trail(trail):
+            bounds = []
+            if type(lower) is int:
+                bounds.append(GtE(left=variable, right=lower))
+            if type(upper) is int:
+                bounds.append(LtE(left=variable, right=upper))
+            if bounds:
+                block = bounds[0] if len(bounds) == 1 else (",", *bounds)
+                refuse_inside_attribute_hooks(
+                    trail, ("{}", block), "{}", 1, ON_ANOTHER_TRAIL)
+            return True
         if type(lower) is int:
             trail.push_pending(QueuedPost(GtE, variable, lower, trail))
         if type(upper) is int:
