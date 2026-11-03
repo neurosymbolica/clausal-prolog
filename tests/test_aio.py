@@ -652,8 +652,8 @@ def test_a_dropped_querys_scc_is_rebuilt_not_resumed(tmp_path, second):
 # Since D68 a query holding an answer holds a complete table, so the
 # dropped-query tests below need another way to leave a table EVALUATING:
 # - hp/2: a query parks INSIDE its evaluation -- hp(1, _) has its answer 2,
-#   its consumer of itself (an SCC dependency, so _complete_scc's store scan
-#   looks at it) has gone on to 3, and waits at hang/1
+#   its consumer of itself (an SCC dependency, so a full store scan for
+#   dormant SCC members looks at it) has gone on to 3, and waits at hang/1
 #   (_drop_mid_evaluation).  Such a query is never reclaimed by the GC.
 # - cvar/2: its answer carries a dif/2 constraint, so its leader hands it
 #   over live before its table completes (D68's constrained-answer
@@ -689,8 +689,11 @@ def test_an_unrelated_scc_sweep_leaves_a_dropped_querys_table_alone(
     # for good.
     # Rebuilt for D68: the dropped query holds hp(1, _) EVALUATING, with its
     # partial answer [2], parked mid-evaluation; the GC has not reclaimed it
-    # yet, so the unrelated query's _complete_scc sweep meets it and must
-    # leave it alone (_mine).  Completing it would freeze [2] for good.
+    # yet, so the unrelated query's _complete_scc sweep must leave it alone
+    # (_mine).  Completing it would freeze [2] for good.  (The sweep walks
+    # its registry of dormant members, where a frame that never exited is not
+    # registered; CLAUSAL_CHECK_SCC_MEMBERS=1 also runs the full store scan,
+    # which meets it.)
     import gc
     src = tmp_path / "sweep.seam"
     src.write_text(_SWEEP_PROGRAM)
@@ -780,9 +783,14 @@ def test_a_query_dying_during_a_store_scan_does_not_break_it(
 
         def collecting(entry):
             # Run the cyclic GC from inside _complete_scc's store scan.
-            if not fired and sys._getframe(1).f_code.co_name == "_complete_scc":
+            # _complete_scc walks only its registry of dormant SCC members
+            # (todo/done/complete-scc-scans-whole-table-store-per-completion-
+            # 2026-11-03.md); the full store scan is the cross-check mode's,
+            # turned on here so a scan of the whole store still runs.
+            if not fired and sys._getframe(1).f_code.co_name == "_scan_scc_members":
                 fired.append(gc.collect())
             return original(entry)
+        monkeypatch.setattr(tabling, "_CHECK_SCC_MEMBERS", True)
         monkeypatch.setattr(tabling, "_on_leader_stack", collecting)
         y = Var()
         answers = sorted(deref(y) for _ in solve(("path", 7, y), mod))

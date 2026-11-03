@@ -34,6 +34,7 @@ After SLG completion, a simplification pass resolves delayed negations:
 """
 
 from __future__ import annotations
+import os
 import threading
 from decimal import Decimal as _Decimal
 from fractions import Fraction as _Fraction
@@ -560,6 +561,78 @@ def end_drive_episode() -> None:
                 _resolve_all_conditions(store)
 
 
+# ── Dormant SCC member registry ──────────────────────────────────────────
+#
+# ``_complete_scc`` runs once per completed leader and needs the store's
+# dormant SCC members: entries still ``evaluating`` with a non-empty
+# ``scc_deps``, off the leader stack, led by the running drive.  Finding them
+# by walking the whole store made every completion O(store), so a workload
+# that completes n tables in a store of n entries (tabled fib) was O(n^2)
+# although the answer was nearly always "none".
+#
+# A :class:`~clausal.logic.database.TableStore` keeps ``scc_candidates``,
+# ``{entry: store_key}`` in registration order: a SUPERSET of the entries that
+# can satisfy the test above.  It never has to be updated when an entry stops
+# qualifying -- each use re-applies the full test and drops entries that never
+# can again -- only when one STARTS to, and that happens in one place:
+#
+# * ``scc_deps`` only grows, and only on an entry on the leader stack (the
+#   current leader, or the leader below a judging leader in
+#   ``seam.judged_answers``); status only goes evaluating -> complete;
+# * so an entry first satisfies the test when it leaves the leader stack still
+#   evaluating with deps.  A trampoline leader frame that exits normally does
+#   that in the ``deps_pending`` branch after its fixpoint, which registers it.
+#   One that exits abnormally drops the entry from the store (``_repair_lead``)
+#   unless a newer lead of the same entry has taken over, whose own exit
+#   registers or drops it.  A parked frame never resumed keeps the entry on
+#   the stack until ``end_drive_episode`` pops it, and that drops it from the
+#   store too.  The simple-mode wrapper completes its entry at exit and never
+#   leaves one dormant.
+# * an entry led by a frame parked in ANOTHER query's leader context (a
+#   clausal.aio query swapped out, or the synchronous context swapped out
+#   while one runs) is off the installed stack without having exited; it
+#   is not registered, and it is not a member either: it belongs to that
+#   query, and the test's ``_mine`` excludes it.
+#
+# Entries leave the store by ``del``, ``abolish_table``, ``clear``
+# (``abolish_all_tables``, which also clears the registry), replacement under
+# the same key, and ``clausal.aio`` reaping; the use-time test
+# ``table_store.get(key) is entry`` covers every one of them.  A store that is
+# a plain dict (tests build one directly) has no registry and is scanned.
+#
+# Set CLAUSAL_CHECK_SCC_MEMBERS=1 to compare the registry's answer with the
+# full store scan at every use (an AssertionError names both).
+
+_CHECK_SCC_MEMBERS = os.environ.get("CLAUSAL_CHECK_SCC_MEMBERS", "") not in ("", "0")
+
+
+def _scan_scc_members(table_store) -> list:
+    """Every dormant SCC member of *table_store*, by walking all of it."""
+    # The cheap tests first: ``_on_leader_stack`` walks the leader stack, so
+    # asking it of every evaluating entry (each ancestor of a deep recursion)
+    # made a completion cost O(store x depth).
+    return [e for e in table_store.values()
+            if e.status == "evaluating" and e.scc_deps
+            and not _on_leader_stack(e) and _mine(e)]
+
+
+def _register_dormant(entry, table_store, store_key) -> None:
+    """Record that *entry* left the leader stack as a dormant SCC member."""
+    cands = getattr(table_store, "scc_candidates", None)
+    if cands is not None:
+        cands[entry] = store_key
+
+
+def _check_scc_members(members, table_store) -> None:
+    scanned = _scan_scc_members(table_store)
+    if (len(members) != len(scanned)
+            or {id(e) for e in members} != {id(e) for e in scanned}):
+        raise AssertionError(
+            "CLAUSAL_CHECK_SCC_MEMBERS: the dormant SCC member registry "
+            f"disagrees with the store scan: registry {members!r}, "
+            f"scan {scanned!r}")
+
+
 def _complete_scc(root: TableEntry, table_store) -> None:
     """Mark *root* complete, then sweep dormant SCC members (A04-F001).
 
@@ -579,14 +652,26 @@ def _complete_scc(root: TableEntry, table_store) -> None:
     """
     root.status = "complete"
     # Only entries this drive owns: completing another query's abandoned
-    # entry would freeze its partial answers for good (rule 3).
-    # The cheap tests first: ``_on_leader_stack`` walks the leader stack, so
-    # asking it of every evaluating entry (each ancestor of a deep recursion)
-    # made a completion cost O(store x depth).  Since D68 every leader
-    # completes before its first answer, so that was paid on every call.
-    members = [e for e in table_store.values()
-               if e.status == "evaluating" and e.scc_deps
-               and not _on_leader_stack(e) and _mine(e)]
+    # entry would freeze its partial answers for good (rule 3).  Walked from
+    # the store's registry of candidates, not the whole store (see "Dormant
+    # SCC member registry").  The members' ORDER is then the registry's, not
+    # the store's, and it is not observable: below, they only build a set of
+    # ids; the blocked set is the least fixpoint of a monotone test that
+    # reads statuses, deps and the leader stack and changes none of them, so
+    # every visiting order reaches the same set; and the unblocked members
+    # are marked complete by assignments independent of one another.
+    cands = getattr(table_store, "scc_candidates", None)
+    if cands is None:
+        members = _scan_scc_members(table_store)
+    else:
+        members = []
+        for e, key in list(cands.items()):
+            if e.status != "evaluating" or table_store.get(key) is not e:
+                cands.pop(e, None)   # completed, dropped or replaced: for good
+            elif (e.scc_deps and not _on_leader_stack(e) and _mine(e)):
+                members.append(e)
+        if _CHECK_SCC_MEMBERS:
+            _check_scc_members(members, table_store)
     if not members:
         return
     member_ids = {id(e) for e in members}
@@ -2163,6 +2248,9 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             if not _leader_ctx.stack:
                 _resolve_all_conditions(table_store)
         else:
+            # A dormant SCC member from here on: the one place an entry
+            # starts to be one (see "Dormant SCC member registry").
+            _register_dormant(entry, table_store, store_key)
             # A04-F001 (transitive): this entry stays dormant, and its
             # ENCLOSING leader transitively depends on the same still-active
             # ancestors (Tarjan lowlink propagation). Without this edge, a

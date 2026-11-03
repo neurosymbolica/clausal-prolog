@@ -158,6 +158,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (`BDDNode`) no longer recurses once per level: past 1000 nested frees
   the remaining nodes are freed from an explicit stack; a 1M-level BDD
   used to crash at the default stack size.
+### Changed
+
+- **Performance: completing a tabled call no longer walks the whole table
+  store.** The search for dormant SCC members at each completion visited
+  every table of the module, so a program completing n tables (tabled
+  fib) took O(n^2); `bench_tabling` scales about linearly now (n=16000:
+  13.4 s -> 2.1 s). Answers, their order and WFS truth values are
+  unchanged. `CLAUSAL_CHECK_SCC_MEMBERS=1` checks the new registry against
+  the full scan at every completion (a debugging aid).
 
 ## 1.4.0 (2026-11-03)
 

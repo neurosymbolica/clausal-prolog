@@ -552,6 +552,23 @@ _BACKEND_INSTALLERS: dict[str, Callable] = {}
 # ── Database ───────────────────────────────────────────────────────────────────
 
 
+class TableStore(dict):
+    """A database's table store: ``(functor, arity, variant_key) -> TableEntry``.
+
+    A plain dict plus ``scc_candidates``, the registry of entries that may be
+    dormant SCC members (``clausal.logic.tabling``, "Dormant SCC member
+    registry"), so completing a table does not walk the whole store."""
+    __slots__ = ("scc_candidates",)
+
+    def __init__(self):
+        super().__init__()
+        self.scc_candidates: dict = {}
+
+    def clear(self) -> None:
+        super().clear()
+        self.scc_candidates.clear()
+
+
 class Database:
     """in_-memory store mapping (functor, arity) → clause list."""
 
@@ -609,7 +626,7 @@ class Database:
         # default.  See ``clausal.logic.builtins.flags``.
         self.prolog_flags: dict = {}
         self._shallow: set[tuple[str, int]] = set()
-        self._table_store: dict = {}
+        self._table_store: dict = TableStore()
         self._rows: dict[tuple[str, int], PredRow] = {}
         # Rows another database OWNS, resolvable here under this module's own
         # spelling because an ``-import_from`` named them (spec §4 q1).  Held
