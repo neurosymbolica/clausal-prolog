@@ -75,6 +75,18 @@ _FAIL = 0
 _WALK = 1           # reconsider_basis_list/3 on a continuation
 _STATUS = 2         # reconsider_basis_list_status/6 on a new status
 
+#: The algorithm trace, for the differential harness
+#: (tests/clpq_port/differential/): None, or a callable that gets each
+#: decision of the algorithm as ``TRACE(event, *arguments)``.  Each site
+#: reads the global once and calls nothing while it is None, so a run
+#: without the harness does no more work than before.  Events here:
+#: ``("pivot", leaving, entering, coefficient, component)`` (pivot/3),
+#: ``("pivot_ignoring_bounds", leaving, entering, coefficient)`` (pivot/2),
+#: ``("bound_swap", variable)`` (pivot_or_bound_swap/4's self-limiting
+#: clause), ``("solve", category, selected)`` (solve/5's select_dependent
+#: choice) and ``("solve_for_variable", selected)`` (solve_x/6).
+TRACE = None
+
 # What solve_step hands back to solve_homogeneous.
 _SOLVE_FAILED = 0
 _SOLVE_FINISHED = 1
@@ -1003,6 +1015,8 @@ def solve_step(terms, form, constant, bindings, trail):
     components, preference, new_variables = select_dependent(terms)  # clause 2
     category = preference[0]
     selected = preference[1]
+    if TRACE is not None:
+        TRACE("solve", category, deref(selected))
     form_1 = isolate(selected, form)
     if form_1 is None:
         return _SOLVE_FAILED, None
@@ -1085,6 +1099,8 @@ def solve_for_variable_homogeneous(terms, form, constant, selected, bindings,
         return is_zero(constant)
     components, _, new_variables = select_dependent(terms)  # clause 2
     selected = deref(selected)
+    if TRACE is not None:
+        TRACE("solve_for_variable", selected)
     form_1 = isolate(selected, form)
     if form_1 is None:
         return False
@@ -1426,6 +1442,9 @@ def pivot_ignoring_bounds(dependent, independent_variable, trail):
     if deleted is None:
         return False
     form_0, coefficient = deleted
+    if TRACE is not None:
+        TRACE("pivot_ignoring_bounds", deref(dependent), independent_variable,
+              coefficient)
     factor = divide(MINUS_ONE, coefficient)
     form = add_linear_forms_scaled(
         form_0, factor, LinearForm(ZERO, ZERO, [(deref(dependent), MINUS_ONE)]),
@@ -1451,6 +1470,8 @@ def pivot_or_bound_swap(limiting, variable, limiting_bounds, variable_bounds,
     """bv.pl, pivot_or_bound_swap/4 (pivot_b/4): where *variable* limits
     itself (`Vub == V`), swap its active bound; otherwise pivot."""
     if deref(limiting) is deref(variable):
+        if TRACE is not None:
+            TRACE("bound_swap", deref(variable))
         _put_attributes(variable, trail, bounds=limiting_bounds)
         delta = bound_swap_delta(limiting_bounds)
         if delta is None:
@@ -1498,6 +1519,9 @@ def pivot(dependent, independent_variable, independent_bounds, trail):
     if deleted is None:
         return False
     form_0, coefficient = deleted
+    if TRACE is not None:
+        TRACE("pivot", dependent, independent_variable, coefficient,
+              state.component)
     factor = divide(MINUS_ONE, coefficient)
     form = add_linear_forms_scaled(
         form_0, factor,
