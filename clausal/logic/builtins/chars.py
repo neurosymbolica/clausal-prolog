@@ -645,6 +645,13 @@ _LAYOUT = frozenset(" \t\n\r\v\f")
 _SYMBOL_CHARS = frozenset("+-*/\\^<>=~:.?@#&$")
 
 
+class _FloatOverflow(Exception):
+    """A float token that no double holds (``9.9e999``): number_chars/2
+    raises ``representation_error(max_float)``, not a syntax error
+    (Ulrich's number_chars_cont #82 marks ``syntax_error(...)`` unexpected;
+    Trealla agrees, Scryer does not)."""
+
+
 class _NumberSyntax(Exception):
     """A number text that is not one: *kind* is Scryer's syntax_error
     formal (``unexpected_end_of_file``, ``unexpected_char``, ...) and *at*
@@ -777,7 +784,7 @@ def _number_token_at(s: str, i: int):
                 k = m
         value = float(s[i:k].replace("_", ""))
         if value in (float("inf"), float("-inf")):
-            raise _NumberSyntax("infinite_float", i, found=s[i:k])
+            raise _FloatOverflow()
         return value, k
     text = s[i:j].replace("_", "")
     # through Decimal: CPython caps int(str) at ~4300 digits
@@ -816,6 +823,25 @@ def _other_token_end(s: str, i: int) -> int:
     raise _bad_char(i)               # a variable, punctuation, a quote ...
 
 
+def _quoted_name(s: str, i: int):
+    """The quoted token at ``s[i]`` (a ``'``): ``(name, end)``, its name as
+    the reader decodes it (escapes, continuations, doubled quotes), or None
+    when no quote closes it.  The reader decides where it ends."""
+    from clausal.tools.prolog_tokenizer import (  # noqa: PLC0415
+        TokenizeError, TokenType, tokenize)
+    j = s.find("'", i + 1)
+    while j >= 0:
+        try:
+            toks = tokenize(s[i:j + 1], nested_comments=False)
+        except TokenizeError:
+            toks = None
+        if (toks and toks[0].quoted
+                and all(t.type is TokenType.END for t in toks[1:])):
+            return toks[0].value, j + 1
+        j = s.find("'", j + 1)
+    return None
+
+
 def _read_number_text(s: str):
     """The number *s* spells, read as Scryer's number_chars/2 reads it
     (ISO 8.16.7): layout and comments may lead, a ``-`` may stand before
@@ -834,12 +860,12 @@ def _read_number_text(s: str):
         i = _skip_layout(s, i + 1)
         if i == n:
             raise _eof(n)
-    elif s[i] == "'" and s[i + 1:i + 3] == "-'":
-        # the quoted-atom spelling of the same name "-" forms the negative
-        # sign too (ruled 2026-10-13, Ulrich's number_chars_cont #54: Scryer
-        # accepts both spellings of the token).
+    elif s[i] == "'" and (quoted := _quoted_name(s, i)) and quoted[0] == "-":
+        # a quoted token naming "-" forms the negative sign too, however it
+        # is spelled: '-', '\<newline>-', '\x2d\' (ruled 2026-10-13, Ulrich's
+        # number_chars_cont #54 and #63; Scryer accepts them all).
         neg = True
-        i = _skip_layout(s, i + 3)
+        i = _skip_layout(s, quoted[1])
         if i == n:
             raise _eof(n)
     if "0" <= s[i] <= "9":
@@ -856,14 +882,17 @@ def _read_number_text(s: str):
 def _parse_number_chars(s: str, who: str):
     """*s* read as a number, or ``error(syntax_error(Kind), context(PI,
     [line(L), column(C), found(F)]))``: Scryer's formal (its
-    ``unexpected_end_of_file`` / ``unexpected_char`` / ``infinite_float`` /
+    ``unexpected_end_of_file`` / ``unexpected_char`` /
     ``cannot_parse_big_int``), and the context every syntax error of the
     engine has (``prolog_reader.syntax_error_term``, operator ruling
     2026-10-24) -- it used to be Scryer's own ``who`` or ``who:0``.  *F* is
-    the offending character, the float literal as written for
-    ``infinite_float``, or ``end_of_file``."""
+    the offending character or ``end_of_file``.  A float no double holds is
+    ``representation_error(max_float)`` instead (:class:`_FloatOverflow`)."""
     try:
         return _read_number_text(s)
+    except _FloatOverflow:
+        from clausal.logic.exceptions import representation_error  # noqa: PLC0415
+        raise LogicException(representation_error("max_float", who)) from None
     except _NumberSyntax as exc:
         from clausal.tools.prolog_reader import syntax_error_term  # noqa: PLC0415
         at = min(exc.at, len(s))

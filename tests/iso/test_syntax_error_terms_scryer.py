@@ -375,11 +375,11 @@ def test_number_chars_context(tmp_path, monkeypatch):
         "error", ("syntax_error", "unexpected_end_of_file"),
         ("context", ("/", "number_codes", 2),
          [("line", 1), ("column", 3), ("found", "end_of_file")]))
-    # the literal as written is named, not the infinity (no ISO term)
+    # a float no double holds is no syntax error here: Ulrich's
+    # number_chars_cont #82 (Scryer differs; the reader keeps infinite_float)
     assert _answer(mod, "n4") == (
-        "error", ("syntax_error", "infinite_float"),
-        ("context", ("/", "number_chars", 2),
-         [("line", 1), ("column", 1), ("found", "1.0e400")]))
+        "error", ("representation_error", "max_float"),
+        ("/", "number_chars", 2))
     # a comment line before the fault: the position is on line 2 (the name
     # `x` is consumed to the end of the text, as Scryer consumes it)
     assert _answer(mod, "n5") == (

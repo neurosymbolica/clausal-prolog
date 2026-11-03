@@ -77,6 +77,14 @@ ROWS = [
     ("#54 quoted '-' atom as the negative sign",
      r"number_chars(R, ['\'', '-', '\'', '1'])",
      ["-1"]),
+    # Any spelling of the quoted atom '-' is the sign: a continuation
+    # escape (#63) or a hex escape.
+    ("#63 '\\<newline>-' as the negative sign",
+     r"number_chars(R, ['\'', '\\', '\n', '-', '\'', ' ', '3'])",
+     ["-3"]),
+    ("'\\x2d\\' as the negative sign",
+     r"number_chars(R, ['\'', '\\', x, '2', d, '\\', '\'', '3'])",
+     ["-3"]),
     # `- 1` IS the integer -1 in the source too (the syntax suite's #56):
     # it used to read as the compound -(1), which is not a number.
     ("#91 number_chars(- 1, \"- 1\")",
@@ -101,7 +109,29 @@ ROWS += [
      ["true"]),
 ]
 
-PROGRAM = "one --> \"1\".\n" + "".join(f"r{i}(R) :- {body}.\n" for i, (_, body, _) in enumerate(ROWS))
+#: Rows where Ulrich's table and Scryer disagree: Ulrich wins (operator
+#: ruling 2026-10-13), so these are pinned against the engine only.
+ULRICH_ONLY = [
+    # #82: a float no double holds is a representation error; Ulrich marks
+    # syntax_error(...) "unexpected" (Scryer raises
+    # syntax_error(infinite_float), Trealla representation_error(max_float)).
+    ("#82 9.9e999 overflows",
+     "catch(number_chars(N, ['9', '.', '9', e, '9', '9', '9']), error(F, C),"
+     " R = [F, C])",
+     ["[representation_error(max_float),number_chars/2]"]),
+    ("#82 negative overflow",
+     "catch(number_chars(N, ['-', '1', '.', '0', e, '4', '0', '0']),"
+     " error(F, _), R = F)",
+     ["representation_error(max_float)"]),
+    ("#82 number_codes too",
+     "catch(number_codes(N, [0'9, 0'., 0'9, 0'e, 0'9, 0'9, 0'9]), error(F, _),"
+     " R = F)",
+     ["representation_error(max_float)"]),
+]
+
+PROGRAM = "one --> \"1\".\n" + "".join(
+    f"r{i}(R) :- {body}.\n" for i, (_, body, _) in enumerate(ROWS)) + "".join(
+    f"u{i}(R) :- {body}.\n" for i, (_, body, _) in enumerate(ULRICH_ONLY))
 
 
 @pytest.fixture(scope="module")
@@ -124,6 +154,12 @@ def pl_mod(tmp_path_factory):
 @pytest.mark.parametrize("i", range(len(ROWS)), ids=[r[0] for r in ROWS])
 def test_engine(pl_mod, i):
     assert _engine_answers(pl_mod, f"r{i}", 3) == ROWS[i][2]
+
+
+@pytest.mark.parametrize("i", range(len(ULRICH_ONLY)),
+                         ids=[r[0] for r in ULRICH_ONLY])
+def test_engine_ulrich_only(pl_mod, i):
+    assert _engine_answers(pl_mod, f"u{i}", 3) == ULRICH_ONLY[i][2]
 
 
 def test_oracle(scryer):

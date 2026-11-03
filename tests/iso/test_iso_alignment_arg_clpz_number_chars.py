@@ -101,10 +101,8 @@ ROWS = [
     ("ncodes both bound", "number_codes(12, [0'1, 0'2]), R = y", ["y"]),
     ("nc lone bang", "catch(number_chars(N, [!]), error(F, C), R = F)",
      ["syntax_error(cannot_parse_big_int)"]),
-    ("nc infinite float",
-     "catch(number_chars(N, ['1', '.', '0', e, '4', '0', '0']), error(F, C),"
-     " R = F)",
-     ["syntax_error(infinite_float)"]),
+    # a float no double holds: Ulrich's #82, engine-only in
+    # test_number_chars_cont_ulrich.py (Scryer raises a syntax error there)
     ("nc unterminated comment",
      "catch(number_chars(N, [/, *]), error(F, C), R = F)",
      ["syntax_error(unexpected_end_of_file)"]),
