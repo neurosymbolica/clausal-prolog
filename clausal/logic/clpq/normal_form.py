@@ -1902,14 +1902,48 @@ _INTEGERS = 3
 
 
 def compare_power_products(first, second):
-    """compare/3 on two power products: -1, 0 or 1."""
-    return _standard_order(_POWER_PRODUCTS, first, second)
+    """compare/3 on two power products: -1, 0 or 1.
+
+    _standard_order's comparison, the pairs in its order (each base, then
+    its exponent, then the lengths), with the common pairs decided here:
+    the same base, and two unbound variables (by creation order, as
+    _standard_order does).  Any other pair of bases goes to _standard_order,
+    so a base bound to a non-number raises exactly where it did
+    (test_the_power_product_comparison_is_the_standard_order)."""
+    for (base_a, exponent_a), (base_b, exponent_b) in zip(first, second):
+        if base_a is not base_b:
+            base_a = deref(base_a)
+            base_b = deref(base_b)
+            if base_a is not base_b:
+                if is_var(base_a) and is_var(base_b):
+                    if base_a._id != base_b._id:
+                        return -1 if base_a._id < base_b._id else 1
+                else:
+                    relation = _standard_order(_BASES, base_a, base_b)
+                    if relation:
+                        return relation
+        if exponent_a != exponent_b:
+            return -1 if exponent_a < exponent_b else 1
+    length_a = len(first)
+    length_b = len(second)
+    if length_a != length_b:
+        return -1 if length_a < length_b else 1
+    return 0
 
 
 def compare_bases(first, second):
     """compare/3 on two bases.  Two unbound variables are in creation order
     (DEVIATIONS.md D11); a base bound to a number before repair compares as
-    the number."""
+    the number.  Two variables are compared here, anything else by
+    _standard_order."""
+    first = deref(first)
+    second = deref(second)
+    if first is second:
+        return 0
+    if is_var(first) and is_var(second):
+        if first._id != second._id:
+            return -1 if first._id < second._id else 1
+        return 0
     return _standard_order(_BASES, first, second)
 
 
