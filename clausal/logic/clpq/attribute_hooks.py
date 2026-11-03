@@ -19,6 +19,10 @@ itself (DEVIATIONS.md D3).  So the hook:
   carries its state.  The stand-in is X as verify_attributes/3 sees it, so
   the rest is itf3.pl's code on an unbound variable
   (test_one_unification_binding_two_constrained_variables);
+- does only X's own work on X's stand-in; each other bound member's work
+  is done on its stand-in in that member's own hook, so in the order of
+  the bindings, as 1.3.3 runs verify_attributes/3 (ruling 2026-11-03;
+  test_one_unification_does_the_bound_variables_in_binding_order);
 - never writes to X: put_attr on a variable bound to another would write
   that one's attributes (test_the_state_on_the_bound_variable_is_left_alone);
 - binds what solve/5 implies one binding at a time from a work list, each
@@ -38,6 +42,8 @@ the same work list.
 itf3.pl's goal expansions (nf_ordering/3, decompose/4) are
 variable_ordering.compare_variable_order and the LinearForm fields.
 """
+from operator import itemgetter
+
 from clausal.logic.clpq.arithmetic import (
     compare, from_number, is_zero, to_number)
 from clausal.logic.clpq.attributes import (
@@ -52,7 +58,7 @@ from clausal.logic.clpq.components import (
     component_drop, list_elements)
 from clausal.logic.clpq.delayed_goals import verify_delayed
 from clausal.logic.clpq.linear_forms import (
-    LinearForm, independent, normal_form_coefficient_of)
+    CHECK_ROW_INDEX, LinearForm, independent, normal_form_coefficient_of)
 from clausal.logic.exceptions import LogicException, system_error, type_error
 from clausal.logic.pending import run_first
 from clausal.logic.variables import (
@@ -142,14 +148,25 @@ def verify_attributes(state, other, trail, later):
         if not verify_bound(None, state, other, trail, later, bindings):
             return False
         return bind_queued(bindings, trail, later)
-    components = [deref(state.component)]
-    other_component = _component_of(other)
-    if other_component is not None:
-        components.append(other_component)
-    stand_ins = _stand_in_for_bound_members(components, state, trail)
-    if stand_ins is None:
-        return True             # an earlier hook of this unification did it
-    if not _verify_stand_ins(stand_ins, trail, later, bindings):
+    turn = _take_turn(state)
+    if turn is None:
+        components = [deref(state.component)]
+        other_component = _component_of(other)
+        if other_component is not None:
+            components.append(other_component)
+        stand_ins = _stand_in_for_bound_members(components, state, trail)
+        if stand_ins is None:
+            # X is bound, in no member list and has no turn: its work would
+            # be skipped in silence.  An earlier hook that does a member's
+            # work leaves it a turn (_wait_for_turns), so this cannot
+            # happen; if it does, it is the port's fault, not the
+            # program's (DEVIATIONS.md D3).
+            raise LogicException(system_error(
+                "clpq_lost_turn", "=/2: a bound constrained variable has "
+                "neither a turn nor a place in its component"))
+        turn = stand_ins[0]
+        _wait_for_turns(stand_ins[1:], trail)
+    if not _verify_turn(turn, trail, later, bindings):
         return False
     return bind_queued(bindings, trail, later)
 
@@ -160,16 +177,72 @@ def _carries_nothing(state):
     return _without_solver_attributes(state) and not state.delayed_goals
 
 
-def _verify_stand_ins(stand_ins, trail, later, bindings):
-    """Clause 3 for each bound member, on its stand-in."""
+#: The bound members whose stand-in the first hook of their unification
+#: made and whose own hook is still to come: id(state) -> (state,
+#: stand_in, member).  An entry lives from that first hook to the
+#: member's own hook in the same dispatch; an undo past the first hook
+#: (a later hook failed or raised) removes it (trail.record).
+_TURNS = {}
+
+
+def _wait_for_turns(stand_ins, trail):
+    """Keep each (stand_in, member_state, member) of *stand_ins* for the
+    member's own hook, which comes later in the same unification
+    (_take_turn)."""
+    if not stand_ins:
+        return
+    entries = []
     for stand_in, member_state, member in stand_ins:
-        value = deref(member)
-        put_state(stand_in, with_changes(state_of(stand_in), forward=value),
-                  trail)                                        # put_atts(X, forward(Y))
-        if not verify_bound(stand_in, member_state, value, trail, later,
-                            bindings):
+        entry = (member_state, stand_in, member)
+        _TURNS[id(member_state)] = entry
+        entries.append(entry)
+
+    def forget():
+        for entry in entries:
+            key = id(entry[0])
+            if _TURNS.get(key) is entry:
+                del _TURNS[key]
+    trail.record(forget)
+
+
+def _take_turn(state):
+    """The (stand_in, state, member) an earlier hook of this unification
+    made for the member whose own state is *state*, taken off the list;
+    None for none."""
+    entry = _TURNS.get(id(state))
+    if entry is None or entry[0] is not state:
+        return None
+    del _TURNS[id(state)]
+    return entry[1], state, entry[2]
+
+
+def _verify_turn(turn, trail, later, bindings):
+    """Clause 3 for one bound member, on its stand-in, in its own hook: the
+    members of one unification are verified in the order of their
+    bindings, each while the later ones are still unbound stand-ins, as
+    1.3.3's verify_attributes/3 runs under SICStus's and Scryer's driver
+    (DEVIATIONS.md D3, ruling 2026-11-03).
+
+    An earlier member's work can have bound the stand-in already (bv.pl's
+    export_binding/1 of an implied value, checked then by clause 3 on the
+    stand-in): the member's own binding must then agree with it, and its
+    delayed goals, which the stand-in does not carry, wake with it."""
+    stand_in, member_state, member = turn
+    value = deref(member)
+    implied = deref(stand_in)
+    if not is_var(implied):
+        if not unify(implied, value, trail):
             return False
-    return True
+        return verify_delayed(member_state, deref(value), trail, later)
+    current = state_of(stand_in)
+    put_state(stand_in, with_changes(current, forward=value),
+              trail)                                            # put_atts(X, forward(Y))
+    # X's attributes as they are now: an earlier member's work can have
+    # changed the stand-in's (its row, its type); the delayed goals are
+    # the member's own.
+    return verify_bound(stand_in, with_changes(
+        current, delayed_goals=member_state.delayed_goals), value, trail,
+        later, bindings)
 
 
 def _component_of(value):
@@ -319,9 +392,25 @@ def _stand_in_for_bound_members(components, state, trail):
             member_state, delayed_goals=None,
             linear_form=_rename_in_form(member_state.linear_form, stand_ins)),
             trail)
+    rows = any(_in_its_own_row(member, member_state)
+               for member, member_state in bound)
     for component in components:
-        _rename_in_component(component, stand_ins, trail)
+        _rename_in_component(component, stand_ins, trail, rows)
     return result
+
+
+def _in_its_own_row(member, member_state):
+    """*member*'s own row holds it: it is independent (its row is 1*X),
+    so other rows may hold it too.  A dependent member's row does not hold
+    it, and no other row does: a solved form's rows hold only independent
+    variables (bv.pl keeps them so: a pivot back-substitutes the new
+    dependent variable out of every row), and the stand-in left in a row
+    (DEVIATIONS.md D3) is unbound."""
+    form = member_state.linear_form
+    return form is not None and any(term[0] is member for term in form.terms)
+
+
+_first = itemgetter(0)
 
 
 def _rename_in_form(form, stand_ins):
@@ -330,7 +419,15 @@ def _rename_in_form(form, stand_ins):
     sorted."""
     if form is None:
         return None
+    ids = form.variable_ids
+    if ids and stand_ins.keys().isdisjoint(ids):
+        # The row's index holds the id of every variable of its terms
+        # (linear_forms.row_variable_ids), so no stand-in's variable is
+        # in the row.
+        return form
     terms = form.terms
+    if stand_ins.keys().isdisjoint(map(id, map(_first, terms))):
+        return form                     # the common case, in one C loop
     renamed = None
     for i in range(len(terms)):
         stand_in = stand_ins.get(id(terms[i][0]))
@@ -368,8 +465,12 @@ def _rename_in_list(items, stand_ins):
     return result
 
 
-def _rename_in_component(component, stand_ins, trail):
-    """The stand-ins in *component*'s member list, basis and rows."""
+def _rename_in_component(component, stand_ins, trail, rows=True):
+    """The stand-ins in *component*'s member list, basis and rows.  With
+    *rows* False no row holds a variable that has a stand-in (every one is
+    dependent, _in_its_own_row), so the rows are not read;
+    CHECK_ROW_INDEX reads them and raises AssertionError where one would
+    change."""
     record = get_attr(component, COMPONENT_KEY)
     members = _rename_in_list(record.members, stand_ins)
     basis = _rename_in_list(record.basis, stand_ins)
@@ -377,6 +478,10 @@ def _rename_in_component(component, stand_ins, trail):
         put_attr(component, COMPONENT_KEY,
                  ComponentRecord(members, record.tail, basis, record.priority),
                  trail)
+    if not rows:
+        if CHECK_ROW_INDEX:
+            _check_no_row_holds_a_stand_in(members, stand_ins)
+        return
     for member in list_elements(members):
         member = deref(member)
         if not is_var(member):
@@ -388,6 +493,23 @@ def _rename_in_component(component, stand_ins, trail):
         if form is not member_state.linear_form:
             put_state(member, with_changes(member_state, linear_form=form),
                       trail)
+
+
+def _check_no_row_holds_a_stand_in(members, stand_ins):
+    """CHECK_ROW_INDEX: the rows of *members* that _rename_in_component
+    skipped hold no variable that has a stand-in."""
+    for member in list_elements(members):
+        member = deref(member)
+        if not is_var(member):
+            continue
+        member_state = state_of(member)
+        if member_state is None or member_state.linear_form is None:
+            continue
+        form = member_state.linear_form
+        if not stand_ins.keys().isdisjoint(map(id, map(_first, form.terms))):
+            raise AssertionError(
+                f"clpq stand-in pass skipped the rows, but the row of "
+                f"{member!r} holds a bound dependent variable: {form!r}")
 
 
 # ---------------------------------------------------------------- itf3.pl

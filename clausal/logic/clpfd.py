@@ -1777,7 +1777,7 @@ def _apply_evaluable(fn, args):
     return fn(l, r)
 
 
-def _arith_cells_to_nodes(x, strict=None):
+def _arith_cells_to_nodes(x, strict=None, depth=0):
     """*x* with every arithmetic CELL rewritten as its operator node, or None
     when *x* holds none (the common case: nothing is allocated).
 
@@ -1796,7 +1796,16 @@ def _arith_cells_to_nodes(x, strict=None):
     own diagnosis -- unless *strict* is a context string: then an atom or a
     non-evaluable compound raises ``type_error(evaluable, Name/Arity)``
     (CLP(Q)/CLP(R), whose linearisers had no diagnosis of their own).
+
+    *depth* counts the frames above this one.  Past ``_SHALLOW_CELL_WALK``
+    the rest of the term is walked by :func:`_arith_cells_to_nodes_deep`,
+    the same walk on an explicit stack, so a sum nested 100,000 deep does
+    not raise RecursionError and a cyclic term raises an ISO error instead
+    (clpq DEVIATIONS.md D27; D23).  A shallow term, the common
+    case, keeps the recursive walk and its speed.
     """
+    if depth > _SHALLOW_CELL_WALK:
+        return _arith_cells_to_nodes_deep(x, strict)
     x = deref(x)
     t = type(x)
     if t is int or t is float:
@@ -1811,12 +1820,12 @@ def _arith_cells_to_nodes(x, strict=None):
         if key[1] == 1:
             o = x.operand
             to = type(o)
-            oc = None if to is int or to is float else _arith_cells_to_nodes(o, strict)
+            oc = None if to is int or to is float else _arith_cells_to_nodes(o, strict, depth + 1)
             return None if oc is None else _replace(x, operand=oc)
         a, b = x.left, x.right
         ta, tb = type(a), type(b)
-        lc = None if ta is int or ta is float else _arith_cells_to_nodes(a, strict)
-        rc = None if tb is int or tb is float else _arith_cells_to_nodes(b, strict)
+        lc = None if ta is int or ta is float else _arith_cells_to_nodes(a, strict, depth + 1)
+        rc = None if tb is int or tb is float else _arith_cells_to_nodes(b, strict, depth + 1)
         if lc is None and rc is None:
             return None
         return _replace(x, left=a if lc is None else lc, right=b if rc is None else rc)
@@ -1826,7 +1835,7 @@ def _arith_cells_to_nodes(x, strict=None):
     if ka is not None and ka[0] in _EVALUABLE:
         args = []
         for a in ka[1]:
-            c = _arith_cells_to_nodes(a, strict)
+            c = _arith_cells_to_nodes(a, strict, depth + 1)
             if c is None:
                 a = deref(a)
                 if not _arith_leaf(a):
@@ -1856,13 +1865,144 @@ def _arith_cells_to_nodes(x, strict=None):
             # folded to its value here and a non-ground one is left as the
             # cell, for each post's own diagnosis (the CLP posts do not
             # propagate through it).
-            return _eval_ground(x)
+            return _eval_ground_of_cell(x)
         if len(args) == 1:
             return cls(operand=args[0])
         return cls(left=args[0], right=args[1])
     if strict is not None and (ka is not None or t is str):
         raise _not_evaluable(x, strict)
     return None
+
+
+#: The frames _arith_cells_to_nodes recurses before it hands the rest of
+#: the term to _arith_cells_to_nodes_deep.
+_SHALLOW_CELL_WALK = 50
+
+
+def _cell_walk_steps(x, strict):
+    """One level of _arith_cells_to_nodes for the dereferenced compound *x*,
+    as a generator: it yields each argument the recursive walk would recurse
+    on and is sent that argument's result, and it returns the level's
+    result.  Line for line the body of _arith_cells_to_nodes, with
+    ``(yield a)`` where that has ``_arith_cells_to_nodes(a, ...)``, so the
+    two walks visit, rebuild and refuse in the same order."""
+    t = type(x)
+    key = _NODE_KEYS.get(t)
+    if key is not None:
+        if key[1] == 1:
+            o = x.operand
+            to = type(o)
+            oc = None if to is int or to is float else (yield o)
+            return None if oc is None else _replace(x, operand=oc)
+        a, b = x.left, x.right
+        ta, tb = type(a), type(b)
+        lc = None if ta is int or ta is float else (yield a)
+        rc = None if tb is int or tb is float else (yield b)
+        if lc is None and rc is None:
+            return None
+        return _replace(x, left=a if lc is None else lc, right=b if rc is None else rc)
+    if is_var(x) or exact_cell_number(x) is not None:
+        return None
+    ka = _cell_key_args(x)
+    if ka is not None and ka[0] in _EVALUABLE:
+        args = []
+        for a in ka[1]:
+            c = yield a
+            if c is None:
+                a = deref(a)
+                if not _arith_leaf(a):
+                    if strict is not None:
+                        inner = _cell_key_args(a)
+                        if inner is not None and inner[0] in _EVALUABLE:
+                            args.append(a)
+                            continue
+                        raise _not_evaluable(a, strict)
+                    return None
+                c = a
+            args.append(c)
+        cls = _key_nodes().get(ka[0])
+        if cls is None:
+            return _eval_ground_of_cell(x)
+        if len(args) == 1:
+            return cls(operand=args[0])
+        return cls(left=args[0], right=args[1])
+    if strict is not None and (ka is not None or t is str):
+        raise _not_evaluable(x, strict)
+    return None
+
+
+_NO_TERM = object()
+
+
+def _arith_cells_to_nodes_deep(x, strict=None):
+    """_arith_cells_to_nodes on an explicit stack of _cell_walk_steps
+    levels: the same result and the same errors, in the same order, at any
+    depth.  A compound met again while it is on the path from the root
+    closes a cycle (``X = 1 + X``), which the recursive walk met as
+    RecursionError: under a *strict* context it raises
+    ``type_error(evaluable, F/A)``, F/A that compound's functor, as the
+    CLP(Q) port's normal_form/2 does (clpq DEVIATIONS.md D23); otherwise
+    ``resource_error(finite_memory)``, the engine's error for a cycle a
+    walk has no answer for (``rational_walk.unwalkable_term_error``)."""
+    on_path = set()
+    stack = []
+    pending = x
+    value = None
+    while True:
+        if pending is not _NO_TERM:
+            term = deref(pending)
+            pending = _NO_TERM
+            t = type(term)
+            if t is int or t is float:
+                value = None
+            else:
+                key = id(term) if (t is tuple or t in _NODE_KEYS) else None
+                if key is not None and key in on_path:
+                    _refuse_cycle(term, strict)
+                steps = _cell_walk_steps(term, strict)
+                if key is not None:
+                    on_path.add(key)
+                stack.append((steps, key))
+                value = None
+        # Send *value* to the innermost level (None starts a new one); it
+        # asks for its next argument or returns its result to its parent.
+        while stack:
+            steps, key = stack[-1]
+            try:
+                pending = steps.send(value)
+                break
+            except StopIteration as stop:
+                stack.pop()
+                if key is not None:
+                    on_path.discard(key)
+                value = stop.value
+        else:
+            return value
+
+
+def _refuse_cycle(term, strict):
+    """Raise the error for the cyclic *term* a walk met again on its path:
+    ``type_error(evaluable, F/A)`` under the CLP(Q) or CLP(R) context
+    *strict*, ``resource_error(finite_memory)`` when *strict* is None.
+    Shared by every stack walk over an arithmetic expression (the cell
+    walk, the units scan, CLP(R)'s and legacy CLP(Q)'s walks; clpq
+    DEVIATIONS.md D27)."""
+    if strict is not None:
+        raise _not_evaluable(term, strict)
+    from clausal.logic.rational_walk import unwalkable_term_error  # noqa: PLC0415
+    raise unwalkable_term_error(term, "an arithmetic expression", "value")
+
+
+def _eval_ground_of_cell(x):
+    """_eval_ground of an evaluable cell with no operator node (``abs/1``,
+    ``min/2``, ...).  _eval_ground recurses, as is/2 does; an argument
+    nested deeper than Python's stack raises ``resource_error(stack)``, the
+    error is/2 raises for it, never a RecursionError."""
+    try:
+        return _eval_ground(x)
+    except RecursionError:
+        from clausal.logic.rational_walk import unwalkable_term_error  # noqa: PLC0415
+        raise unwalkable_term_error(x, "an arithmetic expression", "value") from None
 
 
 _Quantity = None

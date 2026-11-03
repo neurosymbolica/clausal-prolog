@@ -254,7 +254,11 @@ def delete_first(items, variable):
     prefix = []
     node = deref(items)
     while type(node) is ListCell:                               # clause 3
-        if _identical_variable(node.head, variable):
+        head = node.head
+        # _identical_variable(head, variable), its first step inlined
+        if (type(head) is Var or type(head) is PlainVar) and (
+                head is variable or (head.is_bound and _identical_variable(
+                    head.value, variable))):
             result = node.rest
             i = len(prefix) - 1
             while i >= 0:

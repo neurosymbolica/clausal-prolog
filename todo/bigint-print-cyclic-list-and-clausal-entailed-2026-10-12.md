@@ -13,4 +13,4 @@
    tests/test_clpq_entailed_relation_cells.py::test_clausal_program_under_each_solver.
    **`entailed/1` in .clausal always answers false, on both solvers.** The builtin
    (`constraints.py:269`) matches AST nodes, but the argument arrives as a cell. This is the same
-   family as the .pl `entailed` gap in todo/clpq-prolog-surface-gaps-entailed-dump-tabling-2026-10-12.md.
+   family as the .pl `entailed` gap in todo/done/clpq-prolog-surface-gaps-entailed-dump-tabling-2026-10-12.md.

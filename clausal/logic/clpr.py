@@ -494,23 +494,51 @@ def _collect_constraint_vars(lhs, rhs) -> tuple:
     return tuple(result)
 
 
-def _collect_vars_from(expr, result: list) -> None:
-    expr = deref(expr)
-    if is_var(expr):
-        result.append(expr)
-        return
-    _ensure_term_imports()
-    if isinstance(expr, (_Add, _Sub, _Mult)):
-        _collect_vars_from(expr.left, result)
-        _collect_vars_from(expr.right, result)
-    elif _Div is not None and isinstance(expr, (_Div, _FloorDiv, _Mod)):
-        _collect_vars_from(expr.left, result)
-        _collect_vars_from(expr.right, result)
-    elif _Pow is not None and isinstance(expr, _Pow):
-        _collect_vars_from(expr.left, result)
-        _collect_vars_from(expr.right, result)
-    elif _Negate is not None and isinstance(expr, _Negate):
-        _collect_vars_from(expr.operand, result)
+#: On a walk's stack, the marker that the compound whose id is the next
+#: item is left: it is off the path from the root.
+_LEAVE = object()
+
+
+def _collect_vars_from(expr, result: list, context=None) -> None:
+    """Append the variables of *expr* to *result*, left to right, depth
+    first, as met (a repeated variable each time).  An explicit stack, so a
+    sum nested 100,000 deep raises no RecursionError (clpq DEVIATIONS.md
+    D27: ``inf/2`` and ``sup/2`` call this first).  A node met again while
+    it is on the path from the root closes a cycle (``X = 1 + X``) and
+    raises ``type_error(evaluable, F/A)``, *context* the culprit's context
+    (unbound when None); a subterm two branches share is no cycle."""
+    on_path = set()
+    stack = [expr]
+    while stack:
+        expr = stack.pop()
+        if expr is _LEAVE:
+            on_path.discard(stack.pop())
+            continue
+        expr = deref(expr)
+        if is_var(expr):
+            result.append(expr)
+            continue
+        _ensure_term_imports()
+        if (isinstance(expr, (_Add, _Sub, _Mult))
+                or (_Div is not None and isinstance(expr, (_Div, _FloorDiv, _Mod)))
+                or (_Pow is not None and isinstance(expr, _Pow))):
+            stack.append(_enter_node(expr, on_path, context))
+            stack.append(_LEAVE)
+            stack.append(expr.right)
+            stack.append(expr.left)
+        elif _Negate is not None and isinstance(expr, _Negate):
+            stack.append(_enter_node(expr, on_path, context))
+            stack.append(_LEAVE)
+            stack.append(expr.operand)
+
+
+def _enter_node(x, on_path: set, context) -> int:
+    key = id(x)
+    if key in on_path:
+        from clausal.logic.exact_arith import not_evaluable  # noqa: PLC0415
+        raise not_evaluable(x, context)
+    on_path.add(key)
+    return key
 
 
 # ── Constraint base class and concrete types ──────────────────────────────────
@@ -974,7 +1002,7 @@ def is_real_expression(expr, context: str) -> bool:
     """True if *expr* mentions a variable with a CLP(R) interval -- the test
     ``inf/2``/``sup/2`` use to answer from CLP(R) rather than CLP(Q)."""
     vars_list: list = []
-    _collect_vars_from(_expr_node(expr, context), vars_list)
+    _collect_vars_from(_expr_node(expr, context), vars_list, context)
     return any(is_var(v := deref(x)) and get_attr(_solver_var(v), REAL_KEY) is not None
                for x in vars_list)
 

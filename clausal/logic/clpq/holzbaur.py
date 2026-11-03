@@ -35,11 +35,17 @@ reads rows and member lists that hold those bindings.  clpfd calls
 ``q_eq``, ``q_ne``, ``q_le``, ``q_lt`` (and ``q_gt``, ``q_ge`` through
 them) and ``sync_fd_bounds`` from its propagation, which runs inside the
 FD hook, from its reified comparisons and from the units hook.  So while
-``trail.hooks_running`` is above 0 (the engine is dispatching attribute
-hooks, docs/coroutining.md "Inside a hook or at a goal") these functions
-queue the post on the trail's pending queue (``trail.push_pending`` of a
-``QueuedPost``) and return True; the post runs at the goal boundary after
-every hook of the unification.  At a goal (``hooks_running == 0``) they
+the engine is dispatching the hooks of the trail they are given
+(``trail.hooks_running`` above 0, docs/coroutining.md "Inside a hook or
+at a goal") these functions queue the post on the trail's pending queue
+(``trail.push_pending`` of a ``QueuedPost``) and return True; the post
+runs at the goal boundary after every hook of the unification.  While a
+dispatch on ANOTHER trail is in progress in this thread
+(``hook_dispatch_depth()`` above the trail's counter, docs/coroutining.md
+"On any trail"; a fresh trail inside a hook) they refuse, as the entry
+points do: that trail's goal boundary can come inside the other
+dispatch, where the queued post could not run (DEVIATIONS.md D26).  At a
+goal (``hooks_running == 0``) they
 post in place, bare or under a driver: the engine's goal boundary after
 an inline comparison runs what the post wakes before the next goal
 (test_switch.py, test_a_comparison_from_clpfd_inside_a_hook_is_queued,
@@ -55,8 +61,9 @@ from a hook, and post in place.
 
 Every other entry point here refuses to run inside a hook (ruling R30):
 ``error(permission_error(call, goal, Goal), Name/Arity)`` while
-``trail.hooks_running`` is above 0, as the engine's ``solve`` does there
-(DEVIATIONS.md D3, tests/clpq_port/test_refused_inside_a_hook.py).
+``trail.hooks_running`` or ``hook_dispatch_depth()`` is above 0, as the
+engine's ``solve`` does there (DEVIATIONS.md D3 and D26,
+tests/clpq_port/test_refused_inside_a_hook.py).
 
 ``{C1 ; C2}`` (ruling R18, DEVIATIONS.md D12).  A block that holds ``;``
 is posted with ``post_constraint_with_choices``, and
@@ -77,13 +84,15 @@ from clausal.logic.clpq import variable_ordering as _variable_ordering
 from clausal.logic.clpq.arithmetic import (
     arithmetic_normalize, is_exact_decimal, is_number)
 from clausal.logic.clpq.attributes import (
-    CLPQ_KEY, culprit_argument, refuse_inside_attribute_hooks, state_of)
+    CLPQ_KEY, ON_ANOTHER_TRAIL, culprit_argument,
+    dispatching_on_another_trail, inside_attribute_hooks,
+    refuse_inside_attribute_hooks, state_of)
 from clausal.logic.clpq.legacy import (
     _block_cell_as_node, _cell_as_node, _cells_as_nodes, _units_result,
     _units_strip, _units_strip_expr)
 from clausal.logic.clpz_surface import _proper_list
 from clausal.logic.exceptions import (
-    LogicException, instantiation_error, type_error)
+    LogicException, instantiation_error, representation_error, type_error)
 from clausal.logic.variables import (
     PlainVar, Var, deref, get_attr, is_var, present_number, unify)
 from clausal.pythonic_ast.nodes import (
@@ -158,20 +167,40 @@ def _variables_of(*terms):
     return found
 
 
-def _promote_fd_variables(left, right, trail):
+def _promote_fd_variables(left, right, trail, exact=None):
     """legacy's _ensure_q_for_expr for an FD variable: a variable with a
     finite-domain attribute and no CLP(Q) state gets its FD bounds as
     rational bounds before the post (ruling R4).  True, or False where a
-    bound fails."""
+    bound fails.
+
+    With *exact* (the context of maximize, minimize or bb_inf), an FD
+    variable whose domain has a hole raises
+    representation_error(fd_domain_with_holes), whether or not it has
+    CLP(Q) state: the store holds only the domain's hull, so an optimum
+    that binds could land in the hole (DEVIATIONS.md D29)."""
     from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
     for variable in _variables_of(left, right):
-        if type(variable) is PlainVar or state_of(variable) is not None:
+        if type(variable) is PlainVar:
+            continue
+        if exact is not None:
+            refuse_fd_holes(variable, exact)
+        if state_of(variable) is not None:
             continue
         fd_state = get_attr(variable, FD_KEY)
         if fd_state is not None:
             if not promote_fd_to_q(variable, fd_state, trail):
                 return False
     return True
+
+
+def refuse_fd_holes(variable, context):
+    """representation_error(fd_domain_with_holes) for an FD variable whose
+    domain is more than one interval (``X in 1..3 \\/ 7..9``)."""
+    from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+    fd_state = get_attr(variable, FD_KEY)
+    if fd_state is not None and len(fd_state.domain) > 1:
+        raise LogicException(
+            representation_error("fd_domain_with_holes", context))
 
 
 def promote_fd_to_q(variable, fd_state, trail):
@@ -258,7 +287,14 @@ def _post_from_library(node_class, left, right, trail):
     """A comparison from clpfd (fd_eq and the others, its Python and its C
     form): queued while the engine is dispatching attribute hooks, posted
     in place at a goal (ruling R28c as the module docstring states it)."""
-    if trail.hooks_running > 0:
+    if inside_attribute_hooks(trail):
+        if dispatching_on_another_trail(trail):
+            # Queued here, the post could run inside that other dispatch
+            # and be refused by {}/1 there, or be lost if the trail is
+            # never driven: refuse it now (DEVIATIONS.md D26).
+            refuse_inside_attribute_hooks(
+                trail, ("{}", node_class(left=left, right=right)), "{}", 1,
+                ON_ANOTHER_TRAIL)
         trail.push_pending(QueuedPost(node_class, left, right, trail))
         return True
     return _post_now(node_class, left, right, trail)
@@ -315,7 +351,18 @@ def sync_fd_bounds(variable, lower, upper, trail):
     variable = deref(variable)
     if not is_var(variable):
         return True
-    if trail.hooks_running > 0:
+    if inside_attribute_hooks(trail):
+        if dispatching_on_another_trail(trail):
+            bounds = []
+            if type(lower) is int:
+                bounds.append(GtE(left=variable, right=lower))
+            if type(upper) is int:
+                bounds.append(LtE(left=variable, right=upper))
+            if bounds:
+                block = bounds[0] if len(bounds) == 1 else (",", *bounds)
+                refuse_inside_attribute_hooks(
+                    trail, ("{}", block), "{}", 1, ON_ANOTHER_TRAIL)
+            return True
         if type(lower) is int:
             trail.push_pending(QueuedPost(GtE, variable, lower, trail))
         if type(upper) is int:
@@ -381,6 +428,9 @@ def _declare(target, lower, upper, trail):
         constraints.append(GtE(left=target, right=present_number(lower)))
     if upper is not None:
         constraints.append(LtE(left=target, right=present_number(upper)))
+    if state_of(target) is None and not _promote_fd_variables(target, 0,
+                                                              trail):
+        return False                    # an FD variable keeps its bounds
     if not constraints:
         if state_of(target) is not None:
             return True
@@ -481,16 +531,28 @@ def _optimum(port_call, expr, result_var, dims, trail):
     return unify(result_var, _units_result(Fraction(number), dims), trail)
 
 
-def _objective(expr, context, trail):
+def _objective(expr, context, trail, exact=False):
+    """The objective *expr* of an optimum as the port reads it, and its
+    dimension; (None, None) where an FD variable in it could not take its
+    FD bounds.  An FD variable with no CLP(Q) state
+    enters with them (``_promote_fd_variables``, DEVIATIONS.md D29), as
+    it does in a comparison post; a variable with neither state stays
+    unknown to the store, so unbounded, as in 1.3.3."""
     _normal_form.refuse_cyclic_term(expr)
     expr = _cell_as_node(deref(expr), context)
-    return _units_strip_expr(expr, context, trail)
+    expr, dims = _units_strip_expr(expr, context, trail)
+    if not _promote_fd_variables(expr, 0, trail,
+                                 context if exact else None):
+        return None, None
+    return expr, dims
 
 
 def sup(expr, result_var, trail):
     """bv.pl sup/2: the supremum of *expr*; fails where it is unbounded."""
     refuse_inside_attribute_hooks(trail, ("sup", expr, result_var), "sup", 2)
     expr, dims = _objective(expr, "sup/2", trail)
+    if expr is None:
+        return False
     return _optimum(_bounded_simplex.sup, expr, deref(result_var), dims,
                     trail)
 
@@ -499,6 +561,8 @@ def inf(expr, result_var, trail):
     """bv.pl inf/2: the infimum of *expr*; fails where it is unbounded."""
     refuse_inside_attribute_hooks(trail, ("inf", expr, result_var), "inf", 2)
     expr, dims = _objective(expr, "inf/2", trail)
+    if expr is None:
+        return False
     return _optimum(_bounded_simplex.inf, expr, deref(result_var), dims,
                     trail)
 
@@ -508,7 +572,9 @@ def maximize(expr, result_var, trail):
     an unbounded objective fails as legacy's does."""
     refuse_inside_attribute_hooks(
         trail, ("maximize", expr, result_var), "maximize", 2)
-    expr, dims = _objective(expr, "maximize/2", trail)
+    expr, dims = _objective(expr, "maximize/2", trail, exact=True)
+    if expr is None:
+        return False
     value = Var()
     if not _without_a_queue(
             trail, lambda: _bounded_simplex.sup(expr, value, trail)):
@@ -523,7 +589,9 @@ def minimize(expr, result_var, trail):
     """bv.pl minimize/1, then *result_var* is the minimum."""
     refuse_inside_attribute_hooks(
         trail, ("minimize", expr, result_var), "minimize", 2)
-    expr, dims = _objective(expr, "minimize/2", trail)
+    expr, dims = _objective(expr, "minimize/2", trail, exact=True)
+    if expr is None:
+        return False
     value = Var()
     if not _without_a_queue(
             trail, lambda: _bounded_simplex.inf(expr, value, trail)):
@@ -557,8 +625,15 @@ def bb_inf(int_vars, expr, result_var, trail, vertex=None, epsilon=None):
             trail, ("bb_inf", int_vars, expr, result_var, vertex, epsilon),
             "bb_inf", 5)
     int_vars = _proper_list(int_vars, context)
-    expr, dims = _objective(expr, context, trail)
+    expr, dims = _objective(expr, context, trail, exact=True)
+    if expr is None:
+        return False
     integers = _labels(int_vars, context)
+    # Only the integers that are variables: an element that is a term (a
+    # cyclic one, test_bb_inf_of_a_cyclic_term_raises) is bb.pl's to refuse.
+    if not _promote_fd_variables(
+            [v for v in integers if is_var(deref(v))], 0, trail, context):
+        return False
     return _optimum(
         lambda objective, value, trail: _branch_and_bound.bb_inf(
             integers, objective, value, trail, vertex, epsilon),
@@ -586,9 +661,11 @@ def entailed(constraint_type, l, r, trail):
 
 # ---------------------------------------------------------------- residuals
 
-def _named_targets(target_vars, context, name_of):
+def _named_targets(target_vars, context, name_of, known=()):
     """The targets with each united variable as its shadow, and a namer
-    that names a shadow as the variable the program wrote."""
+    that names a shadow as the variable the program wrote, and each
+    variable of *known* (the caller's other named variables) by
+    *name_of* too."""
     target_vars = list(target_vars)
     shadows = _labels(target_vars, context)
     names = {}
@@ -596,12 +673,16 @@ def _named_targets(target_vars, context, name_of):
         variable, shadow = deref(variable), deref(shadow)
         if is_var(shadow):
             names.setdefault(shadow._id, variable)
+    for variable in known:
+        variable = deref(variable)
+        if is_var(variable):
+            names.setdefault(variable._id, variable)
     internal = {}
 
     def name(variable):
-        # A variable dump/3 keeps that is not a target (a slack of a
-        # disequation) is named _Q1, _Q2, ... as legacy names its internal
-        # variables: name_of is asked about targets only.
+        # A variable dump/3 keeps that is neither a target nor known (a
+        # slack of a disequation) is named _Q1, _Q2, ... as legacy names
+        # its internal variables: name_of is asked about the others only.
         original = names.get(variable._id)
         if original is None:
             if variable._id not in internal:
@@ -638,12 +719,25 @@ def dump(target_vars, names, trail):
         trail, lambda: _residual_constraints.dump(shadows, list(names), trail))
 
 
-def residual_q(target_vars, trail, name_of):
-    """The CLP(Q) constraints on *target_vars* as a toplevel prints them;
-    ``[]`` when none of them carries CLP(Q) state."""
+def residual_q(target_vars, trail, name_of, attributed=()):
+    """The CLP(Q) constraints on *target_vars* (the query's variables) as
+    the toplevel prints them: through project.pl's project_attributes/2
+    and the attribute_goal/2 hooks, not dump/3, so the order of
+    *target_vars* imposes no variable ordering (DEVIATIONS.md D28).
+    *attributed* are the query's attributed variables no query variable
+    reaches (call_residue_vars/2); the projection takes in those that
+    carry a delayed goal, as the SICStus toplevel shows such a goal, and
+    names each of them by *name_of*, as the caller's other printers do.  ``[]`` when none of
+    them carries CLP(Q) state."""
     refuse_inside_attribute_hooks(
         trail, ("residual_q", target_vars), "residual_q", 1)
-    return dump_q(target_vars, trail, name_of, toplevel=True)
+    target_vars = _proper_list(target_vars, "residual_q/1")
+    attributed = list(attributed)
+    shadows, name = _named_targets(target_vars, "residual_q/1", name_of,
+                                   attributed)
+    return _without_a_queue(
+        trail, lambda: _residual_constraints.toplevel_strings(
+            shadows, trail, name, attributed))
 
 
 # ---------------------------------------------------------------- ordering

@@ -322,10 +322,13 @@ solver each term holds dump_q/2's bounds; under the port, 1.3.3's.
 `ordering(Spec)` says which variables an answer defines in terms of which
 (`Spec` a list, the first defined by the rest, or `A < B` / `A > B`); the
 port's projection honours it, the default solver accepts it without
-effect, and an unbound `Spec` fails. The residual a `-g` goal prints is
-dump/3 over the goal's variables in the order it lists them, which is an
-ordering too: an `ordering/1` that contradicts it raises
-`system_error(unsatisfiable_ordering)` on the port.
+effect, and an unbound `Spec` fails. dump/3 reads its `Vars` as an
+ordering too, so an `ordering/1` that contradicts their order raises
+`system_error(unsatisfiable_ordering)` on the port. The residual a `-g`
+goal prints is not dump/3: on the port it is the projection clp(Q,R)'s
+toplevel prints, which imposes no order of its own, so
+`ordering(Y < X), {X + Y = 10}` prints `{Y = 10 - X}` whatever order the
+goal names X and Y in.
 
 ## Units
 
@@ -452,7 +455,7 @@ CLP(Q) uses a fundamentally different solver from CLP(R). Where CLP(R) narrows i
 | **Strict inequality** `Σ aᵢXᵢ < c` | The same simplex, the bound strict (delta-rationals, below) | `{X < Y}` |
 | **Disequality** `X ≠ Y` | Passive check (fires when both ground) | `{X =\= 5}` |
 
-All constraints must be **linear** — each term is a constant times a variable, with no products of variables. `{3*X + 5*Y =< 10}` is linear. `{X * Y = 10}` over two rational variables is not, and raises a Python `TypeError` (`CLP(Q) requires linear constraints`) under the default solver; `CLAUSAL_CLPQ=holzbaur` delays it, as SICStus does, and so the functions clp(Q,R) knows inside `{}` — `abs/1`, `sin/1`, `cos/1`, `tan/1`, `min/2`, `max/2`, `pow/2`, `exp/2` and `^/2` — which the `.pl` front end passes through (`{sin(cos(X)) = 1/2}` answers under the port; `pow/2` and `exp/2` are read as `^`). `entailed/1` of a non-linear relation answers false on both solvers.
+All constraints must be **linear** — each term is a constant times a variable, with no products of variables. `{3*X + 5*Y =< 10}` is linear. `{X * Y = 10}` over two rational variables is not, and raises `domain_error(linear_expression, X*Y)` under the default solver (as do `inf/2`, `sup/2`, `minimize/1`, `maximize/1` and `bb_inf` on a non-linear objective; an operand that is no arithmetic expression, such as a list, is `type_error(expression, Culprit)`); `CLAUSAL_CLPQ=holzbaur` delays it, as SICStus does, and so the functions clp(Q,R) knows inside `{}` — `abs/1`, `sin/1`, `cos/1`, `tan/1`, `min/2`, `max/2`, `pow/2`, `exp/2` and `^/2` — which the `.pl` front end passes through (`{sin(cos(X)) = 1/2}` answers under the port; `pow/2` and `exp/2` are read as `^`). `entailed/1` of a non-linear relation answers false on both solvers.
 
 ### Why not interval arithmetic?
 
@@ -832,6 +835,18 @@ A variable can have **both** FD and Q attributes simultaneously, just like FD an
 3. FD enforces integrality and domain holes; Q handles rational constraint propagation
 4. When FD narrows (via `_narrow`), Q bounds are tightened to match
 5. Integer-valued `Fraction` results (like `Fraction(3)`) are accepted by the FD hook
+
+A CLP(Z) variable enters a CLP(Q) context through a comparison (`{X =< 7}`),
+`in_q/1,3`, or the objective of `sup/2`, `inf/2`, `maximize`, `minimize` and
+`bb_inf`: with `X in 1..5`, `sup(X, S)` gives `S = 5`. Only finite ends come
+along: `X #\= 3` has none, so `sup(X, S)` fails, as it does for a variable
+the store does not know.
+
+Only the domain's hull comes along, a rational relaxation: with
+`X in 1..3 \/ 7..9` and `{X >= 4}`, `inf(X, I)` gives 4, not 7. An optimum
+that binds cannot be read off the hull, so `maximize`, `minimize` and
+`bb_inf` raise `representation_error(fd_domain_with_holes)` when a variable
+of the objective (or of `bb_inf`'s integer list) has a domain with a hole.
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:fd_q_coexistence"

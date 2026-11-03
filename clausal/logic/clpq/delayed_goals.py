@@ -112,15 +112,21 @@ def verify_delayed(state, other, trail, later):
 
 
 def project_nonlinear(target_variables, constrained_variables, trail,
-                      translate_goal=None):
+                      translate_goal=None, all_nonlinear=None):
     """geler.pl, project_nonlinear/3: collect the goals not yet run on
     *constrained_variables* (marking them run), translated by
     *translate_goal* (see translate), and return the variables the
-    translated goals reach (term_variables_set/2).  1.3.3 also sorts the
-    goals and puts them on a fresh variable as `all_nonlinear/1`; nothing
-    reads that variable, and the port leaves both out (DEVIATIONS.md D7).
-    The variables come in creation order; project.pl only marks each one."""
+    translated goals reach (term_variables_set/2).  The variables come in
+    creation order; project.pl only marks each one.
+
+    1.3.3 also sorts the goals and puts them on a fresh variable as
+    `all_nonlinear/1`, which geler.pl's attribute_goal/2 shows at the
+    toplevel.  The port has no such variable: the goals are appended to
+    the list *all_nonlinear* when one is given, and its reader
+    (residual_constraints.toplevel_goals) sorts them (DEVIATIONS.md D7)."""
     goals = collect_nonlinear(constrained_variables, trail, translate_goal)
+    if all_nonlinear is not None:
+        all_nonlinear.extend(goals)
     return _term_variables(goals)
 
 

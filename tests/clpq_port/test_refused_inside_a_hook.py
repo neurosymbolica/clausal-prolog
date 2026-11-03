@@ -3,8 +3,9 @@
 
 A public entry point of the port that reads or writes the store raises
 ``error(permission_error(call, goal, Culprit), Name/Arity)`` while the
-engine is dispatching attribute hooks (``trail.hooks_running`` above 0),
-the shape the engine's ``solve``/``call`` raise there (a750f58c).  At a
+engine is dispatching attribute hooks (``trail.hooks_running`` above 0,
+or ``hook_dispatch_depth()`` above 0 for a fresh trail built inside a
+hook, DEVIATIONS.md D26), the shape the engine's ``solve``/``call`` raise there (a750f58c).  At a
 goal, bare or under a driver, the same calls run.  clpfd's posts (``q_eq``
 and the others, ``sync_fd_bounds``) are not refused: they queue (ruling
 R28c, test_switch.py).  DEVIATIONS.md D3.
@@ -22,7 +23,8 @@ from clausal.logic.clpq import variable_ordering as vo
 from clausal.logic.exceptions import LogicException
 from clausal.logic.pending import drain
 from clausal.logic.variables import (
-    Trail, Var, deref, is_var, put_attr, register_attr_hook, unify)
+    Trail, Var, deref, hook_dispatch_depth, is_var, put_attr,
+    register_attr_hook, unify)
 from clausal.pythonic_ast.nodes import Add, ArithEq, GtE, LtE
 
 _PROBE_KEY = "clpq_test_refused_probe"
@@ -234,24 +236,195 @@ def test_the_port_s_own_hook_is_not_refused():
         assert (deref(low), deref(high)) == (1, 5)
 
 
-def test_a_fresh_trail_inside_a_hook_is_not_seen_by_the_check():
-    # Ruling R31, a documented limit: the check reads the counter of the
-    # trail the entry point is given.  A hook body that reaches the store
-    # through a fresh Trail reads 0 there, is not refused, and gets R27's
-    # wrong answer (D3's repro: `[W =< 20]`, Q unbound).  A hook must not
-    # do this (DEVIATIONS.md D3).  An engine-wide dispatch depth would
-    # refuse it, and this test would then fail: flip it to expect the
-    # permission_error.
+def test_a_fresh_trail_inside_a_hook_is_refused_too():
+    # Ruling R31's limit is closed: the check reads hook_dispatch_depth()
+    # as well as the counter of the trail it is given.  D3's repro through
+    # a fresh Trail inside a hook: the fresh trail reads 0, the thread's
+    # dispatch depth reads 1, and dump/3 refuses instead of answering
+    # `[W =< 20]` with Q left unbound.
     t, x, q, w = _store()
     out = {}
 
     def body(trail):
         other = Trail()
         out["hooks_running"] = other.hooks_running
+        out["depth"] = hook_dispatch_depth()
         out["dump"] = rc.dump([w], ["W"], other)
         return nf.post_constraint(("=<", q, 1), other)
     z = Var()
     put_attr(z, _PROBE_KEY, body, t)
+    with pytest.raises(LogicException) as caught:
+        unify(("f", z, x), ("f", 1, 2), t)
+    assert out == {"hooks_running": 0, "depth": 1}
+    assert caught.value.term[1][:3] == ("permission_error", "call", "goal")
+    assert caught.value.term[2] == ("/", "dump", 3)
+    assert t.hooks_running == 0 and hook_dispatch_depth() == 0
+
+
+def _inside_a_hook_on_a_fresh_trail(call):
+    """Run *call* in a probe hook body with a fresh Trail, not the hook's:
+    return what it raised (None if nothing)."""
+    t, x, q, w = _store()
+    seen = {}
+
+    def body(trail):
+        other = Trail()
+        seen["hooks_running"] = other.hooks_running
+        try:
+            call(other, w)
+        except LogicException as exc:
+            seen["raised"] = exc
+        return True
+    z = Var()
+    put_attr(z, _PROBE_KEY, body, t)
     assert unify(("f", z, x), ("f", 1, 2), t)
-    assert out == {"hooks_running": 0, "dump": [("=<", "W", 20)]}
-    assert is_var(deref(q))
+    assert seen["hooks_running"] == 0
+    return seen.get("raised")
+
+
+@pytest.mark.parametrize(
+    "label, call, name, arity", _ENTRY_POINTS,
+    ids=[entry[0] for entry in _ENTRY_POINTS])
+def test_an_entry_point_called_from_a_hook_on_a_fresh_trail_is_refused(
+        label, call, name, arity):
+    raised = _inside_a_hook_on_a_fresh_trail(call)
+    assert raised is not None, f"{label} ran inside a hook on a fresh trail"
+    assert raised.term[1][:3] == ("permission_error", "call", "goal")
+    assert raised.term[2] == ("/", name, arity)
+
+
+_LIBRARY_POSTS = [
+    ("q_le", lambda t, w: h.q_le(w, 10, t), ("{}", "LtE")),
+    ("q_eq", lambda t, w: h.q_eq(w, 10, t), ("{}", "ArithEq")),
+    ("q_ne", lambda t, w: h.q_ne(w, 10, t), ("{}", "ArithNeq")),
+    ("q_lt", lambda t, w: h.q_lt(w, 10, t), ("{}", "Lt")),
+    ("q_gt", lambda t, w: h.q_gt(w, 1, t), ("{}", "Gt")),
+    ("q_ge", lambda t, w: h.q_ge(w, 1, t), ("{}", "GtE")),
+    ("sync_fd_bounds", lambda t, w: h.sync_fd_bounds(w, 2, 5, t), None),
+]
+
+
+def _w_bounds(t, w):
+    low, high = Var(), Var()
+    return (deref(low) if h.inf(w, low, t) else None,
+            deref(high) if h.sup(w, high, t) else None)
+
+
+@pytest.mark.parametrize(
+    "label, post, culprit", _LIBRARY_POSTS,
+    ids=[entry[0] for entry in _LIBRARY_POSTS])
+def test_a_clpfd_post_from_a_hook_on_a_fresh_trail_is_refused(
+        label, post, culprit):
+    # D26: a post from clpfd on a fresh trail inside another trail's
+    # dispatch cannot be queued: that trail's goal boundary may come while
+    # the outer dispatch is still running (a driver on the fresh trail,
+    # or a drain of it in the hook body), where the queued post would
+    # read R27's unhooked bindings or be refused by {}/1 -- an error from
+    # a post the caller never saw.  It is refused where it is made, with
+    # the {}/1 culprit, and the store is unchanged.
+    t, x, q, w = _store()
+    seen = {}
+
+    def body(trail):
+        other = Trail()
+        try:
+            post(other, w)
+        except LogicException as exc:
+            seen["raised"] = exc
+        seen["pending"] = other.pending
+        return True
+    z = Var()
+    put_attr(z, _PROBE_KEY, body, t)
+    assert unify(("f", z, x), ("f", 1, 2), t)
+    raised = seen.get("raised")
+    assert raised is not None, f"{label} was not refused"
+    assert seen["pending"] is None
+    assert raised.term[1][:3] == ("permission_error", "call", "goal")
+    assert raised.term[2] == ("/", "{}", 1)
+    assert "hook's own trail" in raised.message, raised.message
+    if culprit is not None:
+        assert raised.term[1][3][0] == "{}"
+        assert type(raised.term[1][3][1]).__name__ == culprit[1]
+    t2, x2, q2, w2 = _store()
+    assert unify(x2, 2, t2)
+    assert _w_bounds(t, w) == _w_bounds(t2, w2)
+
+
+def test_a_fresh_trail_drained_inside_the_hook_raises_no_queued_post():
+    # The review's reproducer: a hook that posts on a fresh trail and
+    # drains it there.  Queued, the post ran at the drain, inside the
+    # dispatch, and {}/1 refused it: a permission_error out of drain/1 for
+    # a goal the hook never called.  Now the post itself is refused.
+    t = Trail()
+    w, x = Var(), Var()
+    assert h.q_ge(w, 0, t) and h.q_le(x, 5, t)
+    seen = {}
+
+    def body(trail):
+        other = Trail()
+        try:
+            h.q_le(w, 10, other)
+            seen["post"] = "ran"
+        except LogicException as exc:
+            seen["post"] = exc.term[2]
+        seen["drain"] = [None for _ in drain(other)][:1]
+        return True
+    z = Var()
+    put_attr(z, _PROBE_KEY, body, t)
+    assert unify(("f", z, x), ("f", 1, 2), t)
+    assert seen == {"post": ("/", "{}", 1), "drain": [None]}
+    assert _w_bounds(t, w) == (0, None)
+
+
+def test_a_clpfd_post_inside_a_nested_dispatch_on_a_fresh_trail_is_refused():
+    # Inside A's dispatch, a unification on a fresh trail B dispatches B's
+    # hooks: B's counter is 1, the depth 2.  B's queue is drained when B's
+    # dispatch ends, still inside A's, so the post is refused there too.
+    t, x, q, w = _store()
+    seen = {}
+
+    def inner(trail):
+        seen["counts"] = (trail.hooks_running, hook_dispatch_depth())
+        try:
+            h.q_le(w, 10, trail)
+            seen["post"] = "queued"
+        except LogicException as exc:
+            seen["post"] = exc.term[2]
+        return True
+
+    def body(trail):
+        other = Trail()
+        y = Var()
+        put_attr(y, _PROBE_KEY, inner, other)
+        assert unify(y, 1, other)
+        return True
+    z = Var()
+    put_attr(z, _PROBE_KEY, body, t)
+    assert unify(("f", z, x), ("f", 1, 2), t)
+    assert seen == {"counts": (1, 2), "post": ("/", "{}", 1)}
+
+
+def test_a_clpfd_post_inside_the_trail_s_own_dispatch_is_still_queued():
+    # The dispatch on the post's own trail, nested or not, still queues:
+    # every level of the depth is that trail's, so its queue runs after
+    # the outermost hook, at a goal.
+    t, x, q, w = _store()
+    seen = {}
+
+    def inner(trail):
+        seen["counts"] = (trail.hooks_running, hook_dispatch_depth())
+        before = trail.pending
+        assert h.q_le(w, 10, trail)
+        seen["queued"] = trail.pending is not before
+        return True
+
+    def body(trail):
+        y = Var()
+        put_attr(y, _PROBE_KEY, inner, trail)
+        assert unify(y, 1, trail)
+        return True
+    z = Var()
+    put_attr(z, _PROBE_KEY, body, t)
+    assert unify(("f", z, x), ("f", 1, 2), t)
+    assert seen == {"counts": (2, 2), "queued": True}
+    assert _w_bounds(t, w)[1] == 10

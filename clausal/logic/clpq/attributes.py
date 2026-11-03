@@ -13,7 +13,8 @@ trail.
 """
 from collections import deque
 
-from clausal.logic.variables import Var, get_attr, put_attr
+from clausal.logic.variables import (
+    Var, get_attr, hook_dispatch_depth, put_attr)
 
 CLPQ_KEY = "clpq_holzbaur"
 
@@ -50,42 +51,92 @@ def culprit_argument(value):
     return Var() if value is None else value
 
 
-def refuse_inside_attribute_hooks(trail, culprit, name, arity):
+def inside_attribute_hooks(trail):
+    """True while the engine is dispatching attribute hooks in this
+    thread: ``trail.hooks_running`` of the trail an entry point was given
+    is above 0, or ``hook_dispatch_depth()`` is (any trail).  The second
+    count sees a hook body that reaches the store through a fresh
+    ``Trail()``, which reads 0 on its own counter (docs/coroutining.md
+    "On any trail")."""
+    return ((trail is not None and trail.hooks_running > 0)
+            or hook_dispatch_depth() > 0)
+
+
+def dispatching_on_another_trail(trail):
+    """True while a dispatch on some trail other than *trail* is in
+    progress in this thread: the depth counts more dispatches than
+    *trail*'s own counter.  Work queued on *trail* then may run at a goal
+    boundary of *trail* that comes while that other dispatch is still
+    running (a driver on *trail*, or a drain of it, in a hook body), so it
+    cannot be queued there (DEVIATIONS.md D26)."""
+    return hook_dispatch_depth() > trail.hooks_running
+
+
+#: The message of a post refused by dispatching_on_another_trail.
+ON_ANOTHER_TRAIL = (
+    "a CLP(Q) post cannot be queued on a trail other than the one whose "
+    "attribute hooks are running; make it on the hook's own trail")
+
+
+_QUEUE_IT = ("a CLP(Q) entry point cannot run while attribute hooks are "
+             "running; queue it with trail.push_pending(goal)")
+
+
+def refuse_inside_attribute_hooks(trail, culprit, name, arity,
+                                  message=_QUEUE_IT):
     """Ruling R30: a public entry point of the port does not run while the
-    engine is dispatching attribute hooks (``trail.hooks_running`` above
-    0).  A hook body runs while other variables of the same unification
-    are bound with their hooks still to come, so the store it would read
+    engine is dispatching attribute hooks (``inside_attribute_hooks``).
+    A hook body runs while other variables of the same unification are
+    bound with their hooks still to come, so the store it would read
     holds unhooked bindings (DEVIATIONS.md D3, ruling R27).  Raises
     ``error(permission_error(call, goal, Culprit), Name/Arity)``, the shape
     the engine's ``solve``/``call`` raise there (a750f58c).  The port's own
     hook and its internals call no public entry point
     (tests/clpq_port/test_refused_inside_a_hook.py).
 
-    The check is per trail (ruling R31): it reads the counter of the trail
-    the entry point is given.  A hook body that reaches the store through
-    another trail (a fresh ``Trail()``) reads 0 there and is not refused,
-    and it gets R27's wrong answer.  A hook must not reach the store
-    through another trail
-    (test_a_fresh_trail_inside_a_hook_is_not_seen_by_the_check)."""
-    if trail is not None and trail.hooks_running:
+    The check reads the engine's thread-wide dispatch depth as well as
+    the given trail's counter, so a hook body that reaches the store
+    through another trail (a fresh ``Trail()``) is refused too; ruling
+    R31's per-trail limit is closed
+    (test_a_fresh_trail_inside_a_hook_is_refused_too)."""
+    if inside_attribute_hooks(trail):
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, permission_error)
         raise LogicException(
             permission_error("call", "goal", culprit, ("/", name, arity)),
-            "a CLP(Q) entry point cannot run while attribute hooks are "
-            "running; queue it with trail.push_pending(goal)")
+            message)
 
 
 def state_of(variable):
     return get_attr(variable, CLPQ_KEY)
 
 
+_FIELD_SET = frozenset(_FIELDS)
+_new_state = SolverState.__new__
+
+
 def with_changes(state, **fields):
-    values = {}
-    for name in _FIELDS:
-        values[name] = getattr(state, name)
-    values.update(fields)
-    return SolverState(**values)        # an unknown field raises TypeError
+    """A copy of *state* with *fields* changed; an unknown field raises
+    TypeError.  Copies the slots one by one: a back substitution makes
+    one for every row it rewrites (complexity survey R2)."""
+    new = _new_state(SolverState)
+    new.linear_form = state.linear_form
+    new.bounds = state.bounds
+    new.lower_strict = state.lower_strict
+    new.upper_strict = state.upper_strict
+    new.component = state.component
+    new.variable_order = state.variable_order
+    new.nonzero = state.nonzero
+    new.delayed_goals = state.delayed_goals
+    new.forward = state.forward
+    new.target = state.target
+    new.keep_independent = state.keep_independent
+    new.keep = state.keep
+    for name, value in fields.items():
+        if name not in _FIELD_SET:
+            raise TypeError(f"with_changes() got an unexpected field {name!r}")
+        setattr(new, name, value)
+    return new
 
 
 def put_state(variable, state, trail):

@@ -13,6 +13,34 @@ renamed-apart row prerequisite landed 2026-10-20 (see below).
 **Tests:** `tests/audit_2026_07_05/test_12_seams.py::TestF001TablingReplayDropsConstraints` (2 xfail — flip to pass)
 **Design:** A12-D001 (parked) — store-residue vs refuse-to-table vs document
 
+**CLP(Q) part done 2026-11-03 (commit b4d1c592).** `TableEntry.add_answer`
+(given the trail) stores an answer whose variables carry CLP(Q) state with
+its residue, the selected solver's dump/3 over the stored row
+(`tabling._answer_residue`), keys the answer on row and residue, and
+`TableEntry.unify_row` re-posts it on each replay (plan steps 1, 2 and 4,
+phase 3's CLP(Q) half). Pinned in tests/test_clpq_tabled_answers.py.
+A review found the textual key let recursion through CLP(Q) answers run
+forever and kept equal constraints twice; since then CLP(Q) answers are
+kept modulo entailment (answer subsumption, `tabling._residue_entails`,
+plan step 4's entailment check), a negation scans a complete table on the
+caller's trail, an answer that is all CLP(Q) waits for completion (the
+D68 stopgap now applies only to constraints the row cannot carry,
+`_has_uncarried_constraint`), and a judging leader takes a conditional
+answer's residue when it is derived and replays it through `unify_row`.
+Pinned in tests/test_clpq_tabled_answer_subsumption.py. Left:
+- dif/2, freeze/2, CLP(FD), CLP(B): no residue yet (phases 1, 2, 3's
+  CLP(B) half); their answers still lose the constraint on replay, and
+  answers from families with no hook are not refused (phase 4).
+- Subsumption keeps a stored answer when a more general one comes later
+  (sound, not minimal); replacing it would mean retracting a row that
+  consumers may already have read. A loosening recursion
+  (`p(X) :- p(Y), {X >= Y - 1}`) does not terminate.
+- A stored residue over a variable outside its row (the port's slack of
+  `X =\\= 1`) is never used to subsume; such answers can repeat.
+- A united variable (units side channel) in a tabled CLP(Q) answer:
+  dump/3 projects onto its shadow, and the re-posted residue is on a
+  plain fresh variable; untested.
+
 ## Bug
 
 `-table(td/1)` with `td(X) <- (X is not 1)`:

@@ -144,6 +144,20 @@ def test_a_shared_subterm_is_not_a_cycle():
 
 
 @pytest.mark.parametrize("driver", [False, True])
+def test_a_non_linear_base_in_an_error_is_its_expression(driver):
+    # bb_inf([sin(X)], X, I): bb.pl narrows the base sin(X) through inf/2,
+    # whose normal_form/2 refuses it.  The culprit is the expression, not
+    # the solver's internal base.
+    t = _trail(driver)
+    x = Var()
+    term = _raised(lambda: h.bb_inf([("sin", x)], x, Var(), t), t)
+    kind, culprit = term[1][:2], term[1][2]
+    assert kind == ("type_error", "expression") and term[2] == ("/", "normal_form", 2)
+    assert type(culprit) is tuple and culprit[0] == "sin" and len(culprit) == 2
+    assert is_var(deref(culprit[1])), culprit
+
+
+@pytest.mark.parametrize("driver", [False, True])
 def test_bb_inf_of_a_cyclic_term_raises(driver):
     # secport/cyc.clausal c3: X = 1 + X, bb_inf([X], 0, I).
     t = _trail(driver)

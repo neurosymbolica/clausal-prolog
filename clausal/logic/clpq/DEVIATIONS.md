@@ -178,16 +178,62 @@ hook runs, another constrained variable W of the same unification can be
 bound with its hook still to come ("unhooked"), and W can be in rows and
 member lists the solver walks.  Before X's hook reads a row, it makes a
 stand-in for every bound member of X's component, of Y's, and of the
-component each such member's value is in, transitively, and does each
-one's work (`_stand_in_for_bound_members`).  An unhooked W whose work was
-done this way is no longer a member; when its own hook comes it finds that
-and returns at once.  Components are scanned once each: X's and Y's are
-one component when the binding is inside it
+component each such member's value is in, transitively
+(`_stand_in_for_bound_members`).  Components are scanned once each: X's
+and Y's are one component when the binding is inside it
 (`test_a_binding_within_one_component_makes_one_stand_in`).
 
+The order of the bound members' work (ruling 2026-11-03, "Follow
+1.3.3").  X's hook does only X's work, on X's stand-in, and keeps the
+other stand-ins (`attribute_hooks._TURNS`); each member's own hook,
+which the engine calls in binding order, takes its stand-in and does its
+work then (`_take_turn`, `_verify_turn`), each followed by the bindings
+it implies (`bind_queued`).  So the members are verified X1, X2, ..., Xn
+in the order of the bindings, each while the later ones are unbound,
+constrained stand-ins: what 1.3.3's `verify_attributes/3` sees under
+SICStus's driver (bindings undone, then for each variable in turn the
+hook and the binding redone) and under Scryer's (`'$atts':driver/2`,
+`iterate/3`).  An implied binding (bv.pl's `export_binding/1`) can bind
+a later member's stand-in before that member's turn; its turn then
+unifies the implied value with its own and wakes its delayed goals
+(`test_a_binding_implied_by_an_earlier_one_is_checked_against_its_own`).
+An undo past the first hook (a later hook failed) drops the kept
+stand-ins (`trail.record`).  A bound member whose own hook finds neither
+a turn nor itself in its component would have its work skipped; that
+cannot happen, and the hook raises `system_error(clpq_lost_turn)`
+rather than return
+(`test_a_member_with_no_turn_and_no_stand_in_is_an_internal_error`;
+never raised by tests/clpq_port/ or the full differential corpus).  Until this ruling the first hook did every
+member's work itself, in the order of the component's member list,
+newest first: X1, then Xn, ..., X2 for a chain bound as a list.  That
+selected other variables in `solve/5` from the second binding on, and
+made binding a chain in one unification cubic in 1.3.3's own work where
+Scryer's is quadratic
+(implementation_plans/clpq/2026-11-03-chain-binding-divergence.md,
+`test_one_unification_does_the_bound_variables_in_binding_order`; the
+decision traces of `benchmarks/clpq_chain_binding_trace/run.sh` at n = 6
+and 10 are now identical to Scryer's in all three orders).  Changed
+answers: of the 1,377 workloads of the differential corpus, the 963
+that bind one variable per unification keep byte-identical records; of
+the 414 that bind several, 266 changed their decision trace and one its
+answer (`dense_bind-6-11`: a dump after `f(X2, X0, X5) = f(4, 6, 0)`,
+now exactly Scryer's residual, before an equivalent one in another
+basis).  Of the multi-binding queries compared with Scryer exactly (40 by default, 300 in the full set;
+tests/clpq_port/differential/test_differential_scryer.py), the same 44
+differ before and after (Scryer fails the one unification and answers
+the same bindings made one at a time), plus one whose posts alone
+already differ; one that differed in its residual's basis now agrees,
+and none that agreed differs.
+
+What is still not 1.3.3's here: the value each member's work sees is
+what it is bound to after the whole unification (the engine hands the
+hook the dereferenced value), so in `f(X, Y) = f(Y, 1)` X's work sees
+1 where 1.3.3's sees Y unbound; and Scryer fails a unification whose
+later binding an earlier one implied even where the values agree, where
+the port answers (below).
+
 Nothing else runs inside that window, because one rule holds (ruling
-R27, fail-closed on the hook's own trail since ruling R30, with the
-per-trail limit of ruling R31 below): **no attribute hook body calls an
+R27, fail-closed since ruling R30, on any trail since D26): **no attribute hook body calls an
 entry point of the port**.  A hook body runs while other variables of the
 same unification are bound and their hooks are still to come, so an
 entry point called there reads rows and member lists that hold unhooked
@@ -252,22 +298,21 @@ set and the hook-window fuzz under both switches).  `attribute_goal`
 takes no trail and is not checked; only tests call it (the engine's
 toplevel prints residuals through `residual_q`, which is checked).
 
-The check is per trail (ruling R31).  It reads the counter of the trail
-the entry point is given, and the engine counts hook dispatch per trail.
-A hook body that reaches the store through another trail (a fresh
-`Trail()`) reads 0 there, is not refused, and gets the wrong answer
-above: D3's repro through a fresh trail dumps `[W =< 20]` and leaves Q
-unbound (`test_a_fresh_trail_inside_a_hook_is_not_seen_by_the_check`,
-which pins this limit so that an engine-wide dispatch depth flips it).
-This was so before R30 as well.  So a hook must not reach the store
-through another trail; R27 stays a contract there.
+The check was per trail (ruling R31) until D26: it read only the
+counter of the trail the entry point is given, so a hook body that
+reached the store through another trail (a fresh `Trail()`) read 0
+there, was not refused, and got the wrong answer above (D3's repro
+through a fresh trail dumped `[W =< 20]` and left Q unbound).  It now
+also reads the engine's thread-wide `hook_dispatch_depth()`, and that
+case is refused (D26).
 
 clpfd's calls into CLP(Q) are the exception.  They are calls, not
 registrations, and some run inside a hook (clpfd's propagation in its own
 hook, its reified comparisons, the units hook).  Under
 `CLAUSAL_CLPQ=holzbaur` the adapter's `q_eq`, `q_ne`, `q_le`, `q_lt`,
 `q_gt`, `q_ge` and `sync_fd_bounds` are not refused: they queue the post
-while `trail.hooks_running` is above 0 and post in place at a goal
+while `trail.hooks_running` or `hook_dispatch_depth()` is above 0 (D26)
+and post in place at a goal
 (ruling R28c, `holzbaur.py`'s docstring,
 `test_a_comparison_from_clpfd_inside_a_hook_is_queued` and
 `test_a_comparison_from_clpfd_inside_a_hook_is_queued_on_any_store`).
@@ -562,7 +607,7 @@ arrangement/2)` (ruling R13; `test_a_cyclic_ordering_raises_the_system_error`).
 A program that catches the SICStus `type_error` would not catch the port's
 error.
 
-## D7: delayed goals are (procedure, argument) pairs; `all_nonlinear/1` is not kept
+## D7: delayed goals are (procedure, argument) pairs; `all_nonlinear/1` is a list
 
 `geler.pl` delays a Prolog goal and runs it with `call/1`.  The port delays
 a `DelayedGoal(mutex, procedure, argument)` and runs
@@ -643,13 +688,18 @@ a `DelayedGoal(mutex, procedure, argument)` and runs
   (`test_wait_linear_retry_s_goal_is_clpq_qualified_so_it_is_kept`); not
   checked against SICStus.
 - `project_nonlinear/3` also sorts the collected goals and puts them on a
-  fresh variable as `all_nonlinear/1`, which `attribute_goal/2`'s second
-  clause reads.  The variable is local to `project_nonlinear/3`, so no
-  answer can reach it; the port skips the sort and the attribute.  The
-  reachable variables are returned in creation order; 1.3.3's
-  `term_variables_set/2` gives a set, and `project.pl` only marks each
-  variable `target`, so the order does not matter
-  (`test_project_nonlinear_gives_the_variables_the_goals_reach`).
+  fresh variable as `all_nonlinear/1`, which geler.pl's `attribute_goal/2`
+  second clause reads.  No answer term reaches that variable; the SICStus
+  toplevel does, because it asks `attribute_goal/2` of every attributed
+  variable (D28).  The port has no fresh variable: `project_nonlinear`
+  appends the goals to the caller's list `all_nonlinear` when one is
+  given, and the toplevel projection (`residual_constraints.toplevel_goals`)
+  sorts them there (`sort_goals`: the standard order, variables in
+  creation order, D4) and shows them.  dump/3 passes no list, as its
+  goals come from `nonlinear_crux/2`.  The reachable variables are
+  returned in creation order; 1.3.3's `term_variables_set/2` gives a set,
+  and `project.pl` only marks each variable `target`, so the order does
+  not matter (`test_project_nonlinear_gives_the_variables_the_goals_reach`).
 - A PlainVar (an engine variable that cannot carry attributes; 1.3.3 has no
   such variable) cannot hold a delayed goal: `delay_goal` returns False for
   one, attaching nothing, and `verify_delayed` returns False when X's goals
@@ -816,6 +866,15 @@ raise where 1.3.3 answers.  Task 11 removes this check.
 - `goal_expansion/5` and `linear_solver_module/1` are compile-time code:
   `nf_ordering/3` is `variable_ordering.compare_variable_order` (Task 6),
   and `decompose/4` is reading a `LinearForm`'s fields.
+- `attribute_goal/2` is the toplevel's hook: SICStus calls it for each
+  attributed variable after `project_attributes/2` (D28).  The port has
+  no such callback; the `-g` printer's projection
+  (`residual_constraints.toplevel_goals`) calls itf3.pl's half,
+  `dump_linear//2` and `dump_nonzero//2` in the toplevel context, for each
+  variable it shows, and geler.pl's second clause is its reading of the
+  `all_nonlinear` list (D7).  `l2wrapped/2` and `wrap/2` are not called
+  there either: the printer puts each constraint in braces itself, as
+  `wrap/2` does for the typein module (above).
 
 ## D15: dump.pl and redund.pl: what is not ported or differs
 
@@ -839,6 +898,9 @@ raise where 1.3.3 answers.  Task 11 removes this check.
   (`test_dump_of_a_repeated_target_unifies_its_names`).
 - `redundancy_variables/1`'s second clause, which times the first clause's
   call, is unreachable after the first clause's cut and is not ported.
+- The `-g` printer does not print through dump/3 (it did until the todo of
+  2026-10-23 was done); it projects as the SICStus toplevel does (D28).
+  dump/3 is unchanged and still calls `ordering(Target)` first.
 
 ## D16: residual terms hold engine numbers
 
@@ -888,11 +950,21 @@ so a leaf whose value is within Eps of -1 gets the vertex 1.
 The port rounds correctly, as for D17 (correctness first, ruling R25):
 the nearest integer, a half away from zero, so `-1/2` and `-3/4` give
 `-1` (`test_round_rational_is_nearest_with_half_away_from_zero`, over
--3/2, -1, -3/4, -1/2, -1/4, 0, 1/2 and 3/2).  Scryer agrees with the port:
+-3/2, -1, -3/4, -1/2, -1/4, 0, 1/2 and 3/2).
+
+`roundq/4` itself, run on 2026-11-03 under Scryer (`test_roundq_of_1_3_3_rounds_minus_one_to_minus_a_half_up_to_one`) (its copy in Scryer's
+clpq.pl is 1.3.3's text, and Scryer's `//` truncates toward zero, as
+SICStus's does), gives `round(-3/2) = -2`, `round(-1) = -1`,
+`round(-3/4) = 1`, `round(-1/2) = 1`, `round(-1/4) = 0`, and the nearest
+integer for 0, 1/4, 1/2, 3/4 and 3/2, as read above.
+
+Scryer's clpq answers
 `{X >= -1, Y >= 0, X + Y >= -3/4}, bb_inf([X], X + 2*Y, I, [V], 1/2)`
-gives `I = -3/4, V = -1` on both (`test_bb_inf_answers_as_the_oracle`,
-`test_the_vertex_rounds_a_value_in_minus_one_to_minus_a_half_down`).
-Not checked against SICStus.
+with `I = -3/4, V = -1`, as the port does (`test_bb_inf_answers_as_the_oracle`,
+`test_the_vertex_rounds_a_value_in_minus_one_to_minus_a_half_down`).  That
+is not independent evidence: Scryer's copy does not expand `arith_eval`,
+so `round` there is Scryer's native `round/1`, not `roundq`.  Not checked
+against SICStus.
 
 ## D19: a binding checks that its strict bounds can still hold
 
@@ -1040,8 +1112,10 @@ differently from 1.3.3 itself:
   rows whose coefficients were all negative under `toplevel`
   (`{-X =< -2}` vs `{X >= 2}`), so `dump_q/2`'s spelling changes under the
   switch (`test_dump_q_projection.py`, `test_strict_bounds`).
-- A post from clpfd is queued iff `trail.hooks_running` is above 0
-  (ruling R28c), an O(1) read of the engine's counter (a750f58c).  It
+- A post from clpfd is queued iff `trail.hooks_running` or
+  `hook_dispatch_depth()` is above 0 (ruling R28c; refused instead when
+  the depth is above the trail's own counter, D26), O(1) reads of
+  the engine's counters (a750f58c, 47ba2e0a).  It
   replaced Task 14's scan of the components a post reads for an unhooked
   binding, which was linear in their size per post under a driver.
   PERF-BASELINE (Task 14b, 2026-10-12, one engine build at a750f58c, the
@@ -1067,7 +1141,8 @@ differently from 1.3.3 itself:
   `in_q(X, 0, 100), X =< 10, X >= 3, inf(X, Lo)` to catch it.  That was
   true before a750f58c and is not now.
 - The adapter's entry points other than clpfd's posts refuse to run while
-  `trail.hooks_running` is above 0 (ruling R30, D3).  Legacy has no such
+  `trail.hooks_running` or `hook_dispatch_depth()` is above 0 (ruling
+  R30, D3, D26).  Legacy has no such
   check.  A program whose hook body called `inf/2`, `{}/1`, `dump_q/2`
   and the others got an answer from legacy, and gets
   `permission_error(call, goal, Goal)` from the port.  The cost is one
@@ -1299,10 +1374,13 @@ raise the same term.  Tests (bare and as a driver leaves the trail):
 `test_the_adapter_refuses_a_cyclic_term`; through the engine,
 `test_switch_engine.py`'s `test_a_cyclic_term_raises_through_the_engine`.
 
-Not covered: the `inf/2` and `sup/2` builtins ask CLP(R) first
-(`clpr.is_real_expression`), whose cell walk recurses before CLP(Q) is
-reached, so `X = 1 + X, inf(X, I)` through the engine still raises
-`RecursionError`, under both switches (shared code; D24, deep terms).
+The `inf/2` and `sup/2` builtins ask CLP(R) first
+(`clpr.is_real_expression`), whose cell walk overflowed before CLP(Q) was
+reached, so `X = 1 + X, inf(X, I)` through the engine raised
+`RecursionError` under both switches.  The shared cell walk now finds the
+cycle itself (D27), so it raises `type_error(evaluable, (+)/2)` there too,
+with the builtin as the context, `inf/2` or `sup/2`, under both switches
+(`test_clpq_deep_terms.py`'s `test_a_cyclic_objective_through_the_engine`).
 
 ## D24: known limits, deferred by ruling R34; the first three capped (rulings D42, D51)
 
@@ -1534,15 +1612,383 @@ found are.  Timed at a load average of 9 to 11 on 8 cores:
   a product literal.  nf.pl expands as the port does.  A power of a
   constant (`7^N`) is ordinary arithmetic, uncapped here as in `is/2`.
 - **Unifying constrained variables with constrained variables is slower
-  than legacy** (Low 8).  `X1 =< X2 =< ... =< Xn`, each `Yi >= 0`, then
-  `[X1, ..., Xn] = [Y1, ..., Yn]` (`secport/hookscale.py N`, mode
-  `varvar`; legacy `secport/hookscale_leg.py N`): n = 100 takes 1.17 s on
-  the port against 0.15 s on legacy, n = 200 12.25 s against 0.77 s.  A
-  measured regression against legacy.  The other shape is not: unifying
-  the chain with numbers, `[X1, ..., Xn] = [0, ..., n-1]` (mode `list`),
-  is FASTER on the port, n = 200 1.16 s against legacy 10.09 s.
-- **Deep terms raise RecursionError in shared clpfd code** (Medium 7):
+  than legacy** (Low 8), and the cost is 1.3.3's.  `X1 =< X2 =< ... =<
+  Xn`, each `Yi >= 0`, then `[X1, ..., Xn] = [Y1, ..., Yn]`
+  (`tests/clpq_port/test_unify_constrained_variables.py`).  First measured
+  with posting included (n = 100 1.17 s on the port against 0.15 s on
+  legacy, n = 200 12.25 s against 0.77 s).  The unification alone,
+  minimum of five runs (three at n = 400), load 4 to 9 on 8 cores:
+
+  | n | legacy | port before | port after | Scryer (1.3.3's text) |
+  |---|---|---|---|---|
+  | 50 | 0.007 s | 0.052 s | 0.045 s | 0.13 s, 1.2M inferences |
+  | 100 | 0.028 s | 0.31 s | 0.25 s | 0.79 s, 8.2M |
+  | 200 | 0.107 s | 2.92 s | 1.73 s | 5.17 s, 59M |
+  | 400 | 0.59 s | 25.1 s | 13.8 s | 43.8 s, 450M |
+
+  **The cubic growth is the algorithm.**  Each binding `Xi = Yi` posts
+  `Xi - Yi = 0`; the port makes 2n - 1 back substitutions in all (bv.pl
+  `backsubst/2`, `bs/3`), each walking the class's ~n rows, and rewrites
+  n(n - 1) rows by `nf_substitute/4` (a scan of the row for the pivoted
+  variable and a merge with the pivot row), each about n/3 terms long:
+  42,875, 338,250, 2,686,500 and 21,413,000 terms read at n = 50 to 400,
+  n^3/3.  Scryer running the same query on its copy of the 1.3.3 text
+  makes 21 to 23 inferences a term at every n, so it does the same rows;
+  the port is now 2.6 to 3.2 times faster than it.  Legacy's simplex is
+  another algorithm, about n^2 here.  Changing that is changing 1.3.3's
+  algorithm, so it is left.
+
+  **The port's overhead, removed** (implementation only, no answer
+  changes).  The merge of `add_linear_f1h/6` compared two terms by
+  `compare_variable_order`, which read both variables' states at every
+  comparison: 1.64 order lookups a term read at n = 40.  It now looks
+  each term's order up once (`variable_ordering.order_key`) and a back
+  substitution looks the pivot row's orders up once for all its rows
+  (`order_keys`): 1.16 lookups a term (the rest are `nf_coeff_of`'s scans
+  in `upper_bound`, 1.3.3's too).  The comparisons and their outcomes are
+  the same: an unbound order before a bound one, two unbound by creation,
+  two bound by value; a variable with no order still fails the merge
+  where it is compared.  The stand-in renaming of D3 (a binding's hook
+  renames the bound variable in every row of its component, work 1.3.3
+  does not do, because SICStus runs the hook before it binds) now tests a
+  row in one C-level `isdisjoint` before it copies it: 1.7 s of a 10 s
+  profile at n = 200 fell to 0.4 s.  What is left is that renaming,
+  linear in the component's terms per binding, under a quarter of a
+  back substitution's.  The test pins the rows rewritten (n(n - 1)), the
+  lookups a term (at most 1.3) and n = 100 under 3 s.
+  The other shape was never slow: unifying the chain with numbers,
+  `[X1, ..., Xn] = [0, ..., n-1]`, is FASTER on the port, n = 200 1.16 s
+  against legacy 10.09 s.  Later a row index removed the back
+  substitution's scans of rows that do not hold the variable
+  (implementation only; complexity survey R1,
+  `implementation_plans/clpq/2026-11-03-port-complexity-survey.md`).
+  The chain with numbers then took 0.14 s at n = 200 and 2.9 s at
+  n = 800 (7.1 s before), with load 8 to 12 on 32 cores.  The var-var
+  unification above was unchanged (1.64 s against 1.60 s at n = 200),
+  because nearly every row it reads holds the variable.  D3's binding
+  order (ruling 2026-11-03) then made the chain with numbers rewrite
+  1.3.3's n(n - 1)/2 rows, 10 to 11.5 s at n = 800, because each rewrite
+  copied the row and the trail kept every copy (n^3 terms, which the
+  cyclic GC walked on each full collection).  Deleting a row's first
+  term now shares the rest of the list, as delete_factor_hom/4 shares
+  `Ts` (implementation only; survey R2): 2.8 s at n = 800, 13.3 s at
+  1600, the same rows and decisions.
+- **Deep terms raised RecursionError in shared clpfd code** (Medium 7):
   a sum nested 100,000 deep (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`,
-  then `{Y >= T}`) raises `RecursionError` from clpfd's cell walk before
-  the port is reached.  Legacy the same.  The cyclic case of the same walk
-  under `inf/2`/`sup/2` is in D23.
+  then `{Y >= T}`) raised `RecursionError` from clpfd's cell walk before
+  the port was reached.  Legacy the same.  Fixed: see D27.
+
+## D25: an error names a non-linear base by its expression
+
+Error reporting only; no change to any algorithm.  `bb_inf([sin(X)], X, I)`
+takes bb.pl's clause 3 (one base, coefficient 1), narrows the base `sin(X)`
+through `inf/2`, and `normal_form/2` refuses it with
+`type_error(expression, Culprit)`, at the same point and with the same
+error kind as 1.3.3.  1.3.3's culprit is its internal skeleton; the port
+named the Python object that holds the skeleton, which a Prolog program
+cannot read.  It now names the expression the base stands for, `sin(_)`
+(`_as_culprit` in `normal_form.py`, at clause 13 and at the repair path's
+last clause; `test_a_non_linear_base_in_an_error_is_its_expression`).
+The variable is the solver's own: the error undoes the caller's binding.
+
+## D26: the hook checks read the engine's dispatch depth on any trail
+
+No change to any algorithm of 1.3.3; this widens D3's refusal.  1.3.3
+has no such check.  The refusal of R30 (`refuse_inside_attribute_hooks`)
+and the queueing of clpfd's posts of R28c (`_post_from_library`,
+`sync_fd_bounds`) read `attributes.inside_attribute_hooks(trail)`:
+`trail.hooks_running` of the trail the call was given, or the engine's
+thread-wide `hook_dispatch_depth()` (47ba2e0a, docs/coroutining.md "On
+any trail").  Before, they read the trail's counter only (ruling R31), so
+a hook body that built a fresh `Trail()` and called an entry point on it
+was not refused and got R27's wrong answer: D3's repro through a fresh
+trail dumped `[W =< 20]` and left Q unbound.  Now every entry point
+raises `permission_error(call, goal, Culprit)` there
+(`test_a_fresh_trail_inside_a_hook_is_refused_too`,
+`test_an_entry_point_called_from_a_hook_on_a_fresh_trail_is_refused`),
+and so does a post from clpfd (`q_eq` and the others, `sync_fd_bounds`)
+made on a trail other than the one being dispatched
+(`attributes.dispatching_on_another_trail`: the depth is above that
+trail's own counter), with the culprit `{}(Comparison)`, `{}/1`, and a
+message that says to post on the hook's own trail
+(`test_a_clpfd_post_from_a_hook_on_a_fresh_trail_is_refused`,
+`test_a_clpfd_post_inside_a_nested_dispatch_on_a_fresh_trail_is_refused`).
+It is not queued: that trail's next goal boundary can come while the
+outer dispatch still runs (a drain of it in the hook body, a driver on
+it with `solve`/`call`, the end of its own dispatch nested in the outer
+one), where the queued post would read R27's unhooked bindings or be
+refused by `{}/1` with an error for a goal the caller never made; a
+trail never drained would drop it.  (An earlier form of this entry
+queued it there; a hook that drained the fresh trail got
+`permission_error` out of `drain/1`,
+`test_a_fresh_trail_drained_inside_the_hook_raises_no_queued_post`.)
+A post made inside the dispatch of its own trail, nested or not, is
+queued as R28c says and runs after the outermost hook
+(`test_a_clpfd_post_inside_the_trail_s_own_dispatch_is_still_queued`).
+A `QueuedPost` is only made then; one still on its trail's queue when
+a program drives that trail from inside another trail's hook runs
+there, and `{}/1` refuses it, as it refuses every entry point in such a
+driver.  The engine's `solve`/`call` still refuse only on the same trail
+(docs/coroutining.md); a driver on a fresh trail inside a hook runs with
+the depth above 0, so the port's entry points and clpfd's posts into
+CLP(Q) that it reaches refuse.  The cost is one C call per check.
+
+## D27: deep terms are walked on an explicit stack
+
+Implementation only for the sums and products 1.3.3 answers; the port's
+algorithm is unchanged.  1.3.3's `nf/2` recurses on the term, on
+Prolog's stack: Scryer's clpq posts `{Y >= T}` for a
+sum `T` nested 100,000 deep (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`)
+and answers (checked 2026-11-03).  The port's `normal_form` already
+walked the term with an explicit stack (D23), but four Python walks
+before it recursed, one frame per level, and raised `RecursionError`
+past about 1,000 levels (D24, deep terms):
+
+- clpfd's cell walk (`_arith_cells_to_nodes`), shared by every CLP post.
+  It keeps its recursion for the first 50 levels (the common case, at
+  its old speed) and hands anything deeper to
+  `_arith_cells_to_nodes_deep`, the same body as a generator on an
+  explicit stack, so it visits, rebuilds and refuses in the same order.
+  It keeps the compounds on the path from the root, so a cyclic term
+  raises instead of overflowing: `type_error(evaluable, F/A)` under a
+  CLP(Q) or CLP(R) context, as `normal_form/2` raises (D23), and
+  `resource_error(finite_memory)` outside them (clpfd, `between/3`), the
+  engine's error for a cycle a walk has no answer for.
+- the units side channel's scan (`units_clp._scan`, `_first_money`),
+  which runs on each post once the process has built a quantity.
+- CLP(R)'s variable walk (`clpr._collect_vars_from`), which `inf/2` and
+  `sup/2` run first.
+- legacy's `_ensure_q_for_expr`, `_promote_fd_in_expr` and
+  `_linearize` (legacy only).
+
+Each is the same walk, left to right, on an explicit stack, and each
+keeps the compounds on its path from the root, as the cell walk does: a
+stack walk with no path loops for ever on a cyclic term, where the
+recursion it replaced raised RecursionError (found by review: with the
+units channel on, a cycle from head unification in the seam,
+`pair(1 + Y, Y)`, `pair(X, X)`, then `X > 0` or `all_different([X, Y])`,
+hung in `units_clp._scan`).  A compound met again while on the path
+raises through `clpfd._refuse_cycle`: `type_error(evaluable, F/A)` under
+a CLP(Q) or CLP(R) context and `resource_error(finite_memory)` outside
+them.  The units channel takes the post's context when CLP(Q) or CLP(R)
+calls it (`strip_for_solver(..., strict=True)`, `strip_for_real_solver`,
+`strip_expr_for_solver`), and its cell walk is strict then too, so legacy
+with the units channel on reports a cycle as `type_error(evaluable,
+(+)/2)`, as without it (it reported `resource_error(finite_memory)`);
+under clpfd (`#>`, `all_different/1`, `sum/3`, `scalar_product/4`,
+`element/3`, `global_cardinality/2`) the cycle is
+`resource_error(finite_memory)`.  Legacy's own walks name `normal_form/2`
+as the context, as the port does; CLP(R)'s names the caller's context
+(`inf/2`, `sup/2`) or leaves it unbound.  The posts refuse a cycle in the
+cell walk first, so these guard the walks when called on their own or
+from a path that skips that walk.  A subterm two branches share is no
+cycle (`test_a_shared_subterm_is_no_cycle`).  Every walk and entry point
+has a cyclic-term test run under a timeout
+(`test_each_walk_refuses_a_cycle`, `test_clpfd_with_units_refuses_a_cycle`,
+`test_clp_q_with_units_refuses_a_cycle_as_not_evaluable`,
+`test_clp_r_with_units_refuses_a_cycle_as_not_evaluable`,
+`test_a_seam_cycle_with_units_on_raises`).  Nothing the
+port reads changes: the nodes the cell walk returns are the ones it
+returned before, so the normal form makes the same variables in the same
+order (D4, D11).  Tested: the residual, the optimum and the number of
+variables made, for random mixed expressions 300 deep, are the same
+through the recursive walk and the stack walk on both solvers
+(`test_the_stack_walk_answers_as_the_recursive_one`), the two walks
+agree term by term on every kind of argument
+(`test_the_cell_walks_agree_term_by_term`), legacy's linear forms match
+the recursive `_linearize` they replace, coefficients and variable order
+(`test_legacy_linear_forms_match_the_recursive_walk`), and the clpq,
+clpfd, clpz, clpr and units suites pass with the stack walk taken from
+the root (`_SHALLOW_CELL_WALK = -1`).  Depth 100,000 posts and answers on
+both solvers, the post in about 0.9 s on the port (`lsum/3` building the
+term takes longer).
+
+**The deviation.** Two walks still recurse, and past Python's stack they
+raise `error(resource_error(stack), _)` where 1.3.3 answers:
+
+- an `abs/1`, `min/2` or `max/2` (an evaluable with no operator node)
+  whose argument is nested deeper than the stack: the cell walk
+  evaluates it with is/2's evaluator, which recurses, as is/2 does and
+  raises the same error;
+- a deep comparison that holds units material (a quantity or a united
+  variable): the dimension analysis and the strip recurse.  Units are
+  not 1.3.3's.
+
+Tests: `test_a_deep_argument_of_abs_is_a_stack_error`,
+`test_a_deep_sum_of_quantities_is_a_stack_error`.  Both are a
+RecursionError no longer: the error is an ISO term a program can catch.
+Not covered here: clpfd's own posts with the units channel off (`Y #= X`
+or `X > 0` with `X = 1 + X` loops in `_fd_int_term`, before and after
+this change), which are not on the CLP(Q) path.
+
+## D28: the `-g` printer projects as the SICStus toplevel does
+
+1.3.3 has two ways to show an answer's constraints.  dump.pl's `dump/3`
+(`vars_constraints/2`) calls `ordering(Target)`, which reads the target
+list as the chain V1 < V2 < ..., collects the non-linear goals
+(`nonlin_crux/2`), and then calls project.pl's `project_attributes/2`.
+The SICStus 3 toplevel instead calls the atts hook
+`Module:project_attributes(QueryVars, AttrVars)`, which for clp(Q,R) is
+project.pl's (its "interface predicate"), and then
+`Module:attribute_goal(V, Goal)` for each attributed variable: itf3.pl's
+(`dump_linear//2`, `dump_nonzero//2`) and geler.pl's (the delayed goals
+not yet run, and the `all_nonlinear/1` goals `project_nonlinear/3`
+collected).  No `ordering/1` on the query variables, so the order the
+query names them in imposes nothing; the manual's `ordering/1` answers
+(`mg(P,12,0.01,B,Mp), ordering([Mp])`) show that.  The calling protocol
+is SICStus's, not 1.3.3 text: the port's version is
+`residual_constraints.toplevel_goals`, which `holzbaur.residual_q` (the
+`-g` printer) calls in place of dump/3.  It takes a trail mark, projects,
+copies the goals with each query variable standing for itself, and undoes,
+as the port's dump/3 does (D15) and as the toplevel's failure loop does.
+
+What is not 1.3.3 text, or not known, and so is the port's choice:
+
+- AttrVars.  SICStus gathers it itself; its documentation of the hook is
+  not in the 1.3.3 sources.  The manual's dump/3 section shows the
+  toplevel reporting `clpr:{3.0-sin(_B)<0.0}` for
+  `q(X) :- {X>=10}, {sin(Z)>3}`, a goal on a variable no query variable
+  reaches, which geler.pl can only show through the `all_nonlinear/1`
+  goals project_nonlinear/3 collected from AttrVars: so AttrVars holds
+  the query's attributed variables whether the query variables reach them
+  or not.  The port's AttrVars is every variable with CLP(Q) state
+  reachable (component members, linear forms, delayed goals, transitively;
+  `attributed_variables`) from the query variables and from those of the
+  attributed variables the `-g` printer collects for call_residue_vars/2
+  (`trail.attvars_since(0)`, the `attributed` argument of `residual_q`)
+  that carry a delayed goal not yet run (`carries_delayed_goals`)
+  (`test_a_nonlinear_goal_no_query_variable_reaches_shows`).  So a goal's
+  left-over non-linear constraint on internal variables shows in its
+  answer (`rep(4)` in `test_a_product_repaired_a_binding_at_a_time_raises`),
+  where dump/3 over the answer variables showed nothing.
+- A hidden component (one no query variable and no such goal reaches) is
+  left out of AttrVars, not projected.  Projecting it costs
+  Fourier-Motzkin over it at print time: 14 hidden variables with
+  pairwise inequalities and `{X >= 1}` raised
+  `resource_error(clpq_projection)` after 6 s where legacy prints
+  `{X >= 1}` (`test_a_hidden_linear_store_is_not_projected`).  It has no
+  target, so project_attributes/2 eliminates every variable of it, and
+  its inequalities and equations never print: over 2,000 random hidden
+  stores of `<`, `=<`, `>`, `>=` and `=` (1 to 5 hidden variables,
+  1 to 7 constraints, beside `{X >= C}`) projecting the hidden components
+  and leaving them out print the same, every time
+  (`scratchpad` check, not a pinned test;
+  `test_a_linear_constraint_no_query_variable_reaches_is_projected_away`).
+  Disequations are the exception: itf3.pl's `dump_nonzero//2` shows a
+  non-target's nonzero row, so projecting a hidden component holding a
+  disequation prints it (`{Z =\= 1}` as `{_A =\= 1}`; 743 of 2,000
+  random stores with `=\=` added), and the port does not
+  (`test_a_hidden_disequation_no_goal_reaches_is_not_shown`).  Whether
+  the SICStus toplevel shows such a disequation is not known: it depends
+  on AttrVars holding variables nothing reaches, which only the manual's
+  non-linear example shows.  Scryer's toplevel, which prints what the
+  query variables reach, shows neither a hidden linear component nor a
+  hidden goal (`q(X) :- {X >= 10}, {Z >= 3, Z + W =< 7}` prints
+  `X>=10`).  A store that holds is consistent, so a hidden component's
+  linear constraints and disequations say nothing about whether the
+  answer has a solution; a hidden non-linear goal can (the manual's
+  `sin(Z) > 3`), and it still shows.
+- Names.  Each attributed variable the printer is given stands for
+  itself in the copy and is named by the printer's `name_of`, so a hidden
+  variable has one name across the `-g` printers: `{X >= 10},
+  {sin(Z) > 3}, freeze(Z, true)` prints `freeze(_B,true), {X >= 10},
+  {3 - sin(_B) < 0}` (it printed `_Q1` for Z in the constraint, so the
+  answer read weaker than the store)
+  (`test_a_hidden_variable_has_one_name_in_every_printer`).  A variable
+  the copy reaches that the printer was not given (a slack) is `_Q1`,
+  `_Q2`, ... as before.
+- No query variable.  With `Tvs == []` project.pl's first branch drops
+  every linear attribute of AttrVars (`drop_lin_atts/1`), so a
+  non-linear goal prints without the linear constraints it depends on:
+  `h2 :- {X*X = Z, Z =< -1}`, which has no solution, prints
+  `{_A^2 - _B = 0}`
+  (`test_with_no_query_variable_a_goal_shows_without_its_bound`).  That is
+  1.3.3's text, kept; it is not known whether the SICStus toplevel calls
+  `project_attributes/2` with no query variables at all.
+- Which variables `attribute_goal/2` is asked about, and in what order:
+  the members of the components of AttrVars after the projection,
+  component by component as dump.pl's `related_linear_vars/2` lists them
+  (D4), then the `all_nonlinear` goals.  geler.pl's first clause (goals
+  still not run on a variable) is not called: `project_nonlinear/3` has
+  run every goal of AttrVars, and the projection delays no new one.
+  SICStus's order of the attributed variables is not known.
+- Text.  geler.pl's goals are `clpq:{C}` terms, which the toplevel prints
+  as `clpq:{...}` (the manual: `clpr:{3.0-sin(_B)<0.0}`); the printer
+  strips the module as dump.pl's `nonlinear_strip/3` does and prints
+  `{...}`, as it prints itf3.pl's goals (D14's `wrap/2`).
+- Sorting the `all_nonlinear` goals is `sort/2` in the standard order,
+  two variables in creation order (D4), identical goals once
+  (`residual_constraints.sort_goals`).
+
+The answers change from dump/3's where the projection differs, and agree
+with Scryer's own toplevel (which prints the store without projecting)
+in form on the cases checked: `{X + Y = 3}` prints `{Y = 3 - X}` (dump/3
+over [X, Y]: `{X = 3 - Y}`; Scryer: `_ = 3-X`), `{X =\= 2}` prints
+`{X =\= 2}` (dump/3: `{X = 2 + _Q1}, {_Q1 =\= 0}`; Scryer: `X=\=2`),
+`{X >= 2}, {Y >= 2}` prints them in that order (dump/3: the other;
+Scryer: `X>=2, Y>=2`), and `{2*A+B+C = 10, C-D = E, A < 10}` prints the
+manual's own toplevel answer `C=10-2*A-B, E=10-2*A-B-D, A<10` (dump/3
+over [A,...,E] defines A) (`test_the_manual_s_store_prints_as_its_top_level_answer`).
+`ordering(Y < X), {X + Y = 10}` prints `{Y = 10 - X}` in either variable
+order (`test_an_ordering_against_the_target_order_prints`).  Where a
+delayed goal reaches a variable, `mark_target(NlReachable)` keeps it, so
+`{X*Y = Z, Z + X = 3}` shown on X and Y keeps `{_Q1 = 3 - X}` beside
+`{Y*X - _Q1 = 0}`; dump/3 runs `nonlin_crux/2` first, its reachable set is
+empty (D7), and it shows only the product
+(`test_a_variable_a_nonlinear_goal_reaches_is_kept`).  Over five programs
+the `-g` answers, with the variables named in every order, have the same
+solution set as Scryer's dump/3 with the variables in an order
+ordering/1 admits (z3; `test_every_variable_order_prints_the_oracle_s_solution_set`).
+
+One ordering the manual documents still depends on the order of the
+query's variables: `ordering(B < Mp), mg(P,12,0.01,B,Mp), ordering(P < Mp)`
+leaves B and P unordered, and ordering.pl breaks the tie by sorting the
+graph's vertices, the variables themselves, in the standard order.  That
+order is implementation-defined (SICStus: the address); the port's is
+creation order (D4).  The manual's answer defines P; the port does where
+P is created before B and defines B otherwise, including the manual's own
+query text, which names B first (`_ORDERING_TIES`,
+`test_ordering_in_any_variable_order` in test_manual_examples.py).  Not
+checked against SICStus.  The other three manual `ordering/1` queries
+give the manual's answer in every variable order.
+
+Cost: the projection covers the query variables' components and the
+components a hidden delayed goal reaches; those count on the projection
+meter (D24).  A hidden component nothing reaches is not projected (above).
+
+## D29: an FD variable brings its bounds to in_q and to an objective
+
+An extension of D20's promotion (ruling R4), outside 1.3.3, which has no
+CLP(FD) to promote from; no algorithm of the port changes.  D20 gives an
+FD variable that has no CLPQ_KEY state its FD bounds as `{Lo =< X, X =<
+Hi}` before a comparison post (`_promote_fd_variables`).  in_q/1,3 and the
+objectives of sup/2, inf/2, maximize, minimize and bb_inf (and bb_inf's
+integer variables) did not promote, so with `X in 1..5` and no CLP(Q)
+state, `sup(X, S)` failed (X was a variable the store did not know, hence
+unbounded) and `in_q(X, 0, 20), sup(X, S)` gave 20.  They now promote
+first (`_declare` and `_objective`): `sup(X, S)` gives 5, and so does the
+second (`tests/test_clpq_fd_promotion_optima.py`, both solvers).  The
+promotion is the same trailed post as D20's and stays after an optimum,
+as it does after a comparison post.  A variable with neither state is
+untouched: sup/2 of it fails, as in 1.3.3, and an FD variable whose domain
+has an infinite end brings only its finite end (`X #\= 3`: none, so sup/2
+of it fails too).  Legacy promotes at the same points; its promotion of a
+domain with an infinite end raised OverflowError and now leaves that end
+open, as the port's does.
+
+Promotion brings the FD domain's hull, a rational relaxation of it.  For
+sup/2 and inf/2 the answer is the relaxation's bound, documented as such
+(`X in 1..3 \/ 7..9, {X >= 4}, inf(X, I)` gives 4).  An optimum that
+binds, or must be integral and in the domain, cannot be read off the
+hull: bb_inf gave 5, a value in the hole, and maximize/minimize failed
+(their binding is refused by clpfd) where a value exists.  So maximize,
+minimize and bb_inf raise `representation_error(fd_domain_with_holes)`
+when a variable of the objective, or of bb_inf's integers, is an FD
+variable whose domain is more than one interval, whether or not it has
+CLP(Q) state (`refuse_fd_holes`; the same check in legacy).  This adds an
+error 1.3.3 cannot raise (it has no FD variables); no algorithm of the
+port changes (`test_an_optimum_over_a_domain_with_holes_is_refused`).
+Not covered: an FD variable with holes that is linked to the objective
+only through the store (`{Y = X}`, maximize(Y)), and the integrality of an
+FD variable without holes (`X in 1..5, {2*X >= 3}, minimize(X)` still
+fails, the relaxation's optimum 3/2 is refused by clpfd).

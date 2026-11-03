@@ -10,32 +10,126 @@ is the record `LinearForm(constant, rest, terms)`; `terms` is a list of
 `(variable, coefficient)` pairs in the same order.  Coefficients and
 constants are rationals (arithmetic.py).  A function may hand back a list
 it was given, as 1.3.3 shares list tails (test_multiply_linear_factor shows
-the form itself coming back for a factor of 1).
+the form itself coming back for a factor of 1), and deleting the first
+term of a long row shares the rest of its list (_SharedTail).  No list a
+form holds is ever changed.
 
 A predicate that can fail returns None where it fails.
 """
+import os
+from itertools import islice
+from operator import itemgetter
+
 from clausal.logic.clpq.arithmetic import (
     ONE, ZERO, add, arithmetic_normalize, compare, divide, is_zero,
     make_rational, multiply, negate, sign, to_number)
 from clausal.logic.clpq.attributes import state_of
 from clausal.logic.clpq.variable_ordering import (
-    compare_order_values, compare_variable_order)
+    order_key, order_keys, order_value_key)
 from clausal.logic.variables import deref, is_var
 
 MINUS_ONE = (-1, 1)
 
+_first = itemgetter(0)
+
+#: CLAUSAL_CLPQ_CHECK_ROW_INDEX=1: every answer of a row's index that a
+#: variable is not in the row is checked against a full scan of the row
+#: (delete_factor), and a stale index raises AssertionError.  A debugging
+#: aid: the check costs the scan the index saves.
+CHECK_ROW_INDEX = os.environ.get("CLAUSAL_CLPQ_CHECK_ROW_INDEX", "") not in ("", "0")
+
 
 class LinearForm:
-    """store.pl's `[Inhomogeneous, Rest | Terms]` (decompose/4 splits it)."""
-    __slots__ = ("constant", "rest", "terms")
+    """store.pl's `[Inhomogeneous, Rest | Terms]` (decompose/4 splits it).
+
+    A form is never changed once made: every operation makes a new one.
+    `variable_ids` is the row's index (row_variable_ids): None before the
+    row is first scanned, False after, and the index from its second scan
+    on.  It is kept with the form, so a form the trail puts back brings
+    its own index back."""
+    __slots__ = ("constant", "rest", "terms", "variable_ids")
 
     def __init__(self, constant, rest, terms):
         self.constant = constant
         self.rest = rest
         self.terms = terms
+        self.variable_ids = None
 
     def __repr__(self):
         return f"LinearForm({self.constant!r}, {self.rest!r}, {self.terms!r})"
+
+
+_TERMS = LinearForm.__dict__["terms"]   # the slot, under _SharedTail's property
+
+#: delete_factor shares the rest of a row of at least this many terms
+#: when it deletes the first (_SharedTail); a shorter rest is copied.
+SHARE_AT = 8
+
+
+class _SharedTail(LinearForm):
+    """A form whose terms are `base[start:]` of another form's list,
+    not copied until something reads `terms` (store.pl's delete_factor_hom/4
+    answers the tail Ts of [T|Ts] itself).
+
+    delete_factor makes one when it deletes the first term of a long row,
+    which a back substitution does to almost every row it rewrites, so the
+    rows the trail keeps share one list instead of each keeping a copy
+    (complexity survey R2: the copies kept n^3 terms alive in a chain
+    bound to numbers, and the cyclic GC walked them all).  The terms read
+    are the same list a copy would give; the base list is never changed
+    (a form is never changed once made)."""
+    __slots__ = ("base", "start")
+
+    def __init__(self, constant, rest, base, start):
+        self.constant = constant
+        self.rest = rest
+        self.variable_ids = None
+        self.base = base
+        self.start = start
+
+    @property
+    def terms(self):
+        try:
+            return _TERMS.__get__(self)
+        except AttributeError:
+            terms = self.base[self.start:]
+            _TERMS.__set__(self, terms)
+            self.base = None
+            return terms
+
+
+def _terms_from(form):
+    """(list, start): *form*'s terms are list[start:], read without a
+    copy."""
+    if type(form) is _SharedTail:
+        base = form.base
+        if base is not None:
+            return base, form.start
+    return form.terms, 0
+
+
+def term_count(form):
+    """len(form.terms), without copying a shared tail."""
+    base, start = _terms_from(form)
+    return len(base) - start
+
+
+def has_no_terms(form):
+    """*form* is a constant: its homogeneous part is []."""
+    base, start = _terms_from(form)
+    return len(base) <= start
+
+
+def shares_terms(form, terms):
+    """*form*'s terms are a tail of the list *terms*, not a copy."""
+    return type(form) is _SharedTail and form.base is terms
+
+
+def with_constant(form, constant, rest):
+    """A form with *form*'s terms, shared, and *constant* and *rest*."""
+    if type(form) is _SharedTail and form.base is not None:
+        return _SharedTail(constant, rest, form.base, form.start)
+    return LinearForm(constant, rest, form.terms)
 
 
 def normalize_scalar(scalar):
@@ -115,81 +209,116 @@ def add_homogeneous_parts_scaled(terms_a, factor_a, terms_b, factor_b):
     """store.pl, add_linear_ffh/5,7.  The recursion of add_linear_ffh/7,
     unrolled into a two-way merge; its argument swap becomes the two
     indices.  Only a variable in both lists has its zero sum dropped
-    (test_a_zero_factor_keeps_unmerged_terms_as_1_3_3_does)."""
+    (test_a_zero_factor_keeps_unmerged_terms_as_1_3_3_does).
+
+    The merge compares by order_key, looked up once for each term it
+    reaches, as add_homogeneous_parts_first_scaled does; the comparisons
+    and their outcomes are nf_ordering/3's
+    (test_the_scaled_merge_looks_up_each_order_once)."""
     if not terms_a:                                     # add_linear_ffh/5
         return multiply_homogeneous_part(terms_b, factor_b)
     result = []
+    append = result.append
+    length_a = len(terms_a)
+    length_b = len(terms_b)
     i = 0
     j = 0
-    while i < len(terms_a) and j < len(terms_b):
-        x, coefficient_x = terms_a[i]
-        y, coefficient_y = terms_b[j]
-        relation = compare_variable_order(x, y)
-        if relation is None:
+    if length_b:
+        key_a = order_key(terms_a[0][0])
+        key_b = order_key(terms_b[0][0])
+    while i < length_a and j < length_b:
+        if key_a is None or key_b is None:
             return None
-        if relation == 0:
-            coefficient = add(multiply(coefficient_x, factor_a),
-                              multiply(coefficient_y, factor_b))
+        if key_a == key_b:
+            coefficient = add(multiply(terms_a[i][1], factor_a),
+                              multiply(terms_b[j][1], factor_b))
             if not is_zero(coefficient):
-                result.append((x, coefficient))
+                append((terms_a[i][0], coefficient))
             i += 1
             j += 1
-        elif relation < 0:
-            result.append((x, multiply(coefficient_x, factor_a)))
+            if i < length_a:
+                key_a = order_key(terms_a[i][0])
+            if j < length_b:
+                key_b = order_key(terms_b[j][0])
+        elif key_a < key_b:
+            append((terms_a[i][0], multiply(terms_a[i][1], factor_a)))
             i += 1
+            if i < length_a:
+                key_a = order_key(terms_a[i][0])
         else:
-            result.append((y, multiply(coefficient_y, factor_b)))
+            append((terms_b[j][0], multiply(terms_b[j][1], factor_b)))
             j += 1
-    while i < len(terms_a):                             # mult_hom on the rest of A
-        result.append((terms_a[i][0], multiply(terms_a[i][1], factor_a)))
+            if j < length_b:
+                key_b = order_key(terms_b[j][0])
+    while i < length_a:                                 # mult_hom on the rest of A
+        append((terms_a[i][0], multiply(terms_a[i][1], factor_a)))
         i += 1
-    while j < len(terms_b):                             # mult_hom on the rest of B
-        result.append((terms_b[j][0], multiply(terms_b[j][1], factor_b)))
+    while j < length_b:                                 # mult_hom on the rest of B
+        append((terms_b[j][0], multiply(terms_b[j][1], factor_b)))
         j += 1
     return result
 
 
-def add_linear_forms_first_scaled(form_a, factor_a, form_b):
-    """store.pl, add_linear_f1/4: factor_a*form_a + form_b."""
-    terms = add_homogeneous_parts_first_scaled(form_a.terms, factor_a, form_b.terms)
-    if terms is None:
-        return None
+def add_linear_forms_first_scaled(form_a, factor_a, form_b, keys_a=None):
+    """store.pl, add_linear_f1/4: factor_a*form_a + form_b.  *keys_a* as
+    add_homogeneous_parts_first_scaled takes it."""
     constant = add(multiply(form_a.constant, factor_a), form_b.constant)
     rest = add(multiply(form_a.rest, factor_a), form_b.rest)
+    if not form_a.terms:                    # add_linear_f1h/4: B's terms, shared
+        return with_constant(form_b, constant, rest)
+    terms = add_homogeneous_parts_first_scaled(form_a.terms, factor_a,
+                                               form_b.terms, keys_a)
+    if terms is None:
+        return None
     return LinearForm(constant, rest, terms)
 
 
-def add_homogeneous_parts_first_scaled(terms_a, factor_a, terms_b):
-    """store.pl, add_linear_f1h/4,6, unrolled into a two-way merge."""
+def add_homogeneous_parts_first_scaled(terms_a, factor_a, terms_b, keys_a=None):
+    """store.pl, add_linear_f1h/4,6, unrolled into a two-way merge.
+
+    The merge compares by order_key, looked up once for each term it
+    reaches, where nf_ordering/3 looks up both orders at each comparison;
+    the comparisons and their outcomes are the same.  *keys_a*, where
+    given, is order_keys(terms_a), so a back substitution looks up its
+    pivot row's orders once for every row it rewrites (DEVIATIONS.md D24,
+    Low 8; test_a_merge_looks_up_each_order_once)."""
     if not terms_a:                                     # add_linear_f1h/4
         return terms_b
+    if keys_a is None:
+        keys_a = order_keys(terms_a)
     result = []
+    append = result.append
+    length_a = len(terms_a)
+    length_b = len(terms_b)
     i = 0
     j = 0
-    while i < len(terms_a) and j < len(terms_b):
-        x, coefficient_x = terms_a[i]
-        y, coefficient_y = terms_b[j]
-        relation = compare_variable_order(x, y)
-        if relation is None:
+    if length_b:
+        key_b = order_key(terms_b[0][0])
+    while i < length_a and j < length_b:
+        key_a = keys_a[i]
+        if key_a is None or key_b is None:
             return None
-        if relation == 0:
-            coefficient = add(multiply(coefficient_x, factor_a), coefficient_y)
+        if key_a == key_b:
+            coefficient = add(multiply(terms_a[i][1], factor_a), terms_b[j][1])
             if not is_zero(coefficient):
-                result.append((x, coefficient))
+                append((terms_a[i][0], coefficient))
             i += 1
             j += 1
-        elif relation < 0:
-            result.append((x, multiply(coefficient_x, factor_a)))
+            if j < length_b:
+                key_b = order_key(terms_b[j][0])
+        elif key_a < key_b:
+            append((terms_a[i][0], multiply(terms_a[i][1], factor_a)))
             i += 1
         else:
-            result.append((y, coefficient_y))
+            append(terms_b[j])
             j += 1
-    while i < len(terms_a):                             # mult_hom on the rest of A
-        result.append((terms_a[i][0], multiply(terms_a[i][1], factor_a)))
+            if j < length_b:
+                key_b = order_key(terms_b[j][0])
+    while i < length_a:                                 # mult_hom on the rest of A
+        append((terms_a[i][0], multiply(terms_a[i][1], factor_a)))
         i += 1
-    while j < len(terms_b):                             # the rest of B, as it is
-        result.append(terms_b[j])
-        j += 1
+    if j < length_b:                                    # the rest of B, as it is
+        result.extend(terms_b[j:])
     return result
 
 
@@ -203,38 +332,49 @@ def add_linear_forms(form_a, form_b):
 
 
 def add_homogeneous_parts(terms_a, terms_b):
-    """store.pl, add_linear_11h/3,5, unrolled into a two-way merge."""
+    """store.pl, add_linear_11h/3,5, unrolled into a two-way merge.  It
+    compares by order_key, looked up once a term, as
+    add_homogeneous_parts_scaled does
+    (test_the_plain_merge_looks_up_each_order_once)."""
     if not terms_a:                                     # add_linear_11h/3
         return terms_b
     if not terms_b:                                     # add_linear_11h/5, clause 1
         return terms_a
     result = []
+    append = result.append
+    length_a = len(terms_a)
+    length_b = len(terms_b)
     i = 0
     j = 0
-    while i < len(terms_a) and j < len(terms_b):
-        x, coefficient_x = terms_a[i]
-        y, coefficient_y = terms_b[j]
-        relation = compare_variable_order(x, y)
-        if relation is None:
+    key_a = order_key(terms_a[0][0])
+    key_b = order_key(terms_b[0][0])
+    while i < length_a and j < length_b:
+        if key_a is None or key_b is None:
             return None
-        if relation == 0:
-            coefficient = add(coefficient_x, coefficient_y)
+        if key_a == key_b:
+            coefficient = add(terms_a[i][1], terms_b[j][1])
             if not is_zero(coefficient):
-                result.append((x, coefficient))
+                append((terms_a[i][0], coefficient))
             i += 1
             j += 1
-        elif relation < 0:
-            result.append(terms_a[i])
+            if i < length_a:
+                key_a = order_key(terms_a[i][0])
+            if j < length_b:
+                key_b = order_key(terms_b[j][0])
+        elif key_a < key_b:
+            append(terms_a[i])
             i += 1
+            if i < length_a:
+                key_a = order_key(terms_a[i][0])
         else:
-            result.append(terms_b[j])
+            append(terms_b[j])
             j += 1
-    while i < len(terms_a):
-        result.append(terms_a[i])
-        i += 1
-    while j < len(terms_b):
-        result.append(terms_b[j])
-        j += 1
+            if j < length_b:
+                key_b = order_key(terms_b[j][0])
+    if i < length_a:
+        result.extend(terms_a[i:])
+    if j < length_b:
+        result.extend(terms_b[j:])
     return result
 
 
@@ -256,34 +396,113 @@ def multiply_homogeneous_part(terms, factor):
     return result
 
 
-def normal_form_substitute(variable, form_variable, form_x):
+def normal_form_substitute(variable, form_variable, form_x, keys=None):
     """store.pl, nf_substitute/4: replace *variable* in *form_x* by its
-    definition *form_variable*.  None where *variable* is not in *form_x*."""
+    definition *form_variable*.  None where *variable* is not in *form_x*.
+    *keys*, where given, is order_keys(form_variable.terms): a back
+    substitution passes the same definition to every row of the class."""
     deleted = delete_factor(variable, form_x)
     if deleted is None:
         return None
     form_w, coefficient = deleted
-    return add_linear_forms_first_scaled(form_variable, coefficient, form_w)
+    return add_linear_forms_first_scaled(form_variable, coefficient, form_w,
+                                         keys)
+
+
+def row_variable_ids(form):
+    """*form*'s index, made now if it has none: the ids of its terms'
+    variables as they are, and as they dereference now."""
+    ids = form.variable_ids
+    if ids is None or ids is False:
+        base, start = _terms_from(form)
+        variables = list(map(_first, islice(base, start, None)))
+        ids = set(map(id, variables))
+        ids.update(map(id, map(deref, variables)))
+        form.variable_ids = ids
+    return ids
 
 
 def delete_factor(variable, form):
     """store.pl, delete_factor/4.  Returns (form without *variable*, its
-    coefficient), or None."""
-    deleted = delete_factor_homogeneous(variable, form.terms)
+    coefficient), or None.
+
+    A variable not in the row's index (row_variable_ids) is not in the row,
+    so the scan is skipped; where it is in the index, or is not a variable,
+    the scan decides.  The index is right as long as no variable of the row
+    is bound after the row was indexed, and the solver never leaves a bound
+    variable in a row it reads: the hook replaces it by a stand-in first
+    (DEVIATIONS.md D3).  CHECK_ROW_INDEX checks every skip against the scan
+    (test_the_check_mode_catches_a_stale_index)."""
+    variable = deref(variable)
+    ids = form.variable_ids
+    if ids is None:
+        # The first scan of a row only marks it: most rows a substitution
+        # writes are rewritten again at their next read (a var-var
+        # binding), and an index costs about two scans to build.
+        form.variable_ids = False
+    elif is_var(variable):
+        if ids is False:
+            ids = row_variable_ids(form)
+        if id(variable) not in ids:
+            if CHECK_ROW_INDEX:
+                _check_skip(variable, form)
+            return None
+    base, start = _terms_from(form)
+    if start:
+        return _delete_factor_from_tail(variable, form, base, start)
+    if base and len(base) > SHARE_AT and (
+            base[0][0] is variable or deref(base[0][0]) is variable):
+        # delete_factor_hom/4, its first clause: the rest, shared
+        return _SharedTail(form.constant, form.rest, base, 1), base[0][1]
+    deleted = delete_factor_homogeneous(variable, base)
     if deleted is None:
         return None
     return LinearForm(form.constant, form.rest, deleted[0]), deleted[1]
 
 
+def _delete_factor_from_tail(variable, form, base, start):
+    """delete_factor_homogeneous on base[start:] (a _SharedTail's terms):
+    the same scan, and the rest shared where the first term goes."""
+    length = len(base)
+    i = start
+    while i < length:
+        term = base[i]
+        if term[0] is variable or deref(term[0]) is variable:
+            if i == start and length - start > SHARE_AT:
+                return (_SharedTail(form.constant, form.rest, base, start + 1),
+                        term[1])
+            return (LinearForm(form.constant, form.rest,
+                               base[start:i] + base[i + 1:]), term[1])
+        i += 1
+    return None
+
+
+def _check_skip(variable, form):
+    """CHECK_ROW_INDEX: the index said *variable* is not in *form*; the
+    scan must agree."""
+    if delete_factor_homogeneous(variable, form.terms) is not None:
+        raise AssertionError(
+            f"clpq row index is stale: {variable!r} is in the row "
+            f"{form!r} but not in its index")
+
+
 def delete_factor_homogeneous(variable, terms):
     """store.pl, delete_factor_hom/4: the live version, which compares the
     variables themselves and continues on both (<) and (>), so it finds
-    *variable* by identity (test_delete_factor_removes_one_variable).  Returns (terms without it, its coefficient), or
-    None."""
+    *variable* by identity (test_delete_factor_removes_one_variable).
+    Returns (terms without it, its coefficient), or None.
+
+    A Python loop: a C loop over the dereferenced ids (operator.indexOf)
+    was no faster on long rows, about 45 ns a term either way, and twice
+    as slow on the short rows of a pivot, where a miss raised ValueError
+    (complexity survey R1a, measured).  What saves the scans is the row
+    index (delete_factor)."""
     variable = deref(variable)
-    for i in range(len(terms)):
-        if deref(terms[i][0]) is variable:
-            return terms[:i] + terms[i + 1:], terms[i][1]
+    i = 0
+    for term in terms:
+        if term[0] is variable or deref(term[0]) is variable:
+            return terms[:i] + terms[i + 1:], term[1]
+        i += 1
     return None
 
 
@@ -300,14 +519,14 @@ def normal_form_coefficient_homogeneous(terms, order):
     """store.pl, nf_coeff_hom/3: scan while the sought order is greater; stop
     at the first term not below it
     (test_coefficient_lookup_stops_once_past_the_variable)."""
+    sought = order_value_key(order)
     for variable, coefficient in terms:
-        state = state_of(variable)
-        if state is None or state.variable_order is None:
+        key = order_key(variable)
+        if key is None:
             return None
-        relation = compare_order_values(order, state.variable_order)
-        if relation == 0:
+        if key == sought:
             return coefficient
-        if relation < 0:
+        if sought < key:
             return None
     return None
 

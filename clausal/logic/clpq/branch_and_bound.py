@@ -45,6 +45,11 @@ from clausal.logic.exceptions import LogicException, instantiation_error
 from clausal.logic.pending import run_first
 from clausal.logic.variables import Var, deref, is_var, unify
 
+#: The algorithm trace (bounded_simplex.TRACE): ``("branch", variable,
+#: floor, ceiling, alternative)`` for each branch posted and
+#: ``("incumbent", value)`` for each leaf recorded.
+TRACE = None
+
 #: bb_inf/3's Eps, the float 0.001, which normal_form/2 reads as 1/1000.
 DEFAULT_EPSILON = 0.001
 
@@ -159,13 +164,19 @@ def branch_and_bound_loop(objective, integer_forms, epsilon, trail):
             if violation is not None:
                 variable, floor, ceiling = violation
                 alternatives.append((trail.mark(), variable, floor, ceiling))
+                if TRACE is not None:
+                    TRACE("branch", variable, floor, ceiling, 0)
                 if branch_and_bound_branch(variable, floor, ceiling, 0, trail):
                     continue
             else:
                 incumbent = (infimum, round_values(values))     # bb_put
+                if TRACE is not None:
+                    TRACE("incumbent", infimum)
         while alternatives:                                     # backtrack
             mark, variable, floor, ceiling = alternatives.pop()
             trail.undo(mark)
+            if TRACE is not None:
+                TRACE("branch", variable, floor, ceiling, 1)
             if branch_and_bound_branch(variable, floor, ceiling, 1, trail):
                 break
         else:

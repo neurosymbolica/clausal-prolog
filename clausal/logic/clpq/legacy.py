@@ -36,7 +36,8 @@ from clausal.logic.variables import (
     register_attr_hook,
 )
 from clausal.logic.exceptions import (
-    LogicException, instantiation_error, type_error)
+    LogicException, domain_error, instantiation_error, representation_error,
+    type_error)
 from clausal.logic.clpq.arithmetic import is_number
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -1232,14 +1233,18 @@ def _promote_fd_to_q(var: Var, trail: Trail) -> None:
     so that both hooks fire independently — FD enforces integrality and
     domain holes, Q handles rational constraint propagation.
 
-    Unlike float conversion, ``Fraction(int)`` is always exact.
+    Unlike float conversion, ``Fraction(int)`` is always exact.  An
+    infinite end of the domain (``X #\\= 3``) is no bound: it was
+    ``Fraction(inf)``, an OverflowError.
     """
     from clausal.logic.clpfd import FD_KEY, domain_min, domain_max  # noqa: PLC0415
     fd_state = get_attr(var, FD_KEY)
     if fd_state is None:
         return
-    lo = Fraction(domain_min(fd_state.domain))
-    hi = Fraction(domain_max(fd_state.domain))
+    lo = domain_min(fd_state.domain)
+    hi = domain_max(fd_state.domain)
+    lo = Fraction(lo) if type(lo) is int else None
+    hi = Fraction(hi) if type(hi) is int else None
     tableau = _get_tableau(trail)
     _snapshot_tableau(trail)
     tab_id = tableau.register_var(var, lo, hi)
@@ -1263,27 +1268,114 @@ def sync_fd_bounds(var: Var, lo: Any, hi: Any, trail: Trail) -> bool:
     return True
 
 
+#: On a walk's stack, the marker that the compound whose id is the next
+#: item is left: it is off the path from the root.
+_LEAVE = object()
+
+
+def _enter(x: Any, on_path: set) -> int:
+    """Put the compound *x* on the path of a walk (its id, returned).  One
+    met again while on the path closes a cycle (``X = 1 + X``), which
+    raises ``type_error(evaluable, F/A)`` as the port's normal_form/2
+    does (DEVIATIONS.md D23, D27); a subterm two branches share is no
+    cycle.  The posts refuse a cyclic term in the cell walk first, so this
+    guards the walks themselves."""
+    key = id(x)
+    if key in on_path:
+        from clausal.logic.clpfd import _refuse_cycle  # noqa: PLC0415
+        _refuse_cycle(x, "normal_form/2")
+    on_path.add(key)
+    return key
+
+
+def _promote_fd_in_expr(expr: Any, trail: Trail,
+                        exact: str | None = None) -> None:
+    """Promote each FD variable of *expr* that has no Q state
+    (``_promote_fd_to_q``), and nothing else: the objective of sup/2,
+    inf/2, maximize, minimize and bb_inf, and the targets of in_q, enter
+    CLP(Q) with their FD bounds (docs/clpq.md, FD<->Q coexistence).  A
+    variable with neither state stays unknown to the store, so it is
+    unbounded, as in clp(q,r) 1.3.3.
+
+    With *exact* (the context of maximize, minimize or bb_inf), an FD
+    variable whose domain has a hole raises
+    representation_error(fd_domain_with_holes), as the port does: the
+    store holds only the hull, so an optimum that binds could land in the
+    hole.
+
+    Left to right, depth first, on an explicit stack (DEVIATIONS.md
+    D27)."""
+    from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+    on_path: set = set()
+    stack = [expr]
+    while stack:
+        expr = stack.pop()
+        if expr is _LEAVE:
+            on_path.discard(stack.pop())
+            continue
+        expr = deref(expr)
+        if is_var(expr):
+            fd_state = get_attr(expr, FD_KEY)
+            if (exact is not None and fd_state is not None
+                    and len(fd_state.domain) > 1):
+                raise LogicException(
+                    representation_error("fd_domain_with_holes", exact))
+            if get_attr(expr, Q_KEY) is None and fd_state is not None:
+                _promote_fd_to_q(expr, trail)
+            continue
+        if isinstance(expr, list):
+            stack.append(_enter(expr, on_path))
+            stack.append(_LEAVE)
+            stack.extend(reversed(expr))
+            continue
+        _ensure_term_imports()
+        if isinstance(expr, (_Add, _Sub, _Mult, _Div)):
+            stack.append(_enter(expr, on_path))
+            stack.append(_LEAVE)
+            stack.append(expr.right)
+            stack.append(expr.left)
+        elif isinstance(expr, _Negate):
+            stack.append(_enter(expr, on_path))
+            stack.append(_LEAVE)
+            stack.append(expr.operand)
+
+
 def _ensure_q_for_expr(expr: Any, trail: Trail) -> None:
     """Ensure all Vars in *expr* have Q-domain attributes.
 
     If a variable has an FD attribute but no Q attribute, promotes it
     (mirrors ``_ensure_real`` promoting FD to real in CLP(R)).
+
+    Variables are met left to right, depth first, on an explicit stack, so
+    a sum nested 100,000 deep raises no RecursionError (DEVIATIONS.md
+    D27).
     """
-    expr = deref(expr)
-    if is_var(expr):
-        if get_attr(expr, Q_KEY) is None:
-            from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
-            if get_attr(expr, FD_KEY) is not None:
-                _promote_fd_to_q(expr, trail)
-            else:
-                _post_q_domain(expr, None, None, trail)
-        return
-    _ensure_term_imports()
-    if isinstance(expr, (_Add, _Sub, _Mult, _Div)):
-        _ensure_q_for_expr(expr.left, trail)
-        _ensure_q_for_expr(expr.right, trail)
-    elif isinstance(expr, _Negate):
-        _ensure_q_for_expr(expr.operand, trail)
+    on_path: set = set()
+    stack = [expr]
+    while stack:
+        expr = stack.pop()
+        if expr is _LEAVE:
+            on_path.discard(stack.pop())
+            continue
+        expr = deref(expr)
+        if is_var(expr):
+            if get_attr(expr, Q_KEY) is None:
+                from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+                if get_attr(expr, FD_KEY) is not None:
+                    _promote_fd_to_q(expr, trail)
+                else:
+                    _post_q_domain(expr, None, None, trail)
+            continue
+        _ensure_term_imports()
+        if isinstance(expr, (_Add, _Sub, _Mult, _Div)):
+            stack.append(_enter(expr, on_path))
+            stack.append(_LEAVE)
+            stack.append(expr.right)
+            stack.append(expr.left)
+        elif isinstance(expr, _Negate):
+            stack.append(_enter(expr, on_path))
+            stack.append(_LEAVE)
+            stack.append(expr.operand)
 
 
 # ── Linearization ────────────────────────────────────────────────────────────
@@ -1317,77 +1409,87 @@ def _linearize(expr: Any, trail: Trail,
     """Flatten an expression tree to ``{var_id: coeff, …}, constant``.
 
     Returns None for non-linear expressions (e.g. Var * Var).
+
+    A post-order walk on an explicit stack (a sum nested 100,000 deep
+    raises no RecursionError; DEVIATIONS.md D27): both operands of a
+    node are flattened, left first, before the node combines them, as
+    the recursive walk it replaces did.  A node is on the path from its
+    entry to its combination; one met again on it closes a cycle and
+    raises (:func:`_enter`).
     """
     _ensure_term_imports()
-    expr = deref(expr)
+    on_path: set = set()
+    results: list = []
+    stack: list = [(expr, False)]
+    while stack:
+        expr, ready = stack.pop()
+        if ready:
+            on_path.discard(id(expr))
+            if isinstance(expr, _Negate):
+                inner = results.pop()
+                if inner is None:
+                    results.append(None)
+                else:
+                    k, v = inner
+                    results.append(({x: -c for x, c in k.items()}, -v))
+                continue
+            rc = results.pop()
+            lc = results.pop()
+            results.append(_combine_linear(expr, lc, rc))
+            continue
+        expr = deref(expr)
+        if isinstance(expr, bool):
+            results.append(None)
+        elif isinstance(expr, int):
+            results.append(({}, Fraction(expr)))
+        elif isinstance(expr, Fraction):
+            results.append(({}, expr))
+        elif isinstance(expr, (Decimal, float)):
+            results.append(({}, _exact_number(expr)))    # exact; scale is not carried
+        elif is_var(expr):
+            results.append(({expr._id: ONE}, ZERO))
+        elif isinstance(expr, (_Add, _Sub, _Mult, _Div)):
+            _enter(expr, on_path)
+            stack.append((expr, True))
+            stack.append((expr.right, False))
+            stack.append((expr.left, False))
+        elif isinstance(expr, _Negate):
+            _enter(expr, on_path)
+            stack.append((expr, True))
+            stack.append((expr.operand, False))
+        else:
+            results.append(None)
+    return results[0]
 
-    if isinstance(expr, bool):
+
+def _combine_linear(expr: Any, lc: Any, rc: Any,
+                    ) -> tuple[dict[int, Fraction], Fraction] | None:
+    """One binary node of :func:`_linearize`: its operands' linear forms
+    *lc* and *rc* (None for a non-linear one) combined."""
+    if lc is None or rc is None:
         return None
-    if isinstance(expr, int):
-        return {}, Fraction(expr)
-    if isinstance(expr, Fraction):
-        return {}, expr
-    if isinstance(expr, (Decimal, float)):
-        return {}, _exact_number(expr)    # exact; scale is not carried
-    if is_var(expr):
-        return {expr._id: ONE}, ZERO
-
+    lk, lv = lc
+    rk, rv = rc
     if isinstance(expr, _Add):
-        lc = _linearize(expr.left, trail)
-        rc = _linearize(expr.right, trail)
-        if lc is None or rc is None:
-            return None
-        lk, lv = lc
-        rk, rv = rc
         m = dict(lk)
         for v, c in rk.items():
             m[v] = m.get(v, ZERO) + c
         return {v: c for v, c in m.items() if c != ZERO}, lv + rv
-
     if isinstance(expr, _Sub):
-        lc = _linearize(expr.left, trail)
-        rc = _linearize(expr.right, trail)
-        if lc is None or rc is None:
-            return None
-        lk, lv = lc
-        rk, rv = rc
         m = dict(lk)
         for v, c in rk.items():
             m[v] = m.get(v, ZERO) - c
         return {v: c for v, c in m.items() if c != ZERO}, lv - rv
-
     if isinstance(expr, _Mult):
-        lc = _linearize(expr.left, trail)
-        rc = _linearize(expr.right, trail)
-        if lc is None or rc is None:
-            return None
-        lk, lv = lc
-        rk, rv = rc
         if not lk:
             return {v: lv * c for v, c in rk.items()}, lv * rv
         if not rk:
             return {v: rv * c for v, c in lk.items()}, lv * rv
         return None  # non-linear
-
-    if isinstance(expr, _Div):
-        lc = _linearize(expr.left, trail)
-        rc = _linearize(expr.right, trail)
-        if lc is None or rc is None:
-            return None
-        rk, rv = rc
-        if rk or rv == ZERO:
-            return None
-        lk, lv = lc
-        return {v: c / rv for v, c in lk.items()}, lv / rv
-
-    if isinstance(expr, _Negate):
-        inner = _linearize(expr.operand, trail)
-        if inner is None:
-            return None
-        k, v = inner
-        return {x: -c for x, c in k.items()}, -v
-
-    return None
+    # _Div
+    if rk or rv == ZERO:
+        return None
+    return {v: c / rv for v, c in lk.items()}, lv / rv
 
 
 def _zero_divisor(*exprs: Any) -> bool:
@@ -1443,6 +1545,21 @@ def _expression_culprit(*exprs: Any) -> Any:
         elif type(expr) is Decimal and not expr.is_finite():
             from_number(expr)   # the port's evaluation_error (ruling R19)
     return _NO_CULPRIT
+
+
+def _not_linear(context: str, *failed: Any) -> LogicException:
+    """The error for a constraint or objective the default solver cannot
+    linearise (*failed*: the operands that did not linearise).  A leaf that
+    is no arithmetic expression is nf.pl's ``type_error(expression,
+    Culprit)``, as ``entailed/1`` and the port raise; otherwise the operand
+    is non-linear, which this solver refuses with ``domain_error(
+    linear_expression, Operand)`` where the port delays it (docs/clpq.md).
+    Both used to be a Python TypeError."""
+    culprit = _expression_culprit(*failed)
+    if culprit is not _NO_CULPRIT:
+        return LogicException(type_error("expression", culprit, "normal_form/2"))
+    return LogicException(domain_error("linear_expression", deref(failed[0]),
+                                       context))
 
 
 def _nonlinear(*exprs: Any) -> bool:
@@ -1503,6 +1620,7 @@ def _post_q_domain(target: Any, lo: Fraction | None,
     if lo is not None and hi is not None and lo > hi:
         return False
 
+    _promote_fd_in_expr(target, trail)   # an FD variable keeps its bounds
     tableau = _get_tableau(trail)
     _snapshot_tableau(trail)
 
@@ -1763,7 +1881,7 @@ def _units_strip(l, r, context, trail):
     run time) and before the ground fast paths, which read plain numbers."""
     if _strip_for_solver is None:
         _ensure_units_imports()
-    stripped = _strip_for_solver(l, r, context, trail)
+    stripped = _strip_for_solver(l, r, context, trail, strict=True)
     return (l, r) if stripped is None else stripped
 
 
@@ -1806,7 +1924,7 @@ def q_eq(l: Any, r: Any, trail: Trail) -> bool:
     if lc is None or rc is None:
         if _zero_divisor(l, r):
             return False
-        raise TypeError("CLP(Q) requires linear constraints")
+        raise _not_linear("{}/1", *[e for e, c in ((l, lc), (r, rc)) if c is None])
     lk, lv = lc
     rk, rv = rc
     merged = dict(lk)
@@ -1842,7 +1960,7 @@ def q_ne(l: Any, r: Any, trail: Trail) -> bool:
     if lc is None or rc is None:
         if _zero_divisor(l, r):
             return False
-        raise TypeError("CLP(Q) requires linear constraints")
+        raise _not_linear("{}/1", *[e for e, c in ((l, lc), (r, rc)) if c is None])
     lk, lv = lc
     rk, rv = rc
     # Compute l - r: the disequality holds when this is != 0
@@ -1885,7 +2003,7 @@ def _post_le(l: Any, r: Any, trail: Trail, context: str,
     if lc is None or rc is None:
         if _zero_divisor(l, r):
             return False
-        raise TypeError("CLP(Q) requires linear constraints")
+        raise _not_linear(context, *[e for e, c in ((l, lc), (r, rc)) if c is None])
     lk, lv = lc
     rk, rv = rc
     merged = dict(lk)
@@ -1937,11 +2055,12 @@ def sup(expr: Any, result_var: Any, trail: Trail) -> bool:
     expr = _cell_as_node(expr, "sup/2")   # ruling R9 A1: a cell objective is its node
     expr, dims = _units_strip_expr(expr, "sup/2", trail)
     result_var = deref(result_var)
+    _promote_fd_in_expr(expr, trail)
     lc = _linearize(expr, trail)
     if lc is None:
         if _zero_divisor(expr):
             return False
-        raise TypeError("sup requires a linear expression")
+        raise _not_linear("sup/2", expr)
     coeffs, const = lc
     tableau = _get_tableau(trail)
     tab_copy = tableau.copy()
@@ -1962,11 +2081,12 @@ def inf(expr: Any, result_var: Any, trail: Trail) -> bool:
     expr = _cell_as_node(expr, "inf/2")   # ruling R9 A1: a cell objective is its node
     expr, dims = _units_strip_expr(expr, "inf/2", trail)
     result_var = deref(result_var)
+    _promote_fd_in_expr(expr, trail)
     lc = _linearize(expr, trail)
     if lc is None:
         if _zero_divisor(expr):
             return False
-        raise TypeError("inf requires a linear expression")
+        raise _not_linear("inf/2", expr)
     coeffs, const = lc
     tableau = _get_tableau(trail)
     tab_copy = tableau.copy()
@@ -2125,11 +2245,12 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
     expr = _cell_as_node(expr, "maximize/2")   # ruling R9 A1: a cell objective is its node
     expr, dims = _units_strip_expr(expr, "maximize/2", trail)
     result_var = deref(result_var)
+    _promote_fd_in_expr(expr, trail, "maximize/2")
     lc = _linearize(expr, trail)
     if lc is None:
         if _zero_divisor(expr):
             return False
-        raise TypeError("maximize requires a linear expression")
+        raise _not_linear("maximize/1", expr)
     coeffs, const = lc
     tableau = _get_tableau(trail)
     _snapshot_tableau(trail)
@@ -2151,11 +2272,12 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
     expr = _cell_as_node(expr, "minimize/2")   # ruling R9 A1: a cell objective is its node
     expr, dims = _units_strip_expr(expr, "minimize/2", trail)
     result_var = deref(result_var)
+    _promote_fd_in_expr(expr, trail, "minimize/2")
     lc = _linearize(expr, trail)
     if lc is None:
         if _zero_divisor(expr):
             return False
-        raise TypeError("minimize requires a linear expression")
+        raise _not_linear("minimize/1", expr)
     coeffs, const = lc
     tableau = _get_tableau(trail)
     _snapshot_tableau(trail)
@@ -2289,10 +2411,13 @@ def ordering(spec: Any, trail: Trail) -> bool:
     return not is_var(deref(spec))
 
 
-def residual_q(target_vars: list, trail: Trail, name_of) -> list[str]:
+def residual_q(target_vars: list, trail: Trail, name_of,
+               attributed=()) -> list[str]:
     """The CLP(Q) constraints on *target_vars* as a toplevel prints them
     (:func:`dump_q` with ``toplevel=True``); ``[]`` without creating a
-    store when this trail never posted one."""
+    store when this trail never posted one.  *attributed* (the port's
+    call_residue_vars/2 variables) is accepted and not used: legacy
+    projects onto *target_vars* only."""
     if id(trail) not in _tableaux:
         return []
     return dump_q(target_vars, trail, name_of, toplevel=True)
@@ -2557,11 +2682,14 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
             # infinity raises (bb_inf([nan], X, I) used to succeed).
             return False
 
+    _promote_fd_in_expr(expr, trail, context)
+    _promote_fd_in_expr([v for v in shadows if is_var(deref(v))], trail,
+                        context)
     lc = _linearize(expr, trail)
     if lc is None:
         if _zero_divisor(expr):
             return False
-        raise TypeError("bb_inf requires a linear expression")
+        raise _not_linear(context, expr)
     obj_coeffs, obj_const = lc
 
     tableau = _get_tableau(trail)

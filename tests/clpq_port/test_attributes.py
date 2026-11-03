@@ -66,3 +66,19 @@ def test_an_exception_in_later_work_leaves_nothing_stale():
     with pytest.raises(ValueError):
         work.drain()
     assert work.drain() is True and ran == []
+
+
+def test_with_changes_copies_every_field():
+    # with_changes copies the slots one by one (complexity survey R2): a
+    # field added to SolverState must be added there too.
+    from clausal.logic.clpq.attributes import _FIELDS
+    values = {name: object() for name in _FIELDS}
+    state = SolverState(**values)
+    copy = with_changes(state)
+    assert copy is not state
+    assert all(getattr(copy, name) is values[name] for name in _FIELDS)
+    changed = with_changes(state, bounds=1, keep=2)
+    assert (changed.bounds, changed.keep) == (1, 2)
+    assert all(getattr(changed, name) is values[name]
+               for name in _FIELDS if name not in ("bounds", "keep"))
+    assert state.bounds is values["bounds"]

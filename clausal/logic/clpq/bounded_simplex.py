@@ -51,9 +51,11 @@ from clausal.logic.clpq.components import (
     list_elements, open_list)
 from clausal.logic.clpq.linear_forms import (
     MINUS_ONE, LinearForm, add_linear_forms, add_linear_forms_scaled,
-    delete_factor, independent, isolate, multiply_homogeneous_part,
+    delete_factor, has_no_terms, independent, isolate,
+    multiply_homogeneous_part,
     multiply_linear_factor, normal_form_right_hand_side,
-    normal_form_substitute, normal_form_to_sum, normalize_scalar)
+    normal_form_substitute, normal_form_to_sum, normalize_scalar, term_count)
+from clausal.logic.clpq.variable_ordering import order_keys
 from clausal.logic.variables import Var, deref, get_attr, is_var, unify
 from clausal.terms import ConcreteSeg, SegList, VarSeg
 
@@ -74,6 +76,18 @@ PIVOT_OR_BOUND_SWAP = 1
 _FAIL = 0
 _WALK = 1           # reconsider_basis_list/3 on a continuation
 _STATUS = 2         # reconsider_basis_list_status/6 on a new status
+
+#: The algorithm trace, for the differential harness
+#: (tests/clpq_port/differential/): None, or a callable that gets each
+#: decision of the algorithm as ``TRACE(event, *arguments)``.  Each site
+#: reads the global once and calls nothing while it is None, so a run
+#: without the harness does no more work than before.  Events here:
+#: ``("pivot", leaving, entering, coefficient, component)`` (pivot/3),
+#: ``("pivot_ignoring_bounds", leaving, entering, coefficient)`` (pivot/2),
+#: ``("bound_swap", variable)`` (pivot_or_bound_swap/4's self-limiting
+#: clause), ``("solve", category, selected)`` (solve/5's select_dependent
+#: choice) and ``("solve_for_variable", selected)`` (solve_x/6).
+TRACE = None
 
 # What solve_step hands back to solve_homogeneous.
 _SOLVE_FAILED = 0
@@ -1003,13 +1017,14 @@ def solve_step(terms, form, constant, bindings, trail):
     components, preference, new_variables = select_dependent(terms)  # clause 2
     category = preference[0]
     selected = preference[1]
+    if TRACE is not None:
+        TRACE("solve", category, deref(selected))
     form_1 = isolate(selected, form)
     if form_1 is None:
         return _SOLVE_FAILED, None
     if category == 1:
         _put_attributes(selected, trail, linear_form=form_1)
-        back_substitute_collect_binding(form_1.terms, selected,
-                                        form_1.constant, bindings)
+        back_substitute_collect_binding(form_1, selected, bindings)
         if not equate_components(new_variables, components, trail):
             return _SOLVE_FAILED, None
         return _SOLVE_FINISHED, None
@@ -1040,8 +1055,7 @@ def solve_step(terms, form, constant, bindings, trail):
             return _SOLVE_FAILED, None
         if not undetermined_active(form_1, trail):
             return _SOLVE_FAILED, None
-        back_substitute_collect_binding(form_1.terms, selected,
-                                        form_1.constant, bindings)
+        back_substitute_collect_binding(form_1, selected, bindings)
         return _SOLVE_RECONSIDER, new_basis
     # category 4
     state = state_of(selected)
@@ -1085,6 +1099,8 @@ def solve_for_variable_homogeneous(terms, form, constant, selected, bindings,
         return is_zero(constant)
     components, _, new_variables = select_dependent(terms)  # clause 2
     selected = deref(selected)
+    if TRACE is not None:
+        TRACE("solve_for_variable", selected)
     form_1 = isolate(selected, form)
     if form_1 is None:
         return False
@@ -1100,8 +1116,7 @@ def solve_for_variable_homogeneous(terms, form, constant, selected, bindings,
             back_substitute_variables(dependents, selected, form_1, trail)
         return equate_components(new_variables, components, trail)
     _put_attributes(selected, trail, linear_form=form_1)
-    back_substitute_collect_binding(form_1.terms, selected, form_1.constant,
-                                    bindings)
+    back_substitute_collect_binding(form_1, selected, bindings)
     return equate_components(new_variables, components, trail)
 
 
@@ -1426,6 +1441,9 @@ def pivot_ignoring_bounds(dependent, independent_variable, trail):
     if deleted is None:
         return False
     form_0, coefficient = deleted
+    if TRACE is not None:
+        TRACE("pivot_ignoring_bounds", deref(dependent), independent_variable,
+              coefficient)
     factor = divide(MINUS_ONE, coefficient)
     form = add_linear_forms_scaled(
         form_0, factor, LinearForm(ZERO, ZERO, [(deref(dependent), MINUS_ONE)]),
@@ -1451,6 +1469,8 @@ def pivot_or_bound_swap(limiting, variable, limiting_bounds, variable_bounds,
     """bv.pl, pivot_or_bound_swap/4 (pivot_b/4): where *variable* limits
     itself (`Vub == V`), swap its active bound; otherwise pivot."""
     if deref(limiting) is deref(variable):
+        if TRACE is not None:
+            TRACE("bound_swap", deref(variable))
         _put_attributes(variable, trail, bounds=limiting_bounds)
         delta = bound_swap_delta(limiting_bounds)
         if delta is None:
@@ -1498,6 +1518,9 @@ def pivot(dependent, independent_variable, independent_bounds, trail):
     if deleted is None:
         return False
     form_0, coefficient = deleted
+    if TRACE is not None:
+        TRACE("pivot", dependent, independent_variable, coefficient,
+              state.component)
     factor = divide(MINUS_ONE, coefficient)
     form = add_linear_forms_scaled(
         form_0, factor,
@@ -1593,6 +1616,7 @@ def back_substitute_variables(members, variable, form, trail):
     (inlined here: a search's every pivot comes this way, review N2)."""
     meter = _current_meter()
     node = deref(members)
+    keys = order_keys(form.terms)    # the definition's orders, looked up once
     if meter is None:
         while type(node) is ListCell:
             member = deref(node.head)
@@ -1601,7 +1625,7 @@ def back_substitute_variables(members, variable, form, trail):
             if state is None or state.linear_form is None:
                 continue
             new_form = normal_form_substitute(variable, form,
-                                              state.linear_form)
+                                              state.linear_form, keys)
             if new_form is not None:
                 put_state(member, with_changes(state, linear_form=new_form),
                           trail)
@@ -1622,7 +1646,8 @@ def back_substitute_variables(members, variable, form, trail):
         state = state_of(member)
         if state is None or state.linear_form is None:
             continue
-        new_form = normal_form_substitute(variable, form, state.linear_form)
+        new_form = normal_form_substitute(variable, form, state.linear_form,
+                                          keys)
         if new_form is None:
             written += 1                                # the row read
             continue
@@ -1633,7 +1658,7 @@ def back_substitute_variables(members, variable, form, trail):
         if big or abs(c0) + c1 + abs(r0) + r1 >= word:
             written += 1 + row_size(new_form)
         else:
-            written += 4 + len(new_form.terms)
+            written += 4 + term_count(new_form)
     used = meter.used + written
     meter.used = used
     if used > meter.threshold:
@@ -1651,6 +1676,7 @@ def back_substitute_collect_bindings(members, variable, form, bindings, trail):
     if meter is not None:
         return _metered_back_substitute(meter, members, variable, form,
                                         bindings, trail)
+    keys = order_keys(form.terms)    # the definition's orders, looked up once
     node = deref(members)
     while type(node) is ListCell:
         member = deref(node.head)
@@ -1658,11 +1684,11 @@ def back_substitute_collect_bindings(members, variable, form, bindings, trail):
         state = state_of(member)
         if state is None or state.linear_form is None:
             continue
-        new_form = normal_form_substitute(variable, form, state.linear_form)
+        new_form = normal_form_substitute(variable, form, state.linear_form,
+                                          keys)
         if new_form is not None:
             put_state(member, with_changes(state, linear_form=new_form), trail)
-            back_substitute_collect_binding(new_form.terms, member,
-                                            new_form.constant, bindings)
+            back_substitute_collect_binding(new_form, member, bindings)
     return True
 
 
@@ -1686,6 +1712,7 @@ def _metered_back_substitute(meter, members, variable, form, bindings,
                 big = True
                 break
     written = 0
+    keys = order_keys(form.terms)    # the definition's orders, looked up once
     node = deref(members)
     while type(node) is ListCell:
         member = deref(node.head)
@@ -1693,20 +1720,20 @@ def _metered_back_substitute(meter, members, variable, form, bindings,
         state = state_of(member)
         if state is None or state.linear_form is None:
             continue
-        new_form = normal_form_substitute(variable, form, state.linear_form)
+        new_form = normal_form_substitute(variable, form, state.linear_form,
+                                          keys)
         if new_form is None:
             written += 1                                # the row read
             continue
         put_state(member, with_changes(state, linear_form=new_form), trail)
-        back_substitute_collect_binding(new_form.terms, member,
-                                        new_form.constant, bindings)
+        back_substitute_collect_binding(new_form, member, bindings)
         # the row read, and the row written: small_row_size, inlined
         c0, c1 = new_form.constant
         r0, r1 = new_form.rest
         if big or abs(c0) + c1 + abs(r0) + r1 >= word:
             written += 1 + row_size(new_form)
         else:
-            written += 4 + len(new_form.terms)
+            written += 4 + term_count(new_form)
     used = meter.used + written
     meter.used = used
     if used > meter.threshold:
@@ -1714,11 +1741,12 @@ def _metered_back_substitute(meter, members, variable, form, bindings,
     return True
 
 
-def back_substitute_collect_binding(homogeneous, variable, constant, bindings):
+def back_substitute_collect_binding(form, variable, bindings):
     """bv.pl, back_substitute_collect_binding//3 (bs_collect_binding//3): a
-    row with no variables left binds its variable."""
-    if not homogeneous:
-        bindings.append((variable, constant))
+    row with no variables left binds its variable.  It takes the row, not
+    its terms, so a shared tail is not copied to be tested (has_no_terms)."""
+    if has_no_terms(form):
+        bindings.append((variable, form.constant))
 
 
 # ------------------------------ reconsider the basis --------------------------

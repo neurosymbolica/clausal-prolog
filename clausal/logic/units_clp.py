@@ -145,32 +145,68 @@ def _is_plain_number(x: Any) -> bool:
 _FOREIGN = None   # _scan's third answer: a leaf the side channel does not speak for
 
 
-def _scan(x: Any):
+#: On a walk's stack, the marker that the compound whose id is the next
+#: item is left: it is off the path from the root.
+_LEAVE = object()
+
+
+def _scan(x: Any, strict=None):
     """True: units material found. False: none. None: a foreign leaf
     (atom, string, date, …) — not engaged, no exception raised for it,
     since a comparison over atoms is ordinary corpus code. Primes the lazy
     term-class imports itself: it is an entry point for callers that go
-    nowhere else in this module (cumulative/2)."""
+    nowhere else in this module (cumulative/2).
+
+    Leaves are read left to right on an explicit stack, so a sum nested
+    100,000 deep raises no RecursionError (clpq DEVIATIONS.md D27); the
+    first foreign leaf answers None, else any material True.  A compound
+    met again while it is on the path from the root closes a cycle
+    (``X = 1 + X``): ``clpfd._refuse_cycle`` raises
+    ``type_error(evaluable, F/A)`` under the CLP(Q)/CLP(R) context
+    *strict*, ``resource_error(finite_memory)`` without one.  A subterm
+    shared by two branches is no cycle."""
     if _Quantity is None:
         _ensure_imports()
-    x = deref(x)
-    if isinstance(x, _Quantity):
-        return True
-    if is_var(x):
-        return get_attr(x, UNITS_KEY) is not None
-    if _is_plain_number(x):
-        return False
-    if isinstance(x, _BINARY):
-        left = _scan(x.left)
-        if left is _FOREIGN:
+    found = False
+    on_path = set()
+    stack = [x]
+    while stack:
+        x = stack.pop()
+        if x is _LEAVE:
+            on_path.discard(stack.pop())
+            continue
+        x = deref(x)
+        if isinstance(x, _Quantity):
+            found = True
+        elif is_var(x):
+            found = found or get_attr(x, UNITS_KEY) is not None
+        elif _is_plain_number(x):
+            pass
+        elif isinstance(x, _BINARY):
+            key = _enter(x, on_path, strict)
+            stack.append(key)
+            stack.append(_LEAVE)
+            stack.append(x.right)
+            stack.append(x.left)
+        elif isinstance(x, _Negate):
+            key = _enter(x, on_path, strict)
+            stack.append(key)
+            stack.append(_LEAVE)
+            stack.append(x.operand)
+        else:
             return _FOREIGN
-        right = _scan(x.right)
-        if right is _FOREIGN:
-            return _FOREIGN
-        return left or right
-    if isinstance(x, _Negate):
-        return _scan(x.operand)
-    return _FOREIGN
+    return found
+
+
+def _enter(x, on_path: set, strict) -> int:
+    """Put the compound *x* on the path (its id, returned), or raise the
+    cycle error when it is on it already."""
+    key = id(x)
+    if key in on_path:
+        from clausal.logic.clpfd import _refuse_cycle  # noqa: PLC0415
+        _refuse_cycle(x, strict)
+    on_path.add(key)
+    return key
 
 
 def _refuse_bypassed(v, context: str) -> None:
@@ -534,7 +570,8 @@ def strip(x: Any, env: dict[int, dict], trail: Trail) -> Any:
 
 # ── entry point for solver front ends ───────────────────────────────────────
 
-def strip_for_solver(l: Any, r: Any, context: str, trail: Trail):
+def strip_for_solver(l: Any, r: Any, context: str, trail: Trail,
+                     strict: bool = False):
     """The side channel, in one call, for a comparison ``l <op> r``.
 
     Returns None when neither side holds a Quantity or a united Var (the
@@ -556,18 +593,20 @@ def strip_for_solver(l: Any, r: Any, context: str, trail: Trail):
         # arithmetic (a data pair ``a-1(metre)``) comes back as it was and
         # stays foreign to the channel, on the caller's ground fallback.
         from clausal.logic.clpfd import _cells_as_nodes  # noqa: PLC0415
-        l, r = _cells_as_nodes(l, r)
-    material_l = _scan(l)
+        l, r = _cells_as_nodes(l, r, context if strict else None)
+    material_l = _scan(l, context if strict else None)
     if material_l is _FOREIGN:
         return None
-    material_r = _scan(r)
+    material_r = _scan(r, context if strict else None)
     if material_r is _FOREIGN or not (material_l or material_r):
         return None
     try:
         _, _, env = analyse(l, r, context)
+        return strip(l, env, trail), strip(r, env, trail)
     except _NotEngaged:
         return None
-    return strip(l, env, trail), strip(r, env, trail)
+    except RecursionError:
+        raise _too_deep((l, r), context) from None
 
 
 def strip_for_real_solver(l: Any, r: Any, context: str, trail: Trail):
@@ -580,37 +619,49 @@ def strip_for_real_solver(l: Any, r: Any, context: str, trail: Trail):
     _ensure_imports()
     l, r = deref(l), deref(r)
     for side in (l, r):
-        money = _first_money(side)
+        money = _first_money(side, context)
         if money is not None:
             raise _unsupported(
                 context,
                 f"{money!r} is money, which CLP(R) would compute in floats; "
                 f"post it in CLP(Q) (clpq.rational, {{...}}) instead")
-    return strip_for_solver(l, r, context, trail)
+    return strip_for_solver(l, r, context, trail, strict=True)
 
 
-def _first_money(x: Any):
+def _first_money(x: Any, strict=None):
     """The first currency-dimensioned leaf (a Quantity or a united Var) in
-    the tree, or None."""
+    the tree, or None.  Left to right on an explicit stack (clpq
+    DEVIATIONS.md D27); a cycle raises as in :func:`_scan`."""
     from clausal.terms import _currency_info  # noqa: PLC0415
-    x = deref(x)
-    dims = None
-    if isinstance(x, _Quantity):
-        dims = x.dims
-    elif is_var(x):
-        state = get_attr(x, UNITS_KEY)
-        dims = state.dims if state is not None else None
-    elif isinstance(x, _BINARY):
-        return _first_money(x.left) or _first_money(x.right)
-    elif isinstance(x, _Negate):
-        return _first_money(x.operand)
-    elif type(x) is tuple:
-        for a in x[1:]:
-            found = _first_money(a)
-            if found is not None:
-                return found
-    if dims and any(_currency_info(k) is not None for k in dims):
-        return x
+    on_path = set()
+    stack = [x]
+    while stack:
+        x = stack.pop()
+        if x is _LEAVE:
+            on_path.discard(stack.pop())
+            continue
+        x = deref(x)
+        dims = None
+        if isinstance(x, _Quantity):
+            dims = x.dims
+        elif is_var(x):
+            state = get_attr(x, UNITS_KEY)
+            dims = state.dims if state is not None else None
+        elif isinstance(x, _BINARY):
+            stack.append(_enter(x, on_path, strict))
+            stack.append(_LEAVE)
+            stack.append(x.right)
+            stack.append(x.left)
+        elif isinstance(x, _Negate):
+            stack.append(_enter(x, on_path, strict))
+            stack.append(_LEAVE)
+            stack.append(x.operand)
+        elif type(x) is tuple:
+            stack.append(_enter(x, on_path, strict))
+            stack.append(_LEAVE)
+            stack.extend(reversed(x[1:]))
+        if dims and any(_currency_info(k) is not None for k in dims):
+            return x
     return None
 
 
@@ -629,15 +680,26 @@ def strip_expr_for_solver(expr: Any, context: str, trail: Trail):
         return None
     _ensure_imports()
     expr = deref(expr)
-    material = _scan(expr)
+    material = _scan(expr, context)     # only CLP(Q) and CLP(R) call this
     if material is _FOREIGN or not material:
         return None
     a = _Analysis(context)
     try:
         dims, _ = a.run(expr, expr)
+        return strip(expr, a.env, trail), dims
     except _NotEngaged:
         return None
-    return strip(expr, a.env, trail), dims
+    except RecursionError:
+        raise _too_deep(expr, context) from None
+
+
+def _too_deep(term, context: str) -> Exception:
+    """The dimension analysis and the strip recurse on the tree: past
+    Python's stack a comparison holding units material raises
+    ``resource_error(stack)``, never a RecursionError (clpq DEVIATIONS.md
+    D27)."""
+    from clausal.logic.rational_walk import unwalkable_term_error  # noqa: PLC0415
+    return unwalkable_term_error(term, context, "dimension")
 
 
 def reattach(value, dims: dict):

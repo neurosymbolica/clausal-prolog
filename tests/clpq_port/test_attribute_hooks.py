@@ -845,6 +845,23 @@ def test_a_binding_within_one_component_makes_one_stand_in():
     assert _inf(x, trail) == Fraction(3, 2) and _sup(y, trail) == Fraction(3, 2)
 
 
+def test_a_member_with_no_turn_and_no_stand_in_is_an_internal_error(
+        monkeypatch):
+    # A bound member that is not in its component any more and has no
+    # turn recorded would have its work skipped in silence; that cannot
+    # happen (an earlier hook of the unification that did its work left a
+    # turn), so it is a system_error, not `return True`.
+    monkeypatch.setattr(hooks, "_stand_in_for_bound_members",
+                        lambda components, state, trail: None)
+    trail = Trail()
+    x, y = Var(), Var()
+    assert _post(trail, ("=", ("+", x, y), 3))
+    with pytest.raises(LogicException) as caught:
+        unify(x, 1, trail)
+    assert caught.value.term[1][0] == "system_error"
+    assert is_var(deref(x))
+
+
 # ---------------------------------------------------------------- goals another key wakes
 
 def _woken_by_another_key(order, make_goal, mode):
@@ -1013,3 +1030,54 @@ def test_a_stand_in_left_in_a_row_is_a_member():
             state_of(deref(y)).component))
         assert any(deref(m) is term[0] for m in members)
         assert dump([deref(y)], ["Y"], trail) == [(">=", "Y", 1)]
+
+
+# ---------------------------------------------------------------- the rows the stand-in pass reads
+
+def _count_row_reads(monkeypatch):
+    reads = []
+    original = hooks._rename_in_form
+
+    def counting(form, stand_ins):
+        reads.append(form)
+        return original(form, stand_ins)
+    monkeypatch.setattr(hooks, "_rename_in_form", counting)
+    return reads
+
+
+def test_a_bound_dependent_variable_s_pass_reads_no_other_row(monkeypatch):
+    # {Y = X + Z, W = X + 2*Z}: two of the four are dependent, two
+    # independent.  Binding a dependent one: no other row can hold it, so
+    # the pass reads only its own row (its stand-in's); binding an
+    # independent one that a row holds reads every row.
+    monkeypatch.setattr(hooks, "CHECK_ROW_INDEX", True)
+    trail = Trail()
+    x, y, z, w = Var(), Var(), Var(), Var()
+    assert _post(trail, ("=", y, ("+", x, z)), ("=", w, ("+", x, ("*", 2, z))))
+
+    def in_own_row(v):
+        return any(t[0] is v for t in state_of(v).linear_form.terms)
+    dependent = [v for v in (x, y, z, w) if not in_own_row(v)]
+    independent = [v for v in (x, y, z, w) if in_own_row(v)]
+    assert len(dependent) == 2 and len(independent) == 2
+    reads = _count_row_reads(monkeypatch)
+    mark = trail.mark()
+    assert unify(dependent[0], 1, trail)
+    assert len(reads) == 1
+    trail.undo(mark)
+    del reads[:]
+    assert unify(independent[0], 1, trail)
+    assert len(reads) > 1
+
+
+def test_the_check_mode_catches_a_skipped_row_that_holds_a_bound_variable(monkeypatch):
+    # The mutation: claim every bound member is dependent.  X is
+    # independent and in Y's row, so the skipped rows hold it and
+    # CHECK_ROW_INDEX raises.
+    monkeypatch.setattr(hooks, "CHECK_ROW_INDEX", True)
+    monkeypatch.setattr(hooks, "_in_its_own_row", lambda member, state: False)
+    trail = Trail()
+    x, y, z = Var(), Var(), Var()
+    assert _post(trail, ("=", y, ("+", x, z)))
+    with pytest.raises(AssertionError, match="stand-in pass skipped the rows"):
+        unify(x, 1, trail)
