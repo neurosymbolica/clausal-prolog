@@ -36,7 +36,8 @@ from clausal.logic.variables import (
     register_attr_hook,
 )
 from clausal.logic.exceptions import (
-    LogicException, domain_error, instantiation_error, type_error)
+    LogicException, domain_error, instantiation_error, representation_error,
+    type_error)
 from clausal.logic.clpq.arithmetic import is_number
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -1267,7 +1268,8 @@ def sync_fd_bounds(var: Var, lo: Any, hi: Any, trail: Trail) -> bool:
     return True
 
 
-def _promote_fd_in_expr(expr: Any, trail: Trail) -> None:
+def _promote_fd_in_expr(expr: Any, trail: Trail,
+                        exact: str | None = None) -> None:
     """Promote each FD variable of *expr* that has no Q state
     (``_promote_fd_to_q``), and nothing else: the objective of sup/2,
     inf/2, maximize, minimize and bb_inf, and the targets of in_q, enter
@@ -1275,16 +1277,26 @@ def _promote_fd_in_expr(expr: Any, trail: Trail) -> None:
     variable with neither state stays unknown to the store, so it is
     unbounded, as in clp(q,r) 1.3.3.
 
+    With *exact* (the context of maximize, minimize or bb_inf), an FD
+    variable whose domain has a hole raises
+    representation_error(fd_domain_with_holes), as the port does: the
+    store holds only the hull, so an optimum that binds could land in the
+    hole.
+
     Left to right, depth first, on an explicit stack (DEVIATIONS.md
     D27)."""
+    from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
     stack = [expr]
     while stack:
         expr = deref(stack.pop())
         if is_var(expr):
-            if get_attr(expr, Q_KEY) is None:
-                from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
-                if get_attr(expr, FD_KEY) is not None:
-                    _promote_fd_to_q(expr, trail)
+            fd_state = get_attr(expr, FD_KEY)
+            if (exact is not None and fd_state is not None
+                    and len(fd_state.domain) > 1):
+                raise LogicException(
+                    representation_error("fd_domain_with_holes", exact))
+            if get_attr(expr, Q_KEY) is None and fd_state is not None:
+                _promote_fd_to_q(expr, trail)
             continue
         if isinstance(expr, list):
             stack.extend(reversed(expr))
@@ -2187,7 +2199,7 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
     expr = _cell_as_node(expr, "maximize/2")   # ruling R9 A1: a cell objective is its node
     expr, dims = _units_strip_expr(expr, "maximize/2", trail)
     result_var = deref(result_var)
-    _promote_fd_in_expr(expr, trail)
+    _promote_fd_in_expr(expr, trail, "maximize/2")
     lc = _linearize(expr, trail)
     if lc is None:
         if _zero_divisor(expr):
@@ -2214,7 +2226,7 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
     expr = _cell_as_node(expr, "minimize/2")   # ruling R9 A1: a cell objective is its node
     expr, dims = _units_strip_expr(expr, "minimize/2", trail)
     result_var = deref(result_var)
-    _promote_fd_in_expr(expr, trail)
+    _promote_fd_in_expr(expr, trail, "minimize/2")
     lc = _linearize(expr, trail)
     if lc is None:
         if _zero_divisor(expr):
@@ -2624,8 +2636,9 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
             # infinity raises (bb_inf([nan], X, I) used to succeed).
             return False
 
-    _promote_fd_in_expr(expr, trail)
-    _promote_fd_in_expr([v for v in shadows if is_var(deref(v))], trail)
+    _promote_fd_in_expr(expr, trail, context)
+    _promote_fd_in_expr([v for v in shadows if is_var(deref(v))], trail,
+                        context)
     lc = _linearize(expr, trail)
     if lc is None:
         if _zero_divisor(expr):

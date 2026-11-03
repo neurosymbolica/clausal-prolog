@@ -30,8 +30,8 @@ PL = """\
 :- table(p/1).
 p(X) :- {X >= 1, X =< 5}.
 :- table(r/1).
-r(X) :- {X >= 1}.
-r(X) :- {X >= 2}.
+r(X) :- {X >= 0, X =< 1}.
+r(X) :- {X >= 2, X =< 3}.
 :- table(d/2).
 d(X, Y) :- {X + Y = 3, X =\\= 1}.
 :- table(e/2).
@@ -127,11 +127,13 @@ def test_a_second_call_in_the_continuation_sees_the_bounds(program):
 @pytest.mark.parametrize("suffix", SURFACES)
 def test_answers_that_differ_only_in_constraints_are_two_answers(
         tmp_path, suffix):
-    """r(X) :- {X >= 1}.  r(X) :- {X >= 2}.  Both answers are a bare
-    variable; their constraints tell them apart."""
+    """r(X) is 0 =< X =< 1 or 2 =< X =< 3.  Both answers are a bare
+    variable; their constraints tell them apart (neither entails the
+    other: tests/test_clpq_tabled_answer_subsumption.py has the answers
+    one of which covers the other)."""
     module = _load(tmp_path, PL, suffix)
-    assert _answers(module, "infs_r") == [([1, 2],)]
-    assert _answers(module, "infs_r") == [([1, 2],)]
+    assert _answers(module, "infs_r") == [([0, 2],)]
+    assert _answers(module, "infs_r") == [([0, 2],)]
 
 
 @pytest.mark.parametrize("suffix", SURFACES)

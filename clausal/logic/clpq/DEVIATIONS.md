@@ -1884,3 +1884,20 @@ has an infinite end brings only its finite end (`X #\= 3`: none, so sup/2
 of it fails too).  Legacy promotes at the same points; its promotion of a
 domain with an infinite end raised OverflowError and now leaves that end
 open, as the port's does.
+
+Promotion brings the FD domain's hull, a rational relaxation of it.  For
+sup/2 and inf/2 the answer is the relaxation's bound, documented as such
+(`X in 1..3 \/ 7..9, {X >= 4}, inf(X, I)` gives 4).  An optimum that
+binds, or must be integral and in the domain, cannot be read off the
+hull: bb_inf gave 5, a value in the hole, and maximize/minimize failed
+(their binding is refused by clpfd) where a value exists.  So maximize,
+minimize and bb_inf raise `representation_error(fd_domain_with_holes)`
+when a variable of the objective, or of bb_inf's integers, is an FD
+variable whose domain is more than one interval, whether or not it has
+CLP(Q) state (`refuse_fd_holes`; the same check in legacy).  This adds an
+error 1.3.3 cannot raise (it has no FD variables); no algorithm of the
+port changes (`test_an_optimum_over_a_domain_with_holes_is_refused`).
+Not covered: an FD variable with holes that is linked to the objective
+only through the store (`{Y = X}`, maximize(Y)), and the integrality of an
+FD variable without holes (`X in 1..5, {2*X >= 3}, minimize(X)` still
+fails, the relaxation's optimum 3/2 is refused by clpfd).

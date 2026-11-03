@@ -131,9 +131,19 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `(p(X), sup(X, S))` failed and `(p(X), X = 6)` succeeded. The table now
   stores each such answer with the constraints projected onto its
   variables (the selected solver's `dump/3`) and posts them again on every
-  replay, under either solver; two answers that differ only in their
-  CLP(Q) constraints are two answers. `dif/2`, `freeze/2` and CLP(FD)
-  constraints on a tabled answer are still lost on replay
+  replay, under either solver, including a negation's scan of a complete
+  table (on the caller's trail, so `{X >= 10}, \+ p(X)` holds under the
+  default solver too) and a conditional answer of `query_wfs`. CLP(Q)
+  answers are kept **modulo entailment**: a new answer whose constraints
+  entail those of a stored answer of the same shape is not new. So
+  `p(X) :- {X >= 0}. p(X) :- p(Y), {X >= Y + 1}.` completes (it did not
+  while answers were compared by their text), and the same constraints
+  written two ways are one answer. Termination is not guaranteed in
+  general: a recursion whose answers keep getting more general does not
+  complete (docs/tabling.md). An answer whose constraints are all CLP(Q)
+  waits for its table to complete, so `findall(X-Y, (c(X), c(Y)), L)` with
+  `c(X) :- {X >= 1}. c(1). c(2).` gives all 9 pairs. `dif/2`, `freeze/2`
+  and CLP(FD) constraints on a tabled answer are still lost on replay
   (todo/tabled-answers-drop-their-constraints-on-replay-2026-07-05.md).
 - **A CLP(FD) variable brings its bounds to `in_q/1,3` and to the
   objective of `sup/2`, `inf/2`, `maximize`, `minimize` and `bb_inf`.**
@@ -142,6 +152,13 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (DEVIATIONS.md D29). The default solver's promotion of an FD variable
   whose domain has an infinite end (`X #\= 3, {X =< 7}`) raised
   `OverflowError`; that end is left open now.
+  `maximize`, `minimize` and `bb_inf` raise
+  `representation_error(fd_domain_with_holes)` when a variable of the
+  objective (or of `bb_inf`'s integers) is an FD variable whose domain has
+  a hole (`X in 1..3 \/ 7..9`): the store holds only the domain's hull,
+  so `bb_inf` gave 5, a value in the hole, and `maximize`/`minimize` failed
+  where a value exists. `sup/2` and `inf/2` answer on the hull (a
+  relaxation: `inf(X, I)` gives 4 there with `{X >= 4}`).
 - **CLP(Q)'s default solver refuses a non-linear constraint with an ISO
   error, not a Python `TypeError`.** `{X * Y = 10}`, and `inf/2`, `sup/2`,
   `minimize/1`, `maximize/1` and `bb_inf` on a non-linear objective, raise

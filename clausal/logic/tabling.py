@@ -279,6 +279,29 @@ def _has_attributed_var(answer) -> bool:
 _collect_vars = None   # inspection._collect_vars_impl, bound on first use
 
 
+def _has_uncarried_constraint(entry, idx, answer) -> bool:
+    """Whether the answer stored at *idx* holds a constraint its row does
+    not carry: an attributed variable (``_has_attributed_var``) other than
+    one whose only attribute is the CLP(Q) state of the selected solver,
+    which the row's residue carries (``TableEntry.residues``).  Only such
+    an answer still goes to the caller live, before its table completes
+    (the D68 stopgap); one whose constraints are all CLP(Q) waits for
+    completion like any other."""
+    if not _has_attributed_var(answer):
+        return False
+    if idx not in entry.residues:
+        return True
+    import sys  # noqa: PLC0415
+    q_key = sys.modules["clausal.logic.clpq"].Q_KEY
+    variables: list = []
+    _collect_vars(answer, variables)
+    for v in variables:
+        attrs = getattr(v, "attrs", None)
+        if attrs and any(k != q_key for k in attrs):
+            return True
+    return False
+
+
 def push_leader(entry: TableEntry) -> None:
     _leader_ctx.stack.append(entry)
     _leader_ctx.pushes += 1
@@ -628,10 +651,15 @@ def _simplify_disjuncts(disjuncts: frozenset) -> frozenset:
     )
 
 
+#: ``TableEntry.add_answer``'s default *residue*: take it from *trail*.
+_RESIDUE_FROM_TRAIL = object()
+
+
 class TableEntry:
     """Stores status, answers, and suspended consumers for one subgoal."""
     __slots__ = ("status", "answers", "answer_set", "_answer_index",
-                 "nonground", "residues", "suspended", "conditions",
+                 "nonground", "residues", "_residue_shapes", "suspended",
+                 "conditions",
                  "_current_delays",
                  "scc_deps", "_sources", "owner", "lead", "pi")
 
@@ -658,6 +686,10 @@ class TableEntry:
         # re-posts them on each replay's copy.  Empty unless an answer
         # carried CLP(Q) state.
         self.residues: dict[int, list] = {}
+        # Variant key of a residue row's skeleton (the row without its
+        # residue) -> the indices of the rows of that shape, for answer
+        # subsumption (``add_answer``).
+        self._residue_shapes: dict = {}
         self.suspended: list = []             # list of SuspendedConsumer
         # Parallel to answers. Each element is a DISJUNCTION of delay sets —
         # frozenset[frozenset[DelayedNegation]] — one inner set per derivation
@@ -677,7 +709,7 @@ class TableEntry:
         self._sources: dict | None = None
 
     def add_answer(self, answer: tuple, delay_set: frozenset | None = None,
-                   trail=None) -> int | None:
+                   trail=None, residue=_RESIDUE_FROM_TRAIL) -> int | None:
         """Add a frozen answer tuple.  Returns its INDEX if the tuple was new.
 
         The index is never a bare bool (index 0 is falsy, so callers test
@@ -724,20 +756,41 @@ class TableEntry:
         still posted), an answer whose variables carry CLP(Q) state is
         stored with its residue (``_answer_residue``), and the residue is
         part of the answer's key: two answers that differ only in their
-        constraints (``X >= 1``, ``X >= 2``) are two answers.  The key is a
-        variant check on the residue as the solver writes it, so the same
-        constraints written two ways are kept twice (sound, not minimal).
+        constraints (``X >= 1``, ``X >= 2``) are two answers.
+
+        *residue*, when given, is the ``_answer_residue`` of *answer*
+        taken earlier, while its derivation's constraints were posted (a
+        judging leader adds its conditional rows after the solve); *trail*
+        is then only the trail the subsumption trial runs on.
+
+        Such answers are kept modulo entailment (answer subsumption): an
+        unconditional new answer whose constraints entail those of an
+        unconditional stored answer of the same shape (a variant skeleton)
+        is no new answer -- every instance of it is an instance of the
+        stored one (``_residue_entails``).  So a recursion that derives
+        ever tighter constraints (``X >= 0``, then ``X >= 1``, ...) reaches
+        its fixpoint, and the same constraints written two ways are one
+        answer.  A stored answer is never replaced: a more general answer
+        that comes later is kept beside the one it covers.
         """
         if is_intern_enabled():
             answer = tuple(
                 intern_cell(a) if is_cell(a) else a for a in answer
             )
         ds = delay_set if delay_set is not None else frozenset()
-        residue = None
-        if trail is not None:
-            residue = _answer_residue(answer, trail)
+        if residue is _RESIDUE_FROM_TRAIL:
+            residue = (_answer_residue(answer, trail) if trail is not None
+                       else None)
         if residue is not None:
             row, goals = residue
+            shape = make_subgoal_key(row, None)
+            if not ds:
+                for j in self._residue_shapes.get(shape, ()):
+                    conds = self.conditions[j]
+                    if (conds is not _FAILED and frozenset() in conds
+                            and _residue_entails(row, goals, self.answers[j],
+                                                 self.residues[j], trail)):
+                        return None
             key = make_subgoal_key((*row, goals), None)
         else:
             key = make_subgoal_key(answer, None)
@@ -760,6 +813,7 @@ class TableEntry:
         if residue is not None:
             answer = row
             self.residues[idx] = goals
+            self._residue_shapes.setdefault(shape, []).append(idx)
             self.nonground.add(idx)
         elif not _is_ground(answer):
             answer = _rename_row(answer)
@@ -1095,6 +1149,61 @@ def _answer_residue(answer: tuple, trail):
     return row, goals
 
 
+def _residue_entails(row: tuple, goals: list, old_row: tuple,
+                     old_goals: list, trail) -> bool:
+    """Whether the answer *row* with the CLP(Q) residue *goals* is covered
+    by the stored answer *old_row* / *old_goals* of the same shape: its
+    constraints entail each of the stored answer's.  Decided by the
+    selected solver under a trail mark that is undone: fresh copies of
+    both rows are unified (a renaming: the shapes are variants), the new
+    residue is posted, and each stored goal is asked of entailed/1.
+
+    The posts are independent of the caller's store (the copies' variables
+    are fresh), so the answer is the entailment of the two residues alone.
+    A stored goal over a variable the row does not hold (the slack of a
+    disequation the port writes as ``_A =\\= 0, X = 1 + _A``) is an
+    existential that entailed/1 cannot read: no entailment is claimed
+    (sound: the answer is kept).  Nor is one where entailed/1 raises.
+    Runs with ``trail.defer`` off and the outer goal queue set aside, as
+    dump/3 does, so the posts run their own wakeups inside the trial."""
+    from clausal.logic.clpq import entailed  # noqa: PLC0415
+    from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+    global _collect_vars
+    if _collect_vars is None:
+        from clausal.logic.builtins.inspection import _collect_vars_impl  # noqa: PLC0415
+        _collect_vars = _collect_vars_impl
+    held: list = []
+    _collect_vars(old_row, held)
+    in_goals: list = []
+    _collect_vars(old_goals, in_goals)
+    held_ids = {id(v) for v in held}
+    if any(id(v) not in held_ids for v in in_goals):
+        return False
+    saved_defer = trail.defer
+    trail.defer = False
+    try:
+        mark = trail.mark()
+        try:
+            trail.take_pending()        # the outer queue, back at the undo
+            new_row, new_goals = _rename_row((row, goals))
+            stored_row, stored_goals = _rename_row((old_row, old_goals))
+            if not unify(("$answer", *new_row), ("$answer", *stored_row),
+                         trail):
+                return False
+            if not _post_residue(new_goals, trail):
+                return False
+            for relation, left, right in stored_goals:
+                if not entailed(relation, left, right, trail):
+                    return False
+            return True
+        except LogicException:
+            return False
+        finally:
+            trail.undo(mark)
+    finally:
+        trail.defer = saved_defer
+
+
 def _post_residue(goals: list, trail) -> bool:
     """Post a stored CLP(Q) residue (``_answer_residue``) as ``{Goals}``."""
     from clausal.logic.clpq import clpq_constraint_block  # noqa: PLC0415
@@ -1152,27 +1261,48 @@ except ImportError:
 # ── Delayed negation runtime (WFS) ──────────────────────────────────────
 
 
-def _scan_complete_answers(entry, args):
+def _scan_complete_answers(entry, args, trail=None):
     """Scan a COMPLETE table's answers for matches against *args*.
 
     Returns ``(has_unconditional, has_conditional)``: whether some non-failed
-    answer with an empty / non-empty delay set unifies with the call. Uses a
-    scratch trail — the caller's bindings are untouched. Short-circuits on the
-    first unconditional match (it alone decides the negation).
+    answer with an empty / non-empty delay set unifies with the call.
+    Short-circuits on the first unconditional match (it alone decides the
+    negation).
+
+    With *trail* (the caller's), each row is tried on it under a mark that
+    is undone, as every other replay reads a row: so a row's CLP(Q)
+    residue meets the caller's constraints (``{X >= 10}, \\+ p(X)``
+    against a row ``1 =< X =< 5``).  A scratch trail is a separate store
+    under the default solver, which keeps a tableau per trail: the row
+    matched there, and the negation failed.  The trial runs with
+    ``trail.defer`` off and the outer goal queue set aside (as dump/3
+    does), so a hook the unification wakes decides the match inside it.
+    Without *trail* (a delayed negation resolved later, from its frozen
+    arguments) a scratch trail, as before; the caller's bindings are
+    untouched either way.
     """
-    from clausal.logic.variables import Trail as _Trail
-    scratch = _Trail()
+    if trail is None:
+        from clausal.logic.variables import Trail as _Trail
+        trail = _Trail()
     has_conditional = False
-    for i in range(len(entry.answers)):
-        if entry.conditions[i] is _FAILED:
-            continue
-        mark = scratch.mark()
-        matched = entry.unify_row(i, list(args), scratch)
-        scratch.undo(mark)
-        if matched:
-            if entry.truth_value(i) is True:
-                return True, has_conditional
-            has_conditional = True
+    saved_defer = trail.defer
+    trail.defer = False
+    try:
+        for i in range(len(entry.answers)):
+            if entry.conditions[i] is _FAILED:
+                continue
+            mark = trail.mark()
+            try:
+                trail.take_pending()    # the outer queue, back at the undo
+                matched = entry.unify_row(i, list(args), trail)
+            finally:
+                trail.undo(mark)
+            if matched:
+                if entry.truth_value(i) is True:
+                    return True, has_conditional
+                has_conditional = True
+    finally:
+        trail.defer = saved_defer
     return False, has_conditional
 
 
@@ -1479,7 +1609,7 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
     if entry is not None and entry.status == "complete":
         # Standard NAF on complete table: an unconditional answer fails the
         # negation; a conditional-only match delays it (undefined).
-        unconditional, conditional = _scan_complete_answers(entry, args)
+        unconditional, conditional = _scan_complete_answers(entry, args, trail)
         if unconditional:
             return False  # positive answer exists → negation fails
         if conditional:
@@ -1508,7 +1638,7 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
             continue
         if not _key_subsumes(k, key):
             continue
-        unconditional, conditional = _scan_complete_answers(e, args)
+        unconditional, conditional = _scan_complete_answers(e, args, trail)
         if unconditional:
             return False  # subsuming complete table has a definite answer
         if conditional:
@@ -1546,7 +1676,7 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
                 _resolve_all_conditions(table_store)
             entry = table_store.get(store_key)
             if entry is not None and entry.status == "complete":
-                unconditional, conditional = _scan_complete_answers(entry, args)
+                unconditional, conditional = _scan_complete_answers(entry, args, trail)
                 if unconditional:
                     return False
                 if conditional:
@@ -2047,8 +2177,10 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
         #     constraint (an attributed variable) is still handed over live,
         #     when derived, as before D68 -- the table cannot store the
         #     constraint, and delivering it from the table would drop it
-        #     (``_has_attributed_var``).  Such an answer comes from an
-        #     incomplete table, under a cut-check record.
+        #     (``_has_uncarried_constraint``; a constraint that is all
+        #     CLP(Q) is stored in the row's residue, so that answer waits).
+        #     Such an answer comes from an incomplete table, under a
+        #     cut-check record.
         _note_driven_store(table_store)
         push_leader(entry)
         consumer = _streaming_consumer_leader(entry)
@@ -2125,7 +2257,8 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                         changed = True
                         member = _has_pending_dep(entry)
                         if member or (not delay_set
-                                      and _has_attributed_var(answer)):
+                                      and _has_uncarried_constraint(
+                                          entry, new_idx, answer)):
                             if _srec is None:
                                 _srec = _open_tabled(
                                     entry, functor, arity, trail,

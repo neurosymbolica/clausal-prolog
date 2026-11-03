@@ -147,3 +147,69 @@ def test_on_the_prolog_surfaces(tmp_path, suffix, name, expected):
     answers = [deref(result) for _ in call(name, result, module=module)]
     _query_cache.clear()
     assert answers == [expected]
+
+
+# ---- an FD domain with holes -------------------------------------------
+#
+# Promotion brings the FD domain's hull (its least and greatest values),
+# a rational relaxation.  sup/2 and inf/2 answer on the relaxation: with
+# X in 1..3 \/ 7..9 and {X >= 4}, inf(X, I) gives 4 though X is at least 7.
+# An optimum that BINDS (maximize, minimize) or must be integral and in
+# the domain (bb_inf) cannot be had from the relaxation: bb_inf gave 5, a
+# value in the hole, and maximize/minimize failed where a value exists.
+# They raise representation_error(fd_domain_with_holes) for an FD
+# variable with holes in the objective (or bb_inf's integers).
+
+HOLES_PL = """\
+:- use_module(library(clpq)).
+:- use_module(library(clpz)).
+bb(I) :- X in 1..3 \\/ 7..9, {X >= 4}, bb_inf([X], X, I).
+bb_ints(I) :- X in 1..3 \\/ 7..9, {Y >= 4, Y = X}, bb_inf([X], Y, I).
+mx(X) :- X in 0..2 \\/ 8..10, {X =< 7}, maximize(X).
+mn(X) :- X in 1..3 \\/ 7..9, in_q(X, 4, 10), minimize(X).
+sp(S) :- X in 0..2 \\/ 8..10, {X =< 7}, sup(X, S).
+nf(S) :- X in 1..3 \\/ 7..9, {X >= 4}, inf(X, S).
+caught(F) :- X in 1..3 \\/ 7..9, catch(maximize(X), error(F, _), true).
+"""
+
+
+def _holes_module(tmp_path, suffix):
+    path = tmp_path / f"fd_holes{suffix}"
+    path.write_text(HOLES_PL, encoding="utf-8")
+    return _load_module(path.stem, path)
+
+
+def _first(module, name):
+    _query_cache.clear()
+    result = Var()
+    try:
+        return [deref(result) for _ in call(name, result, module=module)]
+    finally:
+        _query_cache.clear()
+
+
+@pytest.mark.parametrize("suffix", [".pl", ".clausal"])
+@pytest.mark.parametrize("name", ["bb", "bb_ints", "mx", "mn"])
+def test_an_optimum_over_a_domain_with_holes_is_refused(tmp_path, suffix, name):
+    from clausal.logic.exceptions import LogicException
+    module = _holes_module(tmp_path, suffix)
+    with pytest.raises(LogicException) as raised:
+        _first(module, name)
+    assert raised.value.term[1] == ("representation_error",
+                                    "fd_domain_with_holes")
+
+
+@pytest.mark.parametrize("suffix", [".pl", ".clausal"])
+def test_the_error_can_be_caught(tmp_path, suffix):
+    module = _holes_module(tmp_path, suffix)
+    assert _first(module, "caught") == [("representation_error",
+                                         "fd_domain_with_holes")]
+
+
+@pytest.mark.parametrize("suffix", [".pl", ".clausal"])
+@pytest.mark.parametrize("name, expected", [("sp", 7), ("nf", 4)])
+def test_sup_and_inf_over_a_domain_with_holes_answer_on_the_hull(
+        tmp_path, suffix, name, expected):
+    """The relaxation's bound (documented): 7 and 4, where the domain's
+    own are 2 and 7."""
+    assert _first(_holes_module(tmp_path, suffix), name) == [expected]

@@ -645,9 +645,9 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
     """
     from clausal.logic.solve import solve
     from clausal.logic.tabling import (
-        _FAILED, TableEntry, _leader_ctx, _resolve_all_conditions,
-        _resolve_conditions, _unify_answer, current_leader, freeze_args,
-        make_subgoal_key, pop_leader, push_leader,
+        _FAILED, TableEntry, _answer_residue, _leader_ctx,
+        _resolve_all_conditions, _resolve_conditions, current_leader,
+        freeze_args, make_subgoal_key, pop_leader, push_leader,
     )
     from clausal.terms import Undefined
     # Judge, freeze and re-bind over the goal's OWN variables -- deduplicating
@@ -724,7 +724,9 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
                 finally:
                     reattach(seg)
                 continue
-            derivations.append((answer,
+            # Its CLP(Q) residue is taken now, while the derivation's
+            # constraints are posted: the row is added after the solve.
+            derivations.append((answer, _answer_residue(answer, trail),
                                 frozenset(leader._current_delays),
                                 tuple(leader._sources.items())))
 
@@ -733,7 +735,7 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
         for st in driven:
             if all(st is not known for known in stores):
                 stores.append(st)
-        for _answer, direct, sources in derivations:
+        for _answer, _residue, direct, sources in derivations:
             # A condition can name a store we never drove: a table another
             # query completed, consumed here off the COMPLETE path.
             for dn in direct:
@@ -754,7 +756,7 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
 
         # Now every table the derivation touched has settled: read the rows
         # back and give the entry each derivation's FINAL condition.
-        for answer, direct, sources in derivations:
+        for answer, residue, direct, sources in derivations:
             delays = set(direct)
             dead = False
             for (src_entry, i), _src_store in sources:
@@ -763,7 +765,8 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
                     break
                 delays |= src_entry.delays_for(i)
             if not dead:
-                leader.add_answer(answer, frozenset(delays))
+                leader.add_answer(answer, frozenset(delays), trail=trail,
+                                  residue=residue)
         if leader.answers:
             _resolve_conditions(leader, store)
 
@@ -774,7 +777,7 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
             if _answer_key(make_subgoal_key, leader.answers[i]) in streamed:
                 continue          # a definite derivation already delivered it
             mark = trail.mark()
-            if _unify_answer(judge_vars, leader.row(i), trail):
+            if leader.unify_row(i, judge_vars, trail):
                 seg = detach()
                 try:
                     if truth is Undefined:

@@ -87,7 +87,7 @@ from clausal.logic.clpq.legacy import (
     _units_strip, _units_strip_expr)
 from clausal.logic.clpz_surface import _proper_list
 from clausal.logic.exceptions import (
-    LogicException, instantiation_error, type_error)
+    LogicException, instantiation_error, representation_error, type_error)
 from clausal.logic.variables import (
     PlainVar, Var, deref, get_attr, is_var, present_number, unify)
 from clausal.pythonic_ast.nodes import (
@@ -162,20 +162,40 @@ def _variables_of(*terms):
     return found
 
 
-def _promote_fd_variables(left, right, trail):
+def _promote_fd_variables(left, right, trail, exact=None):
     """legacy's _ensure_q_for_expr for an FD variable: a variable with a
     finite-domain attribute and no CLP(Q) state gets its FD bounds as
     rational bounds before the post (ruling R4).  True, or False where a
-    bound fails."""
+    bound fails.
+
+    With *exact* (the context of maximize, minimize or bb_inf), an FD
+    variable whose domain has a hole raises
+    representation_error(fd_domain_with_holes), whether or not it has
+    CLP(Q) state: the store holds only the domain's hull, so an optimum
+    that binds could land in the hole (DEVIATIONS.md D29)."""
     from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
     for variable in _variables_of(left, right):
-        if type(variable) is PlainVar or state_of(variable) is not None:
+        if type(variable) is PlainVar:
+            continue
+        if exact is not None:
+            refuse_fd_holes(variable, exact)
+        if state_of(variable) is not None:
             continue
         fd_state = get_attr(variable, FD_KEY)
         if fd_state is not None:
             if not promote_fd_to_q(variable, fd_state, trail):
                 return False
     return True
+
+
+def refuse_fd_holes(variable, context):
+    """representation_error(fd_domain_with_holes) for an FD variable whose
+    domain is more than one interval (``X in 1..3 \\/ 7..9``)."""
+    from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+    fd_state = get_attr(variable, FD_KEY)
+    if fd_state is not None and len(fd_state.domain) > 1:
+        raise LogicException(
+            representation_error("fd_domain_with_holes", context))
 
 
 def promote_fd_to_q(variable, fd_state, trail):
@@ -488,7 +508,7 @@ def _optimum(port_call, expr, result_var, dims, trail):
     return unify(result_var, _units_result(Fraction(number), dims), trail)
 
 
-def _objective(expr, context, trail):
+def _objective(expr, context, trail, exact=False):
     """The objective *expr* of an optimum as the port reads it, and its
     dimension; (None, None) where an FD variable in it could not take its
     FD bounds.  An FD variable with no CLP(Q) state
@@ -498,7 +518,8 @@ def _objective(expr, context, trail):
     _normal_form.refuse_cyclic_term(expr)
     expr = _cell_as_node(deref(expr), context)
     expr, dims = _units_strip_expr(expr, context, trail)
-    if not _promote_fd_variables(expr, 0, trail):
+    if not _promote_fd_variables(expr, 0, trail,
+                                 context if exact else None):
         return None, None
     return expr, dims
 
@@ -528,7 +549,7 @@ def maximize(expr, result_var, trail):
     an unbounded objective fails as legacy's does."""
     refuse_inside_attribute_hooks(
         trail, ("maximize", expr, result_var), "maximize", 2)
-    expr, dims = _objective(expr, "maximize/2", trail)
+    expr, dims = _objective(expr, "maximize/2", trail, exact=True)
     if expr is None:
         return False
     value = Var()
@@ -545,7 +566,7 @@ def minimize(expr, result_var, trail):
     """bv.pl minimize/1, then *result_var* is the minimum."""
     refuse_inside_attribute_hooks(
         trail, ("minimize", expr, result_var), "minimize", 2)
-    expr, dims = _objective(expr, "minimize/2", trail)
+    expr, dims = _objective(expr, "minimize/2", trail, exact=True)
     if expr is None:
         return False
     value = Var()
@@ -581,14 +602,14 @@ def bb_inf(int_vars, expr, result_var, trail, vertex=None, epsilon=None):
             trail, ("bb_inf", int_vars, expr, result_var, vertex, epsilon),
             "bb_inf", 5)
     int_vars = _proper_list(int_vars, context)
-    expr, dims = _objective(expr, context, trail)
+    expr, dims = _objective(expr, context, trail, exact=True)
     if expr is None:
         return False
     integers = _labels(int_vars, context)
     # Only the integers that are variables: an element that is a term (a
     # cyclic one, test_bb_inf_of_a_cyclic_term_raises) is bb.pl's to refuse.
     if not _promote_fd_variables(
-            [v for v in integers if is_var(deref(v))], 0, trail):
+            [v for v in integers if is_var(deref(v))], 0, trail, context):
         return False
     return _optimum(
         lambda objective, value, trail: _branch_and_bound.bb_inf(
