@@ -201,7 +201,8 @@ class BinOp(Node):
             return NotImplemented
         if type(self) is not type(other):
             return False  # distinct operators (e.g. Add vs Mult) never unify
-        from clausal.logic.variables import unify
+        from clausal.terms import _hook_unifier
+        unify = _hook_unifier(trail)   # occurs-checked under unify_with_occurs_check
         mark = trail.mark()
         if unify(self.left, other.left, trail) and unify(self.right, other.right, trail):
             return True
@@ -236,7 +237,8 @@ class UnaryOp(Node):
             return NotImplemented
         if type(self) is not type(other):
             return False
-        from clausal.logic.variables import unify
+        from clausal.terms import _hook_unifier
+        unify = _hook_unifier(trail)   # occurs-checked under unify_with_occurs_check
         return unify(self.operand, other.operand, trail)
 
 
@@ -1162,7 +1164,8 @@ class Predicate(Node):
         not compared (``compare=False``)."""
         if not isinstance(other, Predicate):
             return NotImplemented
-        from clausal.logic.variables import unify
+        from clausal.terms import _hook_unifier
+        unify = _hook_unifier(trail)   # occurs-checked under unify_with_occurs_check
         mark = trail.mark()
         if unify(self.head, other.head, trail) and unify(self.body, other.body, trail):
             return True

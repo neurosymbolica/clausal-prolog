@@ -7,6 +7,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Fixed
+
+- `unify_with_occurs_check/2` no longer builds a cyclic term through a
+  dict, a list view, a quantity, or an operator or clause term
+  (`DictTerm({k: X})` against `DictTerm({k: g(X)})` succeeded and bound
+  `X = g(X)`). Every `__unify__` hook now binds its parts with the
+  occurs check while the outer unification has it, as the Seg* hooks
+  already did; plain `=/2` is unchanged.
+
 ## 1.4.0 (2026-11-03)
 
 ### Changed
