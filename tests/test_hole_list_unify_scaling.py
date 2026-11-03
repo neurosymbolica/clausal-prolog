@@ -50,6 +50,15 @@ def m(tmp_path_factory):
 _KEEP: list = []
 
 
+@pytest.fixture(autouse=True)
+def _close_searches():
+    """Each test's searches stay open while it runs and are closed after,
+    so no binding outlives the test."""
+    yield
+    while _KEEP:
+        _KEEP.pop().close()
+
+
 def _two_chains(m, n, tail, last=None):
     """Two hole-built lists of *n* elements ending in *tail* (``"var"``:
     one unbound variable both share).  *last*, when given, replaces the
