@@ -1,6 +1,6 @@
 # The `-g` printer's CLP(Q) residuals ignore an `ordering/1` that disagrees with the query's variable order
 
-**Status: FIXED 2026-11-03 (COMMIT).** `holzbaur.residual_q` projects as
+**Status: FIXED 2026-11-03 (112f0cc1).** `holzbaur.residual_q` projects as
 the SICStus toplevel does (`residual_constraints.toplevel_goals`:
 project.pl's `project_attributes/2`, then itf3.pl's and geler.pl's
 `attribute_goal/2` halves), not through dump/3; DEVIATIONS.md D26.
