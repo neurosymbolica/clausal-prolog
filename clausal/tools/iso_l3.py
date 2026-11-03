@@ -1198,6 +1198,37 @@ def _var_names_kw(lw: "_ClauseLowering") -> "ast.expr | None":
                     values=[_name(lw.py_name(n)) for n in names])
 
 
+def _strip_own_qualifier(head, head_sp, own: "str | None"):
+    """``own:H`` (and ``own:own:H``) -> ``H`` with its span subtree, when
+    *own* is the file's module/2 name: Scryer adds such a clause to the
+    module named, which here is this one.  Any other head comes back as it
+    is."""
+    while (own is not None and type(head) is tuple and len(head) == 3
+           and head[0] == ":" and type(head[1]) is str and head[1] == own):
+        head = head[2]
+        head_sp = _arg_spans(head_sp, 2)[1]
+    return head, head_sp
+
+
+def _own_head_item(it, own: "str | None"):
+    """A reader ``Clause`` item with an ``own:`` qualifier stripped from its
+    head (:func:`_strip_own_qualifier`), so the procedure bookkeeping keys
+    it by H; the item itself when there is none to strip."""
+    term = it.term
+    rule = type(term) is tuple and len(term) == 3 and term[0] == ":-"
+    head, head_sp = (term[1], _arg_spans(it.spans, 2)[0]) if rule \
+        else (term, it.spans)
+    new_head, new_sp = _strip_own_qualifier(head, head_sp, own)
+    if new_head is head:
+        return it
+    if not rule:
+        return _Item(new_head, new_sp, it.var_names)
+    spans = it.spans
+    if type(spans) is tuple and len(spans) == 3 and not _is_leaf_span(spans):
+        spans = (spans[0], new_sp, spans[2])
+    return _Item((":-", new_head, term[2]), spans, it.var_names)
+
+
 def lower_clause(term: Any, spans=None, var_names=None,
                  positions: "_Positions | None" = None,
                  singletons: "list | None" = None, ctx=None,
@@ -1227,12 +1258,17 @@ def lower_clause(term: Any, spans=None, var_names=None,
     if type(head) is VarRef:
         raise LoweringRefused(
             "a clause head is a variable (ISO instantiation_error)", whole_span)
+    # ``own:H`` (the file's own module/2 name): a clause of H here, as in
+    # Scryer.
+    head, head_sp = _strip_own_qualifier(
+        head, head_sp, ctx.own_module if ctx is not None else None)
     inner = head
     while type(inner) is tuple and len(inner) == 3 and inner[0] == ":":
         inner = inner[2]
     if inner is not head:
         # ``M:H`` with H an ISO built-in: Scryer refuses it as it refuses
-        # ``H`` (7.5.1).  Any other qualified head is not checked here
+        # ``H`` (7.5.1).  A head qualified with another module is not
+        # checked here: it still lowers as a clause of (:)/2
         # (todo/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md).
         q_name = inner if type(inner) is str else (
             inner[0] if type(inner) is tuple and inner
@@ -1395,6 +1431,9 @@ class _DcgTranslation:
             # HEAD: as a body or phrase/2's first argument ``[]`` is still
             # the empty terminal list (Scryer agrees).
             lhs = "[]"
+        # ``own:g --> ...``: a rule of g//N here, as a clause's ``own:H``.
+        lhs, l_sp = _strip_own_qualifier(
+            lhs, l_sp, getattr(self._ctx, "own_module", None))
         if (type(lhs) is tuple and len(lhs) == 3 and lhs[0] == ":") or not (
                 type(lhs) is str or (type(lhs) is tuple and lhs
                                      and type(lhs[0]) is str
@@ -1808,6 +1847,7 @@ def _lower_all(items, refuse, ctx, uses, body, stats, source, positions,
             # refused, not half-handled (assert would vanish under -O).
             refuse(f"{kind} is not lowered", span)
             continue
+        it = _own_head_item(it, ctx.own_module)
         defined.add(_head_indicator(it.term))
         uses.reif = ctx.reif
         uses.clause(it.term)

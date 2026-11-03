@@ -7,6 +7,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Fixed
+
+- **A clause head qualified with the file's own module defines the
+  predicate** (`.pl` and `.clausal`): in a file whose `module/2` names `m`,
+  `m:foo(1).` and `m:bar(X) :- ...` are clauses of `foo/1` and `bar/1`, as
+  in Scryer; they loaded as clauses of `(:)/2`. A grammar rule
+  `m:g --> ...` there defines `g//0`; it was refused. A head qualified with any
+  other module is unchanged (still `(:)/2`, an open question in
+  `todo/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md`).
+
 ## 1.4.0 (2026-11-03)
 
 ### Changed
