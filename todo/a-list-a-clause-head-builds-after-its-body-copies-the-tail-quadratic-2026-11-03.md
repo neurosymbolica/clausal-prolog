@@ -50,6 +50,51 @@ A list built forward in the body (`X = [N|T], ..., mk(N1, L, T)`) is a chain
 of `SegList` links and builds in linear time; so do `=`/2 and `==`/2 on it
 (tests/test_hole_list_unify_scaling.py).
 
+## Benchmark: benchmarks/bench_head_list_build.py
+
+Builds with `mk/3` (tails `[]`, unbound, `foo`) and `inc/2` (the
+map `inc([H|T], [H1|T1]) :- H1 is H+1, inc(T, T1).` over the `[]` list),
+then times every reader on the built lists, each inline in the clause body
+with `statistics(cpu_time, _)`.  One process per row, capped at 8 GB of
+address space and 300 s.  CPU seconds; one run each, on a shared 32-core
+box at load ~20, so a reader under ~0.01 s is noise.
+
+### Baseline, 2026-11-03 (main 4e352fe4)
+
+`python benchmarks/bench_head_list_build.py 1000 4000 16000 64000 --mem 8 --budget 300`
+
+| row | N=1k | 4k | 16k | 64k |
+|---|---|---|---|---|
+| nil: build | 0.016 | 0.145 | 1.93 | over 8 GB |
+| nil: build_inc | 0.019 | 0.263 | 2.56 | -- |
+| nil: peak RSS (MB) | 66 | 271 | 3 220 | -- |
+| open: build | 0.229 | 3.24 | 54.5 | over 300 s |
+| open: recurse (`walk([_|T])`) | 0.334 | 4.85 | 90.9 | -- |
+| open: peak RSS (MB) | 64 | 267 | 3 202 | -- |
+| improper: build | 0.013 | 0.051 | 0.254 | 1.19 |
+| improper: peak RSS (MB) | 52 | 69 | 138 | 416 |
+
+Memory is quadratic as well as time: every level keeps its own copy of the
+rest, and all of them stay bound, so `mk(64000, [], L)` with its twin
+passed 8 GB (an uncapped run reached 31 GB before it was stopped).  Every
+other nil reader (length, nth1, member, append, msort, sum_list, findall,
+`==`, `=`, compare, copy_term, term_to_atom, write_to_string, recursion)
+took under 0.07 s at 16k, except one `compare/3` at 2.2 s (a garbage
+collection over the 3 GB heap; it was 0.004 s at 4k).  The open list's
+`walk([_|T])` recursion is quadratic on its own: each step takes the rest
+of the one flat `SegList` the build made.
+
+Profiles of the builds alone (`--profile TAIL N`), tottime:
+
+* nil, 16k (2.6 s): `_head_list_unify_output` 1.30 s over 16 000 calls,
+  `mk__3` 0.65 s (freeing and trailing the copies); nothing else over 0.11 s.
+* open, 4k (6.4 s): `walk` 4.13 s over 8 001 999 calls, the generator in
+  `SegList._walk_raw` feeding it 1.21 s, `list.extend` 0.74 s -- all under
+  `_head_list_unify_output` (5.8 s cumulative).
+* inc over nil, 16k (7.5 s): `_head_list_unify_output` 2.79 s over 32 000
+  calls, `inc__2` 2.48 s.
+* improper, 16k (0.87 s): nothing over 0.15 s; linear.
+
 ## Options (need a ruling: they change the representation a head builds)
 
 1. Build `SegList([ConcreteSeg(before), VarSeg(star)])` instead of copying

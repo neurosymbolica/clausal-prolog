@@ -16,6 +16,7 @@ Up: [../AGENTS.md](../AGENTS.md)
 | `run_pyspy.py` | py-spy flamegraphs -> `flamegraphs/<name>.svg` (needs `pip install py-spy`) |
 | `microbench.py` | ns/op for deref, unify, trail mark/undo, trampoline dispatch |
 | `bench_*.py` | One fast path each: bytes / str head-literal dispatch (`bench_bytes_dispatch`, `bench_f046_head_dispatch`), constant-list membership, term construction |
+| `bench_head_list_build.py` | Lists a clause head builds after its body (`mk(N, L, [N|T]) :- ..., mk(N1, L, T)`), tails `[]`/open/improper, and the readers of the built lists (length, nth1, member, append, msort, `==`, `=`, findall, printing, recursion); each row in its own process under a memory and time cap; `--profile TAIL N` |
 | `profiles/*.prof` | Committed cProfile output from an earlier run (not regenerated automatically) |
 
 ## Running
