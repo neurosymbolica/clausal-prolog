@@ -1,5 +1,38 @@
 # `=`/2 and `==`/2 on two hole-built lists are quadratic in their length
 
+**Status: RESOLVED 2026-11-03 (already linear at 4e352fe4; no fixing commit).** `=`/2 and `==`/2 on two
+hole-built lists are linear, and were not the cost measured below: the
+timings are those of BUILDING the lists with `mk/3`, whose head builds
+`[N|T]` after its body and copies `T` at every level -- filed as
+todo/a-list-a-clause-head-builds-after-its-body-copies-the-tail-quadratic-2026-11-03.md.
+No code change.  Pinned in tests/test_hole_list_unify_scaling.py, which
+counts the calls one `=` or `==` makes on two chains of 500 and of 2 000
+links (the shape `X = [N|T]` builds, one `SegList` per element; tails `[]`,
+`foo` and one shared unbound variable; equal, and differing only at the
+last element): the count grows x4.0 for x4 the length (a deliberately
+quadratic walk, tried and reverted, made it x15.7 and failed every row).
+
+Measured 2026-11-03 (main 4e352fe4), `mk/3`'s repro with and without the
+goal (`-g`, wall time including ~0.7 s start-up): `b(16000)` (build only)
+7.3 s, `u(16000)` (`=`) 7.3 s, `t(16000)` (`==`) 6.8 s; cProfile puts `==`
+at 0.04 s of it and `=` lower, and `_head_list_unify_output` at 2.4 s.
+Chains built forward (`mkf(N, L, X) :- N > 0, X = [N|T], ...`), timed from
+Python on the live chain:
+
+| N | `=` (tail `[]`) | `==` (tail `[]`) | `=` (tail `foo`) | `==` (tail `foo`) |
+|---|---|---|---|---|
+| 1 000 | 0.001 s | 0.002 s | 0.002 s | 0.010 s |
+| 10 000 | 0.015 s | 0.018 s | 0.020 s | 0.111 s |
+| 100 000 | 0.28 s | 0.29 s | 0.34 s | 1.76 s |
+
+The mechanism suspected under "Where to look" does not occur:
+`SegList.__unify__` against a `SegList` walks each chain once
+(`_walk_raw`, iterative) and unifies the two flat results, so the C unify
+never meets an inner link; `_iso_identical` reads each chain once
+(`_seg_list_parts`).  `==` on an improper (`foo`) tail walks each side a
+few times over (`_seg_term`, `_rational_eq`): linear, about 5x the calls
+of the proper case.
+
 Filed 2026-10-24 while pinning the deep-term rows of
 `tests/iso/test_cyclic_terms_scryer.py` (the cyclic/deep walkers work,
 todo/done/deep-and-cyclic-terms-overflow-the-recursive-walkers-2026-10-22.md);
