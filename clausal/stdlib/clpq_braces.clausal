@@ -1,0 +1,11 @@
+% library(clpq)'s {}/1 as a PREDICATE, for the brace goals the compiler never
+% sees: call({X > 1}), G = {X > 1}, call(G), findall/3 over a brace goal held
+% in a variable, call({}, C).  A WRITTEN {C} goal in a file that imports
+% library(clpq) is still lowered in place to the seam's clpq.rational(C)
+% (clausal/tools/iso_l3.py); this clause posts the same block through the
+% same builtin, which reads a constraint built at run time as its cell.
+:- module(clpq_braces, [{}/1]).
+
+{Constraints} :- clpq:rational(Constraints).
+
+:- end_module(clpq_braces).
