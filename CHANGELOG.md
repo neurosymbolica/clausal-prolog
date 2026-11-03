@@ -42,6 +42,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `m:(p/N)`) as `p/N`; both were refused. A head qualified with any
   other module is unchanged (still `(:)/2`, an open question in
   `todo/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md`).
+- **library(clpq)'s `{}/1` is callable** on the native front end (`.pl` and
+  Clausal Prolog): `call({X > 1})`, `G = {C}, call(G)`, a variable goal,
+  `findall/3` over a brace goal held in a variable, `call({}, C)` and a
+  toplevel `-g "{X > 1}"` post the block as a written `{C}` does, under
+  both CLP(Q) solvers, where each raised `existence_error(procedure, {}/1)`.
+  An import of library(clpq) (with or without an import list) brings in
+  `{}/1` from `clausal/stdlib/clpq_braces.clausal`, which posts through
+  `clpq.rational/1`; a file's own `{}/1` still wins, and without the import
+  `{}/1` stays undefined, as in Scryer.
 
 ## 1.4.0 (2026-11-03)
 

@@ -29,7 +29,9 @@ What is handled, and how (the ISO directive -> the seam's):
     use_module(library(L)[, Is])    lists/apply/dif/...: built in, nothing
                                     clpz: clausal.logic.clpfd + clpz's ops;
                                     label/1 from clausal.stdlib.clpz (Scryer's)
-                                    reif: clausal.stdlib.reif; clpq: built in
+                                    reif: clausal.stdlib.reif; clpq: built
+                                    in, {}/1 (meta-called) from
+                                    clausal.stdlib.clpq_braces
                                     lambda: built in + its +\\ operator
     dynamic/discontiguous/table(PIs)  the same-named seam directive
     meta_predicate(Heads)           -meta_predicate
@@ -165,10 +167,20 @@ _LIBRARY_OVERRIDES: dict[str, dict[str, str]] = {
     # builtins commit to each call's first truth value.
     "reif": {"tfilter": "clausal.stdlib.reif",
              "tpartition": "clausal.stdlib.reif"},
+    # {}/1 as a predicate, for the brace goals the compiler never sees (a
+    # meta-call: call({X > 1}), G = {C}, call(G)); a WRITTEN {C} is lowered
+    # to clpq.rational(C) in place (iso_l3).  Imported whenever the written
+    # form is lowered: also by an import list that does not name it.
+    "clpq": {"{}": "clausal.stdlib.clpq_braces"},
 }
 _OVERRIDE_ARITIES = {"label": ("label", 1), "sum": ("sum", 3),
                      "tfilter": ("tfilter", 3),
-                     "tpartition": ("tpartition", 4)}
+                     "tpartition": ("tpartition", 4), "{}": ("{}", 1)}
+
+#: Overrides an import list brings in even when it does not name them: the
+#: written goal the name lowers is lowered whatever the list says
+#: (``ctx.clpq``), so its meta-called twin is there too.
+_LIBRARY_ALWAYS_OVERRIDDEN: dict[str, tuple[str, ...]] = {"clpq": ("{}",)}
 
 _AS_REFUSED = ("import aliasing with `as` is refused (it is SWI-only: not "
                "ISO, and Scryer cannot read it); resolve a name clash with a "
@@ -629,7 +641,8 @@ class DirectiveContext:
                 continue
             names = {m for m, _ in pis}
             clash = sorted(f"{n}/{a}" for n, a in defined if n in names)
-            if clash and not any(_engine_goal(n) for n in names):
+            if clash and not any(_engine_goal(n) and n not in _COMPILER_GOALS
+                                 for n in names):
                 # No global of that name to fall back to (clpz's sum/3):
                 # dropping the import cannot turn a call into another
                 # predicate silently -- a sum/3 call then has no
@@ -1336,6 +1349,9 @@ def _use_library(ctx, lib, entries, span, what, listed_ops=()):
                 f"{what}: library({name})'s {n}/{arity} is not available in "
                 f"Clausal (neither an engine builtin nor defined in "
                 f"{module or 'the engine'})", span)
+        for n in _LIBRARY_ALWAYS_OVERRIDDEN.get(name, ()):
+            if all(m != n for m, _a in overridden):
+                overridden.append((n, None))
     groups: list = [(module, wanted)]
     for n, arity in overridden:
         over_module = over_names[n]

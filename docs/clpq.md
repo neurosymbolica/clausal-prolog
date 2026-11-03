@@ -79,6 +79,11 @@ test("box and half") :-
     Y =:= 1 rdiv 4,
     half(H),
     H =:= 3 rdiv 2.
+
+test("a brace goal held in a variable") :-
+    G = {Y >= 2, Y =< 2},
+    findall(Y, G, Ys),
+    Ys == [2].
 ```
 
 `two(3, Q)` gives `Q = 6`; `two(N, 8)` solves `N = 4`; `two(N, Q)` with both unbound leaves
@@ -86,6 +91,11 @@ the constraint in the store and binds `Q` the moment `N` is known. A rational an
 as `3 rdiv 4`; compare it with `=:=`, or with `==` against an `rdiv` value you evaluated
 (`Q is rdiv(3, 4)`). Unifying it with the written term `3 rdiv 4` fails: that is a compound
 term, not the number.
+
+`{}/1` is a predicate too: a brace goal built at run time and meta-called
+(`G = {X > 1}, call(G)`, `findall(X, G, Xs)`, `call({}, C)`, a `-g` goal
+at the toplevel) posts its block as the written goal does. Like the
+written form, it exists in a file that imports `library(clpq)`.
 
 A unit-carrying operand is welcome: a `constant_number_units/3` constant folded in with
 `constant(Name)` keeps its unit through the solver (the units side channel), so
