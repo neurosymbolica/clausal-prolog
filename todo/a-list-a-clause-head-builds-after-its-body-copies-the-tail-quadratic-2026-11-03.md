@@ -1,5 +1,14 @@
 # A list a clause head builds after its body copies the tail: quadratic
 
+**Status: PARTLY FIXED 2026-11-03 (commit f4248cbb).** Option 2 landed: the
+unbound-tail build no longer walks every element at every level (54.5 s to
+2.0 s at 16k; pinned in tests/test_head_list_build_scaling.py).  Option 1
+was prototyped, measured and left out (below): it makes the build linear
+but makes every read of the list pay a walk of the chain.  Still open: the
+`[]`- and unbound-tailed builds copy the rest at every level, quadratic in
+time and memory (over 8 GB at 64k); and, separately, recursing down an
+open-tailed list with `[_|T]` is quadratic whichever way it was built.
+
 Found 2026-11-03 while measuring
 todo/done/hole-built-list-unify-and-eq-are-quadratic-2026-10-24.md, whose
 timings were this cost, not `=`/2 or `==`/2.
@@ -130,6 +139,54 @@ the baseline (the largest moves: open `==` at 16k 0.024 -> 0.003 s, nil
 `=` at 16k is 1.35 s in both runs, also a collection).  The open list's
 `walk([_|T])` recursion is still quadratic; that is a reader, untouched here.
 
+### Option 1, prototyped 2026-11-03 and left out
+
+The prototype (C only, behind an environment switch, not committed): when
+the star is a list of at least `LIST_VIEW_MIN` (64) elements or a
+`SegList`, and nothing follows it, the output is the link
+`SegList([ConcreteSeg(before), VarSeg(star)])` sharing the star's variable
+instead of a copy -- so `mk/3` builds a chain of links, as `X = [N|T]` in a
+body does.  Same benchmark, `--repeat 3` (minimum of three runs), the
+prototype against option 2 alone, nil tail:
+
+| row | 1k off | 1k on | 4k off | 4k on | 16k off | 16k on | 64k on |
+|---|---|---|---|---|---|---|---|
+| build | 0.0158 | 0.0109 | 0.141 | 0.0459 | 1.875 | **0.218** | 1.111 |
+| build_inc | 0.0179 | 0.0134 | 0.247 | 0.0545 | 2.308 | 0.305 | 1.600 |
+| peak RSS (MB) | 65 | 54 | 271 | 81 | 3 218 | 185 | 606 |
+| length | 0.0000 | 0.0016 | 0.0000 | 0.0069 | 0.0000 | **0.1538** | 0.602 |
+| nth1 | 0.0000 | 0.0016 | 0.0000 | 0.0065 | 0.0000 | **0.0315** | 0.132 |
+| member | 0.0001 | 0.0017 | 0.0004 | 0.0073 | 0.0014 | 0.0294 | 0.143 |
+| append | 0.0000 | 0.0015 | 0.0000 | 0.0066 | 0.0002 | 0.0273 | 0.132 |
+| msort | 0.0001 | 0.0016 | 0.0002 | 0.0067 | 0.0008 | 0.0280 | 0.135 |
+| sum_list | 0.0003 | 0.0018 | 0.0012 | 0.0077 | 0.0045 | 0.0320 | 0.150 |
+| findall_member | 0.0008 | 0.0024 | 0.0032 | 0.0099 | 0.0132 | 0.0408 | 0.185 |
+| findall_copy | 0.0000 | 0.0014 | 0.0001 | 0.0059 | 0.0004 | 0.0246 | 0.589 |
+| `==` | 0.0004 | 0.0016 | 0.0038 | 0.0070 | 0.0073 | 0.0301 | 0.135 |
+| `=` | 0.0001 | 0.0014 | 0.0002 | 0.0061 | 0.0009 | 0.0282 | 0.129 |
+| compare | 0.0025 | 0.0038 | 0.0040 | 0.0156 | 2.289 | 0.192 | 0.298 |
+| copy_term | 0.0000 | 0.0014 | 0.0000 | 0.0059 | 0.0002 | 0.0289 | 0.591 |
+| term_to_atom | 0.0008 | 0.0021 | 0.0024 | 0.0084 | 0.0091 | 0.0363 | 0.153 |
+| write_to_string | 0.0006 | 0.0020 | 0.0022 | 0.0083 | 0.0089 | 0.0338 | 0.154 |
+| recurse | 0.0042 | 0.0069 | 0.0425 | 0.0261 | 0.0671 | 0.1031 | 0.451 |
+
+Open tail, prototype on (one run): build 0.011 / 0.046 / 0.227 s at
+1k / 4k / 16k (2.0 s with option 2 alone), peak 1 166 MB at 16k; the
+readers 2-10 times slower as above (`=` 0.12 s, `write_to_string` 0.13 s
+at 16k); `walk([_|T])` 87.5 s at 16k, quadratic as before.  The improper
+tail is unchanged (its build already shares the tail as cons cells).
+
+The build is linear (x5 per x4 of N, against x13) and its memory with it.
+But the ruling's second condition fails: every reader regresses well past
+noise, because every read of a chain walks all of it in Python
+(`SegList._walk_raw`, about 2 microseconds a link) where a flat list was
+read in C or not at all -- `length/2` and `nth1/3` go from O(1) to O(N)
+per call, so a program that reads the list once per element (an `nth1/3`
+loop) turns quadratic instead of its build.  Left out.  Making it pay
+would need the readers to read a chain without flattening it (or to
+flatten it once, in place, on first read); that is a change to every list
+reader, not to this output.
+
 ## Options (need a ruling: they change the representation a head builds)
 
 1. Build `SegList([ConcreteSeg(before), VarSeg(star)])` instead of copying
@@ -150,4 +207,5 @@ the baseline (the largest moves: open `==` at 16k 0.024 -> 0.003 s, nil
    inherent to the flat-list representation.
 
 Recommendation: 2 first (no representation change), 1 only with benchmark
-evidence.
+evidence.  Ruled 2026-11-03 as recommended; 2 landed, 1 measured and left
+out (above).
