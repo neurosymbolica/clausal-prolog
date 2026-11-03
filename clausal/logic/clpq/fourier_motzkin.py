@@ -43,6 +43,10 @@ from clausal.logic.clpq.linear_forms import (
 from clausal.logic.clpq.redundancy import redundancy_variables
 from clausal.logic.variables import Var, deref, is_var
 
+#: The algorithm trace (bounded_simplex.TRACE): ``("eliminate", variable)``
+#: for each variable best/3 picks.
+TRACE = None
+
 
 def fourier_motzkin_eliminate(variables, target, pivots, trail):
     """fourmotz.pl, fourier_motzkin_eliminate/3 (fm_elim/3): eliminate the
@@ -83,6 +87,8 @@ def fourier_motzkin_eliminate_internal(variables, target, pivots, trail):
         found = best(variables)
         if found is not None:
             chosen, rest = found
+            if TRACE is not None:
+                TRACE("eliminate", deref(chosen))
             occurrences = occurences(chosen)
             if occurrences is None:
                 return False
