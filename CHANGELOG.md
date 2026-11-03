@@ -33,7 +33,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   apart.  A leaf prints every bound variable (it printed at most 4,
   unmarked), `no bindings` when none is bound, and `bindings unavailable —
   the goal's variable names could not be read from the source` when they
-  cannot be named.  A goal with a
+  cannot be named; a bound variable whose value cannot be printed shows
+  `Name = (its value could not be printed)`.  A Clausal Prolog file's clause
+  is found by its start line and column, so two clauses on one line each
+  print their own head and bindings, and a quoted head or goal leaves out
+  the comments written inside it.  A goal with a
   partial-list argument (`[Key-Value|AccIn]`) in a Clausal Prolog file now
   shows its bindings: the pairing with its source refused the `'.'` list
   term, so the goal printed none.

@@ -795,10 +795,11 @@ def _native_source_text(node, path) -> "str | None":
     if lines is None or not 1 <= line <= end_line <= len(lines):
         return None
     if line == end_line:
-        text = lines[line - 1][col:end_col]
+        text = _strip_comments(lines[line - 1][col:end_col])
     else:
         parts = ([lines[line - 1][col:]] + lines[line:end_line - 1]
                  + [lines[end_line - 1][:end_col]])
+        parts = _strip_comments("\n".join(parts)).split("\n")
         text = " ".join(p.strip() for p in parts if p.strip())
     text = text.strip()
     if not text:
@@ -811,12 +812,14 @@ def _native_source_text(node, path) -> "str | None":
     return text
 
 
-#: Re-read clauses of native Prolog files, by path: ``{start line: item}``.
+#: Re-read clauses of native Prolog files, by path:
+#: ``{(start line, start column): item}``.
 _NATIVE_ITEMS_CACHE: dict[str, dict] = {}
 
 
 def _native_items(path) -> "dict | None":
-    """``{start line: reader Clause item}`` for the Prolog file at *path*.
+    """``{(start line, start column): reader Clause item}`` for the Prolog
+    file at *path* (1-based line, 0-based column, as a clause's position).
 
     Read with the loader's own table (``iso_l3.reader_op_table``), applying
     each ``op/3`` directive and a library import's operators as the loader
@@ -835,12 +838,14 @@ def _native_items(path) -> "dict | None":
         if lines is not None:
             source = "\n".join(lines)
             items, table = iso_l3.iter_iso(source)
+            positions = iso_l3._Positions(source)
             out = {}
             for it in items:
                 if isinstance(it, ReaderClause):
-                    line = iso_l3.line_of(source, iso_l3._top_span(it.spans))
-                    if line is not None:
-                        out.setdefault(line, it)
+                    span = iso_l3._top_span(it.spans)
+                    if span is not None and span[0] >= 0:
+                        # (line, column): two clauses can share a line.
+                        out.setdefault(positions.line_col(span[0]), it)
                     continue
                 t = getattr(it, "term", None)
                 if type(t) is not tuple or not t:
@@ -863,13 +868,20 @@ def _native_items(path) -> "dict | None":
     return out
 
 
+def _native_item(path, clause):
+    """The re-read reader item of *clause*, found by its start line AND
+    column, or ``None``."""
+    pos = getattr(clause, "position", None)
+    if path is None or not (isinstance(pos, (tuple, list)) and len(pos) >= 2):
+        return None
+    items = _native_items(path)
+    return items.get((pos[0], pos[1])) if items else None
+
+
 def _native_twins(path, clause, arity):
     """``[(reader goal, var_names)]`` per body conjunct of a native clause,
     or ``None`` when the re-read clause does not have *arity* conjuncts."""
-    if path is None or not clause.position:
-        return None
-    items = _native_items(path)
-    it = items.get(clause.position[0]) if items else None
+    it = _native_item(path, clause)
     if it is None:
         return None
     t = it.term
@@ -3346,8 +3358,7 @@ def _native_head_text(clause, path) -> "str | None":
     try:
         from clausal.tools import iso_l3  # noqa: PLC0415
 
-        items = _native_items(path)
-        it = items.get(clause.position[0]) if items else None
+        it = _native_item(path, clause)
         lines = _source_lines(path)
         if it is None or lines is None:
             return None
@@ -3357,7 +3368,7 @@ def _native_head_text(clause, path) -> "str | None":
         span = iso_l3._top_span(spans)
         if span is None:
             return None
-        text = "\n".join(lines)[span[0]:span[1]]
+        text = _strip_comments("\n".join(lines)[span[0]:span[1]])
         text = " ".join(p.strip() for p in text.split("\n") if p.strip())
         name = t if type(t) is str else (t[0] if type(t) is tuple and t else None)
         if not text or (type(name) is str and name not in text):
@@ -3365,6 +3376,55 @@ def _native_head_text(clause, path) -> "str | None":
         return text
     except Exception:  # noqa: BLE001 - quoting is a nicety
         return None
+
+
+def _quoted_end(text: str, i: int) -> int:
+    """Index just past the quoted item (or ``0'c`` character code) that
+    starts at ``text[i]``, a quote character."""
+    n, c = len(text), text[i]
+    if (c == "'" and i > 0 and text[i - 1] == "0"
+            and (i < 2 or not text[i - 2].isalnum())):
+        j = i + 2 if i + 1 < n and text[i + 1] != "\\" else i + 3
+        return j + 1 if text[i + 1:i + 3] == "''" else j
+    j = i + 1
+    while j < n:
+        if text[j] == "\\":
+            j += 2
+            continue
+        if text[j] == c:
+            if j + 1 < n and text[j + 1] == c:
+                j += 2
+                continue
+            return j + 1
+        j += 1
+    return n
+
+
+def _strip_comments(text: str) -> str:
+    """Prolog source *text* without its ``% ...`` and ``/* ... */``
+    comments (a ``%`` comment's line break is kept); quoted items and
+    ``0'%`` character codes are left alone."""
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c in "'\"`":
+            j = _quoted_end(text, i)
+            out.append(text[i:j])
+            i = j
+        elif c == "%":
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+        elif text.startswith("/*", i):
+            j = text.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            if i < n and (text[i] in " \t,)]}|"):
+                # ``a /* c */, b``: no stray blank where the comment was.
+                out = ["".join(out).rstrip(" \t")]
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
 
 
 _OPENERS = {"(": ")", "[": "]", "{": "}"}
@@ -3384,24 +3444,7 @@ def _bound_text(text: str, max_chars: int = DIAG_MAX_HEAD_CHARS,
     while i < n:
         c = text[i]
         if c in "'\"`":
-            j = i + 1
-            if (c == "'" and i > 0 and text[i - 1] == "0"
-                    and (i < 2 or not text[i - 2].isalnum())):
-                # 0'c -- a character code: one character, or an escape.
-                j = i + 2 if i + 1 < n and text[i + 1] != "\\" else i + 3
-                j = j + 1 if text[i + 1:i + 3] == "''" else j
-            else:
-                while j < n:
-                    if text[j] == "\\":
-                        j += 2
-                        continue
-                    if text[j] == c:
-                        if j + 1 < n and text[j + 1] == c:
-                            j += 2
-                            continue
-                        j += 1
-                        break
-                    j += 1
+            j = _quoted_end(text, i)
             if not eliding:
                 out.append(text[i:j])
             i = j
@@ -3486,10 +3529,14 @@ def _leaf_bindings(leaf, reified_leaf, path=None,
         try:
             out.append((name, _render_value(value, path)))
         except Exception:  # noqa: BLE001
-            continue
+            # Bound, but its value cannot be printed: never let the leaf
+            # read as having no bindings.
+            out.append((name, UNPRINTABLE_VALUE))
     return out
 
 
+#: Printed for a bound variable whose value cannot be rendered.
+UNPRINTABLE_VALUE = "(its value could not be printed)"
 #: The line under a descent leaf whose variables are all unbound (or that
 #: has none), so that an empty space never reads as a cut.
 NO_BINDINGS = "no bindings"

@@ -1375,3 +1375,74 @@ def test_unavailable_bindings_wording():
     assert BINDINGS_UNAVAILABLE == ("bindings unavailable — the goal's "
                                     "variable names could not be read from "
                                     "the source")
+
+
+# ── native source lookups: by line AND column; comments are not source ─────
+
+def test_two_clauses_on_one_line_list_both_heads(capsys, tmp_path):
+    p = tmp_path / f"oneline{CP}"
+    p.write_text("p(1, a) :- 1 > 2. p(2, b) :- 1 > 2.\n"
+                 "test(t) :- p(3, c).\n")
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert ("no clause head unifies with these arguments — the heads are:\n"
+            f"      oneline{CP}:1  p(1, a)\n"
+            f"      oneline{CP}:1  p(2, b)\n") in out
+
+
+def test_two_clauses_on_one_line_pair_their_own_bindings(capsys, tmp_path):
+    # The second clause's leaf must be named from the SECOND clause: its
+    # variable is B, not the first clause's A.
+    p = tmp_path / f"onebind{CP}"
+    p.write_text("r(A) :- A > 100, A < 0. r(B) :- B > 200, B < 0.\n"
+                 "test(t) :- r(5).\n")
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert (f"      onebind{CP}:1  A > 100  (via onebind{CP}:1)\n"
+            "          A = 5\n"
+            f"      onebind{CP}:1  B > 200  (via onebind{CP}:1)\n"
+            "          B = 5\n") in out
+
+
+def test_comments_inside_a_head_are_not_printed(capsys, tmp_path):
+    p = tmp_path / f"cmt{CP}"
+    p.write_text("q(1,   % zebracomment\n"
+                 "  a /* yakcomment */, 'x % y') :- 1 > 2.\n"
+                 "test(u) :- q(3, c, d).\n")
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert f"      cmt{CP}:1  q(1, a, 'x % y')\n" in out
+    assert "zebracomment" not in out and "yakcomment" not in out
+
+
+def test_strip_comments_helper():
+    from clausal.testing import _strip_comments
+    assert _strip_comments("p(1, % c\n a)") == "p(1, \n a)"
+    assert _strip_comments("p(/* c */ a)") == "p( a)"
+    assert _strip_comments("p('%', \"/*\", 0'%)") == "p('%', \"/*\", 0'%)"
+
+
+def test_a_binding_that_cannot_be_printed_is_not_called_absent(monkeypatch):
+    import clausal.testing as _t
+
+    class Unprintable:
+        def __repr__(self):
+            raise RuntimeError("no")
+        __str__ = __repr__
+
+    monkeypatch.setattr(_t, "_collect_native_named",
+                        lambda goals, twins: [("X", Unprintable())])
+    lines = _t._leaf_binding_lines(None, None, None, native_leaf=("t", {}))
+    assert lines == ["    X = (its value could not be printed)"]
+
+
+def test_comments_inside_a_multi_line_leaf_goal_are_not_printed(
+        capsys, tmp_path):
+    p = tmp_path / f"cmtleaf{CP}"
+    p.write_text("u(N) :- N > 1, between(1,   % wombatcomment\n"
+                 "  N, 0).\n"
+                 "test(v) :- u(5).\n")
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert (f"      cmtleaf{CP}:1  between(1, N, 0)  (via cmtleaf{CP}:1)\n"
+            "          N = 5\n") in out
