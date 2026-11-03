@@ -7,6 +7,21 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Fixed
+
+- **The rest of a query's line is `user_input` while the query runs** in
+  the `?-` top-level (Ulrich Neumerkel's Conformity Testing I #270 and
+  #271): `get_char(C). %a` answers `C = ' '` and `get_char(C).%a`
+  answers `C = '%'`; they answered `C = end_of_file`. Scryer agrees on
+  these, and on `read/1` and `peek_char/1` right after the end token.
+  Clausal still differs from Scryer in what happens to the rest of the
+  line afterwards (open for a ruling): Clausal reads what the query left
+  unread as the next query (`X = 1. Y = 2.` answers both), where Scryer
+  discards it (only `X = 1`); a goal that reads past the line reads the
+  next line in both, but the leftover then runs here; and `get_char(C).`
+  at the end of input with no newline answers `end_of_file` here and
+  `'\n'` in Scryer.
+
 ## 1.4.0 (2026-11-03)
 
 ### Changed
