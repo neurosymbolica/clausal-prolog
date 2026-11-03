@@ -188,6 +188,111 @@ def test_other_module_keeps_the_special_form(tmp_path, surface,
             shutil.rmtree(p, ignore_errors=True)
 
 
+# --- how the file's text may define it ---------------------------------------
+#
+# Whether a goal's arguments are the special form's goals or the
+# definition's data is decided once the whole file is read, from the
+# procedures it defined (after an ``own:`` qualifier is stripped and grammar
+# rules are translated) and its dynamic/1 names, not from how the text is
+# laid out.  Each case's routes must all give ``[mine]``.
+
+_ROUTES = """\
+q1(L) :- findall(Y, forall(Y, true), L).
+q2(L) :- findall(Y, call(forall, Y, true), L).
+q3(L) :- findall(Y, (G = forall(Y, true), call(G)), L).
+q4(L) :- findall(Y, call(forall(Y), true), L).
+"""
+_DEF = "forall(X, _) :- X = mine.\n"
+
+#: (id, program, the predicates asked, the surfaces: "all" or "native").
+LAYOUTS = [
+    ("indented_after", _ROUTES + "    " + _DEF, ("q1", "q2", "q3", "q4"),
+     "all"),
+    ("tab_indented_before", "\t" + _DEF + _ROUTES, ("q1", "q2", "q3", "q4"),
+     "all"),
+    ("after_a_directive_on_its_line",
+     ":- dynamic(p/1). " + _DEF + _ROUTES, ("q1", "q2", "q3", "q4"), "all"),
+    ("after_a_fact_on_its_line", "p(1). " + _DEF + _ROUTES,
+     ("q1", "q2", "q3", "q4"), "all"),
+    ("an_operator", ":- op(700, xfx, forall).\n"
+     + _ROUTES.replace("G = forall(Y, true)", "G = (Y forall true)")
+              .replace("forall(Y, true), L)", "Y forall true, L)")
+     + "X forall _ :- X = mine.\n", ("q1", "q2", "q3", "q4"), "all"),
+    # A goal argument that is no goal (``1``): the file's definition takes
+    # it as data, so the file loads.
+    ("indented_and_a_number_argument",
+     _ROUTES + "  " + _DEF + "t([X]) :- forall(X, 1).\n",
+     ("q1", "q2", "q3", "q4", "t"), "all"),
+    ("indented_freeze_and_a_number_argument",
+     "  freeze(X, _) :- X = mine.\nt([X]) :- freeze(X, 1).\n", ("t",),
+     "all"),
+    # ``m:H`` in the file of module m (native front end; the translator
+    # cannot spell a qualified head).
+    ("own_module_qualified_head",
+     ":- module(own_sf_q, [q1/1, q2/1, q3/1, q4/1, t/1]).\n" + _ROUTES
+     + "own_sf_q:forall(X, _) :- X = mine.\nt([X]) :- forall(X, 1).\n",
+     ("q1", "q2", "q3", "q4", "t"), "native"),
+]
+
+
+def _with_end_module(text: str, suffix: str) -> str:
+    if suffix == CLAUSAL and ":- module(own_sf_q" in text:
+        return text + ":- end_module(own_sf_q).\n"
+    return text
+
+
+@pytest.mark.parametrize("name, text, asked, where", LAYOUTS,
+                         ids=[r[0] for r in LAYOUTS])
+def test_layout_engine(tmp_path, surface, name, text, asked, where):
+    if where == "native" and os.environ.get(
+            "CLAUSAL_PL_FRONTEND") == "translator":
+        pytest.skip("the translator refuses a qualified head")
+    failures = []
+    stem = "own_sf_q" if ":- module(own_sf_q" in text else f"_own_sf_{name}"
+    sys.modules.pop(stem, None)
+    path = tmp_path / f"{stem}{surface}"
+    path.write_text(_with_end_module(text, surface))
+    from clausal.import_hook import _load_module  # noqa: PLC0415
+    try:
+        mod = _load_module(stem, str(path))
+        for q in asked:
+            try:
+                got = _collected(mod, q)
+            except Exception as e:  # noqa: BLE001 -- named below
+                failures.append(f"{q}: {type(e).__name__}: {e}")
+                continue
+            if got != [["mine"]]:
+                failures.append(f"{q}: {got!r}")
+    finally:
+        sys.modules.pop(stem, None)
+    assert not failures, "\n".join(failures)
+
+
+@pytest.mark.parametrize("name, text, asked, _where", LAYOUTS,
+                         ids=[r[0] for r in LAYOUTS])
+def test_layout_oracle(oracle, name, text, asked, _where):
+    goal = ", ".join(f"{q}(A{i})" for i, q in enumerate(asked)) + \
+        ", write([" + ", ".join(f"A{i}" for i in range(len(asked))) + "]), nl"
+    out = oracle(text, goal)
+    want = "[" + ",".join(["[mine]"] * len(asked)) + "]"
+    assert out and out[0] == want, (name, out)
+
+
+def test_term_expansion_definition_refused(tmp_path, surface):
+    """A definition only a term_expansion rule makes is not in the file's
+    text, so the goal's arguments were lowered as the special form's
+    goals.  Calling the definition with them (``call(Y)`` for ``Y``) gave
+    ``[]``: it is refused, loudly.  (Scryer runs the expanded definition.)"""
+    from clausal.logic.compiler.terms_to_goalop import (  # noqa: PLC0415
+        UnseenSpecialFormDefinitionError,
+    )
+    text = ("term_expansion(mk, (forall(X, _) :- X = mine), S, S).\nmk.\n"
+            + _ROUTES)
+    with pytest.raises(UnseenSpecialFormDefinitionError, match="forall/2"):
+        mod = _load(tmp_path, surface, text, "_own_sf_te")
+        _collected(mod, "q1")
+
+
 DYNAMIC_PROGRAM = (":- dynamic(forall/2).\n"
                    "q1(L) :- findall(Y, forall(Y, _), L).\n"
                    "t(L) :- q1([]), assertz(forall(a, b)), q1(L).\n")

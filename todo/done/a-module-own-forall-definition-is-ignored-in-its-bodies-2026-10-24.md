@@ -4,8 +4,11 @@
 definition (clauses or `dynamic/1`) of a special form or goal control that is
 no ISO built-in now runs in its own bodies and through `call/N`, its
 arguments passed as data: the compiler (`terms_to_goalop`) and call/N ask
-`call_body.own_definition_shadows`, and the native front end reads the
-file's heads ahead (`iso_l3.prescan_own_special_forms`). Every such name
+`call_body.own_definition_shadows`; the native front end lowers each such
+goal both ways and chooses once the file is read
+(`iso_l3._settle_own_forms`, a later commit replacing a read-ahead that
+missed indented heads); a definition only term_expansion makes is refused
+(`UnseenSpecialFormDefinitionError`). Every such name
 had the issue: `forall/2`, `call_cleanup/2`, `setup_call_cleanup/3`,
 `call_nth/2`, `count_all/2`, `freeze/2`, `when/2`, `findall/4`,
 `catch_error/2`, `catch_recover/3`, `eval_/2` (`ignore/1`, `not/1`,
@@ -15,7 +18,8 @@ ruling of 2026-10-24, so no further ruling was needed. Scryer refuses
 `findall/4` too (its own builtin); the engine keeps ISO's set. The seam
 keeps its special forms. Left: `todo/pl-translator-call-n-of-a-defined-not-1-2026-11-03.md`
 (translator only). Pinned in tests/iso/test_own_special_form_names_scryer.py
-(test_engine, test_oracle, test_dynamic_engine, test_dynamic_oracle,
+(test_engine, test_oracle, test_layout_engine, test_layout_oracle,
+test_term_expansion_definition_refused, test_dynamic_engine, test_dynamic_oracle,
 test_other_module_keeps_the_special_form, test_seam_keeps_the_special_form).
 
 Filed 2026-10-24, split from

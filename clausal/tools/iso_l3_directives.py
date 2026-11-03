@@ -434,10 +434,15 @@ class DirectiveContext:
         #: of the same name lowers them, or its LoweringRefused): each goal
         #: of an imported special-form name, for a later drop of the import.
         self.special_form_args: dict[int, tuple] = {}
-        #: The special-form names (no ISO built-in) this file itself
-        #: defines, read ahead (``iso_l3.prescan_own_special_forms``): a
-        #: goal of one calls the definition, its arguments as data.
-        self.own_special_forms: "frozenset[tuple[str, int]]" = frozenset()
+        #: id(args list) -> (key, that list, "goals"|"data" (what it
+        #: holds), the arguments as the special form's goals, as data):
+        #: each goal of a special form a file may define, both lowerings
+        #: kept until the file's procedures are known
+        #: (``iso_l3._settle_own_forms``).  A lowering that was refused is
+        #: its LoweringRefused.
+        self.own_form_args: dict[int, tuple] = {}
+        #: Each name/N a dynamic/1 directive of the file names.
+        self.dynamic_pis: set = set()
         #: A constant's declaring directive span, and each predicate a
         #: constants table defines (the constant-name clash check).
         self.constant_spans: dict = {}
@@ -1386,6 +1391,8 @@ def _predspec(directive: str):
                     f"{pi[0]}/{pi[1]} dynamic (ISO permission_error(modify, "
                     f"static_procedure, {pi[0]}/{pi[1]}))", _top(s) or span)
             pis.append(_pi_ast(*pi))
+            if directive == "dynamic":
+                ctx.dynamic_pis.add(pi)
         return ctx.seam(directive, pis, span, what)
     return lower
 

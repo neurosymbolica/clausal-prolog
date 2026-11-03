@@ -329,9 +329,40 @@ def _own_definition_shadows(db: Any, name: str, arity: int) -> bool:
     if key not in SPECIAL_FORMS and key not in GOAL_CONTROLS:
         return False
     from clausal.logic.builtins.call_body import (  # noqa: PLC0415
-        own_definition_shadows,
+        _ISO_TEXT_SURFACES, own_definition_shadows,
     )
-    return own_definition_shadows(db, name, arity)
+    source = getattr(db, "source_defined", None)
+    if source is not None and (key in source or db.is_dynamic(name, arity)):
+        # The file's text defines it (a clause or grammar-rule head before
+        # term expansion, or dynamic/1): both front ends lowered the goal's
+        # arguments as data, for this definition.
+        return own_definition_shadows(db, name, arity) or (
+            getattr(db, "surface", None) in _ISO_TEXT_SURFACES)
+    if not own_definition_shadows(db, name, arity):
+        return False
+    if source is not None:
+        # Defined, but not by the file's text (a term_expansion rule made
+        # the clause): the front ends lowered this goal's arguments as the
+        # special form's goals, and the definition would receive
+        # ``call(Y)`` for ``Y``.  Refused, loudly.
+        raise UnseenSpecialFormDefinitionError(name, arity)
+    return True
+
+
+class UnseenSpecialFormDefinitionError(Exception):
+    """A goal of a special form the module defines only in a way the native
+    front end cannot see (a ``term_expansion`` rule's clause): its
+    arguments were lowered as the special form's goals, so neither the
+    special form nor the definition can run it faithfully."""
+
+    def __init__(self, name: str, arity: int):
+        super().__init__(
+            f"{name}/{arity} is defined in this module only by clauses the "
+            f"file's text does not show (made by term_expansion), so its "
+            f"goals were lowered as the special form {name}/{arity}; "
+            f"define {name}/{arity} with clauses in the file, or call it "
+            f"through call/N")
+        self.name, self.arity = name, arity
 
 
 def _sub_call(goal, func, call_args, call_kwargs, db) -> GoalOp:

@@ -28,9 +28,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `findall(X, forall(X, true), L)` raised `instantiation_error`; it now
   gives `L = [mine]`, as Scryer does. The arguments are passed as written
   (data, not goals). Other modules keep the special form, and so does a
-  seam module that defines the name. Scryer refuses a file that defines
-  `findall/4` (its own builtin); the engine's refusal stays ISO's set.
-  Pinned by `tests/iso/test_own_special_form_names_scryer.py`.
+  seam module that defines the name. Whether the file defines the name is
+  decided from its whole text however it is laid out (indented heads,
+  operators, `own:` qualified heads, dynamic/1). A definition that only a
+  `term_expansion` rule makes is refused when a body calls the name
+  (`UnseenSpecialFormDefinitionError`), where Scryer runs it. Scryer
+  refuses a file that defines `findall/4` (its own builtin); the engine's
+  refusal stays ISO's set. Pinned by
+  `tests/iso/test_own_special_form_names_scryer.py`.
 
 ## 1.4.0 (2026-11-03)
 

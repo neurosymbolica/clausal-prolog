@@ -179,6 +179,12 @@ def compile_module(
 
     # ── Step 1: Term expansion (after imports, before directives) ────────
     from clausal.logic.term_expansion import run_term_expansion
+    # The procedures the file's own text defines, before expansion: a
+    # special form a .pl/.clausal file defines this way is called as the
+    # definition in its bodies (``terms_to_goalop._own_definition_shadows``);
+    # one only an expansion defines is refused there.
+    db.source_defined = frozenset(
+        head_key(n.head) for n in predicate_nodes)
     predicate_nodes = run_term_expansion(predicate_nodes, module_dict, db)
 
     # ── Step 1b: Goal expansion (regex pre-compile + auto-binding) ─────

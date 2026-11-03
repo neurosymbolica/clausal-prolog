@@ -67,7 +67,7 @@ import bisect
 import re
 from typing import Any
 
-from clausal.logic.special_forms import GOAL_POSITIONS
+from clausal.logic.special_forms import GOAL_CONTROLS, GOAL_POSITIONS, SPECIAL_FORMS
 from clausal.tools.prolog_reader import VarRef
 from clausal.tools.iso_builtins import is_iso_builtin, static_procedure_refusal
 
@@ -146,6 +146,13 @@ _REFUSED_CONTROL = {
 #: catch_error/2 and catch_recover/3 too: without them their goal arguments
 #: lowered as DATA and the compiler refused the cell, 2026-10-20).
 _META_GOAL_ARGS: dict[tuple[str, int], tuple[int, ...]] = GOAL_POSITIONS
+
+#: The special forms and goal controls a Prolog text may DEFINE: those that
+#: are no ISO built-in (``forall/2``, ``call_cleanup/2``, ``findall/4`` ...;
+#: operator ruling 2026-10-24).  A goal of one is lowered both ways and
+#: settled once the file's procedures are known (:func:`_settle_own_forms`).
+DEFINABLE_SPECIAL_FORMS: frozenset = frozenset(
+    k for k in (*SPECIAL_FORMS, *GOAL_CONTROLS) if not is_iso_builtin(*k))
 
 #: clpq's ``{C}``: each comparison -> the seam's node for it (``=`` and
 #: ``=:=`` are both equality in library(clpq)).
@@ -609,21 +616,22 @@ class _ClauseLowering:
             # form it may share a name with: its arguments are data, as
             # call/N passes them (the seam's -import_from does the same).
             imported = resolved != name
-            # A special form's name this FILE defines (no ISO built-in, so
-            # it may) is that definition, as in Scryer: its arguments are
-            # data too (``compiler/terms_to_goalop`` calls it).
-            own = (not imported and self._ctx is not None
-                   and (name, len(args)) in self._ctx.own_special_forms)
-            as_special_form = (self._special_form_args(name, args, spans)
-                               if imported else None)
-            lowered = self._goal_args(name, args, spans,
-                                      imported=imported or own)
-            if as_special_form is not None:
-                # Kept for a later ``use_module(M, [])`` that drops the
-                # import: the goal is then the special form again
-                # (``_drop_removed_imports``).
-                self._ctx.special_form_args[id(lowered)] = (
-                    lowered, as_special_form)
+            key = (name, len(args))
+            if (not imported and key in DEFINABLE_SPECIAL_FORMS
+                    and self._ctx is not None
+                    and hasattr(self._ctx, "own_form_args")):
+                lowered = self._own_form_args(key, args, spans)
+            else:
+                as_special_form = (self._special_form_args(name, args, spans)
+                                   if imported else None)
+                lowered = self._goal_args(name, args, spans,
+                                          imported=imported)
+                if as_special_form is not None:
+                    # Kept for a later ``use_module(M, [])`` that drops the
+                    # import: the goal is then the special form again
+                    # (``_drop_removed_imports``).
+                    self._ctx.special_form_args[id(lowered)] = (
+                        lowered, as_special_form)
             head_pos = self._pos.of(_functor_span(sp, name, self._pos.source))
             if (len(args) == 2 and resolved in _REGEX_AUTOBIND_GOALS
                     and not self._meta_depth):
@@ -675,19 +683,58 @@ class _ClauseLowering:
         if (self._ctx is None or not hasattr(self._ctx, "special_form_args")
                 or not _META_GOAL_ARGS.get((name, len(args)))):
             return None
-        saved = (set(self._bound), dict(self.occurrences),
-                 set(self.regex_group_names), self.reordered)
+        return self._aside(lambda: self._goal_args(name, args, spans))
+
+    def _own_form_args(self, key, args: tuple, spans: list) -> list:
+        """The arguments of a goal of a special form a file may define
+        (:data:`DEFINABLE_SPECIAL_FORMS`): whether the file defines it is
+        known only once the whole file is read, so they are lowered BOTH
+        ways -- as the special form's goals, and as written (the data a
+        definition of the name receives, as for an import) -- and the
+        choice is made by :func:`_settle_own_forms`.  The list returned
+        holds the goal lowering, or the data one when only that succeeds;
+        a refusal of both is raised now."""
+        name = key[0]
+        as_data = self._aside(
+            lambda: self._goal_args(name, args, spans, imported=True))
+        saved = self._state()
         try:
-            return self._goal_args(name, args, spans)
+            lowered = as_goals = self._goal_args(name, args, spans)
+            real = "goals"
+        except LoweringRefused as e:
+            if isinstance(as_data, LoweringRefused):
+                raise
+            self._restore(saved)
+            as_goals = e
+            lowered, real = (self._goal_args(name, args, spans,
+                                             imported=True), "data")
+        self._ctx.own_form_args[id(lowered)] = (
+            key, lowered, real, as_goals, as_data)
+        return lowered
+
+    def _aside(self, lower):
+        """``lower()``'s result, or the ``LoweringRefused`` it raised, with
+        the clause's lowering state restored afterwards, so the arguments
+        lowered next bind the same variables first."""
+        saved = self._state()
+        try:
+            return lower()
         except LoweringRefused as e:
             return e
         finally:
-            # (``_if_n`` is not rewound: a truth variable minted here keeps
-            # its name if these arguments are used after all.)
-            (self._bound, occurrences, self.regex_group_names,
-             self.reordered) = saved
-            self.occurrences.clear()
-            self.occurrences.update(occurrences)
+            self._restore(saved)
+
+    def _state(self):
+        return (set(self._bound), dict(self.occurrences),
+                set(self.regex_group_names), self.reordered)
+
+    def _restore(self, saved) -> None:
+        # (``_if_n`` is not rewound: a truth variable minted here keeps
+        # its name if these arguments are used after all.)
+        (self._bound, occurrences, self.regex_group_names,
+         self.reordered) = saved
+        self.occurrences.clear()
+        self.occurrences.update(occurrences)
 
     def _qualified(self, args: tuple, spans: list, sp, pos) -> ast.expr:
         """``m:G`` (D10) -> the seam's qualified call ``a.b.g(...)``: a name
@@ -1725,7 +1772,6 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
                            surface=surface)
     if source is not None:
         ctx.prescanned = prescan_constructors(source)
-        ctx.own_special_forms = prescan_own_special_forms(source)
     uses = Uses()
     body: list[ast.stmt] = []
     stats = {"read": 0, "lowered": 0, "refused": 0, "skipped": 0,
@@ -1888,6 +1934,8 @@ def _lower_all(items, refuse, ctx, uses, body, stats, source, positions,
         refuse(*clash)
     if ctx.dead_stmts or ctx.dropped_keys:
         body = _drop_removed_imports(body, ctx, refuse)
+    if ctx.own_form_args:
+        _settle_own_forms(body, ctx, defined, refuse)
     try:
         body.extend(ctx.auto_declare(uses))
     except DirectiveRefused as e:
@@ -1996,6 +2044,46 @@ def _drop_removed_imports(body: list, ctx, refuse=None) -> list:
                         and kw.value.value in ctx.dropped_keys):
                     kw.value = _const(kw.value.value.rsplit(".", 1)[1])
     return body
+
+
+def _settle_own_forms(body: list, ctx, defined: set, refuse) -> None:
+    """Choose, for each goal of a special form a file may define
+    (``_ClauseLowering._own_form_args``), between its two lowerings, now
+    that the file's procedures are known: *defined* (every clause and
+    grammar-rule head, ``own:`` qualifier stripped) and its ``dynamic/1``
+    names.  A name the file defines is that definition, as in Scryer: its
+    arguments as written.  Otherwise it is the special form: its goals.  A
+    chosen lowering that was refused is reported through *refuse*.
+
+    Only the goals the final tree holds are settled (a goal inside an
+    argument lowering that was not chosen is not), and a settled
+    argument list is walked into, so nested goals settle too.  The
+    compiler (``terms_to_goalop``) makes the same choice from the same
+    facts (the clause heads before term expansion, and dynamic/1), and
+    refuses a definition only a ``term_expansion`` rule makes, whose goals
+    were lowered here as the special form's."""
+    own = {k for k in (*defined, *ctx.dynamic_pis)
+           if k in DEFINABLE_SPECIAL_FORMS}
+    for node in ast.walk(ast.Module(body=body, type_ignores=[])):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == _DOLLAR + "Call"):
+            continue
+        args = next((kw for kw in node.keywords if kw.arg == "args"), None)
+        if args is None or not isinstance(args.value, ast.List):
+            continue
+        elts = args.value.elts
+        entry = ctx.own_form_args.get(id(elts))
+        if entry is None or entry[1] is not elts:
+            continue
+        key, _lowered, real, as_goals, as_data = entry
+        want = "data" if key in own else "goals"
+        if want == real:
+            continue
+        alt = as_data if want == "data" else as_goals
+        if isinstance(alt, LoweringRefused):
+            refuse(str(alt), getattr(alt, "span", None))
+            continue
+        elts[:] = alt
 
 
 def _restore_special_form_args(call: ast.Call, ctx, refuse) -> None:
@@ -2161,71 +2249,6 @@ def _read_as_quad_text(source, issue, table, in_quad):
     if is_labelled_query(item) or (in_quad and is_answer_description(item.term)):
         return item
     return None
-
-
-#: The special forms and goal controls a Prolog text may define: those
-#: that are no ISO built-in (``forall/2``, ``call_cleanup/2``, ``findall/4``
-#: ...; operator ruling 2026-10-24).
-def _definable_special_forms() -> frozenset:
-    from clausal.logic.special_forms import (  # noqa: PLC0415
-        GOAL_CONTROLS, SPECIAL_FORMS,
-    )
-    return frozenset(k for k in (*SPECIAL_FORMS, *GOAL_CONTROLS)
-                     if not is_iso_builtin(*k))
-
-
-DEFINABLE_SPECIAL_FORMS: frozenset = _definable_special_forms()
-
-#: A line that may define one: a clause or grammar-rule head at the start
-#: of a line (``forall(``, ``'forall'(``, ``call_nth -->``), or a
-#: ``name/arity`` a dynamic/1 directive names.  Only a text that matches is
-#: read ahead; a body goal, indented, does not match.
-_DEFINABLE_NAMES = "|".join(
-    re.escape(n) for n in sorted({n for n, _a in DEFINABLE_SPECIAL_FORMS}))
-_OWN_SPECIAL_FORM_RE = re.compile(
-    rf"(?m)^'?(?:{_DEFINABLE_NAMES})'?[ \t]*(?:\(|-->)"
-    rf"|(?:{_DEFINABLE_NAMES})'?[ \t]*/[ \t]*\d")
-
-
-def prescan_own_special_forms(source: str) -> "frozenset[tuple[str, int]]":
-    """The :data:`DEFINABLE_SPECIAL_FORMS` *source* defines, read ahead of
-    lowering: by a clause or grammar-rule head, or a ``dynamic/1``
-    directive.  A goal of such a name anywhere in the file -- before the
-    definition too -- calls the definition, so its arguments are lowered
-    as data, not as the special form's goals, before the first clause is
-    lowered.  (Read with the standard operators, as
-    ``iso_l3_directives.prescan_constructors`` reads.)"""
-    if not _OWN_SPECIAL_FORM_RE.search(source):
-        return frozenset()
-    from clausal.tools.iso_l3_directives import _sequence  # noqa: PLC0415
-    items, _table = iter_iso(source)
-    found: set = set()
-    for it in items:
-        kind = type(it).__name__
-        t = getattr(it, "term", None)
-        if kind == "Directive":
-            if type(t) is tuple and len(t) == 2 and t[0] == "dynamic":
-                for e, _s in _sequence(t[1], None):
-                    if (type(e) is tuple and len(e) == 3 and e[0] == "/"
-                            and type(e[1]) is str and type(e[2]) is int
-                            and (e[1], e[2]) in DEFINABLE_SPECIAL_FORMS):
-                        found.add((e[1], e[2]))
-            continue
-        if kind == "DCGRule":
-            head = t[1] if type(t) is tuple and len(t) == 3 else None
-            if type(head) is tuple and len(head) == 3 and head[0] == ",":
-                head = head[1]          # a pushback: ``H, PB --> B``
-            key = (head, 2) if type(head) is str else (
-                (head[0], len(head) + 1)
-                if type(head) is tuple and head and type(head[0]) is str
-                else None)
-        elif kind == "Clause":
-            key = _head_indicator(t)
-        else:
-            continue
-        if key in DEFINABLE_SPECIAL_FORMS:
-            found.add(key)
-    return frozenset(found)
 
 
 def lower_source(source: str, filename: "str | None" = None, *,

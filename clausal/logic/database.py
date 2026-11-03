@@ -636,6 +636,11 @@ class Database:
         # time and compiled against this db (call/1, phrase/2,3, a query)
         # may hold ``!`` and ``->`` (``call_body.cut_allowed``).
         self.surface: "str | None" = None
+        # The (name, arity) of every procedure the source file's own text
+        # defines, before term expansion (``compiler_v2``); None for a
+        # module no file compiled.  ``terms_to_goalop`` reads it for a
+        # special form's name the file defines.
+        self.source_defined: "frozenset | None" = None
 
     def _home_stores(self) -> tuple:
         """The containers whose keys make a predicate KNOWN here besides a
