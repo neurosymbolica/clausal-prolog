@@ -186,8 +186,7 @@ one component when the binding is inside it
 (`test_a_binding_within_one_component_makes_one_stand_in`).
 
 Nothing else runs inside that window, because one rule holds (ruling
-R27, fail-closed on the hook's own trail since ruling R30, with the
-per-trail limit of ruling R31 below): **no attribute hook body calls an
+R27, fail-closed since ruling R30, on any trail since D26): **no attribute hook body calls an
 entry point of the port**.  A hook body runs while other variables of the
 same unification are bound and their hooks are still to come, so an
 entry point called there reads rows and member lists that hold unhooked
@@ -252,22 +251,21 @@ set and the hook-window fuzz under both switches).  `attribute_goal`
 takes no trail and is not checked; only tests call it (the engine's
 toplevel prints residuals through `residual_q`, which is checked).
 
-The check is per trail (ruling R31).  It reads the counter of the trail
-the entry point is given, and the engine counts hook dispatch per trail.
-A hook body that reaches the store through another trail (a fresh
-`Trail()`) reads 0 there, is not refused, and gets the wrong answer
-above: D3's repro through a fresh trail dumps `[W =< 20]` and leaves Q
-unbound (`test_a_fresh_trail_inside_a_hook_is_not_seen_by_the_check`,
-which pins this limit so that an engine-wide dispatch depth flips it).
-This was so before R30 as well.  So a hook must not reach the store
-through another trail; R27 stays a contract there.
+The check was per trail (ruling R31) until D26: it read only the
+counter of the trail the entry point is given, so a hook body that
+reached the store through another trail (a fresh `Trail()`) read 0
+there, was not refused, and got the wrong answer above (D3's repro
+through a fresh trail dumped `[W =< 20]` and left Q unbound).  It now
+also reads the engine's thread-wide `hook_dispatch_depth()`, and that
+case is refused (D26).
 
 clpfd's calls into CLP(Q) are the exception.  They are calls, not
 registrations, and some run inside a hook (clpfd's propagation in its own
 hook, its reified comparisons, the units hook).  Under
 `CLAUSAL_CLPQ=holzbaur` the adapter's `q_eq`, `q_ne`, `q_le`, `q_lt`,
 `q_gt`, `q_ge` and `sync_fd_bounds` are not refused: they queue the post
-while `trail.hooks_running` is above 0 and post in place at a goal
+while `trail.hooks_running` or `hook_dispatch_depth()` is above 0 (D26)
+and post in place at a goal
 (ruling R28c, `holzbaur.py`'s docstring,
 `test_a_comparison_from_clpfd_inside_a_hook_is_queued` and
 `test_a_comparison_from_clpfd_inside_a_hook_is_queued_on_any_store`).
@@ -1050,8 +1048,9 @@ differently from 1.3.3 itself:
   rows whose coefficients were all negative under `toplevel`
   (`{-X =< -2}` vs `{X >= 2}`), so `dump_q/2`'s spelling changes under the
   switch (`test_dump_q_projection.py`, `test_strict_bounds`).
-- A post from clpfd is queued iff `trail.hooks_running` is above 0
-  (ruling R28c), an O(1) read of the engine's counter (a750f58c).  It
+- A post from clpfd is queued iff `trail.hooks_running` or
+  `hook_dispatch_depth()` is above 0 (ruling R28c, D26), O(1) reads of
+  the engine's counters (a750f58c, 47ba2e0a).  It
   replaced Task 14's scan of the components a post reads for an unhooked
   binding, which was linear in their size per post under a driver.
   PERF-BASELINE (Task 14b, 2026-10-12, one engine build at a750f58c, the
@@ -1077,7 +1076,8 @@ differently from 1.3.3 itself:
   `in_q(X, 0, 100), X =< 10, X >= 3, inf(X, Lo)` to catch it.  That was
   true before a750f58c and is not now.
 - The adapter's entry points other than clpfd's posts refuse to run while
-  `trail.hooks_running` is above 0 (ruling R30, D3).  Legacy has no such
+  `trail.hooks_running` or `hook_dispatch_depth()` is above 0 (ruling
+  R30, D3, D26).  Legacy has no such
   check.  A program whose hook body called `inf/2`, `{}/1`, `dump_q/2`
   and the others got an answer from legacy, and gets
   `permission_error(call, goal, Goal)` from the port.  The cost is one
@@ -1569,3 +1569,29 @@ cannot read.  It now names the expression the base stands for, `sin(_)`
 (`_as_culprit` in `normal_form.py`, at clause 13 and at the repair path's
 last clause; `test_a_non_linear_base_in_an_error_is_its_expression`).
 The variable is the solver's own: the error undoes the caller's binding.
+
+## D26: the hook checks read the engine's dispatch depth on any trail
+
+No change to any algorithm of 1.3.3; this widens D3's refusal.  1.3.3
+has no such check.  The refusal of R30 (`refuse_inside_attribute_hooks`)
+and the queueing of clpfd's posts of R28c (`_post_from_library`,
+`sync_fd_bounds`) read `attributes.inside_attribute_hooks(trail)`:
+`trail.hooks_running` of the trail the call was given, or the engine's
+thread-wide `hook_dispatch_depth()` (47ba2e0a, docs/coroutining.md "On
+any trail").  Before, they read the trail's counter only (ruling R31), so
+a hook body that built a fresh `Trail()` and called an entry point on it
+was not refused and got R27's wrong answer: D3's repro through a fresh
+trail dumped `[W =< 20]` and left Q unbound.  Now every entry point
+raises `permission_error(call, goal, Culprit)` there
+(`test_a_fresh_trail_inside_a_hook_is_refused_too`,
+`test_an_entry_point_called_from_a_hook_on_a_fresh_trail_is_refused`),
+and a post from clpfd through a fresh trail inside a hook is queued on
+that trail, to run when that trail reaches a goal boundary, instead of
+being made in place
+(`test_a_clpfd_post_from_a_hook_on_a_fresh_trail_is_queued`).  A caller
+that drives that trail with `solve`/`call` gets the boundary; a hook
+body that posts on a fresh trail through the Python API and never drains
+it leaves the post on that trail's queue.  The engine's `solve`/`call`
+still refuse only on the same trail (docs/coroutining.md); a driver on a
+fresh trail inside a hook runs with the depth above 0, so the port's
+entry points it reaches refuse.  The cost is one C call per check.
