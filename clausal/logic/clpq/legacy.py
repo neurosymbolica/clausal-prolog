@@ -2608,7 +2608,7 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
             return False
 
     _promote_fd_in_expr(expr, trail)
-    _promote_fd_in_expr(list(shadows), trail)
+    _promote_fd_in_expr([v for v in shadows if is_var(deref(v))], trail)
     lc = _linearize(expr, trail)
     if lc is None:
         if _zero_divisor(expr):

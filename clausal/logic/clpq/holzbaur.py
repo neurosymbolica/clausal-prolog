@@ -581,7 +581,10 @@ def bb_inf(int_vars, expr, result_var, trail, vertex=None, epsilon=None):
     if expr is None:
         return False
     integers = _labels(int_vars, context)
-    if not _promote_fd_variables(integers, 0, trail):
+    # Only the integers that are variables: an element that is a term (a
+    # cyclic one, test_bb_inf_of_a_cyclic_term_raises) is bb.pl's to refuse.
+    if not _promote_fd_variables(
+            [v for v in integers if is_var(deref(v))], 0, trail):
         return False
     return _optimum(
         lambda objective, value, trail: _branch_and_bound.bb_inf(
