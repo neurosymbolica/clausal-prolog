@@ -21,7 +21,7 @@ from clausal.logic.clpq.arithmetic import (
     make_rational, multiply, negate, sign, to_number)
 from clausal.logic.clpq.attributes import state_of
 from clausal.logic.clpq.variable_ordering import (
-    compare_variable_order, order_key, order_keys, order_value_key)
+    order_key, order_keys, order_value_key)
 from clausal.logic.variables import deref, is_var
 
 MINUS_ONE = (-1, 1)
@@ -119,36 +119,52 @@ def add_homogeneous_parts_scaled(terms_a, factor_a, terms_b, factor_b):
     """store.pl, add_linear_ffh/5,7.  The recursion of add_linear_ffh/7,
     unrolled into a two-way merge; its argument swap becomes the two
     indices.  Only a variable in both lists has its zero sum dropped
-    (test_a_zero_factor_keeps_unmerged_terms_as_1_3_3_does)."""
+    (test_a_zero_factor_keeps_unmerged_terms_as_1_3_3_does).
+
+    The merge compares by order_key, looked up once for each term it
+    reaches, as add_homogeneous_parts_first_scaled does; the comparisons
+    and their outcomes are nf_ordering/3's
+    (test_the_scaled_merge_looks_up_each_order_once)."""
     if not terms_a:                                     # add_linear_ffh/5
         return multiply_homogeneous_part(terms_b, factor_b)
     result = []
+    append = result.append
+    length_a = len(terms_a)
+    length_b = len(terms_b)
     i = 0
     j = 0
-    while i < len(terms_a) and j < len(terms_b):
-        x, coefficient_x = terms_a[i]
-        y, coefficient_y = terms_b[j]
-        relation = compare_variable_order(x, y)
-        if relation is None:
+    if length_b:
+        key_a = order_key(terms_a[0][0])
+        key_b = order_key(terms_b[0][0])
+    while i < length_a and j < length_b:
+        if key_a is None or key_b is None:
             return None
-        if relation == 0:
-            coefficient = add(multiply(coefficient_x, factor_a),
-                              multiply(coefficient_y, factor_b))
+        if key_a == key_b:
+            coefficient = add(multiply(terms_a[i][1], factor_a),
+                              multiply(terms_b[j][1], factor_b))
             if not is_zero(coefficient):
-                result.append((x, coefficient))
+                append((terms_a[i][0], coefficient))
             i += 1
             j += 1
-        elif relation < 0:
-            result.append((x, multiply(coefficient_x, factor_a)))
+            if i < length_a:
+                key_a = order_key(terms_a[i][0])
+            if j < length_b:
+                key_b = order_key(terms_b[j][0])
+        elif key_a < key_b:
+            append((terms_a[i][0], multiply(terms_a[i][1], factor_a)))
             i += 1
+            if i < length_a:
+                key_a = order_key(terms_a[i][0])
         else:
-            result.append((y, multiply(coefficient_y, factor_b)))
+            append((terms_b[j][0], multiply(terms_b[j][1], factor_b)))
             j += 1
-    while i < len(terms_a):                             # mult_hom on the rest of A
-        result.append((terms_a[i][0], multiply(terms_a[i][1], factor_a)))
+            if j < length_b:
+                key_b = order_key(terms_b[j][0])
+    while i < length_a:                                 # mult_hom on the rest of A
+        append((terms_a[i][0], multiply(terms_a[i][1], factor_a)))
         i += 1
-    while j < len(terms_b):                             # mult_hom on the rest of B
-        result.append((terms_b[j][0], multiply(terms_b[j][1], factor_b)))
+    while j < length_b:                                 # mult_hom on the rest of B
+        append((terms_b[j][0], multiply(terms_b[j][1], factor_b)))
         j += 1
     return result
 
@@ -224,38 +240,49 @@ def add_linear_forms(form_a, form_b):
 
 
 def add_homogeneous_parts(terms_a, terms_b):
-    """store.pl, add_linear_11h/3,5, unrolled into a two-way merge."""
+    """store.pl, add_linear_11h/3,5, unrolled into a two-way merge.  It
+    compares by order_key, looked up once a term, as
+    add_homogeneous_parts_scaled does
+    (test_the_plain_merge_looks_up_each_order_once)."""
     if not terms_a:                                     # add_linear_11h/3
         return terms_b
     if not terms_b:                                     # add_linear_11h/5, clause 1
         return terms_a
     result = []
+    append = result.append
+    length_a = len(terms_a)
+    length_b = len(terms_b)
     i = 0
     j = 0
-    while i < len(terms_a) and j < len(terms_b):
-        x, coefficient_x = terms_a[i]
-        y, coefficient_y = terms_b[j]
-        relation = compare_variable_order(x, y)
-        if relation is None:
+    key_a = order_key(terms_a[0][0])
+    key_b = order_key(terms_b[0][0])
+    while i < length_a and j < length_b:
+        if key_a is None or key_b is None:
             return None
-        if relation == 0:
-            coefficient = add(coefficient_x, coefficient_y)
+        if key_a == key_b:
+            coefficient = add(terms_a[i][1], terms_b[j][1])
             if not is_zero(coefficient):
-                result.append((x, coefficient))
+                append((terms_a[i][0], coefficient))
             i += 1
             j += 1
-        elif relation < 0:
-            result.append(terms_a[i])
+            if i < length_a:
+                key_a = order_key(terms_a[i][0])
+            if j < length_b:
+                key_b = order_key(terms_b[j][0])
+        elif key_a < key_b:
+            append(terms_a[i])
             i += 1
+            if i < length_a:
+                key_a = order_key(terms_a[i][0])
         else:
-            result.append(terms_b[j])
+            append(terms_b[j])
             j += 1
-    while i < len(terms_a):
-        result.append(terms_a[i])
-        i += 1
-    while j < len(terms_b):
-        result.append(terms_b[j])
-        j += 1
+            if j < length_b:
+                key_b = order_key(terms_b[j][0])
+    if i < length_a:
+        result.extend(terms_a[i:])
+    if j < length_b:
+        result.extend(terms_b[j:])
     return result
 
 

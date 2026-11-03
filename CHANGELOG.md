@@ -14,6 +14,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   of a row for the substituted variable compares ids over the
   dereferenced variables in one C loop instead of a Python loop; the
   same rows, the same answers, the same pivots (complexity survey R1).
+  The merges `add_linear_ffh/7` and `add_linear_11h/5` look each term's
+  order up once, as `add_linear_f1h/6` already did: the same comparisons
+  with the same outcomes (survey R4).
 - **CLP(Q) (`CLAUSAL_CLPQ=holzbaur`): a hook body that reaches the store
   through a fresh `Trail()` is refused too.** The port's entry points
   refused inside an attribute hook only when the trail they were given had
