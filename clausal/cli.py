@@ -460,8 +460,9 @@ def _answer(shown, trail) -> str:
     # The variables the goal left constraints on that no answer variable
     # reaches (call_residue_vars/2): a constraint the incomplete solvers
     # (CLP(FD), dif/2, coroutines) cannot yet refute must still show, not
-    # vanish into `true`.  (CLP(Q) is complete and projects onto the answer
-    # variables, so these take no part in that.)
+    # vanish into `true`.  (CLP(Q) projects onto the answer variables; the
+    # port's projection takes these in as the SICStus toplevel's AttrVars,
+    # so a non-linear goal on them still shows, DEVIATIONS.md D26.)
     from clausal.logic.variables import deref  # noqa: PLC0415
     hidden_residue: dict = {}
     for av in trail.attvars_since(0):
@@ -498,7 +499,8 @@ def _answer(shown, trail) -> str:
         parts += _coroutine_residuals(reached, spell)
         parts += clpq.residual_q(
             list(free.values()), trail,
-            lambda v: names.get(id(v)) or term_writeq(v))
+            lambda v: names.get(id(v)) or term_writeq(v),
+            list(hidden_residue.values()))
     return ", ".join(parts) if parts else "true"
 
 

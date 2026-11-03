@@ -6,7 +6,7 @@ the operator on 2026-10-23 ("all as recommended", below); item 9 was ruled not
 a bug. The two ruled-out examples stay strict xfails, citing the ruling, in
 tests/clpq_port/test_manual_examples.py::test_call_residue and
 ::test_asserting_with_constraints. The printer follow-up is
-todo/clpq-g-printer-should-project-through-itf3-project-attributes-2026-10-23.md.
+todo/done/clpq-g-printer-should-project-through-itf3-project-attributes-2026-10-23.md.
 
 Found by tests/clpq_port/test_manual_examples.py (strict xfails), on the .pl surface with CLAUSAL_CLPQ=holzbaur.
 The oracle (our local clpq.pl port on Scryer) gives the manual's answer unless noted.
@@ -47,7 +47,7 @@ The oracle (our local clpq.pl port on Scryer) gives the manual's answer unless n
    D14). Recommendation: (b), once the hook is ported; until then (a).
    **RULED 2026-10-23** (operator ruling 2026-10-23): keep the printer as it is now, (a);
    porting itf3.pl's project_attributes/2 toplevel hook is a later item, filed as
-   todo/clpq-g-printer-should-project-through-itf3-project-attributes-2026-10-23.md.
+   todo/done/clpq-g-printer-should-project-through-itf3-project-attributes-2026-10-23.md.
    `ordering/1` is missing (4 queries).
 6. **FIXED 2026-10-22 (commit 3dead4ac)** the builtin `bb_inf/5`: the port's bb.pl bb_inf/5 (Vertex
    and Eps); the default solver's bb_inf binds the variables and reads Vertex off them, and reads

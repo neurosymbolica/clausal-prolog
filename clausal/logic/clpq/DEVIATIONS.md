@@ -562,7 +562,7 @@ arrangement/2)` (ruling R13; `test_a_cyclic_ordering_raises_the_system_error`).
 A program that catches the SICStus `type_error` would not catch the port's
 error.
 
-## D7: delayed goals are (procedure, argument) pairs; `all_nonlinear/1` is not kept
+## D7: delayed goals are (procedure, argument) pairs; `all_nonlinear/1` is a list
 
 `geler.pl` delays a Prolog goal and runs it with `call/1`.  The port delays
 a `DelayedGoal(mutex, procedure, argument)` and runs
@@ -643,13 +643,18 @@ a `DelayedGoal(mutex, procedure, argument)` and runs
   (`test_wait_linear_retry_s_goal_is_clpq_qualified_so_it_is_kept`); not
   checked against SICStus.
 - `project_nonlinear/3` also sorts the collected goals and puts them on a
-  fresh variable as `all_nonlinear/1`, which `attribute_goal/2`'s second
-  clause reads.  The variable is local to `project_nonlinear/3`, so no
-  answer can reach it; the port skips the sort and the attribute.  The
-  reachable variables are returned in creation order; 1.3.3's
-  `term_variables_set/2` gives a set, and `project.pl` only marks each
-  variable `target`, so the order does not matter
-  (`test_project_nonlinear_gives_the_variables_the_goals_reach`).
+  fresh variable as `all_nonlinear/1`, which geler.pl's `attribute_goal/2`
+  second clause reads.  No answer term reaches that variable; the SICStus
+  toplevel does, because it asks `attribute_goal/2` of every attributed
+  variable (D26).  The port has no fresh variable: `project_nonlinear`
+  appends the goals to the caller's list `all_nonlinear` when one is
+  given, and the toplevel projection (`residual_constraints.toplevel_goals`)
+  sorts them there (`sort_goals`: the standard order, variables in
+  creation order, D4) and shows them.  dump/3 passes no list, as its
+  goals come from `nonlinear_crux/2`.  The reachable variables are
+  returned in creation order; 1.3.3's `term_variables_set/2` gives a set,
+  and `project.pl` only marks each variable `target`, so the order does
+  not matter (`test_project_nonlinear_gives_the_variables_the_goals_reach`).
 - A PlainVar (an engine variable that cannot carry attributes; 1.3.3 has no
   such variable) cannot hold a delayed goal: `delay_goal` returns False for
   one, attaching nothing, and `verify_delayed` returns False when X's goals
@@ -816,6 +821,15 @@ raise where 1.3.3 answers.  Task 11 removes this check.
 - `goal_expansion/5` and `linear_solver_module/1` are compile-time code:
   `nf_ordering/3` is `variable_ordering.compare_variable_order` (Task 6),
   and `decompose/4` is reading a `LinearForm`'s fields.
+- `attribute_goal/2` is the toplevel's hook: SICStus calls it for each
+  attributed variable after `project_attributes/2` (D26).  The port has
+  no such callback; the `-g` printer's projection
+  (`residual_constraints.toplevel_goals`) calls itf3.pl's half,
+  `dump_linear//2` and `dump_nonzero//2` in the toplevel context, for each
+  variable it shows, and geler.pl's second clause is its reading of the
+  `all_nonlinear` list (D7).  `l2wrapped/2` and `wrap/2` are not called
+  there either: the printer puts each constraint in braces itself, as
+  `wrap/2` does for the typein module (above).
 
 ## D15: dump.pl and redund.pl: what is not ported or differs
 
@@ -839,6 +853,9 @@ raise where 1.3.3 answers.  Task 11 removes this check.
   (`test_dump_of_a_repeated_target_unifies_its_names`).
 - `redundancy_variables/1`'s second clause, which times the first clause's
   call, is unreachable after the first clause's cut and is not ported.
+- The `-g` printer does not print through dump/3 (it did until the todo of
+  2026-10-23 was done); it projects as the SICStus toplevel does (D26).
+  dump/3 is unchanged and still calls `ordering(Target)` first.
 
 ## D16: residual terms hold engine numbers
 
@@ -1569,3 +1586,96 @@ cannot read.  It now names the expression the base stands for, `sin(_)`
 (`_as_culprit` in `normal_form.py`, at clause 13 and at the repair path's
 last clause; `test_a_non_linear_base_in_an_error_is_its_expression`).
 The variable is the solver's own: the error undoes the caller's binding.
+
+## D26: the `-g` printer projects as the SICStus toplevel does
+
+1.3.3 has two ways to show an answer's constraints.  dump.pl's `dump/3`
+(`vars_constraints/2`) calls `ordering(Target)`, which reads the target
+list as the chain V1 < V2 < ..., collects the non-linear goals
+(`nonlin_crux/2`), and then calls project.pl's `project_attributes/2`.
+The SICStus 3 toplevel instead calls the atts hook
+`Module:project_attributes(QueryVars, AttrVars)`, which for clp(Q,R) is
+project.pl's (its "interface predicate"), and then
+`Module:attribute_goal(V, Goal)` for each attributed variable: itf3.pl's
+(`dump_linear//2`, `dump_nonzero//2`) and geler.pl's (the delayed goals
+not yet run, and the `all_nonlinear/1` goals `project_nonlinear/3`
+collected).  No `ordering/1` on the query variables, so the order the
+query names them in imposes nothing; the manual's `ordering/1` answers
+(`mg(P,12,0.01,B,Mp), ordering([Mp])`) show that.  The calling protocol
+is SICStus's, not 1.3.3 text: the port's version is
+`residual_constraints.toplevel_goals`, which `holzbaur.residual_q` (the
+`-g` printer) calls in place of dump/3.  It takes a trail mark, projects,
+copies the goals with each query variable standing for itself, and undoes,
+as the port's dump/3 does (D15) and as the toplevel's failure loop does.
+
+What is not 1.3.3 text, or not known, and so is the port's choice:
+
+- AttrVars.  SICStus gathers it itself; its documentation of the hook is
+  not in the 1.3.3 sources.  The manual's dump/3 section shows the
+  toplevel reporting `clpr:{3.0-sin(_B)<0.0}` for
+  `q(X) :- {X>=10}, {sin(Z)>3}`, a goal on a variable no query variable
+  reaches, which geler.pl can only show through the `all_nonlinear/1`
+  goals project_nonlinear/3 collected from AttrVars: so AttrVars holds
+  the query's attributed variables whether the query variables reach them
+  or not.  The port's AttrVars is every variable with CLP(Q) state
+  reachable (component members, linear forms, delayed goals, transitively;
+  `attributed_variables`) from the query variables and from the
+  attributed variables the `-g` printer collects for call_residue_vars/2
+  (`trail.attvars_since(0)`, the `attributed` argument of `residual_q`)
+  (`test_a_nonlinear_goal_no_query_variable_reaches_shows`,
+  `test_a_linear_constraint_no_query_variable_reaches_is_projected_away`).
+  So a goal's left-over non-linear constraint on internal variables now
+  shows in its answer (`rep(4)` in
+  `test_a_product_repaired_a_binding_at_a_time_raises`), where dump/3
+  over the answer variables showed nothing.
+- Which variables `attribute_goal/2` is asked about, and in what order:
+  the members of the components of AttrVars after the projection,
+  component by component as dump.pl's `related_linear_vars/2` lists them
+  (D4), then the `all_nonlinear` goals.  geler.pl's first clause (goals
+  still not run on a variable) is not called: `project_nonlinear/3` has
+  run every goal of AttrVars, and the projection delays no new one.
+  SICStus's order of the attributed variables is not known.
+- Text.  geler.pl's goals are `clpq:{C}` terms, which the toplevel prints
+  as `clpq:{...}` (the manual: `clpr:{3.0-sin(_B)<0.0}`); the printer
+  strips the module as dump.pl's `nonlinear_strip/3` does and prints
+  `{...}`, as it prints itf3.pl's goals (D14's `wrap/2`).
+- Sorting the `all_nonlinear` goals is `sort/2` in the standard order,
+  two variables in creation order (D4), identical goals once
+  (`residual_constraints.sort_goals`).
+
+The answers change from dump/3's where the projection differs, and agree
+with Scryer's own toplevel (which prints the store without projecting)
+in form on the cases checked: `{X + Y = 3}` prints `{Y = 3 - X}` (dump/3
+over [X, Y]: `{X = 3 - Y}`; Scryer: `_ = 3-X`), `{X =\= 2}` prints
+`{X =\= 2}` (dump/3: `{X = 2 + _Q1}, {_Q1 =\= 0}`; Scryer: `X=\=2`),
+`{X >= 2}, {Y >= 2}` prints them in that order (dump/3: the other;
+Scryer: `X>=2, Y>=2`), and `{2*A+B+C = 10, C-D = E, A < 10}` prints the
+manual's own toplevel answer `C=10-2*A-B, E=10-2*A-B-D, A<10` (dump/3
+over [A,...,E] defines A) (`test_the_manual_s_store_prints_as_its_top_level_answer`).
+`ordering(Y < X), {X + Y = 10}` prints `{Y = 10 - X}` in either variable
+order (`test_an_ordering_against_the_target_order_prints`).  Where a
+delayed goal reaches a variable, `mark_target(NlReachable)` keeps it, so
+`{X*Y = Z, Z + X = 3}` shown on X and Y keeps `{_Q1 = 3 - X}` beside
+`{Y*X - _Q1 = 0}`; dump/3 runs `nonlin_crux/2` first, its reachable set is
+empty (D7), and it shows only the product
+(`test_a_variable_a_nonlinear_goal_reaches_is_kept`).  Over five programs
+the `-g` answers, with the variables named in every order, have the same
+solution set as Scryer's dump/3 with the variables in an order
+ordering/1 admits (z3; `test_every_variable_order_prints_the_oracle_s_solution_set`).
+
+One ordering the manual documents still depends on the order of the
+query's variables: `ordering(B < Mp), mg(P,12,0.01,B,Mp), ordering(P < Mp)`
+leaves B and P unordered, and ordering.pl breaks the tie by sorting the
+graph's vertices, the variables themselves, in the standard order.  That
+order is implementation-defined (SICStus: the address); the port's is
+creation order (D4).  The manual's answer defines P; the port does where
+P is created before B and defines B otherwise, including the manual's own
+query text, which names B first (`_ORDERING_TIES`,
+`test_ordering_in_any_variable_order` in test_manual_examples.py).  Not
+checked against SICStus.  The other three manual `ordering/1` queries
+give the manual's answer in every variable order.
+
+Cost: the projection now covers every component AttrVars reaches, not
+only the query variables' components, so a program that leaves
+unrelated constraints projects them too (and they count on the
+projection meter, D24).

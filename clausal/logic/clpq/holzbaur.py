@@ -638,12 +638,22 @@ def dump(target_vars, names, trail):
         trail, lambda: _residual_constraints.dump(shadows, list(names), trail))
 
 
-def residual_q(target_vars, trail, name_of):
-    """The CLP(Q) constraints on *target_vars* as a toplevel prints them;
-    ``[]`` when none of them carries CLP(Q) state."""
+def residual_q(target_vars, trail, name_of, attributed=()):
+    """The CLP(Q) constraints on *target_vars* (the query's variables) as
+    the toplevel prints them: through project.pl's project_attributes/2
+    and the attribute_goal/2 hooks, not dump/3, so the order of
+    *target_vars* imposes no variable ordering (DEVIATIONS.md D26).
+    *attributed* are the query's attributed variables no query variable
+    reaches (call_residue_vars/2); the projection takes in their
+    constraints too, as the SICStus toplevel does.  ``[]`` when none of
+    them carries CLP(Q) state."""
     refuse_inside_attribute_hooks(
         trail, ("residual_q", target_vars), "residual_q", 1)
-    return dump_q(target_vars, trail, name_of, toplevel=True)
+    target_vars = _proper_list(target_vars, "residual_q/1")
+    shadows, name = _named_targets(target_vars, "residual_q/1", name_of)
+    return _without_a_queue(
+        trail, lambda: _residual_constraints.toplevel_strings(
+            shadows, trail, name, list(attributed)))
 
 
 # ---------------------------------------------------------------- ordering

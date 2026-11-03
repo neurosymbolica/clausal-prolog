@@ -46,6 +46,7 @@ the manual's printed answers are not the answers their own queries have;
 see test_dump_3 and test_monash_go4_as_documented.
 """
 import functools
+import itertools
 import os
 import re
 import subprocess
@@ -556,7 +557,10 @@ def test_mg():
 #: The shown variables (the query's head) are listed in the order of the
 #: manual's answer: the oracle's dump/3 orders its targets as listed, so
 #: [P, B, Mp] with ordering([Mp, P]) would raise
-#: system_error(unsatisfiable_ordering) there.
+#: system_error(unsatisfiable_ordering) there.  The port's `-g` printer
+#: projects as the toplevel does, imposing no order of its own
+#: (DEVIATIONS.md D26), so test_ordering_in_any_variable_order shows them
+#: in every order.
 _ORDERINGS = [
     ("q_ordering_mp", ["Mp", "P", "B"], "Mp",
      {"B": -0.0788487886783417, "P": 0.08884878867834171}),
@@ -576,6 +580,42 @@ def test_ordering(query, variables, defined, documented):
     answer = _one(port(_mg(), query, variables))
     _check_mg_relation(answer, defined, documented)
     assert _sides(answer.residual[0])[0] == defined, answer
+
+
+#: ordering(B < Mp), ordering(P < Mp) leave B and P unordered, so which of
+#: the two is defined is 1.3.3's tie-break: ordering.pl sorts the graph's
+#: vertices, the variables themselves, by the standard order, which is
+#: implementation-defined (SICStus: the address) and on the port creation
+#: order (DEVIATIONS.md D4).  The manual's answer defines P; the port does
+#: where P is created before B, and defines B (the mg relation solved for
+#: B) where B is created first, as in the manual's own query text.
+_ORDERING_TIES = {"q_ordering_p_mp": ("P", "B")}
+#: mg's relation solved for B (test_mg; the manual's first mg answer).
+_MG_B = {"P": 1.1268250301319698, "Mp": -12.682503013196973}
+
+
+@pytest.mark.parametrize("query, variables, defined, documented",
+                         [pytest.param(*row, id=row[0][2:]) for row in _ORDERINGS])
+def test_ordering_in_any_variable_order(query, variables, defined, documented):
+    # The `-g` printer shows the variables in the order the goal first
+    # names them; `_ = f(...)` names them in each order before the query,
+    # which is also the order the variables are created in.
+    failures = []
+    for order in itertools.permutations(variables):
+        goal = (f"_ = f({', '.join(order)}), "
+                f"{query}({', '.join(variables)})")
+        expected, coefficients = defined, documented
+        tie = _ORDERING_TIES.get(query)
+        if tie is not None and order.index(tie[1]) < order.index(tie[0]):
+            expected, coefficients = tie[1], _MG_B
+        try:
+            answer = _one(clausal_answers(_HEAD + _mg(), goal, list(order),
+                                          "holzbaur"))
+            _check_mg_relation(answer, expected, coefficients)
+            assert _sides(answer.residual[0])[0] == expected, answer
+        except (AssertionError, RuntimeError) as error:
+            failures.append(f"{list(order)}: {error}")
+    assert not failures, "\n".join(failures)
 
 
 @pytest.mark.parametrize("query, variables, defined, documented",

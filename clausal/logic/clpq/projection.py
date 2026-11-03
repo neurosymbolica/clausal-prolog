@@ -32,10 +32,13 @@ from clausal.logic.variables import deref, is_var, unify
 #
 # May be destructive (either acts on a copy or in a failure loop)
 #
-def project_attributes(target_variables, constrained_variables, trail):
+def project_attributes(target_variables, constrained_variables, trail,
+                       all_nonlinear=None):
     """project.pl, project_attributes/2: project the store of
     *constrained_variables* onto *target_variables*.  False where it
-    fails.
+    fails.  The goals geler.pl's project_nonlinear/3 collects are appended
+    to *all_nonlinear* when it is given (1.3.3's `all_nonlinear/1`
+    attribute; DEVIATIONS.md D7).
 
     The work of its pivots is counted on a meter of its own (limits.start):
     past the clpq_projection cap it raises
@@ -45,16 +48,18 @@ def project_attributes(target_variables, constrained_variables, trail):
                          "the work of one projection")
     try:
         return _project_attributes(target_variables, constrained_variables,
-                                   trail)
+                                   trail, all_nonlinear)
     finally:
         limits.stop(token)
 
 
-def _project_attributes(target_variables, constrained_variables, trail):
+def _project_attributes(target_variables, constrained_variables, trail,
+                        all_nonlinear):
     targets = sort_variables(target_variables)             # duplicates ?
     constrained = sort_variables(constrained_variables)    # duplicates ?
     mark_target(targets, trail)
-    reachable = project_nonlinear(targets, constrained, trail)
+    reachable = project_nonlinear(targets, constrained, trail,
+                                  all_nonlinear=all_nonlinear)
     if not targets:
         drop_linear_attributes(constrained, trail)
         return True

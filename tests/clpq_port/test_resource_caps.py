@@ -1290,9 +1290,13 @@ def test_a_product_repaired_a_binding_at_a_time_raises(tmp_path):
     # Review N1, from .pl source: K sums each to an unbound exponent, then
     # every exponent bound to 1.  Each binding's repair multiplies one more
     # sum in; the constraint's count runs over its wake-ups.  4 sums
-    # answer; 17 (52 s and 265 MB before) raise.
+    # answer; 17 (52 s and 265 MB before) raise.  rep(4)'s product of four
+    # sums, on variables no answer variable reaches, shows as the SICStus
+    # toplevel shows such a goal (DEVIATIONS.md D26): 2^4 products.
     result = _clausal(tmp_path, "rep(4), caught(rep(17), R)")
-    assert result.stdout.strip() == "R = clpq_expansion.", result.stderr
+    line = result.stdout.strip()
+    assert line.startswith("R = clpq_expansion, {_Q1 - "), result.stderr
+    assert line.endswith(" = 0}.") and line.count(" - ") == 16, line
 
 
 def test_a_cap_flag_takes_a_positive_integer_only(tmp_path):

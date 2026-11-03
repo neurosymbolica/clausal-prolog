@@ -1,5 +1,22 @@
 # The `-g` printer's CLP(Q) residuals ignore an `ordering/1` that disagrees with the query's variable order
 
+**Status: FIXED 2026-11-03 (COMMIT).** `holzbaur.residual_q` projects as
+the SICStus toplevel does (`residual_constraints.toplevel_goals`:
+project.pl's `project_attributes/2`, then itf3.pl's and geler.pl's
+`attribute_goal/2` halves), not through dump/3; DEVIATIONS.md D26.
+Pinned by tests/clpq_port/test_toplevel_projection.py
+(`test_an_ordering_against_the_target_order_prints`,
+`test_the_g_printer_on_an_ordering_against_the_query_order`,
+`test_every_variable_order_prints_the_oracle_s_solution_set`) and
+tests/clpq_port/test_manual_examples.py
+`test_ordering_in_any_variable_order`.  Note on the title: the toplevel
+hook `project_attributes/2` is project.pl's, not itf3.pl's; itf3.pl
+supplies `attribute_goal/2`.  Left as it is: the manual's
+`ordering(B < Mp), mg(...), ordering(P < Mp)` leaves B and P unordered,
+and which one is defined follows the standard order of the two variables
+(creation order on the port, D4), so it is the manual's P only where P is
+created first (D26).
+
 Filed 2026-10-23, from item 5 of
 todo/done/clpq-port-vs-sicstus-manual-23-gaps-2026-10-16.md. Severity: low (a
 printing difference, raised only for a contradictory ordering).
