@@ -9,6 +9,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **CLP(Q) posts a term nested 100,000 deep** under both solvers
+  (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`, then `{Y >= T}`): the cell
+  walk shared by every CLP post, the units scan, CLP(R)'s variable walk
+  (run by `inf/2`, `sup/2`) and the legacy solver's linearisation use an
+  explicit stack past a shallow depth; they raised `RecursionError`.  A
+  cyclic expression under `{}`, `inf/2` or `sup/2` raises
+  `type_error(evaluable, (+)/2)` on both solvers (was `RecursionError`
+  under legacy and through `inf/2`/`sup/2`); `abs/1`, `min/2`, `max/2` of
+  a too-deep argument, and a too-deep comparison of quantities, raise
+  `resource_error(stack)`.  An error whose culprit is too deep to print
+  no longer raises while building its message.  clpq DEVIATIONS.md D26.
+
 - **A `.clausal` or `.pl` file that fails to load reports every error,
   not the first** (operator ruling 2026-11-02: like a compiler). The
   native front end lowers the whole file before it refuses, and the
