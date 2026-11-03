@@ -276,7 +276,8 @@ def test_unary_plus():
 def test_a_long_sum_needs_no_recursion():
     # A left-deep sum of 3,000 variables under a recursion limit of 150
     # frames above this test.  Each step merges into the growing sum, which
-    # is quadratic, as nf.pl's normal_form/2 is.
+    # is quadratic in nf.pl's normal_form/2; the port places the new term
+    # by binary search (test_normal_form_merge.py).
     variables = [Var() for _ in range(3_000)]
     term = variables[0]
     for v in variables[1:]:
