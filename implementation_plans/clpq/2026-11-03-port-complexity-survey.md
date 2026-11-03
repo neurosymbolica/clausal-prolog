@@ -49,17 +49,17 @@ sizes is in brackets.
 
 | Operation (case) | n | seconds | port exponent | Scryer exponent (inferences) | work exponent (unit) | class |
 |---|---|---|---|---|---|---|
-| post chain `X1 =< ... =< Xn` (`chain_le`; `chain_lt` the same) | 100..1600 | .035 .15 .91 5.5 49.7 | 3.2 (2.6) | 2.91 | rows_read 2.0, **terms_scanned 3.0** | inherent, but removable by implementation (R1) |
+| post chain `X1 =< ... =< Xn` (`chain_le`; `chain_lt` the same) | 100..1600 | .035 .15 .91 5.5 49.7 | 3.2 (2.6) | 2.91 | rows_read 2.0, **terms_scanned 3.0** | inherent, but removable by implementation (R1). **After R1b: n = 100..3200 .027 .092 .38 1.86 8.6 42.9, slope 2.15 (top 2.3)** |
 | post equalities `Xi + Xi+1 = 1` (`chain_eq`) | 100..3200 | .006 .. .20 | 1.0 | 1.0 | - | inherent, linear |
 | post n dense rows of n terms (`dense_rows`) | 5..80 | .001 .0044 .016 .069 .37 | 2.4 (2.1) | 2.26 | python_calls 2.6 (normal_form_add merges) | inherent, partly removable (R3) |
 | the same after R3 (`dense_rows`, 2026-11-03) | 5..80 | before (this run) .0012 .0054 .018 .079 .41; after .00097 .0040 .012 .038 .14 | 1.87 (1.71) | 2.26 | - | **R3 done**: 2.9x at n = 80 |
 | post disequations on a chain (`diseq`) | 100..1600 | .014 .044 .17 .81 3.7 | 2.2 (2.0) | 1.9 (manual run, 100..400) | python_calls 1.95 | inherent |
 | post the path LP (`lp_post`) | 25..800 | .002 .. .075 | 1.0 | - | - | linear |
-| bind a chain to numbers in one unification (`bind_numbers`) | 50..800 | .011 .042 .18 1.0 7.9 | **3.0** (2.35) | **1.96** | terms_scanned 3.0, terms_read 2.0 | **unclear: the port does more work than Scryer's copy** (R2) |
-| var-var binding of a chain (`bind_varvar`) | 25..400 | .012 .061 .39 3.4 33.9 | 3.3 (2.9) | 2.85 | terms_read 3.0 | inherent (D24, Low 8); overhead partly removed on r32-varvar |
+| bind a chain to numbers in one unification (`bind_numbers`) | 50..800 | .011 .042 .18 1.0 7.9 | **3.0** (2.35) | **1.96** | terms_scanned 3.0, terms_read 2.0 | **unclear: the port does more work than Scryer's copy** (R2). **After R1b: n = 50..1600 .010 .033 .14 .59 2.9 13.5, slope 2.10 (top 2.2)**: the cubic term was the scan |
+| var-var binding of a chain (`bind_varvar`) | 25..400 | .012 .061 .39 3.4 33.9 | 3.3 (2.9) | 2.85 | terms_read 3.0 | inherent (D24, Low 8); overhead partly removed on r32-varvar (7a573135). After R1b and R4: unchanged within noise (paired n = 200: 1.64 s against 1.60 s): its rows almost all hold the variable, so there is nothing to skip |
 | `sup` of a sum over a bounded chain (`sup_chain`) | 50..1600 | .005 .020 .074 .31 1.5 6.8 | 2.2 (2.1) | 1.98 | terms_read 2.0, 1 pivot | inherent |
 | `inf(Xn - X1)` (`inf_chain`) | 50..1600 | 0.0001 .. 0.003 | 1.25 | - | - | linear |
-| `maximize` path LP (`lp_maximize`) | 25..800 | .010 .026 .094 .35 1.4 9.1 | 2.7 (1.96) | 1.99 | pivots 1.0, rows_read 2.0, python_calls 1.98 | inherent (the 2.7 top slope is noise: calls grow 1.98) |
+| `maximize` path LP (`lp_maximize`) | 25..800 | .010 .026 .094 .35 1.4 9.1 | 2.7 (1.96) | 1.99 | pivots 1.0, rows_read 2.0, python_calls 1.98 | inherent (the 2.7 top slope is noise: calls grow 1.98). After R1b and R4: paired n = 400 1.19 s against 1.14 s |
 | `bb_inf` 0/1 knapsack (`bb_knapsack`) | 5..40 | .003 .037 .058 .61 4.6 1.7 .31 4.1 | depends on the instance | depends on the instance | time follows bb_nodes (4..7958) | inherent (the search) |
 | `bb_inf` wide, `Xi >= 1/2` (`bb_wide`) | 25..400 | .005 .012 .030 .090 .29 | 1.7 (1.4) | 1.87 | rows 2.0, 1 node (bb narrows the bounds) | inherent |
 | `dump` onto `[X1, Xn]` of a bounded chain (`dump_small`) | 25..200 | .11 .68 6.3 38.8 | 2.6 (2.9) | 2.92 | pivots 2.0, terms_read 3.0, fm_cross 1.0 | inherent (redundancy checks) |
@@ -69,7 +69,7 @@ sizes is in brackets.
 | post `Zi = Xi*Yi` (`nonlinear_post`) | 100..3200 | .004 .. .12 | 1.0 | - | - | linear |
 | wake them by binding the Yi (`nonlinear_wake`) | 100..1600 | .015 .049 .20 1.2 4.8 | 2.0 (2.1) | 1.9 (manual, 100..400) | python_calls 2.0 | inherent |
 | n rounds of mark, `Xi >= 50`, undo (`backtrack_rounds`) | 50..400 | .098 .76 6.5 56 | 3.1 | 2.9 (manual, 25..100) | terms_read 3.0 | inherent; the undo itself is negligible |
-| chain with a mark per link, then undo all (`backtrack_deep`) | 100..1600 | as `chain_le` | 3.0 | - | as `chain_le` | marks and undos cost nothing measurable |
+| chain with a mark per link, then undo all (`backtrack_deep`) | 100..1600 | as `chain_le` | 3.0 | - | as `chain_le` | marks and undos cost nothing measurable. **After R1b: as `chain_le`, n = 3200 41 s, slope 2.15** |
 | `{S = X1 + ... + Xn}`, left-leaning (`left_sum`) | 250..8000 | .033 .12 .48 1.9 7.5 29.8 | 2.0 | 1.99 | python_calls 2.0 | inherent, but removable by implementation (R3) |
 | the same after R3 (`left_sum`, 2026-11-03) | 250..32000 | .0075 .018 .036 .071 .18 .40 2.4 | 1.3 (1.17) | 1.99 | comparisons about n | **fixed** (R3): 473 s at 32,000 before |
 | `{S = X1 + (X2 + ...)}`, right-leaning (`right_sum`, R3 run) | 250..32000 | before .0099 .021 .045 .091 .21 .67 7.5; after .0076 .016 .036 .085 .18 .39 3.4 | after 1.55 (1.23) | - | list copies | R3; the rest is the copying of the list (C) |
@@ -125,6 +125,53 @@ time it costs at sizes people use.
   needs a debug assertion mode that cross-checks the set against the
   scan over the clpq_port suite. Neither fix changes iteration order,
   variable creation or residual text.
+
+- **Status (2026-11-03, measured).** (b) is done; (a) was tried and
+  backed out.
+  - (a) The C scan (`operator.indexOf` over the ids of the
+    dereferenced variables) was no faster on long rows: about 45 ns a
+    term either way on CPython 3.13 (300 terms: 14.4 us against
+    13.6 us). On the short rows of a pivot it was 2 to 4 times slower,
+    mostly the ValueError a miss raises, and lp_maximize n = 400 went
+    from 1.18 s to 1.46 s. The estimate of 5 to 10x did not hold.
+  - (b) Each `LinearForm` keeps `variable_ids`: the ids of its term
+    variables as they are, and as they dereference when the index is
+    built. The index is built at the row's second scan, because building
+    it costs about two scans. Indexing at the first scan made
+    `bind_varvar` 45% slower, since there nearly every row read is
+    rewritten. A form never changes, so the trail needs nothing: it puts
+    back old forms, and each carries its own index. The index can go
+    stale only if a variable of the row is bound to another variable
+    after the row was indexed. The D3 hook replaces bound members by
+    stand-ins before anything reads the rows.
+    `CLAUSAL_CLPQ_CHECK_ROW_INDEX=1` checks every skip against a full
+    scan. The clpq_port suite, the full differential and
+    `tests/test_clpq*.py` pass with it on and off, and the differential's
+    goldens and traces are unchanged.
+  - Paired runs against the base, minimum of 3, sequential, load 8 to
+    10 on 32 cores:
+
+    | case | base | after |
+    |---|---|---|
+    | `chain_le` n = 800 | 6.52 s | 1.53 s |
+    | `bind_numbers` n = 800 | 7.07 s | 2.46 s |
+    | `bind_varvar` n = 200 | 1.64 s | 1.60 s |
+    | `lp_maximize` n = 400 | 1.19 s | 1.14 s |
+    | `dump_large` n = 100 | 0.76 s | 0.75 s |
+    | `sup_chain` n = 800 | 1.21 to 1.23 s | 1.26 to 1.31 s |
+
+    `sup_chain` does no index work (cProfile: 4.98 s against 4.89 s), so
+    its difference is the box's noise.
+  - Exponents, from the slope between n = 400 and n = 800, run with 7
+    jobs as the baseline was: `chain_le` from 2.92 to 2.29,
+    `backtrack_deep` from 2.89 to 2.21 and `bind_numbers` from 2.76 to
+    2.32. Over every size up to 3200 (1600 for `bind_numbers`) the
+    slopes are 2.15, 2.15 and 2.10. `terms_scanned` in the table still
+    counts each row's length, not the terms that are now read.
+  - `nf_coeff_of` (`normal_form_coefficient_homogeneous`) was left as it
+    is. It is an ordered scan that stops early, and it matches by order
+    key, not identity: a stand-in shares its variable's order, so an
+    identity index would not answer the same.
 
 ### R2. Binding a solved chain to numbers: the port is cubic where Scryer's copy is quadratic (unclear, investigate first)
 
@@ -222,6 +269,17 @@ time it costs at sizes people use.
   dump). The exponent is unchanged.
 - **Risk.** None if the comparisons and their outcomes are kept, as
   7a573135 did.
+
+- **Status (2026-11-03, measured).** Done for `add_homogeneous_parts_scaled`
+  (add_linear_ffh/7) and `add_homogeneous_parts` (add_linear_11h/5). Both
+  now look each term's order up once (at most one lookup a term in
+  `tests/clpq_port/test_row_scans.py`, against 78 for 45 terms before).
+  The comparisons and their outcomes are the same, and the identity gate
+  passes. The gain is small: in the sup_chain n = 800 profile the two
+  merges went from 0.92 s and 0.69 s cumulative to 0.74 s and 0.57 s.
+  No other merge in the port compares by `compare_variable_order` at
+  each step (`projection.py` compares once). The gcd short cut for a
+  factor of 1 or -1 was not attempted.
 
 ### R5. Projection (`dump/3`): cubic for chains, dominated by the redundancy checks (inherent)
 

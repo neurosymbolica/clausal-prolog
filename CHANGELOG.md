@@ -16,6 +16,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
   variables directly; the answers, residuals and variable order are
   unchanged (the differential goldens are identical).  Posting dense
   rows is about 3 times faster at 80 rows of 80 terms.
+- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: the back
+  substitution skips the rows that do not hold its variable.** Each row
+  keeps an index of its variables, so `delete_factor_hom/4` no longer
+  scans a row without the substituted variable: posting a chain
+  `X1 =< ... =< Xn` grows as n^2, not n^3 (complexity survey R1).
+  `CLAUSAL_CLPQ_CHECK_ROW_INDEX=1` checks every skip against a full scan.
+  The merges `add_linear_ffh/7` and `add_linear_11h/5` look each term's
+  order up once, as `add_linear_f1h/6` already did (survey R4).  The
+  same rows, the same answers, the same pivots.
+
 - **CLP(Q) (`CLAUSAL_CLPQ=holzbaur`): a hook body that reaches the store
   through a fresh `Trail()` is refused too.** The port's entry points
   refused inside an attribute hook only when the trail they were given had

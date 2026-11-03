@@ -1610,7 +1610,14 @@ found are.  Timed at a load average of 9 to 11 on 8 cores:
   lookups a term (at most 1.3) and n = 100 under 3 s.
   The other shape was never slow: unifying the chain with numbers,
   `[X1, ..., Xn] = [0, ..., n-1]`, is FASTER on the port, n = 200 1.16 s
-  against legacy 10.09 s.
+  against legacy 10.09 s.  Later a row index removed the back
+  substitution's scans of rows that do not hold the variable
+  (implementation only; complexity survey R1,
+  `implementation_plans/clpq/2026-11-03-port-complexity-survey.md`).
+  The chain with numbers then took 0.14 s at n = 200 and 2.9 s at
+  n = 800 (7.1 s before), with load 8 to 12 on 32 cores.  The var-var
+  unification above was unchanged (1.64 s against 1.60 s at n = 200),
+  because nearly every row it reads holds the variable.
 - **Deep terms raised RecursionError in shared clpfd code** (Medium 7):
   a sum nested 100,000 deep (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`,
   then `{Y >= T}`) raised `RecursionError` from clpfd's cell walk before
