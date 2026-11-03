@@ -482,3 +482,64 @@ def test_the_exact_numbers_share_one_band_by_value():
     from decimal import Decimal
     got = _run_list_builtin(_msort__2, [Decimal("2.50"), 3, Fraction(1, 2), 1, 0.25])
     assert got == [0.25, Fraction(1, 2), 1, Decimal("2.50"), 3]
+
+
+# ── Clausal's own sorting builtins use the same order (ruling 2026-11-03:
+# "do it so that it conforms with ISO Prolog") ────────────────────────────
+#
+# sort_by/3, max_by/3 and min_by/3 compared keys with Python's ``<`` when it
+# did not raise: numbers by value, compounds name-first.  The dict and set
+# builtins sorted by ``repr`` (``10`` before ``9``, atoms before numbers).
+# They now all use the standard order of terms, as msort/2.
+
+def _solve_one(goal_text, var="R"):
+    import importlib, sys, tempfile, os
+    d = tempfile.mkdtemp()
+    name = f"_std_order_own_{abs(hash(goal_text))}"
+    with open(os.path.join(d, name + ".pl"), "w") as fh:
+        fh.write(f"id(X, X).\nr({var}) :- {goal_text}.\n")
+    sys.path.insert(0, d)
+    try:
+        mod = importlib.import_module(name)
+        r = Var()
+        for _ in solve(("r", r), mod):
+            from clausal.logic.solve import _deref_walk
+            return _deref_walk(r)
+    finally:
+        sys.path.remove(d)
+        sys.modules.pop(name, None)
+
+
+@pytest.mark.parametrize("goal, want", [
+    ("sort_by(id, [2, 1.5, 1], R)", [1.5, 1, 2]),
+    ("sort_by(id, [2, 1.5, a, 1], R)", [1.5, 1, 2, "a"]),
+    ("sort_by(id, [g(1), f(1, 2)], R)", [("g", 1), ("f", 1, 2)]),
+    ("max_by(id, [1, 2.0], R)", 1),
+    ("min_by(id, [1, 2.0], R)", 2.0),
+    ("max_by(id, [g(1), f(1, 2)], R)", ("f", 1, 2)),
+    # numeric predicates stay numeric
+    ("max_list([1, 2.0], R)", 2.0),
+    ("min_list([1, 2.0], R)", 1),
+])
+def test_own_builtins_use_the_standard_order(goal, want):
+    assert _solve_one(goal) == want
+
+
+def test_sort_by_agrees_with_msort():
+    xs = "[3, 2.5, b, f(1, 2), g(1), 1, 0.5, a, \"s\"]"
+    assert _solve_one(f"sort_by(id, {xs}, R)") == _solve_one(f"msort({xs}, R)")
+
+
+def test_dict_keys_and_set_list_use_the_standard_order():
+    from clausal.logic.builtins import dict_set as ds
+    d = DictTerm({10: "x", 9: "y", "a": "z", 2.5: "w"})
+    s = SetTerm([10, 9, "a", 2.5, 1])
+
+    def run(fn, *args):
+        out, trail = Var(), Trail()
+        for _ in fn(None, "proceed", "fail", None, *args, out, trail):
+            return [deref(x) for x in deref(out)]
+
+    assert run(ds._dict_keys__2, d) == [2.5, 9, 10, "a"]
+    assert run(ds._dict_values__2, d) == ["w", "y", "x", "z"]
+    assert run(ds._set_list__2, s) == [2.5, 1, 9, 10, "a"]

@@ -64,6 +64,7 @@ def _is_hashable(x) -> bool:
         return False
 
 from clausal.logic.builtins._registry import _builtin, _trampoline_builtin
+from clausal.logic.builtins._helpers import _standard_order_sorted
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -177,7 +178,7 @@ def _dict_keys__2(this_generator, _proceed, _fail, _catcher, d, keys, trail):
     """dict_keys(Dict, Keys) — Keys is the sorted list of keys in Dict."""
     data = _dict_input(deref(d))
     if data is not None:
-        sorted_keys = sorted(data.keys(), key=repr)
+        sorted_keys = _standard_order_sorted(list(data.keys()))
         mark = trail.mark()
         if unify(keys, sorted_keys, trail):
             yield (_proceed, None)
@@ -190,7 +191,7 @@ def _dict_values__2(this_generator, _proceed, _fail, _catcher, d, values, trail)
     """dict_values(Dict, Values) — Values is the list of values in key-sorted order."""
     data = _dict_input(deref(d))
     if data is not None:
-        sorted_keys = sorted(data.keys(), key=repr)
+        sorted_keys = _standard_order_sorted(list(data.keys()))
         vals = [data[k] for k in sorted_keys]
         mark = trail.mark()
         if unify(values, vals, trail):
@@ -227,7 +228,7 @@ def _dict_pairs__2(this_generator, _proceed, _fail, _catcher, d, pairs, trail):
     data = _dict_input(d_val)
     if data is not None:
         # Dict → Pairs
-        sorted_keys = sorted(data.keys(), key=repr)
+        sorted_keys = _standard_order_sorted(list(data.keys()))
         from clausal.logic.builtins.higher_order import _unify_pairs  # noqa: PLC0415
         mark = trail.mark()
         if _unify_pairs(pairs, [(k, data[k]) for k in sorted_keys], trail):
@@ -596,7 +597,7 @@ def _set_list__2(this_generator, _proceed, _fail, _catcher, s, lst, trail):
 
     s_elems = _set_input(s_val)
     if s_elems is not None:
-        sorted_elems = sorted(s_elems, key=repr)
+        sorted_elems = _standard_order_sorted(list(s_elems))
         mark = trail.mark()
         if unify(lst, sorted_elems, trail):
             yield (_proceed, None)
@@ -755,7 +756,7 @@ def _gen_set__2(this_generator, _proceed, _fail, _catcher, elem, s, trail):
     """gen_set(Elem, Set) — enumerate all elements of Set on backtracking."""
     elems = _set_input(deref(s))
     if elems is not None:
-        for e in sorted(elems, key=repr):
+        for e in _standard_order_sorted(list(elems)):
             mark = trail.mark()
             if unify(elem, e, trail):
                 yield (_proceed, None)
