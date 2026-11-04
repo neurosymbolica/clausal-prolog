@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import dataclasses
 
-from clausal.tools.prolog_tokenizer import Token, TokenizeError, TokenType, tokenize
+from clausal.tools.prolog_tokenizer import (Token, TokenizeError, TokenType,
+                                            is_decimal_lexeme, tokenize)
 from clausal.tools.prolog_ast import (
     PAtom, PVar, PNumber, PString, PCompound, PList, PCurly,
     PClause, PDCGRule, PDirective, PQuery, PModule,
@@ -848,14 +849,24 @@ class PrologParser:
 
     def _unexpected_kind(self, tok: Token) -> str:
         """Scryer's formal for a token the parser cannot place: a digit
-        group separator with no digit after it (``1_000_``, ``1__000``, an
-        integer glued to an ``_``-led variable) is its number reader's
-        ``cannot_parse_big_int``; anything else ``incomplete_reduction``."""
+        group separator with no digit after it (``1_000_``, ``1__000``, a
+        decimal integer glued to an ``_``-led variable, ``1_ a``) is its
+        number reader's ``cannot_parse_big_int``; anything else
+        ``incomplete_reduction``.  A ``0x``/``0o``/``0b`` integer or a
+        ``0'c`` code takes no digit group, so ``0x1_2`` is not one; nor is
+        ``1_ 0x1``, which Scryer reads as ``10`` and the name ``x1``
+        (operator ruling 2026-11-03)."""
         i = self._pos
         if (i > 0 and tok.type == TokenType.VAR and tok.value[:1] == "_"
                 and tok.offset >= 0):
             prev = self._tokens[i - 1]
-            if prev.type == TokenType.INTEGER and prev.end_offset == tok.offset:
+            if (prev.type == TokenType.INTEGER and prev.end_offset == tok.offset
+                    and is_decimal_lexeme(prev.lexeme)):
+                nxt = self._tokens[i + 1] if i + 1 < len(self._tokens) else None
+                if (tok.value == "_" and nxt is not None
+                        and nxt.type in (TokenType.INTEGER, TokenType.FLOAT)
+                        and nxt.lexeme[:1].isdigit()):
+                    return "incomplete_reduction"
                 return "cannot_parse_big_int"
         return "incomplete_reduction"
 

@@ -247,17 +247,45 @@ class TestExpectedDivergences:
             (TokenType.INTEGER, 1), (TokenType.ATOM, "e1_0"), (TokenType.DOT, "."),
         ]
 
-    def test_no_divergence_for_digit_adjacent_underscore(self):
-        # `0x_1`/`0x1_` DO have a real digit somewhere in the run, so they
-        # are NOT part of the underscore-only divergence above -- both old
-        # and new agree these lex as the integer 1 (see iso.toklex.pl's
-        # comment on hex_int/oct_int/bin_int: the tightened rule generates
-        # exactly "at least one real digit, `_` anywhere else").
-        for src in ("0x_1.", "0x1_.", "0o_1.", "0o1_.", "0b_1.", "0b1_."):
+    def test_radix_integers_take_no_underscore(self):
+        # `0x_1`/`0x1_` used to lex as the integer 1 (the radix rules took
+        # `_` anywhere after the prefix, as the old tokenizer did). Operator
+        # ruling 2026-11-03 follows Scryer: a 0x/0o/0b integer is plain
+        # digits, so the `_` starts another token and the parser refuses
+        # the text (tests/iso/test_digit_groups_scryer.py). A deliberate
+        # divergence from the old tokenizer, now of this module's set.
+        for p in "xob":
+            assert [(t.type, t.value) for t in tokenize(f"0{p}_1.")[:3]] == [
+                (TokenType.INTEGER, 0), (TokenType.ATOM, f"{p}_1"),
+                (TokenType.DOT, "."),
+            ]
+            assert [(t.type, t.value) for t in tokenize(f"0{p}1_.")[:3]] == [
+                (TokenType.INTEGER, 1), (TokenType.VAR, "_"),
+                (TokenType.DOT, "."),
+            ]
+        assert [(t.type, t.value) for t in tokenize("0x1_2.")[:2]] == [
+            (TokenType.INTEGER, 1), (TokenType.VAR, "_2"),
+        ]
+
+    def test_fraction_takes_no_underscore(self):
+        # Operator ruling 2026-11-03 (Scryer): the fraction is plain digits.
+        assert [(t.type, t.value) for t in tokenize("1.0_0.")[:2]] == [
+            (TokenType.FLOAT, 1.0), (TokenType.VAR, "_0"),
+        ]
+
+    def test_layout_after_digit_group_joins_one_number(self):
+        # Operator ruling 2026-11-03 (Scryer): layout and comments after a
+        # digit group `_` continue the number; the old tokenizer ended it.
+        for src, value in (("1_ 000.", 1000), ("1_/*c*/000.", 1000),
+                           ("1_%c\n000.", 1000), ("1_ 000_ 000.", 1000000),
+                           ("1_ 0.5.", 10.5)):
             toks = tokenize(src)
             assert [(t.type, t.value) for t in toks[:2]] == [
-                (TokenType.INTEGER, 1), (TokenType.DOT, "."),
-            ]
+                (TokenType.FLOAT if isinstance(value, float)
+                 else TokenType.INTEGER, value),
+                (TokenType.DOT, "."),
+            ], src
+            assert (toks[0].offset, toks[0].end_offset) == (0, len(src) - 1)
 
 
 # ── Final-wave hardening: no bare (non-TokenizeError) exception may ever ──

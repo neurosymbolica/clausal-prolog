@@ -228,6 +228,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `0x`/`0o`/`0b` rules are unchanged. Pinned in
   `tests/iso/test_syntax_error_terms_scryer.py` and
   `tests/toklex/test_iso_spec.py`.
+- **ISO number syntax follows Scryer on digit groups** (operator ruling
+  2026-11-03). A fraction takes no `_` (`1.0_0`, read as 1.0, is
+  `syntax_error(incomplete_reduction)`), nor does a `0x`/`0o`/`0b`
+  integer (`0x1_2`, `0x_1`, `0x1_` read as integers and are now
+  `incomplete_reduction`). Layout and comments may follow a digit group
+  `_`: `1_ 000`, `1_/*c*/000` and `1_%c<newline>000` read as 1000 (they
+  were `cannot_parse_big_int`), in the reader and in `number_chars/2`.
+  `number_chars/2` also gives Scryer's `cannot_parse_big_int` for a `_`
+  with something other than a digit after it (`1__000`, `1_ a`), and
+  still refuses a `_` that ends the text (`1_000_`), which Scryer's
+  number_chars takes. Pinned in `tests/iso/test_digit_groups_scryer.py`
+  (every row checked against Scryer) and `tests/toklex/test_parity.py`.
 - `unify_with_occurs_check/2` no longer builds a cyclic term through a
   dict, a list view, a quantity, or an operator or clause term
   (`DictTerm({k: X})` against `DictTerm({k: g(X)})` succeeded and bound

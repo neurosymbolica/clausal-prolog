@@ -158,14 +158,13 @@ ROWS = [
     ('valid_sanity', 'foo(X) :- bar(X, \'a b\', "s", 0\'c, 1.5e3).\n', None),
 ]
 
-#: Rows where the reader reads a term Scryer refuses.  The lexer's digit
-#: group is one ``_`` between two digits in the integer part and the
-#: fraction alike, so ``1.0_0`` reads as 1.0; Scryer's number reader takes
-#: no ``_`` in a fraction (``incomplete_reduction``).  The trailing and
-#: doubled integer-group rows (``1_000_``, ``1__000``) left this set when
-#: the rule was tightened
-#: (todo/done/reader-digit-group-trailing-underscore-2026-10-24.md).
-KNOWN_DIFFERENCES = {"fraction_group"}
+#: Rows where the reader reads a term Scryer refuses: none.  ``1.0_0``
+#: (row ``fraction_group``) left this set when the fraction stopped taking
+#: digit groups (operator ruling 2026-11-03), and the trailing and doubled
+#: integer-group rows (``1_000_``, ``1__000``) before it
+#: (todo/done/reader-digit-group-trailing-underscore-2026-10-24.md).  The
+#: digit-group rows are tests/iso/test_digit_groups_scryer.py.
+KNOWN_DIFFERENCES: set[str] = set()
 
 _IDS = [r[0] for r in ROWS]
 
