@@ -852,3 +852,118 @@ class TestIntegration:
         i = deref(integral)
 
         assert sp.simplify(i - x**3) == 0
+
+
+# ── Conversion safety ───────────────────────────────────────────────────────
+
+
+_PAYLOAD = "__import__('sys').modules.__setitem__('_clausal_sympy_eval_probe', 1)"
+
+
+class TestNoEvalFallback:
+    # A term with no SymPy form used to reach sympy.sympify, which parses
+    # the strings inside a list, tuple or dict with eval -- so Clausal
+    # code could run arbitrary Python through any converting predicate.
+    # Each shape below must now fail as an ordinary conversion failure
+    # and leave no trace in sys.modules.
+
+    @pytest.fixture(autouse=True)
+    def _no_probe(self):
+        import sys
+        sys.modules.pop("_clausal_sympy_eval_probe", None)
+        yield
+        assert "_clausal_sympy_eval_probe" not in sys.modules
+        sys.modules.pop("_clausal_sympy_eval_probe", None)
+
+    @pytest.mark.parametrize("term", [
+        [_PAYLOAD],
+        ((1,), _PAYLOAD),
+        {"k": _PAYLOAD},
+    ], ids=["list", "tuple-non-atom-head", "dict"])
+    def test_to_sympy_refuses(self, term):
+        # nv
+        with pytest.raises(TypeError):
+            _to_sympy(term)
+
+    @pytest.mark.parametrize("term", [[_PAYLOAD], ((1,), _PAYLOAD)],
+                             ids=["list", "tuple-non-atom-head"])
+    def test_simplify_fails(self, term):
+        # nv
+        assert _first_solution(simplify, term, Var()) is None
+
+    def test_sym_str_fails(self):
+        # nv
+        assert _first_solution(sym_str, [_PAYLOAD], Var()) is None
+
+    def test_sympy_term_raises_type_error(self):
+        # nv
+        with pytest.raises(LogicException) as exc_info:
+            _first_solution(sympy_term, Var(), [_PAYLOAD])
+        assert "sympy_expression" in str(exc_info.value.term)
+
+
+class TestCyclicTerms:
+    # Clausal has no occurs check, so X = f(X) builds a cyclic term. The
+    # converter used to recurse until RecursionError (resource_error(stack)
+    # at the engine boundary); it now detects the cycle at the first
+    # repeated Var and raises a ValueError, which every predicate already
+    # handles as a conversion failure.
+
+    @staticmethod
+    def _cyclic():
+        x = Var()
+        assert unify(x, ("f", x), Trail())
+        return x
+
+    def test_plain_cycle_detected(self):
+        # nv
+        from clausal.modules.py.sympy import _CyclicTerm
+        with pytest.raises(_CyclicTerm):
+            _to_sympy(self._cyclic())
+
+    def test_plain_cycle_through_arithmetic(self):
+        # nv
+        from clausal.modules.py.sympy import _CyclicTerm
+        x = Var()
+        assert unify(x, Add(left=x, right=1), Trail())
+        with pytest.raises(_CyclicTerm):
+            _to_sympy(x)
+
+    def test_plain_cycle_simplify_fails(self):
+        # nv
+        assert _first_solution(simplify, self._cyclic(), Var()) is None
+
+    def test_plain_cycle_sympy_term_type_error(self):
+        # nv
+        with pytest.raises(LogicException) as exc_info:
+            _first_solution(sympy_term, Var(), self._cyclic())
+        assert "sympy_expression" in str(exc_info.value.term)
+
+    def test_tag_cycle_sympy_term_type_error(self):
+        # The todo's case, in sympy_term/2's own Term -> Sympy direction:
+        # sympy_term(S, X+1), X = S, sympy_term(S2, X).
+        # nv
+        x, s = Var(), Var()
+        _first_solution(sympy_term, s, Add(left=x, right=1))
+        assert unify(x, deref(s), Trail())
+        with pytest.raises(LogicException) as exc_info:
+            _first_solution(sympy_term, Var(), x)
+        assert "sympy_expression" in str(exc_info.value.term)
+
+    def test_shared_subterm_is_not_a_cycle(self):
+        # The same bound Var reached twice, side by side, is a DAG.
+        # nv
+        x = Var()
+        assert unify(x, Add(left=Var(), right=1), Trail())
+        assert _to_sympy(Mult(left=x, right=x)) is not None
+
+    def test_long_acyclic_tag_chain(self):
+        # The RecursionError guard fired on long acyclic chains of tagged
+        # expressions; the exact check must not.
+        # nv
+        prev = Var()
+        for _ in range(60):
+            s = Var()
+            _first_solution(sympy_term, s, Add(left=prev, right=1))
+            prev = deref(s)
+        assert _first_solution(simplify, prev, Var()) is not None

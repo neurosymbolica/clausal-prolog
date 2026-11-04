@@ -39,6 +39,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **clausal-sympy no longer evaluates strings inside terms as Python.**
+  A term the converter had no case for (a list, a dict, a compound whose
+  functor is not an atom) fell through to `sympy.sympify`, which parses
+  the strings inside it with `eval`. So `simplify(["__import__('os')..."], R)`
+  ran Python, through every predicate that converts its input. Such a
+  term is now a conversion failure: `sympy_term/2` raises
+  `type_error(sympy_expression, Term)`, and the other predicates fail.
+  Cyclic terms are detected exactly: a plain cycle (`X = f(X)`) used to
+  throw `resource_error(stack)` and now gets that same conversion-failure
+  treatment. The `sympy_term/2` tag cycle is now detected at its first
+  repeated variable, not by catching `RecursionError`.
+
 - **A tail call of a dynamic predicate sees the clauses its own clause
   asserted or retracted before it (the logical update view, ISO 7.5.4).**
   Tail-recursion optimisation restarts the predicate in place over the
