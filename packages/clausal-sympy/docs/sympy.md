@@ -86,13 +86,40 @@ A [quantity](https://github.com/neurosymbolica/clausal-prolog/blob/main/docs/uni
 may appear anywhere in an expression. It goes to SymPy as its exact
 magnitude, in SI base units, times one dimension symbol per base unit
 (`kilogram`, `metre`, `second`, `kelvin`, ...); a `Decimal` or `Fraction`
-magnitude stays an exact `Rational`. Dimensions are judged by Clausal's
-units system, as everywhere else: every sum and every function argument is
-checked with `Quantity` arithmetic, and so is every result. A ground result
-comes back as a quantity (an irrational magnitude, such as a log mean
-temperature difference, as a float); units that cancel give a plain number;
-a result that still holds a variable stays symbolic, dimension symbols
-included.
+magnitude stays an exact `Rational`. The dimension symbols are constants,
+never variables: `diff/2`, `integrate/2`, `degree/2`, `free_vars/2` and
+`sym_equal/2` do not see them. They print as `(kelvin)`, the way a quantity
+prints its unit, so they cannot be confused with an atom `kelvin`.
+
+Dimensions are judged by Clausal's units system, as everywhere else, with
+`Quantity` arithmetic: on the Clausal term before SymPy sees it (SymPy would
+fold `5(pascal) - 5(pascal)` to a dimensionless 0), and again on every result. A plain
+number is dimensionless, as in the engine (`0 + 3(kelvin)` is a mismatch); a
+variable's dimension is unknown, but two terms with the same powers of the
+same variables must agree (`X * 1(kelvin) + X * 1(pascal)` is refused), and a sum such
+as `X - 3(kelvin)` tells `solve` that X is a temperature, so its root `0` comes
+back as `0(kelvin)`.
+
+What comes back:
+
+- a ground result with a rational magnitude is a quantity with an exact
+  magnitude; units that cancel give a plain number; a zero keeps the
+  dimension of the input (`simplify(3(kelvin) - 3(kelvin))` is `0(kelvin)`);
+- a ground result with an irrational magnitude stays EXACT, as the Clausal
+  arithmetic term `Magnitude * 1 (unit)`, e.g. `2**(1/2) * 1 (metre)` or
+  `20/log(3) * 1 (kelvin)`. Evaluate it to get a decimal quantity,
+  `eval_(R, V)` (`V is R` in Clausal Prolog), and compare `V`; a further
+  sympy call reads `R` back exactly (its square is exactly `2(metre**2)`);
+- a result that still holds a variable stays symbolic, dimension symbols
+  included;
+- `solve/3`, `solve_all/3` and `roots/3` of an equation that holds a
+  quantity give its REAL roots only (`X**2 + 4(metre**2)` has none: `[]`); a
+  complex, infinite or NaN magnitude anywhere else is
+  `evaluation_error(undefined)`, as is a quantity whose magnitude is
+  infinite or NaN on the way in;
+- `gcd/3`, `lcm/3` and `sym_equal/2` refuse two quantities of different
+  dimensions with `units_mismatch`, and `subs/3` refuses a quantity as the
+  thing to substitute for (`type_error(variable, Q)`).
 
 ```seam
 --8<-- "tests/fixtures/sympy_units.seam:heat_exchanger_quantities"
@@ -111,7 +138,8 @@ A mismatch is the units system's own error, `error(system_error(units_mismatch),
 ```
 
 `log`, `exp`, the trigonometric functions, `floor` and `ceiling` need a
-dimensionless argument; a ratio of two temperature differences is one:
+dimensionless argument; a ratio of two temperature differences is one, and
+the log mean temperature difference comes back exact:
 
 ```seam
 --8<-- "tests/fixtures/sympy_units.seam:log_mean_temperature_difference"
@@ -122,8 +150,7 @@ is a length, `sqrt` of a temperature is refused (a dimension exponent must be
 an integer). A temperature is in kelvin and only differences are
 meaningful to the units system (there is no Celsius offset scale): enter a
 difference in millidegrees Celsius as kelvin over 1000, `12345(kelvin) / 1000`,
-which stays the exact rational 2469/200 K. A literal zero carries no
-dimension in SymPy, so `0 K + 3 K` is accepted as `3 K`.
+which stays exact: 2469/200 times 1(kelvin).
 
 ---
 

@@ -9,7 +9,10 @@ units) times one positive SymPy symbol per base dimension::
 
 SymPy then simplifies and solves over those symbols like any others, so a
 root inherits its dimension from the equation (``F*cp*dT - P`` solved for
-``F`` is ``P/(cp*dT)``, in kilogram/second).
+``F`` is ``P/(cp*dT)``, in kilogram/second).  The dimension symbols are
+constants, never variables: ``free_variables`` leaves them out, so ``diff``,
+``integrate``, ``degree``, ``free_vars`` and the renaming in ``sym_equal``
+never treat ``kelvin`` as "the variable".
 
 There is no second unit system here.  The dimension symbols are named by the
 atoms that key ``Quantity.dims``, and every dimension judgement is made by
@@ -19,34 +22,59 @@ units system's own ``UnitsMismatch`` (which the engine reports as
 ``error(system_error(units_mismatch), _)``), and an exponent is checked by
 ``Quantity.__pow__``.  ``sympy.physics.units`` is not used.
 
-Checks happen in two places:
+Where the dimensions are judged
+-------------------------------
+* On the CLAUSAL term, before SymPy sees it (``check_terms``).  SymPy folds
+  ``5(pascal) - 5(pascal)`` and ``0 * 5(pascal)`` to the number 0, which has no dimension,
+  so a check on SymPy's expression could not refuse ``3(kelvin) + (5(pascal) - 5(pascal))``.
+  The walk carries every subterm's dimension.  A plain number is
+  dimensionless (as in the engine, where ``0 + 3(kelvin)`` is a mismatch).  A
+  variable's dimension is unknown, written as a power of the variable; a
+  sum whose terms share the same unknown part must agree on the known part
+  (``X*1(kelvin) + X*1(pascal)`` is refused), and any other sum states a constraint on
+  the variables (``X - 3(kelvin)`` says X is a temperature).
+* On every RESULT (``result_to_clausal``), because solving can introduce a
+  mismatch (a root of ``X**2 + X - 1(metre)`` adds a number to a length).
 
-* while a Clausal term is converted (``check_sum``, ``check_function_args``),
-  because SymPy folds ``3*K + 5*Pa - 5*Pa`` to ``3*K`` on construction and a
-  later check would never see the mismatch;
-* when a result comes back (``result_to_clausal``), because solving can
-  introduce one (a root of ``X**2 + X - 1 m`` adds a number to a length).
+What comes back
+---------------
+A ground result is a Clausal quantity:
 
-A ground result comes back as a ``Quantity``: an exact rational magnitude as
-an int or ``Fraction``, a float one as a float, and any other real number
-(``20/log(3)`` from a log mean temperature difference) as a float, as the
-engine's own ``is`` would give for ``log``.  A result that still holds free
-variables stays symbolic (a ``SymExpr``) with its dimension symbols, after
-the same check.
+* an exact rational magnitude is a ``Quantity`` with an int or ``Fraction``
+  magnitude; a float magnitude is a ``Quantity`` with a float;
+* any other exact real magnitude (``sqrt(2)``, ``20/log(3)``) stays EXACT, as
+  the Clausal arithmetic term ``Magnitude * Quantity(1, dims)``, e.g.
+  ``2**(1/2) * 1 (metre)``.  Comparison evaluates it; ``V is R`` (the seam's
+  ``eval_(R, V)``) gives the decimal ``Quantity`` when one is wanted, and a
+  further sympy call reads it back exactly;
+* a zero keeps the dimension the operation implies: the input's for
+  ``simplify``/``expand``/``factor`` (``3(kelvin) - 3(kelvin)`` is ``0(kelvin)``), the
+  variable's (from the constraints above) for a root of ``solve``;
+* a complex, infinite or NaN magnitude is refused with
+  ``evaluation_error(undefined)``; ``solve``, ``solve_all`` and ``roots``
+  of an equation holding a quantity return the REAL roots only.
 
-Literal zero is the one dimension-blind value: SymPy turns ``0 * kelvin`` into
-the number ``0``, so a zero is treated as having whatever dimension its sum
-needs rather than refusing ``0 K + 3 K``.
+A result that still holds free variables stays symbolic (a ``SymExpr``)
+with its dimension symbols, which print as ``(kelvin)`` so they cannot be
+mistaken for the atom ``kelvin``.
 """
 
 from __future__ import annotations
 
+import math
 from decimal import Decimal
 from fractions import Fraction
-from typing import Any
+from typing import Any, Callable
 
+from clausal.logic.cells import is_chars
+from clausal.logic.exceptions import LogicException, evaluation_error
+from clausal.logic.variables import is_var
 from clausal.modules.py import _import_stdlib
-from clausal.terms import Quantity, UnitsMismatch, _dims_str
+from clausal.terms import (
+    Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate,
+    Quantity, UnitsMismatch, _dims_str,
+)
+from clausal.terms import plain_deref as deref
 
 _sp = _import_stdlib("sympy")
 
@@ -56,11 +84,18 @@ class _UnitSymbol(_sp.Symbol):
 
     A subclass, so it never equals a plain ``Symbol`` of the same name (an
     atom ``kelvin`` written in a term stays an ordinary symbol).  Positive,
-    so ``sqrt(kelvin**2)`` is ``kelvin`` and ``x**2 = 4 m**2`` has the two
-    roots ``-2 m`` and ``2 m``.
+    so ``sqrt(kelvin**2)`` is ``kelvin`` and ``x**2 = 4(metre**2)`` has the two
+    roots ``-2(metre)`` and ``2(metre)``.  Prints as ``(kelvin)``, the way a Clausal
+    quantity prints its unit.
     """
 
     __slots__ = ()
+
+    def _sympystr(self, printer) -> str:
+        return f"({self.name})"
+
+    def _latex(self, printer) -> str:
+        return r"\mathrm{%s}" % self.name.replace("_", r"\_")
 
 
 _UNIT_SYMBOLS: dict[str, _UnitSymbol] = {}
@@ -72,6 +107,22 @@ def unit_symbol(atom: str) -> _UnitSymbol:
         symbol = _UnitSymbol(atom, positive=True)
         _UNIT_SYMBOLS[atom] = symbol
     return symbol
+
+
+def has_units(expr: Any) -> bool:
+    return isinstance(expr, _sp.Basic) and bool(expr.atoms(_UnitSymbol))
+
+
+def free_variables(expr: Any) -> set:
+    """``expr.free_symbols`` without the dimension symbols: the variables."""
+    return {s for s in expr.free_symbols if not isinstance(s, _UnitSymbol)}
+
+
+def _undefined() -> LogicException:
+    return LogicException(evaluation_error("undefined"))
+
+
+# -- Into SymPy --------------------------------------------------------------
 
 
 def exact_number_to_sympy(value: Any) -> Any:
@@ -93,162 +144,321 @@ def exact_number_to_sympy(value: Any) -> Any:
 
 
 def quantity_to_sympy(quantity: Quantity) -> Any:
-    expr = exact_number_to_sympy(quantity.value)
+    """Magnitude times dimension symbols.  An infinite or NaN magnitude is
+    refused: SymPy folds ``oo * metre`` to ``oo`` and the dimension is lost."""
+    value = quantity.value
+    if isinstance(value, Decimal) and not value.is_finite():
+        raise _undefined()
+    if isinstance(value, float) and not math.isfinite(value):
+        raise _undefined()
+    expr = exact_number_to_sympy(value)
     for atom, exponent in quantity.dims.items():
         expr = expr * unit_symbol(atom) ** exponent
     return expr
 
 
-def has_units(expr: Any) -> bool:
-    return isinstance(expr, _sp.Basic) and bool(expr.atoms(_UnitSymbol))
+# -- Dimensions: a known part (a unit Quantity) times powers of unknowns ----
 
 
-# -- Dimension of a SymPy expression, judged by Quantity arithmetic ---------
+class Dimension:
+    """``known * prod(variable ** exponent)``.  ``known`` is ``Quantity(1,
+    dims)``; ``unknown`` maps a SymPy symbol (a variable) to its exponent.
+    ``None`` in place of a Dimension means undetermined (an unknown function,
+    a symbol named by an atom)."""
 
-_DIMENSIONLESS = None  # built lazily: Quantity() touches the units flag
+    __slots__ = ("known", "unknown")
 
-#: Functions whose value has the dimension of their (single) argument, as
-#: ``abs`` does for a Quantity.  Every other known function needs a
-#: dimensionless argument.
-_DIMENSION_PRESERVING = ("Abs",)
+    def __init__(self, known: Quantity, unknown: dict | None = None) -> None:
+        self.known = known
+        self.unknown = {s: e for s, e in (unknown or {}).items() if e != 0}
 
-
-def _dimensionless() -> Quantity:
-    global _DIMENSIONLESS
-    if _DIMENSIONLESS is None:
-        _DIMENSIONLESS = Quantity(1, {})
-    return _DIMENSIONLESS
+    @property
+    def signature(self) -> frozenset:
+        return frozenset(self.unknown.items())
 
 
-def _dimension(expr: Any) -> Quantity | None:
-    """``Quantity(1, dims)`` for *expr*'s dimension, or None when it is not
-    determined (a free variable, an unknown function, a literal zero).
-    Raises ``UnitsMismatch`` where the expression is inconsistent."""
-    if isinstance(expr, _UnitSymbol):
-        return Quantity(1, {expr.name: 1})
-    if expr.is_Number:
-        return None if expr.is_zero else _dimensionless()
-    if expr.is_NumberSymbol or expr is _sp.S.ImaginaryUnit:
-        return _dimensionless()
-    if isinstance(expr, _sp.Symbol):
+def _unit(dims) -> Quantity:
+    return Quantity(1, dict(dims))
+
+
+def dimensionless() -> Dimension:
+    return Dimension(_unit({}))
+
+
+def _variable(symbol) -> Dimension:
+    return Dimension(_unit({}), {symbol: 1})
+
+
+def _product(a: Dimension | None, b: Dimension | None, sign: int = 1) -> Dimension | None:
+    if a is None or b is None:
         return None
-    if isinstance(expr, _sp.Add):
-        return _sum_dimension([_dimension(a) for a in expr.args])
-    if isinstance(expr, _sp.Mul):
-        result = _dimensionless()
-        undetermined = False
-        for factor in expr.args:
-            d = _dimension(factor)
-            if d is None:
-                undetermined = True
-            elif not undetermined:
-                result = result * d
-        return None if undetermined else _unit(result)
-    if isinstance(expr, _sp.Pow):
-        base, exponent = expr.args
-        _require_dimensionless("**", _dimension(exponent))
-        d = _dimension(base)
-        if d is None or not d.dims:
-            return d
-        # Quantity.__pow__ refuses a non-integer exponent (a square root of
-        # a temperature) with the units system's own message; let it.
-        return _unit(d ** (int(exponent) if exponent.is_Integer else exponent))
-    if isinstance(expr, _sp.Function) and type(expr).__name__ in _DIMENSION_PRESERVING:
-        return _dimension(expr.args[0])
-    if isinstance(expr, (_sp.Mod, _sp.core.relational.Relational)):
-        return _sum_dimension([_dimension(a) for a in expr.args])
-    if isinstance(expr, _sp.Function) and _is_known_function(expr):
-        for argument in expr.args:
-            _require_dimensionless(type(expr).__name__, _dimension(argument))
-        return _dimensionless()
-    # Anything else (an undefined function, a Derivative, ...): check what
-    # is inside, claim nothing about the whole.
-    for argument in expr.args:
-        if isinstance(argument, _sp.Basic):
-            _dimension(argument)
+    known = a.known * b.known if sign > 0 else a.known / b.known
+    if not isinstance(known, Quantity):     # units that cancel give a number
+        known = _unit({})
+    unknown = dict(a.unknown)
+    for s, e in b.unknown.items():
+        unknown[s] = unknown.get(s, 0) + sign * e
+    return Dimension(_unit(known.dims), unknown)
+
+
+def _power(base: Dimension | None, exponent_dimension: Dimension | None,
+           exponent: Any, analysis: "Analysis") -> Dimension | None:
+    require_dimensionless("**", exponent_dimension, analysis)
+    if base is None:
+        return None
+    if not base.known.dims and not base.unknown:
+        return base
+    if exponent is not None and getattr(exponent, "is_Rational", False):
+        ratio = Fraction(int(exponent.p), int(exponent.q))
+        dims = {}
+        for atom, e in base.known.dims.items():
+            scaled = e * ratio
+            if scaled.denominator != 1:
+                # Quantity.__pow__ refuses a non-integer exponent with the
+                # units system's own message; let it.
+                base.known ** exponent
+                raise UnitsMismatch(
+                    f"Exponent must be an integer constant for dimensional "
+                    f"quantities, got {exponent}")
+            dims[atom] = int(scaled)
+        unknown = {}
+        for s, e in base.unknown.items():
+            scaled = e * ratio
+            if scaled.denominator != 1:
+                return None
+            unknown[s] = int(scaled)
+        return Dimension(_unit(dims), unknown)
+    # A symbolic or float exponent: only a dimensionless base allows it.
+    if base.known.dims:
+        base.known ** exponent          # raises UnitsMismatch
     return None
 
 
-def _is_known_function(expr: Any) -> bool:
-    # An undefined function f(x) is an instance of AppliedUndef; a SymPy
-    # library function (log, exp, sin, gamma, ...) is not.
-    return not isinstance(expr, _sp.core.function.AppliedUndef)
+class Analysis:
+    """Constraints met while walking: ``prod(var ** e) == known``."""
+
+    __slots__ = ("constraints",)
+
+    def __init__(self) -> None:
+        self.constraints: list[tuple[dict, Quantity]] = []
+
+    def sum(self, dimensions: list) -> Dimension | None:
+        determined = [d for d in dimensions if d is not None]
+        if not determined:
+            return None
+        groups: dict[frozenset, Dimension] = {}
+        for d in determined:
+            first = groups.get(d.signature)
+            if first is None:
+                groups[d.signature] = d
+            else:
+                first.known + d.known      # Quantity's own check: UnitsMismatch
+        representatives = list(groups.values())
+        head = representatives[0]
+        for other in representatives[1:]:
+            # head.known * head.unknown == other.known * other.unknown
+            unknown = dict(other.unknown)
+            for s, e in head.unknown.items():
+                unknown[s] = unknown.get(s, 0) - e
+            ratio = head.known / other.known
+            known = ratio if isinstance(ratio, Quantity) else _unit({})
+            self.constraints.append(
+                ({s: e for s, e in unknown.items() if e}, _unit(known.dims)))
+        return head
+
+    def dimension_of(self, symbol) -> Quantity | None:
+        """The dimension the constraints give *symbol* (``Quantity(1,
+        dims)``), or None if they say nothing about it alone."""
+        found = None
+        for unknown, known in self.constraints:
+            if set(unknown) != {symbol}:
+                continue
+            n = unknown[symbol]
+            dims = {}
+            for atom, e in known.dims.items():
+                if e % n:
+                    raise UnitsMismatch(
+                        f"no dimension of {symbol} satisfies {symbol}**{n} = "
+                        f"{_dims_str(known.dims)}")
+                dims[atom] = e // n
+            candidate = _unit(dims)
+            if found is None:
+                found = candidate
+            else:
+                found + candidate          # two constraints disagree
+        return found
 
 
-def _unit(quantity: Quantity) -> Quantity:
-    return Quantity(1, dict(quantity.dims))
-
-
-def _sum_dimension(dimensions: list) -> Quantity | None:
-    known = [d for d in dimensions if d is not None]
-    if not known:
-        return None
-    total = known[0]
-    for d in known[1:]:
-        total = total + d          # Quantity's own check: UnitsMismatch
-    return _unit(total)
-
-
-def _require_dimensionless(name: str, dimension: Quantity | None) -> None:
-    if dimension is not None and dimension.dims:
+def require_dimensionless(name: str, dimension: Dimension | None,
+                          analysis: Analysis) -> None:
+    if dimension is None:
+        return
+    if dimension.unknown:
+        # prod(var ** e) * known == 1
+        inverse = _unit({}) / dimension.known
+        known = inverse if isinstance(inverse, Quantity) else _unit({})
+        analysis.constraints.append((dict(dimension.unknown), _unit(known.dims)))
+        return
+    if dimension.known.dims:
         raise UnitsMismatch(
             f"{name} requires a dimensionless argument; got "
-            f"{_dims_str(dimension.dims)}")
+            f"{_dims_str(dimension.known.dims)}")
 
 
-# -- Hooks called from the wrapper -------------------------------------------
+#: Clausal function names whose value has their argument's dimension.
+_PRESERVING_NAMES = ("abs",)
+#: The same, as SymPy class names.
+_PRESERVING_CLASSES = ("Abs",)
 
 
-def check_sum(left: Any, right: Any) -> None:
-    """Refuse ``left + right`` (or ``left - right``) across dimensions."""
-    if has_units(left) or has_units(right):
-        _sum_dimension([_dimension(left), _dimension(right)])
+def term_dimension(term: Any, analysis: Analysis, *,
+                   symbol_for_var: Callable, to_sympy: Callable,
+                   known_functions) -> Dimension | None:
+    """The dimension of a CLAUSAL term, carried node by node (before SymPy
+    can fold anything).  Raises ``UnitsMismatch``."""
+    def walk(t):
+        t = deref(t)
+        if is_var(t):
+            return _variable(symbol_for_var(t))
+        if isinstance(t, Quantity):
+            return Dimension(_unit(t.dims))
+        if isinstance(t, (bool, int, float, Decimal, Fraction)):
+            return dimensionless()
+        if is_chars(t) or isinstance(t, str):
+            return None
+        if isinstance(t, (Add, Sub)):
+            return analysis.sum([walk(t.left), walk(t.right)])
+        if isinstance(t, Mod):
+            return analysis.sum([walk(t.left), walk(t.right)])
+        if isinstance(t, FloorDiv):
+            analysis.sum([walk(t.left), walk(t.right)])
+            return dimensionless()
+        if isinstance(t, Mult):
+            return _product(walk(t.left), walk(t.right))
+        if isinstance(t, Div):
+            return _product(walk(t.left), walk(t.right), -1)
+        if isinstance(t, Negate):
+            return walk(t.operand)
+        if isinstance(t, Pow):
+            base, exponent = walk(t.left), walk(t.right)
+            return _power(base, exponent, to_sympy(t.right), analysis)
+        if type(t) is tuple and len(t) >= 2 and type(t[0]) is str:
+            name, args = t[0], [walk(a) for a in t[1:]]
+            if name == "sqrt" and len(args) == 1:
+                return _power(args[0], dimensionless(), _sp.Rational(1, 2), analysis)
+            if name in _PRESERVING_NAMES and len(args) == 1:
+                return args[0]
+            if name in known_functions:
+                for a in args:
+                    require_dimensionless(name, a, analysis)
+                return dimensionless()
+            return None                    # an unknown function
+        return sympy_dimension(to_sympy(t), analysis)
+    return walk(term)
 
 
-def check_function_args(name: str, args: list) -> None:
-    """Refuse a dimensioned argument to a function that needs a number."""
-    if not any(has_units(a) for a in args):
-        return
-    if name == "sqrt":
-        # A power: sqrt(4 m**2) is 2 m; a fractional dimension left over is
-        # refused when the result is checked.
-        return
-    if name == "abs":
-        for a in args:
-            _dimension(a)
-        return
-    for a in args:
-        _require_dimensionless(name, _dimension(a))
+def sympy_dimension(expr: Any, analysis: Analysis) -> Dimension | None:
+    """The dimension of a SymPy expression.  A SymPy zero is undetermined:
+    it may be a folded ``5(pascal) - 5(pascal)``."""
+    if isinstance(expr, _UnitSymbol):
+        return Dimension(_unit({expr.name: 1}))
+    if expr.is_Number:
+        return None if (expr.is_zero or not expr.is_finite) else dimensionless()
+    if expr.is_NumberSymbol or expr is _sp.S.ImaginaryUnit:
+        return dimensionless()
+    if isinstance(expr, _sp.Symbol):
+        return _variable(expr)
+    if isinstance(expr, _sp.Add):
+        return analysis.sum([sympy_dimension(a, analysis) for a in expr.args])
+    if isinstance(expr, _sp.Mul):
+        result = dimensionless()
+        for factor in expr.args:
+            d = sympy_dimension(factor, analysis)
+            result = _product(result, d) if result is not None else None
+        return result
+    if isinstance(expr, _sp.Pow):
+        base, exponent = expr.args
+        return _power(sympy_dimension(base, analysis),
+                      sympy_dimension(exponent, analysis),
+                      exponent if exponent.is_Number else None, analysis)
+    if isinstance(expr, _sp.Function) and type(expr).__name__ in _PRESERVING_CLASSES:
+        return sympy_dimension(expr.args[0], analysis)
+    if isinstance(expr, (_sp.Mod, _sp.core.relational.Relational)):
+        return analysis.sum([sympy_dimension(a, analysis) for a in expr.args])
+    if isinstance(expr, _sp.Function) and not isinstance(
+            expr, _sp.core.function.AppliedUndef):
+        for argument in expr.args:
+            require_dimensionless(type(expr).__name__,
+                                  sympy_dimension(argument, analysis), analysis)
+        return dimensionless()
+    # Anything else (an undefined function, a Derivative, ...): check what
+    # is inside, claim nothing about the whole.
+    for argument in expr.args:
+        if isinstance(argument, _sp.Expr):
+            sympy_dimension(argument, analysis)
+    return None
 
 
-def result_to_clausal(expr: Any, symbolic: Any) -> Any:
-    """A SymPy result holding dimension symbols, back in Clausal terms.
+def same_dimension(first: Dimension | None, second: Dimension | None) -> None:
+    """Refuse two values of different dimensions where one is required
+    (``gcd``, ``lcm``, ``sym_equal``)."""
+    Analysis().sum([first, second])
 
-    Checks the dimension first (``UnitsMismatch`` if inconsistent).  A ground
-    result is a ``Quantity``; one with free variables is ``symbolic(expr)``.
+
+# -- Back to Clausal ---------------------------------------------------------
+
+
+def real_magnitude(expr: Any) -> Any:
+    return expr.subs({u: 1 for u in expr.atoms(_UnitSymbol)})
+
+
+def is_possibly_real(root: Any) -> bool:
+    """False only for a root SymPy knows is not real (``2*I*metre``)."""
+    return real_magnitude(root).is_extended_real is not False
+
+
+def result_to_clausal(expr: Any, symbolic: Callable, exact_term: Callable,
+                      expected: Quantity | None = None) -> Any:
+    """A SymPy result, back in Clausal terms, with its dimension checked.
+
+    *expected* is the dimension the operation implies (``Quantity(1,
+    dims)``), used for a zero and checked against a non-zero.  A ground
+    result is a quantity (see the module docstring); one with free variables
+    is ``symbolic(expr)``.  *exact_term* turns an exact SymPy number into a
+    Clausal arithmetic term.
     """
-    dimension = _dimension(expr)
-    if expr.free_symbols - expr.atoms(_UnitSymbol):
+    analysis = Analysis()
+    dimension = sympy_dimension(expr, analysis)
+    if free_variables(expr):
         return symbolic(expr)
-    magnitude = expr.subs({u: 1 for u in expr.atoms(_UnitSymbol)})
-    if dimension is None:
-        # Only a literal zero gets here: no dimension to attach.
-        if magnitude.is_zero:
-            return 0
-        raise TypeError(f"undetermined dimension for {expr}")
-    return Quantity(_magnitude_to_python(magnitude), dict(dimension.dims))
-
-
-def _magnitude_to_python(magnitude: Any) -> Any:
+    if dimension is None and not expr.is_zero:
+        # An unknown function of a quantity, f(3(kelvin)): keep it symbolic.
+        if expr.is_number is False or expr.atoms(_sp.core.function.AppliedUndef):
+            return symbolic(expr)
+    magnitude = real_magnitude(expr)
+    if magnitude.is_finite is False or magnitude.is_extended_real is False \
+            or magnitude is _sp.nan:
+        raise _undefined()
+    if dimension is not None:
+        dims = dict(dimension.known.dims)
+        if expected is not None:
+            dimension.known + expected     # the operation's own dimension
+    elif expected is not None:
+        dims = dict(expected.dims)
+    else:
+        dims = {}
+    if not dims:
+        if magnitude.is_Integer:
+            return int(magnitude)
+        return symbolic(magnitude) if not magnitude.is_Float else float(magnitude)
     if magnitude.is_Integer:
-        return int(magnitude)
+        return Quantity(int(magnitude), dims)
     if magnitude.is_Rational:
-        return Fraction(int(magnitude.p), int(magnitude.q))
+        return Quantity(Fraction(int(magnitude.p), int(magnitude.q)), dims)
     if magnitude.is_Float:
-        return float(magnitude)
-    if magnitude.is_number and magnitude.is_extended_real:
-        return float(magnitude.evalf(17))
-    raise TypeError(f"not a real quantity magnitude: {magnitude}")
+        return Quantity(float(magnitude), dims)
+    # Exact but not rational (sqrt(2), 20/log(3)): keep it exact.
+    return Mult(left=exact_term(magnitude), right=Quantity(1, dims))
 
 
 def unit_symbol_to_clausal(symbol: _UnitSymbol) -> Quantity:

@@ -10,10 +10,11 @@
 # normal error, error(system_error(units_mismatch), _).  A ground result
 # comes back as a Clausal quantity.
 #
-# The numbers are a heat-exchanger duty: flow 500 g/s, specific heat
-# 4186 J/(kg K), temperature difference 12345 millidegrees C (a temperature
-# DIFFERENCE, so the same as 12345 millikelvin, entered exactly as a
-# rational: 12345 K / 1000).
+# The numbers are a heat-exchanger duty: flow 500 gram per second, specific
+# heat 4186 joule per kilogram per kelvin, temperature difference 12345
+# millidegrees Celsius.  A temperature DIFFERENCE in millidegrees Celsius is
+# the same number of thousandths of a kelvin, so it is entered as a number
+# times a unit, exactly: 12345(kelvin) / 1000.
 
 # --8<-- [start:heat_exchanger_quantities]
 flow(FLOW) <- (eval_(500(gram), MASS), eval_(MASS / 1(second), FLOW))
@@ -108,9 +109,11 @@ test('c: a mismatch beside the unknown is refused by solve') <- (
 test('d: log mean temperature difference from a dimensionless ratio of temperature differences') <- (
     eval_(30(kelvin), HOT_END_DIFFERENCE), eval_(10(kelvin), COLD_END_DIFFERENCE),
     simplify((HOT_END_DIFFERENCE - COLD_END_DIFFERENCE) / log(HOT_END_DIFFERENCE / COLD_END_DIFFERENCE), LOG_MEAN_TEMPERATURE_DIFFERENCE),
-    has_units(LOG_MEAN_TEMPERATURE_DIFFERENCE, kelvin),
-    LOG_MEAN_TEMPERATURE_DIFFERENCE > 18.2047(kelvin),
-    LOG_MEAN_TEMPERATURE_DIFFERENCE < 18.2048(kelvin)
+    # exact: 20/log(3) * 1 (kelvin), an arithmetic term; eval_ gives the decimal
+    eval_(LOG_MEAN_TEMPERATURE_DIFFERENCE, DECIMAL_VALUE),
+    has_units(DECIMAL_VALUE, kelvin),
+    DECIMAL_VALUE > 18.2047(kelvin),
+    DECIMAL_VALUE < 18.2048(kelvin)
 )  # nv
 # --8<-- [end:log_mean_temperature_difference]
 
@@ -149,7 +152,43 @@ test('e: sympy_term turns a quantity into a quantity') <- (
 )  # nv
 
 test('e: a symbolic result keeps its units for printing') <- (
-    simplify(X * 3(kelvin), OUTCOME),
+    simplify(X_UNUSED * 3(kelvin), OUTCOME),
     sym_str(OUTCOME, TEXT),
     ++("kelvin" in TEXT)
+)  # nv
+
+# ── review findings: currency, exact irrational roots ────────────────────────
+
+-import_from(european_union, [euro])
+
+test('currency: a third of 1000 euro is exact') <- (
+    simplify(1000.00(euro) / 3, THIRD),
+    eval_(1000.00(euro) / 3, EXPECTED),
+    THIRD == EXPECTED
+)  # nv
+
+test('currency: euro plus kelvin is refused') <- (
+    catch((simplify(1.00(euro) + 1(kelvin), _), OUTCOME is 'computed'),
+          error(system_error(CODE), _),
+          OUTCOME is CODE),
+    OUTCOME is 'units_mismatch'
+)  # nv
+
+test('exact root: x squared = 2 square metres stays exact, eval_ gives decimals') <- (
+    eval_(2(metre) * 1(metre), AREA),
+    solve_all(X**2 - AREA, X, [NEGATIVE_ROOT, POSITIVE_ROOT]),
+    eval_(POSITIVE_ROOT, DECIMAL_VALUE),
+    has_units(DECIMAL_VALUE, metre),
+    DECIMAL_VALUE > 1.41421(metre),
+    DECIMAL_VALUE < 1.41422(metre),
+    eval_(NEGATIVE_ROOT, NEGATIVE_DECIMAL),
+    NEGATIVE_DECIMAL < 0(metre),
+    simplify(POSITIVE_ROOT * POSITIVE_ROOT, SQUARE),
+    SQUARE == AREA
+)  # nv
+
+test('complex roots: x squared + 4 square metres has no real root') <- (
+    eval_(4(metre) * 1(metre), AREA),
+    solve_all(X**2 + AREA, X, ROOTS),
+    ROOTS == []
 )  # nv

@@ -21,13 +21,21 @@ surface described in [docs/public-api.md](docs/public-api.md).
   back: a mismatch (kelvin plus pascal, `log` of a temperature, a root that
   adds a number to a length, a square root of a temperature) raises
   `error(system_error(units_mismatch), _)`. A ground result is a `Quantity`
-  (exact `int`/`Fraction` magnitude, a float for an irrational one such as
-  a log mean temperature difference); units that cancel give a plain
+  (exact `int`/`Fraction` magnitude); units that cancel give a plain
   number; a result with free variables stays symbolic. Roots of `solve/3`
   and `solve_all/3` carry their dimension (a flow solved from a duty is in
   kilogram/second). Plain `Decimal` and `Fraction` terms also convert to
-  an exact SymPy `Rational` (a `Decimal` was a `Float`). A literal zero is
-  dimension-blind (SymPy makes `0 * kelvin` the number 0). Tests:
+  an exact SymPy `Rational` (a `Decimal` was a `Float`). Dimensions are
+  carried on the Clausal term before SymPy can fold a zero, so `3(kelvin) + (5(pascal)
+  - 5(pascal))`, `0(pascal) + 3(kelvin)` and `X * 1(kelvin) + X * 1(pascal)` are refused and `solve(X -
+  0(kelvin))` answers `0(kelvin)`. The dimension symbols are constants: `diff/2`,
+  `integrate/2`, `degree/2`, `free_vars/2` and `sym_equal/2` never treat
+  them as variables; they print as `(kelvin)`. An irrational magnitude
+  stays exact, as the arithmetic term `Magnitude * 1 (unit)` (evaluate it
+  for a decimal). An equation holding a quantity gives its real roots only;
+  a complex, infinite or NaN magnitude is `evaluation_error(undefined)`.
+  `gcd/3`, `lcm/3` and `sym_equal/2` refuse mixed dimensions, `subs/3` a
+  quantity as its key (`type_error(variable, _)`). Tests:
   `packages/clausal-sympy/tests/fixtures/sympy_units.seam`,
   `packages/clausal-sympy/tests/test_sympy_units.py`.
 
