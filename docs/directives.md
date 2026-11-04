@@ -606,6 +606,39 @@ imported with `:- use_module(european_union, [euro]).`, and a declared value
 is used as `constant(max_fine)`, folded at compile time exactly as here. See
 [Importing Prolog Code](importing_prolog.md#constants-units-and-dicts-native-front-end).
 
+### `#(Name)`, the short spelling
+
+**Ruled 2026-11-04.** In ISO syntax `#(Name)`, with an atom argument, is
+`constant(Name)`: the same compile-time fold to the declared (or imported)
+value, units and all, everywhere `constant(Name)` is folded (an expression,
+a data term, a clause head, a `{}/1` constraint, another constant's value).
+Under `library(clpz)`, whose prefix operator `#` this is, `#max_fine` reads
+as `#(max_fine)` and folds the same way.
+
+```clausal
+:- constant_value(max_retries, 3).
+:- constant_value(retry_budget, #(max_retries)).
+
+next_try(N, NEXT) :-
+    N < #(max_retries),
+    NEXT is N + 1.
+
+test("# folds like constant/1") :-
+    X is #(max_retries) * 2,
+    X =:= constant(max_retries) * 2,
+    constant(retry_budget) =:= 3.
+```
+
+A declared or imported constant wins. With nothing declaring it, a name is
+refused at load exactly as `constant/1` refuses it ("#(foo): nothing
+declares `foo`"), with one exception kept from clp(q,r): inside a CLP(Q)/CLP(R)
+`{}/1`, the undeclared names `p`, `pi`, `e` and `zero` (clp(q,r) 1.3.3's
+`#(pi)` ...) are lowered exactly as they were before `#(Name)` folded. A
+`#` over a variable or an integer — CLP(Z)'s `#X` / `#3` markers — is not a
+constant reference and is untouched, and a `#(Name)` term built at run time
+(`T =.. ['#', max_retries]`) is a plain term, as a run-time `constant(Name)`
+term is. The seam has no `#(Name)`: there `#` begins a Python comment.
+
 ### Reaching a constant from another module
 
 **Ruled 2026-09-12.** A constant is in scope where it is **declared**, where it is

@@ -363,6 +363,26 @@ test("half is 3/2 euro") :-
     Q == H.
 ```
 
+`#(Name)` is the short spelling of `constant(Name)` (ruled 2026-11-04,
+[directives](directives.md#name-the-short-spelling)): `{Q = 100 * #(one_euro)}`
+is the same constraint. A declared or imported constant wins; with nothing
+declaring them, clp(q,r)'s own `#(p)`, `#(pi)`, `#(e)` and `#(zero)` inside
+`{}/1` are lowered as before, and any other undeclared name is refused at
+load.
+
+```clausal
+:- use_module(library(clpq)).
+:- use_module(european_union, [euro]).
+:- constant_number_units(one_euro, 1, euro).
+
+price(Q) :- {Q = 100 * #(one_euro)}.
+
+test("# is constant/1 in a constraint") :-
+    price(Q),
+    P is 100 * constant(one_euro),
+    Q == P.
+```
+
 The seam spelling:
 
 ```seam

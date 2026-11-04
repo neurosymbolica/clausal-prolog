@@ -243,6 +243,15 @@ class Uses:
                     # D8's compile-time fold, not a data term: neither
                     # ``constant`` nor the constant's name is an atom use.
                     continue
+                if t[0] == "#" and len(t) == 2 and type(t[1]) is str:
+                    # ``#(Name)``, the same fold (operator ruling
+                    # 2026-11-04).  clp(q,r)'s ``#(pi)`` ... is counted as
+                    # before (inside a {}/1 an undeclared one is not
+                    # folded); clpz's ``#X`` / ``#3`` is data.
+                    from clausal.tools.iso_l3 import (  # noqa: PLC0415
+                        _CLPQ_NAMED_CONSTANTS)
+                    if t[1] not in _CLPQ_NAMED_CONSTANTS:
+                        continue
                 if t[0] != ".":
                     self.functors.setdefault(t[0], set()).add(len(t) - 1)
                 stack.extend(t[1:])
@@ -1577,6 +1586,8 @@ def _initialization(ctx, args, spans, span):
 #                                                      seam reads exactly
 #                                                      ("292.00" keeps .00)
 #                     constant(Earlier)             -> the earlier constant
+#                     #(Earlier)                    -> the same (operator
+#                                                      ruling 2026-11-04)
 #                     a list / a compound           -> that term, as DATA
 #                                                      (``2*3`` is the term
 #                                                      '*'(2, 3): ISO, and
@@ -1631,6 +1642,8 @@ def _const_value(ctx, cell, span, what, *, units: bool) -> ast.expr:
             return ast.Tuple(elts=[ast.Constant(value="$chars"),
                                    ast.Constant(value=cell[1])],
                              ctx=ast.Load())
+        if cell[0] == "#" and len(cell) == 2 and type(cell[1]) is str:
+            return _name(cell[1])       # ``#(Earlier)``: constant(Earlier)
         if cell[0] == "constant" and len(cell) == 2:
             if type(cell[1]) is not str:
                 raise _refused(f"{what}: constant() takes the name of a "
