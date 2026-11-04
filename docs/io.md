@@ -494,8 +494,30 @@ indicator has other representations: the cells `('/', Name, Arity)` /
 `('//', Name, Arity)`, reachable from Python/engine callers that already
 hold the name and arity as data, and -- what a user-written `foo/2` or
 `foo // 2` compiles to in `.seam` source -- a runtime `Div` / `FloorDiv`
-node, since in the seam `/` and `//` are arithmetic operators.) It prints a
-header with clause count, then each clause in `head <- (body).` format.
+node, since in the seam `/` and `//` are arithmetic operators.)
+
+What it prints depends on the module that defines the predicate:
+
+- a `.pl` or Clausal Prolog predicate lists exactly as Scryer's `listing/1`
+  lists it, through `portray_clause/1`'s layout: no header line, variables
+  named `A`, `B`, ... (a shared variable keeps one name), operators and
+  quoted atoms as `writeq/1` writes them, strings as `"..."`, a rule's goals
+  one per line indented three spaces, and an if-then-else or disjunction
+  laid out with `(  `, `;  ` and `->`:
+
+  ```text
+  p([A|B],A-B).
+  p(A,B) :-
+     (  A>0 ->
+        B=pos
+     ;  B=neg
+     ).
+  ```
+
+- a seam predicate prints a `% name/arity — N clause(s)` header, then each
+  clause in the seam's spelling, `head.` or `head <- (g1, g2).`, its
+  variables `_0`, `_1`, ... in order of first occurrence (a partial list is
+  `[H, *T]`).
 
 From Python, `listing` also takes a predicate handle (`listing(mod.fib)`
 lists every arity the module defines under that name, and prints

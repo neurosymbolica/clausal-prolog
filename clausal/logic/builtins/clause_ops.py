@@ -214,6 +214,40 @@ def _as_cell(head: Any) -> Any:
     return head
 
 
+def _pattern_as_term(t: Any) -> Any:
+    """*t*, a stored head (or a part of one), with every list PATTERN that
+    holds a ``StarUnpack`` built as the list term it spells: ``[H, *T]``
+    (ISO ``[H|T]``) as the engine's partial list (a ``SegList``), exactly
+    what the compiled head would bind an unbound argument to.  Cells and
+    lists are walked (nested patterns included); everything else, and a
+    part holding no pattern, is returned as it is (the same object).
+
+    Run with the construction's bindings in place (inside
+    ``_on_private_trail``): a tail a hoisted argument bound is read through
+    its binding, as ``_build_star_list`` reads it.  A stored head is a tree
+    the compiler built, so this walks no variable binding but the tails."""
+    if type(t) is list:
+        parts = [_pattern_as_term(e) for e in t]
+        if any(isinstance(e, nodes.StarUnpack) for e in parts):
+            from clausal.logic.compiler.terms_to_ast import (  # noqa: PLC0415
+                _parse_star_segments)
+            from clausal.logic.runtime.body_star_unify import (  # noqa: PLC0415
+                _build_multi_star_list, _build_star_list)
+            if (isinstance(parts[-1], nodes.StarUnpack) and not any(
+                    isinstance(e, nodes.StarUnpack) for e in parts[:-1])):
+                return _build_star_list(parts[:-1], parts[-1].value, ())
+            return _build_multi_star_list(_parse_star_segments(parts))
+        if any(a is not b for a, b in zip(parts, t)):
+            return parts
+        return t
+    if type(t) is tuple and len(t) > 1 and type(t[0]) is str:
+        args = [_pattern_as_term(a) for a in t[1:]]
+        if any(a is not b for a, b in zip(args, t[1:])):
+            return make_cell(t[0], *args)
+        return t
+    return t
+
+
 # ── Stored goal -> term ─────────────────────────────────────────────────────
 
 
@@ -994,13 +1028,14 @@ def head_matches(clause, home_db, cell, trail=None) -> "tuple[bool, str | None]"
     unifies with the caller's *cell*, which may wake a coroutine."""
     head = _as_cell(clause.head)
     built = _head_built(clause, home_db)
+
+    def probe(tmp):
+        return bool(unify(cell, _pattern_as_term(head), tmp))
     try:
-        matched = _on_private_trail(
-            built, lambda tmp: bool(unify(cell, head, tmp)), trail)
+        matched = _on_private_trail(built, probe, trail)
     except _BuildFailed as failed:
         built = _head_failed(clause, home_db, failed.exc)
-        matched = _on_private_trail(
-            built, lambda tmp: bool(unify(cell, head, tmp)), trail)
+        matched = _on_private_trail(built, probe, trail)
     return matched, built.why
 
 
@@ -1009,6 +1044,26 @@ def clause_terms(clause, home_db) -> tuple:
     arguments put back and the body remainder as a term, both a FRESH
     renaming.  When the body cannot be a term, Body is ``None`` and *why*
     says so.
+
+    The contract (clause/2, retract/1 and outside callers such as
+    explanation/provenance tools rely on it; pinned in
+    ``tests/test_clause_terms_shape.py``):
+
+    - ``(Head, Body, None)``, or ``(None, None, why)`` with *why* a str.
+    - Head and Body are TERMS, in the engine's runtime representation --
+      what the compiled clause would bind its arguments to: an atom is a
+      ``str``, a compound a cell ``(functor, *args)``, a proper list a
+      ``list``, a string the chars carrier, and a partial list ``[H|T]``
+      the engine's partial list (a ``SegList`` whose tail is an unbound
+      variable), never the compiler's head pattern ``[H, StarUnpack(T)]``:
+      no head PATTERN node survives.  (A seam term may still hold the
+      seam's operator nodes -- ``H - T`` is ``Sub`` -- as term position
+      builds them; those are terms there.)
+    - Head and Body share their variables (one renaming of the clause),
+      and none is shared with the stored clause or a previous call.
+    - Body is ``True`` for a fact; else the term (seam: the plain tuple for
+      a conjunction; ISO surface: the body as read, ``','``/2 cells), or a
+      :class:`FailClosedBody` wrapping it (see below).
 
     An ISO-surface rule (:func:`iso_bodies`) hands back its body AS READ
     (``Clause.source_body``), renamed together with the head.  It is a
@@ -1035,7 +1090,8 @@ def clause_terms(clause, home_db) -> tuple:
         if built.why is None:
             try:
                 h, b = _on_private_trail(
-                    built, lambda tmp: _copy_term((head, out), {}))
+                    built, lambda tmp: _copy_term(
+                        (_pattern_as_term(head), out), {}))
             except _BuildFailed as failed:
                 if out is src:
                     built = _head_failed(clause, home_db, failed.exc)
@@ -1057,7 +1113,8 @@ def clause_terms(clause, home_db) -> tuple:
     if built.why is None:
         try:
             h, b = _on_private_trail(
-                built, lambda tmp: _copy_term((head, built.out), {}))
+                built, lambda tmp: _copy_term(
+                    (_pattern_as_term(head), built.out), {}))
             # an ISO rule with no source term: approximate, fail closed
             return h, (FailClosedBody(b) if iso_rule else b), None
         except _BuildFailed as failed:
