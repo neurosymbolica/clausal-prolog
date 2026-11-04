@@ -80,6 +80,51 @@ Results from one predicate can be fed directly into another:
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:chaining_ex2"
 ```
 
+### Quantities (units)
+
+A [quantity](https://github.com/neurosymbolica/clausal-prolog/blob/main/docs/units.md)
+may appear anywhere in an expression. It goes to SymPy as its exact
+magnitude, in SI base units, times one dimension symbol per base unit
+(`kilogram`, `metre`, `second`, `kelvin`, ...); a `Decimal` or `Fraction`
+magnitude stays an exact `Rational`. Dimensions are judged by Clausal's
+units system, as everywhere else: every sum and every function argument is
+checked with `Quantity` arithmetic, and so is every result. A ground result
+comes back as a quantity (an irrational magnitude, such as a log mean
+temperature difference, as a float); units that cancel give a plain number;
+a result that still holds a variable stays symbolic, dimension symbols
+included.
+
+```seam
+--8<-- "tests/fixtures/sympy_units.seam:heat_exchanger_quantities"
+```
+
+Solving backwards gives a root with its dimension, a mass flow here:
+
+```seam
+--8<-- "tests/fixtures/sympy_units.seam:solve_for_a_quantity"
+```
+
+A mismatch is the units system's own error, `error(system_error(units_mismatch), _)`:
+
+```seam
+--8<-- "tests/fixtures/sympy_units.seam:dimension_mismatch"
+```
+
+`log`, `exp`, the trigonometric functions, `floor` and `ceiling` need a
+dimensionless argument; a ratio of two temperature differences is one:
+
+```seam
+--8<-- "tests/fixtures/sympy_units.seam:log_mean_temperature_difference"
+```
+
+`abs` keeps its argument's dimension and `sqrt` is a power: `sqrt` of an area
+is a length, `sqrt` of a temperature is refused (a dimension exponent must be
+an integer). A temperature is in kelvin and only differences are
+meaningful to the units system (there is no Celsius offset scale): enter a
+difference in millidegrees Celsius as kelvin over 1000, `12345(kelvin) / 1000`,
+which stays the exact rational 2469/200 K. A literal zero carries no
+dimension in SymPy, so `0 K + 3 K` is accepted as `3 K`.
+
 ---
 
 ## Predicates

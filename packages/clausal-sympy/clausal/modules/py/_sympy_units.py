@@ -110,7 +110,7 @@ _DIMENSIONLESS = None  # built lazily: Quantity() touches the units flag
 #: Functions whose value has the dimension of their (single) argument, as
 #: ``abs`` does for a Quantity.  Every other known function needs a
 #: dimensionless argument.
-_DIMENSION_PRESERVING = ("Abs", "floor", "ceiling")
+_DIMENSION_PRESERVING = ("Abs",)
 
 
 def _dimensionless() -> Quantity:
@@ -150,12 +150,9 @@ def _dimension(expr: Any) -> Quantity | None:
         d = _dimension(base)
         if d is None or not d.dims:
             return d
-        if not exponent.is_Integer:
-            # Quantity.__pow__ refuses a non-integer exponent with the
-            # units system's own message; let it.
-            exponent_value = float(exponent) if exponent.is_Number else exponent
-            return _unit(d ** exponent_value)
-        return _unit(d ** int(exponent))
+        # Quantity.__pow__ refuses a non-integer exponent (a square root of
+        # a temperature) with the units system's own message; let it.
+        return _unit(d ** (int(exponent) if exponent.is_Integer else exponent))
     if isinstance(expr, _sp.Function) and type(expr).__name__ in _DIMENSION_PRESERVING:
         return _dimension(expr.args[0])
     if isinstance(expr, (_sp.Mod, _sp.core.relational.Relational)):
@@ -212,7 +209,11 @@ def check_function_args(name: str, args: list) -> None:
     """Refuse a dimensioned argument to a function that needs a number."""
     if not any(has_units(a) for a in args):
         return
-    if name in ("abs", "floor", "ceiling"):
+    if name == "sqrt":
+        # A power: sqrt(4 m**2) is 2 m; a fractional dimension left over is
+        # refused when the result is checked.
+        return
+    if name == "abs":
         for a in args:
             _dimension(a)
         return

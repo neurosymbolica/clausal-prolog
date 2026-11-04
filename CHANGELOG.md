@@ -9,6 +9,28 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Added
 
+- **clausal-sympy computes with quantities, dimensions checked by the units
+  system.** A `Quantity` in a sympy predicate's input failed silently before
+  (sympify refused it, the error was caught, the predicate had no answer),
+  so `simplify(Flow * SpecificHeat * TemperatureDifference, Duty)` and a
+  `solve/3` for the flow were "no". A quantity now goes to SymPy as its
+  exact magnitude times one dimension symbol per base unit (named by the
+  atoms keying `Quantity.dims`; `sympy.physics.units` is not used). Each
+  sum and each function argument is checked with Clausal's own `Quantity`
+  arithmetic while the term is converted, and each result again on the way
+  back: a mismatch (kelvin plus pascal, `log` of a temperature, a root that
+  adds a number to a length, a square root of a temperature) raises
+  `error(system_error(units_mismatch), _)`. A ground result is a `Quantity`
+  (exact `int`/`Fraction` magnitude, a float for an irrational one such as
+  a log mean temperature difference); units that cancel give a plain
+  number; a result with free variables stays symbolic. Roots of `solve/3`
+  and `solve_all/3` carry their dimension (a flow solved from a duty is in
+  kilogram/second). Plain `Decimal` and `Fraction` terms also convert to
+  an exact SymPy `Rational` (a `Decimal` was a `Float`). A literal zero is
+  dimension-blind (SymPy makes `0 * kelvin` the number 0). Tests:
+  `packages/clausal-sympy/tests/fixtures/sympy_units.seam`,
+  `packages/clausal-sympy/tests/test_sympy_units.py`.
+
 - **A `.pl` module asserts rules** (ISO 13211-1 8.9, operator ruling
   2026-11-03): `assertz/1`, `asserta/1`, `retract/1` and `clause/2` take
   `(Head :- Body)` with any body, cut and if-then-else included. The rule is
