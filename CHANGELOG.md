@@ -430,7 +430,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   it, as in the one-function compile (a table marked it last only as the
   table's final clause): it is compiled a second time, with that marking,
   at the first call that needs it. Facts holding `true`
-  or `false` are held as data, keyed and unified apart from 1 and 0.
+  or `false` are held as data, keyed and unified apart from 1 and 0. A table exposes
+  its index buckets to call sites with a static key, as compiled indexing
+  does (`index_plans`). An indexed call into a 40-fact table costs about
+  10% more than into the compiled predicate (2.15 vs 1.95 us per call), a
+  full scan about the same.
   Pinned in `tests/test_clause_table.py` (counts of compiled clause arms
   and recompiles, known-last answers).
 

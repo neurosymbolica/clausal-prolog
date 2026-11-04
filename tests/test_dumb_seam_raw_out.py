@@ -330,10 +330,15 @@ def test_the_constant_registry_dies_with_the_code_object():
     assert not any(i in cells._COMPILED_GROUND for i in ids), "and its entries are gone too"
 
 
-def test_a_recompiling_dynamic_predicate_does_not_grow_the_registry():
+def test_a_recompiling_dynamic_predicate_does_not_grow_the_registry(
+        monkeypatch):
     """The worst case roborev 252 named: a predicate recompiled after every
     assertz (an assert/call loop, since assertz recompiles lazily at the next
     call), and every old code object's constants must go with it.
+    (A fact predicate written between calls is a clause table, which takes
+    each assertz in place and compiles nothing: the rules that make it one
+    are switched off here, so that it recompiles at every call; the table
+    case is the next test.)
     DISCRIMINATING (roborev 257): the growth over two EQUAL intervals is the
     same for linear growth and ~1.7x for quadratic (a*i^2: 30000a vs 50000a),
     the total is bounded by the live clause count, and the table must have
@@ -342,6 +347,9 @@ def test_a_recompiling_dynamic_predicate_does_not_grow_the_registry():
     import gc
     from clausal.logic import cells
     from clausal.logic.solve import call
+    import clausal.logic.compiler.clause_table as clause_table
+    monkeypatch.setattr(clause_table, "FACT_TABLE_THRESHOLD", 10 ** 9)
+    monkeypatch.setattr(clause_table, "RECOMPILES_BEFORE_TABLE", 10 ** 9)
     m = _load("_ss_dyn", (
         "-module(_ss_dyn, [d(X, Y), pt(A, B)])\n-dynamic(d/2)\n-private([a])\n"
         "d(0, pt(a, 0)),\n"
@@ -363,3 +371,28 @@ def test_a_recompiling_dynamic_predicate_does_not_grow_the_registry():
     assert d1 > 0, sizes                                  # not vacuous: the facts register constants
     assert d2 <= 1.2 * d1 + 10, (d1, d2, sizes)            # linear: equal intervals, equal growth
     assert sizes[3] - sizes[0] <= 3 * 301 + 50, sizes     # bounded by the LIVE program (2/clause measured)
+
+
+def test_an_assert_call_loop_into_a_fact_table_does_not_grow_the_registry():
+    """The same loop with the clause table on: from the second recompile
+    the predicate is a table, each assertz is appended in place, and no
+    code is compiled -- so nothing is registered at all."""
+    import gc
+    from clausal.logic import cells
+    from clausal.logic.solve import call
+    m = _load("_ss_dyn_t", (
+        "-module(_ss_dyn_t, [d(X, Y), pt(A, B)])\n-dynamic(d/2)\n-private([a])\n"
+        "d(0, pt(a, 0)),\n"
+    ))
+    mod = m.__dict__["$module"]
+    sizes = []
+    for i in range(1, 301):
+        for _ in call("assertz", ("d", i, ("pt", "a", i)), module=mod):
+            pass
+        for _ in call("d", i, ("pt", "a", i), module=mod):
+            pass
+        if i % 100 == 0:
+            gc.collect()
+            sizes.append(len(cells._COMPILED_GROUND))
+    assert sizes[2] - sizes[0] <= 5, sizes
+    assert len(list(call("d", 300, ("pt", "a", 300), module=mod))) == 1

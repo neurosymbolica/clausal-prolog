@@ -63,7 +63,6 @@ from __future__ import annotations
 
 import heapq
 from bisect import bisect_left
-from itertools import islice
 from types import FunctionType
 from typing import Any, Callable
 
@@ -248,97 +247,136 @@ def build_table_dispatch(
     # The positions in use.
     plans = [entry for entry in index if len(entry[1]) >= 2]
 
-    def candidates(call_args, n0):
-        """The indices below *n0* of the clauses that can match
-        *call_args*, ascending."""
+    def candidates(call_args):
+        """The indices of the clauses that can match *call_args*,
+        ascending, among the clauses there are now (*n0*)."""
+        n0 = len(facts)
         best = None
         best_count = n0
         for pos, specific, defaults in plans:
             a = deref(call_args[pos])
-            if is_var(a):
-                continue
-            k = _runtime_arg_key(a, False)
-            if k is _INDEX_VAR:
-                continue
+            t = type(a)
+            if t is int:                # the common keys, inline
+                k = a
+            elif t is str and a:
+                k = (a, 0)
+            else:
+                if is_var(a):
+                    continue
+                k = _runtime_arg_key(a, False)
+                if k is _INDEX_VAR:
+                    continue
             try:
                 hit = specific.get(k, ())
             except TypeError:
                 continue
-            nh = _below(hit, n0)
-            nd = _below(defaults, n0)
+            # How many of the (ascending) indices are below *n0*.
+            nh = len(hit)
+            if nh and hit[-1] >= n0:
+                nh = bisect_left(hit, n0)
+            nd = len(defaults)
+            if nd and defaults[-1] >= n0:
+                nd = bisect_left(defaults, n0)
             count = nh + nd
             if count < best_count:
                 best, best_count = (hit, nh, defaults, nd), count
+                if count <= 1:
+                    # Another position could only rule out this one
+                    # candidate, which its own unification does too.
+                    break
         if best is None:
             return range(n0)
         hit, nh, defaults, nd = best
-        # Bounded even when nothing is past *n0* yet: the lists are live,
-        # and a clause appended while the call runs must not reach it.
-        hit = islice(hit, nh)
-        defaults = islice(defaults, nd)
+        # Copies of the first *nh* / *nd*: the lists are live, and a clause
+        # appended while the call runs must not reach it.
         if not nd:
-            return hit
+            return hit[:nh]
         if not nh:
-            return defaults
-        return heapq.merge(hit, defaults)
+            return defaults[:nd]
+        return heapq.merge(hit[:nh], defaults[:nd])
 
-    def dispatch(this_generator, _proceed, _fail, _catcher, *rest):
-        trail = rest[-1]
-        call_args = rest[:-1]
-        if arity == 1:
-            c0 = call_args[0]
-        elif arity == 2:
-            c0, c1 = call_args
-        it = iter(candidates(call_args, len(facts)))
-        nxt = next(it, _END)
-        while nxt is not _END:
-            i = nxt
+    def driver(chosen, done: bool):
+        """A generator function trying, in order, the clauses whose indices
+        ``chosen(call_args)`` gives (ascending): the dispatch, ending with
+        ``(fail, DONE)`` (*done*), or an index bucket for a call site, which
+        does not (``arg_index._make_call_site_bucket_trampoline`` adds it).
+        """
+        def dispatch(this_generator, _proceed, _fail, _catcher, *rest):
+            trail = rest[-1]
+            call_args = rest            # (the trail last: read up to arity)
+            if arity == 1:
+                c0 = rest[0]
+            elif arity == 2:
+                c0 = rest[0]
+                c1 = rest[1]
+            it = iter(chosen(call_args))
             nxt = next(it, _END)
-            fact = facts[i]
-            if fact is None:
-                # A cut in the clause yields ``(_fail, DONE)``: this
-                # generator is not resumed after it (a compiled predicate's
-                # own cut exit relies on the same).
-                # The clause's answers can be FINAL only when no candidate
-                # is left after it: its FINAL-marking compile then, else its
-                # plain one.
-                entry = fns[i]
-                fn = entry[0]
-                if nxt is _END and final_answers:
-                    fn = entry[1]
-                    if fn is None:
-                        fn = entry[1] = compile_clause(entry[2], entry[3], True)
-                yield from fn(this_generator, _proceed, _fail, _catcher, *rest)
-                continue
-            args, ground = fact
-            if not ground:
-                args = _copy_term(args, {})
-            mark = trail.mark()
-            closed = False
-            try:
-                if arity == 1:
-                    ok = unify(c0, args[0], trail)
-                elif arity == 2:
-                    ok = (unify(c0, args[0], trail)
-                          and unify(c1, args[1], trail))
-                else:
-                    ok = True
-                    for a, t in zip(call_args, args):
-                        if not unify(a, t, trail):
-                            ok = False
-                            break
-                if ok:
-                    yield (_proceed,
-                           FINAL if nxt is _END and final_answers else None)
-            except GeneratorExit:
-                # Closed after an answer (once/1, a cut): its bindings are
-                # the caller's now -- as a compiled clause arm leaves them.
-                closed = True
-                raise
-            finally:
-                if not closed:
-                    trail.undo(mark)
-        yield (_fail, DONE)
+            while nxt is not _END:
+                i = nxt
+                nxt = next(it, _END)
+                fact = facts[i]
+                if fact is None:
+                    # A cut in the clause yields ``(_fail, DONE)``: this
+                    # generator is not resumed after it (a compiled
+                    # predicate's own cut exit relies on the same).  The
+                    # clause's answers can be FINAL only when no candidate
+                    # is left after it: its FINAL-marking compile then,
+                    # else its plain one.
+                    entry = fns[i]
+                    fn = entry[0]
+                    if nxt is _END and final_answers:
+                        fn = entry[1]
+                        if fn is None:
+                            fn = entry[1] = compile_clause(
+                                entry[2], entry[3], True)
+                    yield from fn(this_generator, _proceed, _fail, _catcher,
+                                  *rest)
+                    continue
+                args, ground = fact
+                if not ground:
+                    args = _copy_term(args, {})
+                mark = trail.mark()
+                closed = False
+                try:
+                    if arity == 1:
+                        ok = unify(c0, args[0], trail)
+                    elif arity == 2:
+                        ok = (unify(c0, args[0], trail)
+                              and unify(c1, args[1], trail))
+                    else:
+                        ok = True
+                        for a, t in zip(call_args, args):
+                            if not unify(a, t, trail):
+                                ok = False
+                                break
+                    if ok:
+                        yield (_proceed,
+                               FINAL if nxt is _END and final_answers else None)
+                except GeneratorExit:
+                    # Closed after an answer (once/1, a cut): its bindings
+                    # are the caller's now -- as a compiled arm leaves them.
+                    closed = True
+                    raise
+                finally:
+                    if not closed:
+                        trail.undo(mark)
+            if done:
+                yield (_fail, DONE)
+        return dispatch
+
+    dispatch = driver(candidates, True)
+
+    # Index buckets for call sites with a static key, as the compiled
+    # indexing exposes (``index_plans``): over the clauses the table has
+    # now.  Only a LOCKED predicate's plans are read, and a locked
+    # predicate never grows.
+    buckets: dict = {}
+    for pos, specific, defaults in plans:
+        by_key = buckets[pos] = {}
+        for k, hit in specific.items():
+            chosen = tuple(heapq.merge(hit, defaults)) if defaults \
+                else tuple(hit)
+            by_key[k] = driver(lambda call_args, c=chosen: c, False)
 
     def append(clause) -> "Callable | None":
         """Add *clause* (just assertz'd: stored after every clause this
@@ -351,9 +389,8 @@ def build_table_dispatch(
 
         Safe for a call running meanwhile (also with free threading): it
         took ``len(facts)`` when it began, every index list is appended to
-        before ``facts`` is, and it reads index lists only up to that
-        length (``_below``, ``islice``), so it never reaches the new
-        clause."""
+        before ``facts`` is, and it copies the part of an index list below
+        that length, so it never reaches the new clause."""
         args = fact_arguments(clause, db, arity)
         if args is None:
             return None
@@ -371,6 +408,7 @@ def build_table_dispatch(
     def _named(fn):
         fn.__name__ = fn.__qualname__ = f"{functor}__{arity}"
         fn.table_append = append
+        fn.index_buckets = buckets
         return fn
 
     return _named(dispatch)
@@ -393,11 +431,3 @@ def _add_key(specific: dict, defaults: list, k, i: int) -> None:
         specific.setdefault(k, []).append(i)
     except TypeError:
         defaults.append(i)
-
-
-def _below(indices, n0: int) -> int:
-    """How many of the ascending *indices* are below *n0*."""
-    if not indices or indices[-1] < n0:
-        return len(indices)
-    return bisect_left(indices, n0)
-
