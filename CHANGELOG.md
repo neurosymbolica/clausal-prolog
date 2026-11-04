@@ -39,6 +39,20 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A call whose arguments are all ground and nested past the deep-literal
+  bound loads.** `call((g1, ..., g20, call((...))))` nested 12 deep, a fact
+  `h(T)` with `T` a 300-term `a+a+...+a`, or `X is 1+1+...+1` failed to load
+  with `TypeError: object of type 'DeepLiteral' has no len()`. The rewrite
+  that compiles deep ground data as one constant treated a call's argument
+  list (`Call.args`) as a list term, so when every argument was ground and
+  deep it replaced the whole list with one constant. It now rewrites each
+  argument of a syntax node's child list on its own. A deep literal goal
+  given to `call/N` is unknowable to the compile-time cut-over-table rule,
+  like a goal built at run time; the run-time check covers it. The
+  generated code of every program that loaded before is unchanged (checked
+  on every `.pl`, `.clausal` and `.seam` file in the repository outside
+  `packages/`). Pinned in `tests/test_deep_literals.py`.
+
 - **Deeply nested `\+`, `findall/3` and long conjunctions load in linear
   time.** Load time doubled with each nested `\+` (or other construct
   compiled to a nested function): `\+` nested 16 deep took 5 s and 24 deep

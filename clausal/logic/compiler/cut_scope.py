@@ -290,7 +290,11 @@ def _literal_call_goal(op, db):
     its goal argument is a LITERAL callable: call/1's term as a body, or
     call/N's atom/compound closure extended by the N-1 extra arguments.
     ``None`` for a variable (or otherwise unknowable) goal -- a goal built at
-    run time is out of reach of a static rule, as in XSB."""
+    run time is out of reach of a static rule, as in XSB.  A goal too deep
+    to compile structurally (a ``DeepLiteral``, deep_literals.py) is one of
+    those: :func:`_body_term_ir` reads it as the empty conjunction, since a
+    walk into it would recurse once per level, and the run-time check covers
+    it like any goal built at run time."""
     from clausal.logic.variables import deref, is_var
     if not op.args:
         return None

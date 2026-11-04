@@ -31,6 +31,8 @@ from typing import TYPE_CHECKING, Any
 
 from clausal.logic.cells import is_chars
 from clausal.logic.variables import deref
+from clausal.pythonic_ast.node_class import _field_kind
+from clausal.pythonic_ast.nodes import Node
 
 if TYPE_CHECKING:
     from clausal.logic.database import Clause
@@ -146,6 +148,13 @@ def rewrite_term(term: Any) -> Any:
     return result
 
 
+def _is_child_sequence(node: Any, field: "dataclasses.Field") -> bool:
+    """True when *field* of the syntax node *node* holds a sequence of child
+    nodes or argument terms (annotated ``list[Node]``: ``Call.args``,
+    ``Call.kwargs``, a literal's ``elements``) rather than one term."""
+    return isinstance(node, Node) and _field_kind(field) == "node_list"
+
+
 def _rewrite_args(goal: Any) -> Any:
     """*goal* (a head or a body goal) with its ARGUMENTS rewritten: a cell's
     slots, a syntax node's fields.  The goal itself is never a literal."""
@@ -159,7 +168,17 @@ def _rewrite_args(goal: Any) -> Any:
         changes = {}
         for field in dataclasses.fields(g):
             old = getattr(g, field.name)
-            if type(deref(old)) in (tuple, list):
+            if type(old) is list and _is_child_sequence(g, field):
+                # A node's child list (``Call.args``) is a SEQUENCE of
+                # arguments, not a list term: each argument may become a
+                # leaf, the sequence never does.  Every reader of the
+                # field iterates and measures it (``len(call.args)``), so
+                # a sequence replaced whole was a TypeError at load time
+                # for any call whose arguments were all ground and deep.
+                new_items = [rewrite_term(a) for a in old]
+                if any(n is not o for n, o in zip(new_items, old)):
+                    changes[field.name] = new_items
+            elif type(deref(old)) in (tuple, list):
                 new = rewrite_term(old)
                 if new is not old:
                     changes[field.name] = new
