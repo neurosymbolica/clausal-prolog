@@ -935,6 +935,28 @@ def _refuse_control_construct(head, who):
         f"{who}: {name}/{arity} is a control construct"))
 
 
+def _refuse_neck_head(term_val, who, clause=True):
+    """A clause (or, *clause* False, a retractall/1 head) whose head is
+    ``(:-)/1`` or ``(:-)/2`` -- a directive or a clause as a head -- is
+    Scryer's ``permission_error(modify, static_procedure, (:-)/N)``, the
+    loader's answer (``iso_l3.lower_clause``).  ``(:-)/0`` is an ordinary
+    atom head (operator ruling 2026-11-03)."""
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+    from clausal.logic.exceptions import permission_error  # noqa: PLC0415
+    head = deref(term_val)
+    if clause:
+        parts = neck_parts(head)
+        if parts is not None:
+            head = deref(parts[0])
+    ok, functor = compound_cell_shape(head)
+    if ok and functor == ":-" and len(head) in (2, 3):
+        n = len(head) - 1
+        raise LogicException(permission_error(
+            "modify", "static_procedure", ("/", mint(":-"), n),
+            f"{who}: a clause head (:-)/{n} is a "
+            f"{'directive' if n == 1 else 'clause'}, not a procedure"))
+
+
 def _qualified_target(db, term_val, who):
     """``(db, term)``: the database a ``M:Clause`` argument writes to and
     the clause without its qualification -- ``(db, term_val)`` unchanged
@@ -1030,6 +1052,7 @@ def _assert_factory(context, front):
             target, term_val = _qualified_target(db, term_val, context)
             _refuse_truth_atom_head(term_val, context)
             _refuse_control_construct(term_val, context)
+            _refuse_neck_head(term_val, context)
             _assert_clause(target, db.runtime_author(), term_val, context,
                            front, caller=db)
             yield None
@@ -1102,6 +1125,7 @@ def _retract_in(db, author, term_val, trail):
     # a FACT only -- and retract((Head :- Body)) matches the clause's
     # body too (see _unneck_clause).
     _refuse_truth_atom_head(term_val, "retract/1")
+    _refuse_neck_head(term_val, "retract/1")
     term_val = _unneck_clause(term_val, "retract/1", "retract")
     if term_val is _NEVER_MATCHES:
         return
@@ -1232,6 +1256,7 @@ def _retractall_factory(db):
         target, h = _qualified_target(db, h, "retract/1")
         _refuse_truth_atom_head(h, "retract/1")   # Scryer's context, as above
         _refuse_control_construct(h, "retract/1")
+        _refuse_neck_head(h, "retract/1", clause=False)
         target_dict = getattr(target, "module_dict", None)
         term_val = _check_cell_head_permission(h, "retract/1", target,
                                                target_dict)

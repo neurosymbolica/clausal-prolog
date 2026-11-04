@@ -1286,6 +1286,10 @@ def resolve_module(designator: Any, calling_module: Any = None,
     named = isinstance(target, str)
     if named:
         found = sys.modules.get(target)
+        if found is None and target == "user":
+            own = _user_is_self(calling_module)
+            if own is not None:
+                return own
         if found is None:
             _no_such_module(culprit, calling_module, context)
         target = found
@@ -1301,6 +1305,30 @@ def resolve_module(designator: Any, calling_module: Any = None,
         return _coerce_module(target)
     except TypeError as exc:
         _no_such_module(culprit, calling_module, context, cause=exc)
+
+
+#: Set in the module dict of a Prolog text (``.pl``, ``.clausal``) with no
+#: module/2: there ``user:G`` names the file itself, at load
+#: (``DirectiveContext.local_module``) and when a goal runs (operator
+#: ruling 2026-11-03).
+USER_IS_SELF_KEY = "$user_is_self"
+
+
+def _user_is_self(calling_module) -> "Module | None":
+    """The calling module, when it is a Prolog text without module/2 (so
+    ``user`` names it); else None."""
+    if calling_module is None:
+        return None
+    try:
+        module = _coerce_module(calling_module)
+    except TypeError:
+        return None
+    md = module.module_dict
+    if md is None:
+        md = getattr(module.db, "module_dict", None)
+    if isinstance(md, dict) and md.get(USER_IS_SELF_KEY):
+        return module
+    return None
 
 
 def _no_such_module(designator, calling_module, context: str, cause=None):

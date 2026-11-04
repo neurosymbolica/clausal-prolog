@@ -1,8 +1,6 @@
 # `:- .` reads as a fact whose head is the atom `':-'`
 
-**Status: open, waiting on an operator ruling (2026-11-03).** The reader is
-right. The open question is whether a Prolog text may define `(:-)/0`. See
-"Findings 2026-11-03" below.
+**Status: FIXED 2026-11-03 (commit 1adbe9c4).** Operator ruling 2026-11-03: option 1, follow Scryer. The reader is unchanged; `iso_l3.lower_clause` refuses a `:-` head only at arity 1 or 2, so `:- .` defines `(:-)/0` and `call((:-))` succeeds. Pinned in tests/iso/test_colon_dash_head_scryer.py::test_file_defines_colon_dash_0.
 
 **Filed:** 2026-09-04 (second item of
 `todo/done/toklex-unclosed-block-comment-silent-eof-2026-09-04.md`), split
@@ -69,5 +67,5 @@ refuses.
    accept that `:- .` is refused with an inaccurate message.
 
 Related, filed separately:
-`todo/assertz-accepts-colon-dash-1-and-2-heads-2026-11-03.md`. `assertz/1`
+`todo/done/assertz-accepts-colon-dash-1-and-2-heads-2026-11-03.md`. `assertz/1`
 accepts `(:-)/1` and `(:-)/2` heads, which Scryer refuses.

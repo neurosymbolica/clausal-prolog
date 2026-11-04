@@ -1143,6 +1143,8 @@ class _PrologToClausal:
         self._dialect = dialect
         self._source_path = source_path
         self._module_name = module_name
+        #: The file's module/2 name, once read (``own:H`` is local).
+        self._own_module: str | None = None
         if surface is None:
             from clausal.end_module import surface_of  # noqa: PLC0415
             surface = surface_of(source_path or "") or "pl"
@@ -1303,10 +1305,25 @@ class _PrologToClausal:
     def _emit_head(self, term: PTerm, extra_args: int = 0) -> str:
         """Emit a clause head as a clausal predicate call.  *extra_args* is
         2 for a grammar rule's head (the nonterminal ``s//N`` is ``s/N+2``)."""
+        # ``own:H`` (module/2's name, or ``user`` without module/2) is a
+        # clause of H; any other qualifier is refused as the native front
+        # end refuses it (iso_l3._refuse_qualified_head; operator ruling
+        # 2026-11-03).
+        local = self._local_module()
+        while (isinstance(term, PCompound) and term.functor == ":"
+               and len(term.args) == 2 and isinstance(term.args[0], PAtom)
+               and term.args[0].name == local):
+            term = term.args[1]
         inner = term
         while (isinstance(inner, PCompound) and inner.functor == ":"
                and len(inner.args) == 2):
-            inner = inner.args[1]      # M:H names H, as in Scryer
+            if not isinstance(inner.args[0], PAtom) or self._is_nil(
+                    inner.args[0]):
+                raise PrologTranslationError(
+                    "a clause head is module-qualified with a variable or a "
+                    "non-atom (ISO permission_error(modify, "
+                    "static_procedure, (:)/2))")
+            inner = inner.args[1]
         if isinstance(inner, (PCompound, PAtom)):
             name = inner.functor if isinstance(inner, PCompound) else inner.name
             arity = (len(inner.args) if isinstance(inner, PCompound) else 0) \
@@ -1315,6 +1332,16 @@ class _PrologToClausal:
                 # ISO 7.5.1, as the native front end (iso_l3.lower_clause).
                 raise PrologTranslationError(
                     static_procedure_refusal(name, arity))
+        if inner is not term:
+            shown = (f"{name}/{arity - extra_args}"
+                     if isinstance(inner, (PCompound, PAtom))
+                     else _plain_term(inner))
+            raise PrologTranslationError(
+                f"{term.args[0].name}:{shown} -- a clause for another module "
+                f"is not supported: a file defines the predicates of its own "
+                f"module only (qualify a head with the module/2 name, or "
+                f"with user in a file without module/2, or leave it "
+                f"unqualified)")
         if self._is_nil(term) or (isinstance(term, PCompound)
                                   and term.functor == "[]"):
             raise self._nil_head_refused()
@@ -1696,8 +1723,16 @@ class _PrologToClausal:
         finally:
             self._seam_operators -= 1
 
+    def _local_module(self) -> str:
+        """The qualifier naming THIS file: its module/2 name, or ``user``
+        without one (operator ruling 2026-11-03; as the native front end's
+        ``DirectiveContext.local_module``)."""
+        return self._own_module if self._own_module is not None else "user"
+
     def _emit_module_directive(self, body: PCompound) -> str:
         name = self._emit_atom_name(body.args[0])
+        if isinstance(body.args[0], PAtom):
+            self._own_module = body.args[0].name
         exports = self._emit_export_list(body.args[1])
         return f"-module({name}, {exports})"
 
@@ -2365,6 +2400,10 @@ class _PrologToClausal:
         if functor == ":" and len(args) == 2 and isinstance(args[0], PAtom):
             module = args[0].name
             qualified = args[1]
+            if (goal or called) and module == self._local_module():
+                # ``own:G`` / ``user:G`` without module/2: this file's G.
+                return (self._emit_goal(qualified) if goal
+                        else self._emit_goal_arg(qualified))
             # ``m:foo/1`` -- a qualified predicate indicator, or any operator
             # term after the colon -- names no predicate: it is the data cell
             # ``':'(m, '/'(foo, 1))``.  (``_predicate_name`` refused it.)

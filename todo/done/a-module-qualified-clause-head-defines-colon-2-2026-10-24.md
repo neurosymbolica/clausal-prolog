@@ -1,6 +1,8 @@
 # A module-qualified clause head defines `:/2` instead of the qualified predicate
 
-Filed 2026-10-24, found in review of the ISO built-ins-are-static fix. OPEN.
+Filed 2026-10-24, found in review of the ISO built-ins-are-static fix.
+
+**Status: FIXED 2026-11-03 (commit 1adbe9c4).** Operator ruling 2026-11-03: options (a) and (b). A variable or non-atom module refuses the file with `permission_error(modify, static_procedure, (:)/2)`; any other atom module is refused ("a clause for another module is not supported"); `user:` in a file without module/2 is the file, for heads, indicators and calls (at load and at run time), on both `.pl` front ends and `.clausal`. Option (c) not done. Pinned in tests/iso/test_module_qualified_head_scryer.py.
 
 **Status: PARTLY FIXED 2026-11-03.** A head (clause or grammar rule)
 qualified with the file's OWN module -- the name its `module/2` gives --

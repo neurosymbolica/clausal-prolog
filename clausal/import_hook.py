@@ -41,7 +41,8 @@ import warnings
 
 from . import _suffixes as _sfx
 from ._suffixes import CLAUSAL_SUFFIXES
-from .end_module import SURFACE_CLAUSAL_PROLOG, SURFACE_SEAM, surface_of
+from .end_module import (SURFACE_CLAUSAL_PROLOG, SURFACE_PL, SURFACE_SEAM,
+                         surface_of)
 from .pythonic_ast import nodes as simple_ast
 from .atom_diagnostics import truth_literal_hint_lines
 from .import_diagnostics import exec_with_import_diagnostics
@@ -338,6 +339,14 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
         lowering_context = getattr(loader, "lowering_context", None)
         if lowering_context is not None:
             module_dict[LOWERING_CONTEXT_KEY] = lowering_context
+        if (surface_of(module_dict.get("__file__") or "") in (
+                    SURFACE_PL, SURFACE_CLAUSAL_PROLOG)
+                and not any(isinstance(i, simple_ast.ModuleDeclaration)
+                            for i in module_items)):
+            # A Prolog text with no module/2: ``user:G`` run when a goal
+            # runs names this file, as it does at load.
+            from clausal.logic.solve import USER_IS_SELF_KEY  # noqa: PLC0415
+            module_dict[USER_IS_SELF_KEY] = True
         logic_module = compile_module(
             predicate_nodes, module_items, module_dict, module.__name__,
         )

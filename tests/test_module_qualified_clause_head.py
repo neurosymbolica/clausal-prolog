@@ -2,7 +2,7 @@
 
 ``m:foo(1).`` in a file whose module/2 names ``m`` is a clause of ``foo/1``
 in ``m``, as in Scryer; the native front end used to load it as a clause of
-``(:)/2`` (todo/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md).
+``(:)/2`` (todo/done/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md).
 
 Scryer (the oracle build, 2026-11-03), file ``a.pl``::
 
@@ -24,9 +24,9 @@ And a grammar rule ``c:g --> [a].`` in module ``c`` defines ``g//0``
 (``phrase(c:g, [a])`` succeeds).
 
 A head qualified with ANOTHER module (``b:qux(8).`` in ``a``, or ``m:foo``
-in a file with no module/2) is not settled here: Scryer adds the clause to
-that module, and what Clausal should do with it is an open question in the
-todo file.
+in a file with no module/2) is refused, and ``user:`` in a file with no
+module/2 names the file (operator ruling 2026-11-03):
+``tests/iso/test_module_qualified_head_scryer.py``.
 """
 from __future__ import annotations
 
