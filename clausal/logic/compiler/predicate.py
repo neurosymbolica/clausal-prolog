@@ -1610,10 +1610,20 @@ def _compile_predicate_trampoline_impl(
             fn = _compile_clause_table(
                 functor, arity, _stored_clauses, clauses, db, _effective_db,
                 body_compiler, ctx_template, base_globals, globals_)
-            # Nothing for a call site to specialise on: no bucket functions.
+            # A call site with a static key may drive the table's bucket for
+            # it directly, as it does a compiled index bucket (never for a
+            # tabled predicate: see the compiled branch below).
             _plan_row = _plan_row_for(pred_cls, db, functor, arity)
             if _plan_row is not None:
-                _plan_row.index_plans = {}
+                _tabled_tbl = db is not None and db.is_tabled(functor, arity)
+                _plan_row.index_plans = {} if _tabled_tbl else {
+                    pos: {
+                        key: _make_call_site_bucket_trampoline(
+                            bfn, fn, DONE, arity=arity)
+                        for key, bfn in by_key.items()
+                    }
+                    for pos, by_key in fn.index_buckets.items()
+                }
                 _plan_row.index_plans_joint = {}
                 _plan_row.index_plans_hierarchical = {}
         else:
