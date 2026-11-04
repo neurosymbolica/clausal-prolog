@@ -288,3 +288,136 @@ def scryer_batch(batch, timeout=900):
         except RuntimeError as error:
             answers[name] = ("error", str(error))
     return answers
+
+
+# ------------------------------------- bare workloads as queries (checks)
+
+def _tree_text(tree):
+    """A ``nlpost`` expression tree (_workloads.py) as Prolog text, every
+    operation in parentheses."""
+    kind = tree[0]
+    if kind == "x":
+        return f"X{tree[1]}"
+    if kind == "n":
+        value = Fraction(tree[1])
+        text = _number_text(value)
+        return f"({text})" if value < 0 or value.denominator != 1 else text
+    arguments = [_tree_text(argument) for argument in tree[1:]]
+    if kind in ("+", "-", "*", "/"):
+        return f"({arguments[0]} {kind} {arguments[1]})"
+    return f"{kind}({', '.join(arguments)})"
+
+
+def _element_text(element):
+    if element[0] == "x":
+        return f"X{element[1]}"
+    value = Fraction(element[1])
+    if value.denominator != 1:
+        raise ValueError(f"a unification with a rational {element!r}")
+    return str(value.numerator)
+
+
+def _terms_text(terms):
+    return _linear([(i, Fraction(c)) for i, c in terms])
+
+
+def step_text(step):
+    """The Prolog goal of one bare-workload step that changes the store,
+    or None for a step that only reads it."""
+    kind = step[0]
+    if kind == "post":
+        _, relation, terms, constant = step
+        return (f"{{{_terms_text(terms)} {relation} "
+                f"{_number_text(Fraction(constant))}}}")
+    if kind == "nlpost":
+        _, relation, tree, constant = step
+        return (f"{{{_tree_text(tree)} {relation} "
+                f"{_number_text(Fraction(constant))}}}")
+    if kind == "nonlinear":
+        _, relation, i, j, constant = step
+        return f"{{X{i}*X{j} {relation} {_number_text(Fraction(constant))}}}"
+    if kind == "bind":
+        return f"X{step[1]} = {_element_text(['n', step[2]])}"
+    if kind == "alias":
+        return f"X{step[1]} = X{step[2]}"
+    if kind == "unify":
+        _, shape, lefts, rights = step
+        left = ", ".join(_element_text(e) for e in lefts)
+        right = ", ".join(_element_text(e) for e in rights)
+        if shape == "list":
+            return f"[{left}] = [{right}]"
+        return f"f({left}) = f({right})"
+    return None
+
+
+def workload_queries(workload, observation):
+    """(id, text, shown, expected) for every result *observation* (the
+    workload's golden observation) records, each as one conjunction for
+    the exact comparison with Scryer: the store steps in force at that
+    step (those after a mark that was undone dropped, and those that
+    failed or raised, which the harness undid), then
+
+    * a ``dump`` step: shown its targets; expected its dump strings;
+    * a ``sup``/``inf`` step: the optimum into S, shown S; expected the
+      optimum, or None where it failed;
+    * a store step that failed: the step itself; expected no answer;
+    * at the end: shown every variable (the final values and residual).
+
+    Steps the comparison does not reach (maximize, minimize, bb_inf,
+    entailed) are skipped, as are workloads binding a rational."""
+    names = [f"X{i}" for i in range(workload["variables"])]
+    # the reader makes the variables in their order of appearance, and the
+    # port orders variables by creation (DEVIATIONS.md D4): this first
+    # goal makes them in the workload's order X0, X1, ...
+    active, marks, result = [f"_ = [{', '.join(names)}]"], [], []
+    for index, (step, outcome) in enumerate(zip(workload["steps"],
+                                                observation["steps"])):
+        name = f"{workload['id']}@{index}"
+        kind = step[0]
+        if kind == "mark":
+            marks.append(len(active))
+            continue
+        if kind == "undo":
+            if marks:
+                del active[marks.pop():]
+            continue
+        if kind == "dump":
+            shown = [names[i] for i in step[1]]
+            data = outcome[1] if type(outcome) is list and outcome[0] is True else None
+            result.append((name, ", ".join(active), shown,
+                           ("dump", data)))
+            continue
+        if kind in ("sup", "inf"):
+            goal = f"{kind}({_terms_text(step[1])}, S)"
+            value = outcome[1] if type(outcome) is list and outcome[0] is True else None
+            result.append((name, ", ".join(active + [goal]), ["S"],
+                           ("optimum", value)))
+            continue
+        text = step_text(step)
+        if text is None:
+            continue
+        if outcome is True:
+            active.append(text)
+        else:
+            result.append((name, ", ".join(active + [text]), names,
+                           ("fails", outcome)))
+    result.append((f"{workload['id']}@end", ", ".join(active),
+                   names, ("final", observation)))
+    return result
+
+
+_ARGUMENTS = r"((?:[^()\[\]=]|\([^()]*\))*)"
+_ONE_UNIFICATION = re.compile(
+    rf"(?:\[{_ARGUMENTS}\]|f\({_ARGUMENTS}\)) = (?:\[{_ARGUMENTS}\]|f\({_ARGUMENTS}\))")
+
+
+def split_unifications(text):
+    """*text* with each one-unification binding ``[A, B] = [1, 2]`` or
+    ``f(A, B) = f(1, 2)`` written as ``(A = 1, B = 2)``: Scryer's driver
+    fails some unifications that bind several variables of one store and
+    answers the same bindings made one at a time (DEVIATIONS.md D3)."""
+    def one(match):
+        left = (match.group(1) or match.group(2)).split(", ")
+        right = (match.group(3) or match.group(4)).split(", ")
+        return "(" + ", ".join(f"{a} = {b}" for a, b in zip(left, right)) + ")"
+    return _ONE_UNIFICATION.sub(one, text)

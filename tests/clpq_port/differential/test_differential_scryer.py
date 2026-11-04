@@ -22,9 +22,11 @@ Skipped without the Scryer build (tests/_oracles.py).
 """
 import os
 import pathlib
+import re
 
 import pytest
 
+import clausal.logic.clpq as clpq
 from tests._oracles import SCRYER
 from tests.clpq_oracle import same_solution_sets
 from tests.clpq_port.differential._scryer_batch import (
@@ -200,6 +202,226 @@ def test_multi_binding_queries_answer_as_scryer_or_as_the_baseline():
 def test_the_known_differences_name_a_deviation():
     for name, (entry, reason) in _KNOWN_DIFFERENCES.items():
         assert entry.startswith("D") and reason, name
+    for known in (_ENGINE_KNOWN, _BARE_KNOWN):
+        for name, (entry, reason) in known.items():
+            assert (entry.startswith("D") or entry == "scryer") and reason, name
     for name, (entry, kind, reason) in _MULTIBIND_BASELINE.items():
         assert (entry.startswith("D") or entry == "open") and kind \
             and reason, name
+
+
+# ------------------------------------------------- engine workloads (F2)
+
+#: A delayed non-linear goal in the port's residual: Scryer's dump/3 drops
+#: them (ruling R8, test_against_oracle.py), so they are left out here.
+_DELAYED_GOAL = re.compile(r"\^|abs\(|min\(|max\(|[A-Z_]\w*\s*\*\s*[A-Z_]|/\s*[A-Z_(]")
+
+
+def linear_only(answers):
+    from tests.clpq_oracle import Answer
+    return [Answer(a.bindings, [c for c in a.residual
+                                if not _DELAYED_GOAL.search(c)])
+            for a in answers]
+
+
+#: Engine workloads (_engine.py) whose answers differ from Scryer's, the
+#: program as it is and with its multi-variable unifications made one at
+#: a time: id -> (DEVIATIONS.md entry or "scryer", why).  Full set only;
+#: the default set answers as Scryer does (2026-11-04).
+_ENGINE_KNOWN = {
+    # X0 is a CLP(FD) variable; promoted to CLP(Q) it brings its domain's
+    # bounds (D20), which Scryer's clpq, knowing nothing of clpz, lacks
+    **{f"engine-fd-12-2-{s}": ("D20", "the FD variable's bounds are in "
+                               "the residual") for s in ("pl", "clausal")},
+    # Scryer raises uninstantiation_error in get_atts/2 while waking
+    # abs(X1 - X1) and max(X1, X1); the port's answer X0 = 2, X1 = 3,
+    # X2 = 2, S = 2 satisfies every constraint (checked by hand)
+    **{f"engine-nonlinear-3-1-{s}": ("scryer", "Scryer raises "
+                                     "uninstantiation_error(2) in get_atts/2")
+       for s in ("pl", "clausal")},
+}
+
+
+def engine_difference(workload):
+    """None, or (kind, text) of how the port's answers to *workload*
+    differ from Scryer's: as the program is, then with its
+    multi-variable unifications split (D3), which is no difference."""
+    from tests.clpq_oracle import oracle_answers
+    from tests.clpq_port.differential import _engine
+    from tests.clpq_port.differential._scryer_batch import split_unifications
+    goal = f"q({', '.join(workload['shown'])})"
+    program = workload.get("oracle_program", workload["program"])
+    try:
+        got = linear_only(_engine.scryer_comparable(workload))
+    except Exception as error:              # reported, never hidden
+        return "port-error", f"{type(error).__name__}: {error}"
+    found = None
+    for text in (program, split_unifications(program)):
+        try:
+            found = difference(got, oracle_answers(text, goal, workload["shown"]))
+        except RuntimeError as error:
+            found = ("scryer-error", str(error)[:300])
+        if found is None:
+            return None
+    return found
+
+
+@pytest.mark.skipif(not pathlib.Path(SCRYER).exists(),
+                    reason=f"needs the Scryer CLP(Q) build at {SCRYER}")
+@pytest.mark.skipif(clpq.SOLVER != "holzbaur",
+                    reason="the engine reaches the port with CLAUSAL_CLPQ=holzbaur")
+def test_engine_workloads_answer_as_scryer():
+    # Every engine workload's answers: the same number, the same bindings,
+    # the same residual text and order as Scryer's dump/3 (copy_term/2
+    # workloads against the program without the copy: Scryer copies the
+    # attributes, todo/copy-term-attributes-...).  Every difference is in
+    # _ENGINE_KNOWN, and every entry of the set that ran still differs.
+    from tests.clpq_port.differential import _engine
+    workloads = _engine.corpus(full=FULL)
+    new, agreeing = [], []
+    for workload in workloads:
+        found = engine_difference(workload)
+        name = workload["id"]
+        if found is None:
+            if name in _ENGINE_KNOWN:
+                agreeing.append(f"{name}: known, but answers as Scryer does")
+        elif name not in _ENGINE_KNOWN:
+            new.append(f"{name}: {found[0]}: {found[1]}")
+    assert not new and not agreeing, "\n".join(
+        [f"{len(new)} of {len(workloads)} engine workloads differ from "
+         f"Scryer:"] + new + agreeing)
+
+
+# ------------------------------- the new bare families, result by result
+
+def _renamed(strings, pattern=r"_[TQI]\d+"):
+    table = {}
+    return [re.sub(pattern, lambda m: table.setdefault(
+        m.group(0), f"_V{len(table) + 1}"), text) for text in strings]
+
+
+def _same_dump(recorded, residual):
+    """A recorded dump against a replay's residual, as text, internal
+    variables named by first appearance; aliased variables may be named
+    by another member of their class on each side (the dump names a
+    target, the replay its first shown name), so failing the first test
+    every variable is named by first appearance."""
+    from tests.clpq_oracle import Answer
+    rest = [c for c in residual if not re.fullmatch(r"X\d+=X\d+", c)]
+    for pattern in (r"_[TQI]\d+", r"\bX\d+\b|_[TQI]\d+"):
+        if residual_text([Answer({}, _renamed(recorded, pattern))]) \
+                == residual_text([Answer({}, _renamed(rest, pattern))]):
+            return True
+    return False
+
+
+def _number(spelt):
+    from fractions import Fraction
+    return Fraction(spelt) if isinstance(spelt, (int, str)) else spelt
+
+
+def replay_problem(kind, data, got, shown):
+    """None where the port, replaying a recorded result's conjunction on
+    a fresh trail (port_answers), agrees with the recording, else why."""
+    if type(got) is tuple:
+        return None if kind == "fails" and type(data) is list else str(got)
+    if kind == "fails":
+        return None if not got else f"{len(got)} answers"
+    if kind == "optimum":
+        if data is None:
+            return None if not got else "an optimum where none was recorded"
+        if len(got) == 1 and got[0].bindings.get("S") == _number(data):
+            return None
+        return f"optimum {[a.bindings for a in got]}"
+    if len(got) != 1:
+        return f"{len(got)} answers"
+    if kind == "dump":
+        return None if _same_dump(data or [], got[0].residual) else "residual"
+    final = data["final"]
+    for name, value in zip(shown, final):
+        if not (isinstance(value, str) and value[:1] in "X_") \
+                and got[0].bindings.get(name) != _number(value):
+            return f"{name}: {got[0].bindings.get(name)} recorded {value}"
+    if not _same_dump(data.get("residual", []), got[0].residual):
+        return "residual"
+    return None
+
+
+#: Results of the base_skeletons and long_row_tails workloads of the
+#: default corpus that differ from Scryer: query id -> (entry, why).  The
+#: full corpus (1,405 base_skeletons and 394 long_row_tails results, run
+#: once on 2026-11-04, not by this test) differs in these classes too and,
+#: besides, where Scryer is wrong or raises: Scryer raises in get_atts/2
+#: (uninstantiation_error) or nf/2 (type_error) waking a skeleton; its
+#: optimum or bound is a float-rounded rational (N rdiv 2^k); it fails or
+#: gives an optimum the linear constraints alone exclude (checked with z3)
+#: where the port answers correctly.
+_ORDER = ("z3 finds the residuals equivalent; the constraints are in "
+          "another order, or a row is solved for another variable (D4: "
+          "creation order, where Scryer orders as 1.3.3 does)")
+_BARE_KNOWN = {
+    "base_skeletons-5-0@15": ("D4", _ORDER),
+    "base_skeletons-8-1@27": ("D4", _ORDER),
+    "long_row_tails-16-0@end": ("D4", _ORDER),
+    "long_row_tails-24-1@end": ("D4", _ORDER),
+}
+
+
+@pytest.mark.skipif(not pathlib.Path(SCRYER).exists(),
+                    reason=f"needs the Scryer CLP(Q) build at {SCRYER}")
+@pytest.mark.skipif(not FULL, reason="CLPQ_DIFFERENTIAL=full (minutes)")
+def test_the_skeleton_and_long_row_results_answer_as_scryer():
+    # Every result the golden records of the default corpus's
+    # base_skeletons and long_row_tails workloads hold (each dump, optimum,
+    # failed step and the final store) as one conjunction of the store
+    # steps in force (_scryer_batch.workload_queries): the port replaying
+    # it on a fresh trail must give the recorded result, and Scryer the
+    # same answers (delayed non-linear goals left out: Scryer's dump/3
+    # drops them), or Scryer the same with the unifications split (D3).
+    from tests.clpq_port.differential import _golden
+    from tests.clpq_port.differential._scryer_batch import (
+        split_unifications, workload_queries)
+    from tests.clpq_port.differential._workloads import corpus
+    _, observations = _golden.load()
+    cases = []
+    for workload in corpus(full=False):
+        if workload["id"].rsplit("-", 2)[0] in ("base_skeletons",
+                                                "long_row_tails"):
+            cases += workload_queries(workload, observations[workload["id"]])
+    replays, new, agreeing = [], [], []
+    for start in range(0, len(cases), _BATCH):
+        batch = cases[start:start + _BATCH]
+        plain = scryer_batch([(n, t, s) for n, t, s, _ in batch])
+        split = scryer_batch([(n, split_unifications(t), s)
+                              for n, t, s, _ in batch])
+        for name, text, shown, (kind, data) in batch:
+            try:
+                got = port_answers(text, shown, bounds=False)
+            except Exception as error:      # reported, never hidden
+                got = ("raised", f"{type(error).__name__}: {error}")
+            problem = replay_problem(kind, data, got, shown)
+            if problem:
+                replays.append(f"{name}: the replay differs: {problem}\n"
+                               f"    query: {text}")
+            found = ("port-error", got[1]) if type(got) is tuple else None
+            for want in (plain[name], split[name]):
+                if type(got) is tuple:
+                    break
+                if type(want) is tuple:
+                    found = ("scryer-error", want[1][:200])
+                    continue
+                try:
+                    found = difference(linear_only(got), want)
+                except ValueError as error:
+                    found = ("unparsed", str(error))
+                if found is None:
+                    break
+            if found is None:
+                if name in _BARE_KNOWN:
+                    agreeing.append(f"{name}: known, but answers as Scryer")
+            elif name not in _BARE_KNOWN:
+                new.append(f"{name}: {found[0]}: {found[1][:400]}\n"
+                           f"    query: {text}")
+    assert not replays and not new and not agreeing, "\n".join(
+        [f"{len(replays)} replays and {len(new)} of {len(cases)} results "
+         f"differ:"] + replays + new + agreeing)

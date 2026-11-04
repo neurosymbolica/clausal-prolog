@@ -2,7 +2,8 @@
 
     PYTHONPATH=. python -m tests.clpq_port.differential.regenerate [--full] [--check]
 
-Default: the default corpus; --full: the full corpus (minutes).  Records
+Default: the default corpus; --full: the full corpus (minutes).  Both
+include the engine workloads (_engine.py).  Records
 of workloads not regenerated are kept, so a default run does not drop the
 full corpus's.  It prints every workload whose record changes.
 
@@ -21,7 +22,7 @@ import json
 import sys
 import time
 
-from tests.clpq_port.differential import _golden
+from tests.clpq_port.differential import _engine, _golden
 from tests.clpq_port.differential._observe import record
 from tests.clpq_port.differential._workloads import corpus
 
@@ -32,9 +33,15 @@ def main(argv=None):
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--trace", metavar="ID")
     arguments = parser.parse_args(argv)
-    workloads = corpus(full=arguments.full)
+    from clausal.logic.clpq import SOLVER
+    if SOLVER != "holzbaur":
+        # the engine workloads reach the port only through the switch
+        print("run with CLAUSAL_CLPQ=holzbaur (the engine workloads)")
+        return 2
+    workloads = corpus(full=arguments.full) + _engine.corpus(full=arguments.full)
     if arguments.trace:
-        found = [w for w in corpus(full=True) if w["id"] == arguments.trace]
+        found = [w for w in corpus(full=True) + _engine.corpus(full=True)
+                 if w["id"] == arguments.trace]
         if not found:
             print(f"no workload {arguments.trace}")
             return 2

@@ -40,7 +40,8 @@ from clausal.logic.clpq.residual_constraints import residual_strings
 from clausal.logic.pending import drain
 from clausal.logic.variables import Trail, Var, deref, is_var, unify
 from clausal.pythonic_ast import nodes
-from clausal.tools.iso_l3 import _CLPQ_BINARY, _CLPQ_COMPARISONS, read_iso
+from clausal.tools.iso_l3 import (
+    _CLPQ_BINARY, _CLPQ_COMPARISONS, _CLPQ_FUNCTIONS, read_iso)
 from clausal.tools.prolog_reader import VarRef
 from tests.clpq_oracle import (
     Answer, _equivalent, _marked_negative, _parse, _sides, oracle_answers,
@@ -83,6 +84,10 @@ class _Query:
             return nodes.Negate(operand=self.expression(term[1]))
         if type(term) is tuple and len(term) == 2 and term[0] == "+":
             return self.expression(term[1])
+        if type(term) is tuple and (term[0], len(term) - 1) in _CLPQ_FUNCTIONS:
+            # abs/1, min/2, max/2, ...: a compound cell, as the lowering
+            # passes them through
+            return (term[0], *(self.expression(a) for a in term[1:]))
         raise ValueError(f"not an expression the lowering accepts: {term!r}")
 
     def constraints(self, term):
