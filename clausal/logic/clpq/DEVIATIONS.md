@@ -1878,7 +1878,8 @@ What is not 1.3.3 text, or not known, and so is the port's choice:
   non-target's nonzero row, so projecting a hidden component holding a
   disequation prints it (`{Z =\= 1}` as `{_A =\= 1}`; 743 of 2,000
   random stores with `=\=` added), and the port does not
-  (`test_a_hidden_disequation_no_goal_reaches_is_not_shown`).  Whether
+  (`test_a_hidden_disequation_no_goal_reaches_is_not_shown`; kept by
+  operator ruling 2026-11-03, as Scryer's toplevel shows it).  Whether
   the SICStus toplevel shows such a disequation is not known: it depends
   on AttrVars holding variables nothing reaches, which only the manual's
   non-linear example shows.  Scryer's toplevel, which prints what the
