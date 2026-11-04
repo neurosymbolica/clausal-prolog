@@ -11,14 +11,16 @@ test('dif: the goal restores it') <- (
     dif(X, 'a'),
     copy_term(X, Y, [G]),
     call(G),
-    not Y is 'a'
+    copy_term(Y, _, Gs),
+    length(Gs, 1)
 )  # nv
 
 test('freeze: the goal restores it') <- (
     freeze(X, fail),
     copy_term(X, Y, [G]),
     call(G),
-    not Y is 1
+    copy_term(Y, _, Gs),
+    length(Gs, 1)
 )  # nv
 
 test('no constraints, no goals') <- (

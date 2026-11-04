@@ -17,9 +17,9 @@ w3(N, Y) :- Y = 0, N < 0.
 log(E) :- assertz(ev(E)).
 check(X) :- X \== 0.
 check(0) :- throw(oops).
-run_w(L) :- retractall(ev(_)), \+ (freeze(X, log(woke)), w(2, X), log(answer), fail), findall(E, ev(E), L).
-run_w2(L) :- retractall(ev(_)), \+ (freeze(X, log(woke)), w2(1, X), log(answer), fail), findall(E, ev(E), L).
-run_w3(L) :- retractall(ev(_)), \+ (freeze(X, log(woke)), w3(1, X), log(answer), fail), findall(E, ev(E), L).
+run_w(L) :- retractall(ev(_)), findall(_, (freeze(X, log(woke)), w(2, X), log(answer)), _), findall(E, ev(E), L).
+run_w2(L) :- retractall(ev(_)), findall(_, (freeze(X, log(woke)), w2(1, X), log(answer)), _), findall(E, ev(E), L).
+run_w3(L) :- retractall(ev(_)), findall(_, (freeze(X, log(woke)), w3(1, X), log(answer)), _), findall(E, ev(E), L).
 first_w2(X) :- freeze(X, check(X)), w2(1, X).
 % Later clauses keyed by atoms, called with an integer: still restarts.
 cnt(N) :- N > 0, M is N - 1, cnt(M).

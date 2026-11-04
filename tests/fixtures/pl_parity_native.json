@@ -1184,6 +1184,34 @@
    "preds": null,
    "tests": null
   },
+  "tests/fixtures/bucket_tro.pl": {
+   "collect_error": null,
+   "error": null,
+   "load": "ok",
+   "preds": {},
+   "tests": null
+  },
+  "tests/fixtures/bucket_tro_cut.pl": {
+   "collect_error": null,
+   "error": null,
+   "load": "ok",
+   "preds": {},
+   "tests": null
+  },
+  "tests/fixtures/list_dispatch_order.pl": {
+   "collect_error": null,
+   "error": null,
+   "load": "ok",
+   "preds": {
+    "lo/2": [
+     "[_,any]",
+     "[[],nil]",
+     "[[_|_],cons]",
+     "[_,last]"
+    ]
+   },
+   "tests": null
+  },
   "tests/fixtures/prolog_golden/clpfd_queens.pl": {
    "collect_error": null,
    "error": null,
@@ -1598,6 +1626,171 @@
     "squares": "pass",
     "unique members": "pass"
    }
+  },
+  "tests/fixtures/tro_clause_order.pl": {
+   "collect_error": null,
+   "error": null,
+   "load": "ok",
+   "preds": {
+    "cnt/1": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    },
+    "down/1": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    },
+    "len/3": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    },
+    "p/2": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    },
+    "up/2": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    }
+   },
+   "tests": null
+  },
+  "tests/fixtures/tro_clause_order_lists.pl": {
+   "collect_error": null,
+   "error": null,
+   "load": "ok",
+   "preds": {
+    "go/2": [
+     "[q,[_]]",
+     "[q2,[_,_]]",
+     "[q3,[_,_|_]]"
+    ],
+    "log/1": [
+     "[_]"
+    ],
+    "q/2": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    },
+    "q2/2": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    },
+    "q3/2": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    },
+    "run_q/2": [
+     "[_,[woke,answer,woke,woke,woke,answer,woke,woke,woke,answer,woke,woke]]"
+    ]
+   },
+   "tests": null
+  },
+  "tests/fixtures/tro_clause_order_patterns.pl": {
+   "collect_error": null,
+   "error": null,
+   "load": "ok",
+   "preds": {
+    "b/2": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    },
+    "gc/2": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    },
+    "log/1": [
+     "[_]"
+    ],
+    "ls/2": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    },
+    "run_b/1": [
+     "[[woke,answer,woke,woke]]"
+    ],
+    "walk/3": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    }
+   },
+   "tests": null
+  },
+  "tests/fixtures/tro_clause_order_segments.pl": {
+   "collect_error": null,
+   "error": null,
+   "load": "ok",
+   "preds": {
+    "seg/3": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    }
+   },
+   "tests": null
+  },
+  "tests/fixtures/tro_clause_order_wake.pl": {
+   "collect_error": null,
+   "error": null,
+   "load": "ok",
+   "preds": {
+    "check/1": {
+     "after": [
+      "[_]"
+     ],
+     "error": "LogicException: Uncaught logic exception: oops"
+    },
+    "cnt/1": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    },
+    "first_w2/1": {
+     "after": [
+      "[done]"
+     ],
+     "error": "LogicException: Uncaught logic exception: oops"
+    },
+    "log/1": [
+     "[_]"
+    ],
+    "run_w/1": [
+     "[[woke,answer,woke,woke]]"
+    ],
+    "run_w2/1": [
+     "[[woke,answer,woke,woke]]"
+    ],
+    "run_w3/1": [
+     "[[woke,answer,woke,woke]]"
+    ],
+    "w/2": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    },
+    "w2/2": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    },
+    "w3/2": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    }
+   },
+   "tests": null
+  },
+  "tests/fixtures/tro_deferred_list.pl": {
+   "collect_error": null,
+   "error": null,
+   "load": "ok",
+   "preds": {
+    "pc/2": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    },
+    "pq/2": {
+     "after": [],
+     "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
+    }
+   },
+   "tests": null
   },
   "tests/fuzz/_scryer_fz_top.pl": {
    "collect_error": null,
@@ -2937,6 +3130,9 @@
   "implementation_plans/native-iso-reader-step2-2026-09-29/translator_probe/tpkg/sw_setof.pl": "45d45e7a072d55d4",
   "tests/_scryer_end_module.pl": "c8887292f4d345c1",
   "tests/_scryer_toplevel.pl": "0b18ae392ae4d276",
+  "tests/fixtures/bucket_tro.pl": "57b9d1766ac5ee1c",
+  "tests/fixtures/bucket_tro_cut.pl": "71d4ab8648ccd530",
+  "tests/fixtures/list_dispatch_order.pl": "870abba5001068f3",
   "tests/fixtures/prolog_golden/clpfd_queens.pl": "553626386ff4dec0",
   "tests/fixtures/prolog_golden/dcg_grammar.pl": "65331c4cd2a50d8f",
   "tests/fixtures/prolog_golden/edge_graph.pl": "717ced6f560ae378",
@@ -2948,6 +3144,12 @@
   "tests/fixtures/prolog_golden/iso_type_checking.pl": "6665a46b7bd03131",
   "tests/fixtures/prolog_golden/iso_unification.pl": "f3b1a949fe56e0e8",
   "tests/fixtures/prolog_golden/meta_test.pl": "302440ea3baab24b",
+  "tests/fixtures/tro_clause_order.pl": "e68748ba5c5ab331",
+  "tests/fixtures/tro_clause_order_lists.pl": "a2437a21549f05e7",
+  "tests/fixtures/tro_clause_order_patterns.pl": "c7c64efe3cedeb79",
+  "tests/fixtures/tro_clause_order_segments.pl": "a0e049a3a0113686",
+  "tests/fixtures/tro_clause_order_wake.pl": "eb2034629cb35ae4",
+  "tests/fixtures/tro_deferred_list.pl": "3c137f157203a017",
   "tests/fuzz/_scryer_fz_top.pl": "02951cd9148a9404",
   "tests/iso_diff/allsol.pl": "c43fc8370f03ff9c",
   "tests/iso_diff/arith.pl": "c4fe5264a522e8a3",

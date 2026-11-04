@@ -21,4 +21,4 @@ gl([_|T], N, X, R) :- gl(T, N, X, R).
 b(N, X) :- N > 0, M is N - 1, b(M, X).
 b(N, f(0)) :- N =< 0.
 log(E) :- assertz(ev(E)).
-run_b(L) :- retractall(ev(_)), \+ (freeze(Y, log(woke)), b(2, f(Y)), log(answer), fail), findall(E, ev(E), L).
+run_b(L) :- retractall(ev(_)), findall(_, (freeze(Y, log(woke)), b(2, f(Y)), log(answer)), _), findall(E, ev(E), L).

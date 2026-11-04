@@ -14,7 +14,7 @@ q3([_, _|_], N) :- N =< 0.
 log(E) :- assertz(ev(E)).
 run_q(Which, L) :-
     retractall(ev(_)),
-    \+ (freeze(Z, log(woke)), L0 = [a|Z], go(Which, L0), log(answer), fail),
+    findall(_, (freeze(Z, log(woke)), L0 = [a|Z], go(Which, L0), log(answer)), _),
     findall(E, ev(E), L).
 go(q, X) :- q(X, 2).
 go(q2, X) :- q2(X, 2).

@@ -3,6 +3,13 @@
  "observations": "pl_parity_native.json",
  "known": [
   {
+   "key": "tests/fixtures/bucket_tro_cut.pl::load::",
+   "class": "d",
+   "note": "Intentional: the translator produces cut-free Clausal and refuses !/0 (Clausal is cut-free by design); the native .pl front end loads cut. The fixture tests TRO in a predicate with a cut, which only the native side runs.",
+   "translator_sha": "f6b6154b6800fa3d",
+   "native_sha": "c48b5b1a9776c846"
+  },
+  {
    "key": "tests/fixtures/prolog_golden/dcg_grammar.pl::load::",
    "class": "a",
    "note": "native refuses the WHOLE file at the one grammar rule that has \\+ in its body (dcg_grammar.pl:31, representation_error(dcg_body)), as Scryer refuses that rule; Scryer and Trealla still load the rest of the file, the translator accepts all of it. Classed (a) because native's reading of the rule is Scryer's (ISO first, then Scryer, ruling 2026-09-27); refusing the whole file rather than the one clause is the slice 0 fail-closed rule",
@@ -29,6 +36,167 @@
    "note": "oracle: scryer: error(error(existence_error(procedure,min/3),min/3)), as native. Translator: pass; native: error: PredicateNotFoundError: Predicate min/3 not found",
    "translator_sha": "fedce8e8af485c25",
    "native_sha": "3e3141afd0c28b5c"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order.pl::answers::cnt/1",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order.pl::answers::down/1",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order.pl::answers::len/3",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order.pl::answers::p/2",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order.pl::answers::up/2",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_lists.pl::answers::q/2",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_lists.pl::answers::q2/2",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_lists.pl::answers::q3/2",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_lists.pl::answers::run_q/2",
+   "class": "a",
+   "note": "oracle: scryer agrees with native (tests/test_tro_clause_order.py compares these against Scryer). Translator: the translated seam runs a goal woken by a head unification only at the next answer and drops it when that clause then fails (todo/seam-goals-woken-by-a-head-unification-are-dropped-when-the-clause-fails-2026-11-04.md).",
+   "translator_sha": "7d099df396272835",
+   "native_sha": "067d57b5266212df"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_patterns.pl::answers::b/2",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_patterns.pl::answers::gc/2",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_patterns.pl::answers::ls/2",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_patterns.pl::answers::walk/3",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_segments.pl::answers::seg/3",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_wake.pl::answers::cnt/1",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_wake.pl::answers::first_w2/1",
+   "class": "a",
+   "note": "oracle: scryer agrees with native (tests/test_tro_clause_order.py compares these against Scryer). Translator: the translated seam runs a goal woken by a head unification only at the next answer and drops it when that clause then fails (todo/seam-goals-woken-by-a-head-unification-are-dropped-when-the-clause-fails-2026-11-04.md).",
+   "translator_sha": "83f07c33bd5c4f81",
+   "native_sha": "60e29bdcb1a76301"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_wake.pl::answers::run_w/1",
+   "class": "a",
+   "note": "oracle: scryer agrees with native (tests/test_tro_clause_order.py compares these against Scryer). Translator: the translated seam runs a goal woken by a head unification only at the next answer and drops it when that clause then fails (todo/seam-goals-woken-by-a-head-unification-are-dropped-when-the-clause-fails-2026-11-04.md).",
+   "translator_sha": "0888a67ebd8a7e58",
+   "native_sha": "5a744b754614efdd"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_wake.pl::answers::run_w2/1",
+   "class": "a",
+   "note": "oracle: scryer agrees with native (tests/test_tro_clause_order.py compares these against Scryer). Translator: the translated seam runs a goal woken by a head unification only at the next answer and drops it when that clause then fails (todo/seam-goals-woken-by-a-head-unification-are-dropped-when-the-clause-fails-2026-11-04.md).",
+   "translator_sha": "0888a67ebd8a7e58",
+   "native_sha": "5a744b754614efdd"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_wake.pl::answers::w/2",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_wake.pl::answers::w2/2",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_clause_order_wake.pl::answers::w3/2",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_deferred_list.pl::answers::pc/2",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
+  },
+  {
+   "key": "tests/fixtures/tro_deferred_list.pl::answers::pq/2",
+   "class": "a",
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: X is E becomes eval_/2, so an unbound-argument call reports instantiation_error with context eval_/2 (as in tests/iso_diff/lists.pl::answers::add/3).",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
   },
   {
    "key": "tests/iso_diff/allsol.pl::answers::t/3",
