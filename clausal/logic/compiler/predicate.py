@@ -701,6 +701,31 @@ def _sweep_tro_eligible(
     return frozenset(eligible)
 
 
+def _signal_safe_tro_indices(clauses: list, tro_indices, db):
+    """The clauses of a bucket, default or fallback function that may
+    signal an in-place restart without changing the order of answers.
+
+    The dispatch loop takes a signalled tail call only after the function
+    has run out, so every later clause would answer before the tail call's
+    answers -- clause order reversed.  A restart is in order for the
+    function's last clause, and for a clause whose body cuts before the
+    tail (the cut drops the later clauses: its exit returns with the tail
+    pending).  The other clauses make the tail an ordinary call."""
+    from . import ir as _ir
+    from .terms_to_goalop import terms_to_goalop
+    last = len(clauses) - 1
+    keep = []
+    for i in sorted(tro_indices):
+        if i == last:
+            keep.append(i)
+            continue
+        body_ir = terms_to_goalop(clauses[i].body, db=db)
+        ops = body_ir.ops if isinstance(body_ir, _ir.Sequence) else [body_ir]
+        if any(isinstance(op, _ir.Cut) for op in ops[:-1]):
+            keep.append(i)
+    return frozenset(keep)
+
+
 def _clauses_have_cut(clauses: list, db) -> bool:
     """True if any clause body holds an ISO cut node anywhere in its term
     tree.  Deliberately an over-approximation (a cut inside once/findall,
@@ -923,6 +948,7 @@ def _build_predicate_trampoline_funcdef_impl(
     skip_trail: bool = False,
     ctx_template: CompilationContext | None = None,
     _segments: bool = True,
+    tro_functor: str | None = None,
 ) -> ast.FunctionDef:
     """Build the ``ast.FunctionDef`` for a trampoline-protocol compiled predicate.
 
@@ -939,7 +965,14 @@ def _build_predicate_trampoline_funcdef_impl(
     - ``emit_done=True`` (or non-bucket): ``while True`` loop with ``continue``.
     - ``emit_done=False`` (bucket): signal mode — set ``_tro_state`` and return.
       The dispatch closure checks ``_tro_state`` after ``yield from`` completes.
+
+    *tro_functor* is the predicate's own name, which a tail call must name
+    to be a self call.  A bucket, default or fallback function is built
+    under a name of its own (``p__p0_b1``), so its caller passes the
+    predicate's; it defaults to *functor*.
     """
+    if tro_functor is None:
+        tro_functor = functor
     use_tro = bool(tro_indices)
     # Bucket functions use "signal" mode (set _tro_state, return).
     # Full functions use "loop" mode (while True + continue).
@@ -989,7 +1022,13 @@ def _build_predicate_trampoline_funcdef_impl(
     # emits ``_compile_tro_tail`` as the leaf.  Replaces the legacy
     # ``_compile_tro_body`` bypass entirely.
     if use_tro:
-        _tro_clause_set = {id(clauses[i]) for i in tro_indices}
+        # A signal-mode function restarts only where answer order allows
+        # (``_signal_safe_tro_indices``); its other eligible clauses make
+        # the ordinary call.  The function keeps its TRO shape either way.
+        _restart_indices = (
+            tro_indices if tro_mode == "loop"
+            else _signal_safe_tro_indices(clauses, tro_indices, db))
+        _tro_clause_set = {id(clauses[i]) for i in _restart_indices}
         _orig_bc = body_compiler
         _tro_m = tro_mode
         _tro_ctx = ctx_template
@@ -1069,8 +1108,11 @@ def _build_predicate_trampoline_funcdef_impl(
                     from .terms_to_goalop import terms_to_goalop as _tro_ir
                     from .optimisations.tro import analyse as _tro_analyse_lazy
                     _body_ir = _tro_ir(clause.body, db=db)
+                    # The PREDICATE's name, not this function's: under a
+                    # bucket's own name no tail call is a self call, and
+                    # no bucket ever restarted in place.
                     _plan = _tro_analyse_lazy(
-                        _body_ir, clause.head, functor, arity, db=db)
+                        _body_ir, clause.head, tro_functor, arity, db=db)
                     _plans[id(clause)] = _plan
                 _prev_plan = _ctx.tro_plan
                 _prev_mode = _ctx.tro_mode
@@ -1644,6 +1686,23 @@ def _compile_predicate_trampoline_impl(
                     # Shared mutable TRO state: [flag, arg0, arg1, ..., argN-1]
                     _tro_state_obj = [False] + [None] * arity
                     base_globals["$tro_state"] = _tro_state_obj
+            _tro_orig_ids = (
+                frozenset(id(clauses[i]) for i in _idx_tro_indices)
+                if _idx_tro_indices is not None else frozenset())
+
+            def _tro_subset(subset, restarting_only=False):
+                """The TRO-eligible positions within *subset* (a bucket's
+                or default's clauses, before any lift), or None.  With
+                *restarting_only*, None as well when none of them may
+                restart (``_signal_safe_tro_indices``): the joint and
+                secondary functions, built without TRO before, take its
+                shape only where a clause restarts."""
+                found = frozenset(
+                    i for i, cl in enumerate(subset) if id(cl) in _tro_orig_ids)
+                if found and restarting_only and not _signal_safe_tro_indices(
+                        subset, found, _effective_db):
+                    return None
+                return found or None
 
             # Compile fallback (all clauses, for when no arg is ground).
             # emit_done=False makes the fallback SIGNAL-mode TRO like the
@@ -1652,7 +1711,7 @@ def _compile_predicate_trampoline_impl(
             fallback_def = _build_predicate_trampoline_funcdef(
                 f"{functor}__all", arity, clauses,
                 _effective_db, body_compiler, emit_done=False,
-                tro_indices=_idx_tro_indices,
+                tro_indices=_idx_tro_indices, tro_functor=functor,
                 ctx_template=ctx_template,
             )
 
@@ -1705,14 +1764,7 @@ def _compile_predicate_trampoline_impl(
                     # ``head_to_match_pattern`` will use.
                     bname = f"{functor}__p{pos}_b{len(idx_dict)}"
                     # Map TRO indices from original clauses to this bucket's clauses.
-                    _b_tro = None
-                    if _idx_tro_indices is not None:
-                        _orig_ids = {id(cl) for i, cl in enumerate(clauses) if i in _idx_tro_indices}
-                        _b_tro_set = frozenset(
-                            i for i, cl in enumerate(bucket_clauses) if id(cl) in _orig_ids
-                        )
-                        if _b_tro_set:
-                            _b_tro = _b_tro_set
+                    _b_tro = _tro_subset(bucket_clauses)
                     if len(index["buckets"]) == 1:
                         # Every clause has this one key here (or a variable):
                         # the bucket is the whole predicate, so it is the
@@ -1730,24 +1782,17 @@ def _compile_predicate_trampoline_impl(
                     bdef = _build_predicate_trampoline_funcdef(
                         bname, arity, lifted_bucket,
                         _effective_db, body_compiler, emit_done=False,
-                        tro_indices=_b_tro,
+                        tro_indices=_b_tro, tro_functor=functor,
                         skip_trail=_skip_trail,
                 ctx_template=ctx_template,
             )
                     idx_dict[key] = _shared_fn(bdef, base_globals)
                 # Default bucket (clauses with Var at indexed position).
-                _d_tro = None
-                if _idx_tro_indices is not None:
-                    _orig_ids = {id(cl) for i, cl in enumerate(clauses) if i in _idx_tro_indices}
-                    _d_tro_set = frozenset(
-                        i for i, cl in enumerate(index["defaults"]) if id(cl) in _orig_ids
-                    )
-                    if _d_tro_set:
-                        _d_tro = _d_tro_set
+                _d_tro = _tro_subset(index["defaults"])
                 ddef = _build_predicate_trampoline_funcdef(
                     f"{functor}__p{pos}_dflt", arity, index["defaults"],
                     _effective_db, body_compiler, emit_done=False,
-                    tro_indices=_d_tro,
+                    tro_indices=_d_tro, tro_functor=functor,
                 ctx_template=ctx_template,
             )
                 pos_default_fn = _shared_fn(ddef, base_globals)
@@ -1796,6 +1841,8 @@ def _compile_predicate_trampoline_impl(
                                             bname, arity, lifted,
                                             _effective_db, body_compiler,
                                             emit_done=False,
+                                            tro_indices=_tro_subset(bkt, True),
+                                            tro_functor=functor,
                 ctx_template=ctx_template,
             )
                                         l1_fns[kj] = _shared_fn(
@@ -1814,6 +1861,8 @@ def _compile_predicate_trampoline_impl(
                                         l1dname, arity, l1d_lifted,
                                         _effective_db, body_compiler,
                                         emit_done=False,
+                                        tro_indices=_tro_subset(l1_defaults, True),
+                                        tro_functor=functor,
                 ctx_template=ctx_template,
             )
                                     level0_compiled[ki] = (
@@ -1836,6 +1885,8 @@ def _compile_predicate_trampoline_impl(
                                         bname, arity, lifted,
                                         _effective_db, body_compiler,
                                         emit_done=False,
+                                        tro_indices=_tro_subset(l1_defaults, True),
+                                        tro_functor=functor,
                 ctx_template=ctx_template,
             )
                                     level0_compiled[ki] = (
@@ -1850,6 +1901,9 @@ def _compile_predicate_trampoline_impl(
                                     arity, sec["level0_defaults"],
                                     _effective_db, body_compiler,
                                     emit_done=False,
+                                    tro_indices=_tro_subset(
+                                        sec["level0_defaults"], True),
+                                    tro_functor=functor,
                 ctx_template=ctx_template,
             )
                                 level0_default_fn = _shared_fn(
@@ -1882,6 +1936,8 @@ def _compile_predicate_trampoline_impl(
                             jbdef = _build_predicate_trampoline_funcdef(
                                 jbname, arity, lifted,
                                 _effective_db, body_compiler, emit_done=False,
+                                tro_indices=_tro_subset(bkt, True),
+                                tro_functor=functor,
                 ctx_template=ctx_template,
             )
                             joint_dict[jk] = _shared_fn(
@@ -1892,6 +1948,8 @@ def _compile_predicate_trampoline_impl(
                                 f"{functor}__j{pos_i}_{pos_j}_dflt",
                                 arity, joint_info["defaults"],
                                 _effective_db, body_compiler, emit_done=False,
+                                tro_indices=_tro_subset(joint_info["defaults"], True),
+                                tro_functor=functor,
                 ctx_template=ctx_template,
             )
                             joint_default_fn = _shared_fn(

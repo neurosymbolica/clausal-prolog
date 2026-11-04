@@ -1227,10 +1227,11 @@ def _make_secondary_dispatch_impl(
 
     if tro_state is not None:
         def dispatch(*args):
-            # The level-0/level-1 buckets are compiled without TRO, but
-            # fallback_fn is the shared SIGNAL-mode `{functor}__all` — a
-            # tail call signalled there must re-dispatch (the updated args
-            # may now key into a level-0 bucket), not be dropped.
+            # fallback_fn is the shared SIGNAL-mode `{functor}__all`, and a
+            # level-0/level-1 bucket is SIGNAL-mode too when one of its
+            # clauses restarts in place -- a tail call signalled there must
+            # re-dispatch (the updated args may now key into another
+            # bucket), not be dropped.
             args_list = None
             while True:
                 tro_state[0] = False

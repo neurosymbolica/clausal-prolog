@@ -1,0 +1,9 @@
+% Last-call optimisation inside first-argument index buckets.
+% Four clauses with an atom first argument: count/4 is indexed on it,
+% and the recursive clause is compiled into the bucket for `go`.
+:- module(bucket_tro_clausal, [count/4]).
+count(stop, _, N, N).
+count(go, 0, A, N) :- count(stop, 0, A, N).
+count(go, K, A, N) :- K > 0, K1 is K - 1, A1 is A + 1, count(go, K1, A1, N).
+count(other, _, N, N).
+:- end_module(bucket_tro_clausal).

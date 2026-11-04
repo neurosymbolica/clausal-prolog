@@ -39,6 +39,23 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A loop through an indexed predicate runs in constant space again.**
+  A predicate indexed on an argument is compiled into one function per index
+  bucket, and a tail-recursive clause in one restarts the predicate in place
+  through the dispatch loop.  Since 2026-09-05 no bucket, default or fallback
+  function did: its compile asked whether the tail call is a self call under
+  the function's own name (`count__p0_b1`), so every iteration made an
+  ordinary call and held its frame.  `count(go, K, A, N) :- K > 0, K1 is K -
+  1, A1 is A + 1, count(go, K1, A1, N).` beside three other `count/4` clauses
+  peaked at 445 MB over 100000 iterations; it is now under 1 MB and twice as
+  fast, in `.pl`, `.clausal` and `.seam` alike (a seam step written
+  `K1 == K - 1` is still not taken as binding `K1`; see
+  `todo/tro-seam-arithmetic-equals-does-not-count-as-binding-2026-11-04.md`).  A bucket restarts only from a
+  clause that has no later clause in it or cuts before its tail call, so the
+  order of answers is unchanged; a dynamic predicate keeps its clause-
+  generation check.  Joint and two-level index buckets restart too, where one
+  of their clauses may.
+
 - **A tail call of a dynamic predicate sees the clauses its own clause
   asserted or retracted before it (the logical update view, ISO 7.5.4).**
   Tail-recursion optimisation restarts the predicate in place over the
