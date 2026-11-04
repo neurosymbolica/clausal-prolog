@@ -424,6 +424,29 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **Fact predicates load and grow in linear time with a small constant.**
+  Loading 200 facts of arity 8 took 7 s, about 5 ms per argument per fact:
+  every argument position where all facts have the same constant was an
+  index whose one bucket is the whole predicate, and it was compiled again,
+  a copy per position. Such a position now dispatches to the predicate's
+  own function. A predicate whose clauses are all facts compiles to a
+  clause table from 16 clauses (`clause_table.FACT_TABLE_THRESHOLD`; other
+  predicates from 256, as before), and a fact predicate recompiled twice
+  after clause writes stays a table at any size. An `assertz` of a fact
+  into a table adds it in place instead of invalidating the dispatch, so a
+  loop that asserts and calls in turn no longer recompiles the predicate at
+  every call (50 facts of arity 8: 30 s -> 0.8 s; 2,600: 1.0 s). `asserta`,
+  `retract` and rules still invalidate. The logical update view holds: a
+  call reads only the clauses there were when it began. Answers and their
+  order are unchanged; a table's known differences (head bindings left to
+  right, no tail-recursion optimisation, last answer detected per indexed
+  argument) now apply to these predicates too. The whole-function
+  mark/undo invariant walk runs only under
+  `CLAUSAL_CHECK_COMPILED_FUNCTIONS=1` (the test suite sets it), and the
+  location check that could not fail after the position pass is skipped.
+  Pinned in `tests/test_clause_table.py` (counts of compiled clause arms
+  and recompiles).
+
 - **A re-led tabled SCC member skips a re-run that could find nothing
   new** (operator ruling 2026-11-03).  When nothing its clauses can read has
   changed since a pass of theirs that found nothing (no table changed, no

@@ -12,6 +12,13 @@ boundary; it adds no work that scales with predicate size beyond what
 the phase already does.  Cost is negligible — a few dict lookups per
 clause.
 
+The one exception is :func:`assert_mark_undo_paired`, a walk over every
+node of every compiled function: about an eighth of the time a fact
+table took to compile (2026-11-04).  The compiler runs it only when
+:data:`CHECK_COMPILED_FUNCTIONS` is on (``CLAUSAL_CHECK_COMPILED_FUNCTIONS=1``,
+as ``CLAUSAL_CHECK_SCC_MEMBERS`` gates the tabling store scan); the test
+suite turns it on (``tests/conftest.py``).
+
 Slice F (post-D7b): the IR path is now source-of-truth, phase
 boundaries are crisp, and these assertions lock in the invariants
 that the parallel-implementation harness verified empirically through
@@ -25,9 +32,16 @@ assertions become the primary detection mechanism for IR-side bugs.
 from __future__ import annotations
 
 import ast
+import os
 from typing import Any
 
 from ._vars import _collect_vars
+
+#: Run the whole-function walks (:func:`assert_mark_undo_paired`) on every
+#: function the predicate compiler builds.  Off by default (a walk over every
+#: node of every compiled function); on in the test suite.
+CHECK_COMPILED_FUNCTIONS = os.environ.get(
+    "CLAUSAL_CHECK_COMPILED_FUNCTIONS", "") not in ("", "0")
 
 
 class InvariantError(AssertionError):

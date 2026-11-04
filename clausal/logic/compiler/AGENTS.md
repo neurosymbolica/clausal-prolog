@@ -24,7 +24,7 @@ data structures, the two strategies, invariants §10, gotchas §11, public API
 |---|---|
 | Entry points | `predicate.py` (`compile_predicate_trampoline` / `_shallow` / `_ast`, `_install`, the `base_globals` runtime aliases); `__init__.py` (public API) |
 | Globals (phase 1) | `globals_env.py`: call-target resolution into the function's `__globals__`; also asks `../dialect_edge.py` at call sites |
-| Indexing / dispatch (2-3) | `arg_index.py` (first-arg, joint, secondary, groundness-keyed), `list_dispatch.py`, `clause_table.py` (a predicate of 256+ clauses: a clause table and one driver, facts kept as terms) |
+| Indexing / dispatch (2-3) | `arg_index.py` (first-arg, joint, secondary, groundness-keyed), `list_dispatch.py`, `clause_table.py` (a predicate of 256+ clauses, of 16+ facts, or of facts asserted between calls: a clause table and one driver, facts kept as terms, an assertz of a fact appended in place) |
 | Heads (4) | `head_match.py`: head -> `match` case patterns, list/star patterns |
 | Bodies (5): IR path | `terms_to_goalop.py` (body -> `GoalOp` IR in `ir.py`), `lower_python_shallow.py` / `lower_python_trampoline.py`, shared `_lower_goalop_shared.py` |
 | Bodies (5): goals | `goal_shallow.py`, `goal_trampoline.py`, `control_constructs.py` (once, catch, findall, freeze, setup_call_cleanup, ...), `ite_reified.py`, `tabled_naf.py`, `star_segments.py` |

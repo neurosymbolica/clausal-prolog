@@ -52,7 +52,7 @@ _GOAL_BOUNDARY_ITERS = frozenset({"$unify_iter", "$pending"})
 
 class _Names:
     __slots__ = ("self_name", "proceed", "fail", "fresh", "later_excluded",
-                 "later_excluded_arms")
+                 "later_excluded_arms", "named_iters")
 
     def __init__(self, self_name, proceed, fail, later_excluded=None):
         self.self_name, self.proceed = self_name, proceed
@@ -60,6 +60,9 @@ class _Names:
         # own fail, and for a segment of a long body also the scope's.
         self.fail = (fail,) if isinstance(fail, str) else tuple(fail)
         self.fresh = 0
+        # How many loops were given a ``_final_iter`` name (``_name_iters``
+        # has nothing to do without one).
+        self.named_iters = 0
         # ({id(clause arm Match): test that no later arm can match the
         # call}, {id(every clause arm Match)})
         self.later_excluded, self.later_excluded_arms = (
@@ -318,6 +321,7 @@ def _walk_goal_boundary(st, conds, ok, n: _Names, out: list):
     yield _walk_block(st.body, conds + [cond], ok, n, out)
     if len(out) > before:
         st._final_iter = it_name                  # see _name_iters
+        n.named_iters += 1
 
 
 # ── rewriting ────────────────────────────────────────────────────────────────
@@ -432,7 +436,8 @@ def mark_final_yields(func_def: ast.FunctionDef, *, self_name: str,
                 new_block.append(ast.copy_location(mark, s))
                 new_block.append(s)
         block[:] = new_block
-    _name_iters(func_def)
+    if n.named_iters:
+        _name_iters(func_def)
     fix_missing_locations(func_def)
     return len(sites)
 
