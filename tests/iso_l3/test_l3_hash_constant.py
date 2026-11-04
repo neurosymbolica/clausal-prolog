@@ -2,10 +2,11 @@
 wins"): with an ATOM argument, ``#`` folds at compile time to the declared
 (or imported) constant's value, units and all, anywhere the native front
 end folds ``constant/1``.  An undeclared name is a load error with
-constant/1's own words, spelled ``#(Name)`` -- except that inside a
-CLP(Q) ``{}/1`` the four clp(q,r) 1.3.3 names ``p``, ``pi``, ``e`` and
-``zero``, when NOT declared, are lowered exactly as before (pinned here
-under both solvers).  CLP(Z)'s ``#X`` / ``#3`` markers (a variable or an
+constant/1's own words, spelled ``#(Name)``.  A module that loads
+library(clpq) has clp(q,r) 1.3.3's ``p``, ``pi``, ``e`` and ``zero``
+declared for ``constant/1`` and ``#/1`` (follow-up ruling 2026-11-04, "let
+CLPQ declare them too"), its own declaration winning; the atoms stay
+atoms.  CLP(Z)'s ``#X`` / ``#3`` markers (a variable or an
 integer argument) are untouched, and a ``#(Name)`` cell built at run time
 is a plain term, as a run-time ``constant(Name)`` cell is.
 """
@@ -167,13 +168,17 @@ def test_an_undeclared_hash_name_in_braces_is_a_load_error(native):
     assert "#(tau): nothing declares `tau`" in str(err), err
 
 
-def test_an_undeclared_pi_outside_braces_is_a_load_error(native):
-    """The clp(q,r) names are exempt inside ``{}/1`` only."""
-    err = _refusal(native, "hc_undecl_pi", """\
-        q(X) :- X is #(pi).
+@pytest.mark.parametrize("ref", ["#(pi)", "constant(e)", "#(zero)", "#p"])
+def test_without_clpq_its_names_are_undeclared(native, ref):
+    """library(clpq) declares p/pi/e/zero; a module that does not load it
+    has nothing declaring them (clpz's prefix ``#`` reads ``#p``)."""
+    name = ref.strip("#()").replace("constant(", "")
+    err = _refusal(native, "hc_noclpq", f"""\
+        :- use_module(library(clpz)).
+        q(X) :- X is {ref}.
     """)
-    assert err.lineno == 1, err
-    assert "#(pi): nothing declares `pi`" in str(err), err
+    assert err.lineno == 2, err
+    assert f"nothing declares `{name}`" in str(err), err
 
 
 def test_a_hash_declared_below_its_use_is_refused(native):
@@ -262,66 +267,125 @@ def test_an_asserted_rule_keeps_a_run_time_hash_cell_as_data(native):
     assert _all(mod, "a3", V) == [(("#", "foo"),)]
 
 
-# ── undeclared p/pi/e/zero inside {}: unchanged, under BOTH solvers ─────────
+# ── library(clpq) declares p, pi, e, zero: under BOTH solvers ───────────────
 
-_HOLZBAUR_PROBE = r'''
+_CLPQ_PROBE = r'''
 import importlib, sys, textwrap
+from fractions import Fraction
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
-from clausal.logic.clpq import normal_form as nf
 import clausal.logic.clpq as clpq
 assert clpq.SOLVER == sys.argv[2], clpq.SOLVER
 sys.path.insert(0, sys.argv[1])
-out = {}
-# Written at the top of a {}/1 comparison: refused at load, as before.
-for name in ("p", "pi", "e", "zero"):
-    mod = "hcq_top_" + name
-    with open(f"{sys.argv[1]}/{mod}.clausal", "w") as f:
-        f.write(":- use_module(library(clpq)).\nq(X) :- {X = 2 * #(%s)}.\n" % name)
-    try:
-        importlib.import_module(mod)
-        out[name] = "loaded"
-    except SyntaxError as e:
-        out[name] = (e.lineno, str(e))
-# Under a {}/1 function, and built at run time: type_error(evaluable, #/1).
-with open(f"{sys.argv[1]}/hcq_late.clausal", "w") as f:
+with open(f"{sys.argv[1]}/hcq_lib.clausal", "w") as f:
     f.write(textwrap.dedent("""\
         :- use_module(library(clpq)).
-        nested(E) :- catch({_ = sin(#(pi))}, error(E, _), true).
-        late(N, E) :- T =.. ['#', N], catch({_ = T}, error(E, _), true).
+        :- constant_value(half_turn, #(pi)).
+        two_pi(X) :- {X = 2 * #(pi)}.
+        two_pi_literal(X) :- {X = 2 * 3.141592653589793}.
+        pi_alone(X) :- {X = #(pi)}.
+        pi_literal(X) :- {X = 3.141592653589793}.
+        p_alone(X) :- {X = #(p)}.
+        e_is(X) :- X is #(e).
+        pi_constant(X) :- X is constant(pi).
+        zero(X) :- {X = 1 + #(zero)}.
+        zero_data(X) :- X = #(zero).
+        half(X) :- X = constant(half_turn).
+        late(E) :- T =.. ['#', pi], catch({_ = T}, error(E, _), true).
     """))
-m = importlib.import_module("hcq_late")
-v = Var()
-out["nested"] = [walk(deref(v)) for _ in call("nested", v, module=m)]
-for name in ("p", "pi", "e", "zero"):
+m = importlib.import_module("hcq_lib")
+out = {}
+for p in ("two_pi", "two_pi_literal", "pi_alone", "pi_literal", "p_alone",
+          "e_is", "pi_constant", "zero", "zero_data", "half", "late"):
     v = Var()
-    out["late_" + name] = [walk(deref(v)) for _ in call("late", name, v, module=m)]
-# The port's own normal form keeps nf.pl's monash_constant/2.
-out["nf"] = [nf.monash_constant(n) for n in ("p", "pi", "e", "zero", "tau")]
+    out[p] = [walk(deref(v)) for _ in call(p, v, module=m)]
+out["pi_global"] = vars(m).get("pi", "<unbound>")
 print(repr(out))
 '''
 
 
-@pytest.mark.parametrize("solver", ["legacy", "holzbaur"])
-def test_undeclared_clpq_names_in_braces_are_unchanged(solver, tmp_path):
+def _under(solver, tmp_path):
     env = dict(os.environ, CLAUSAL_CLPQ=solver, PYTHONPATH=str(ROOT))
     env.pop("CLAUSAL_PL_FRONTEND", None)
-    r = subprocess.run([sys.executable, "-c", _HOLZBAUR_PROBE,
-                        str(tmp_path), solver],
-                       cwd=tmp_path, env=env, capture_output=True,
+    r = subprocess.run([sys.executable, "-c", _CLPQ_PROBE, str(tmp_path),
+                        solver], cwd=tmp_path, env=env, capture_output=True,
                        text=True, timeout=300)
     assert r.returncode == 0, r.stderr
-    out = eval(r.stdout.strip().splitlines()[-1])
-    for name in ("p", "pi", "e", "zero"):
-        line, message = out[name]
-        assert line == 2 and (
-            f":2: {{}}/1 (clpq): ('#', '{name}') is not an arithmetic "
-            f"expression (numbers, variables, + - * /, abs sin cos tan "
-            f"min max exp pow ^)") in message, (name, out[name])
-        assert out["late_" + name] == [
-            ("type_error", "evaluable", ("/", "#", 1))], out
-    assert out["nested"] == [("type_error", "evaluable", ("/", "#", 1))], out
-    from clausal.logic.clpq.arithmetic import ZERO
-    assert out["nf"] == [3.141592653589793, 3.141592653589793,
-                         2.718281828459045, ZERO, None], out
-    assert ZERO == (0, 1)
+    return eval(r.stdout.strip().splitlines()[-1])
+
+
+@pytest.mark.parametrize("solver", ["legacy", "holzbaur"])
+def test_clpq_declares_p_pi_e_zero(solver, tmp_path):
+    out = _under(solver, tmp_path)
+    # A folded #(pi) meets the solver as the float literal does.
+    assert out["two_pi"] == out["two_pi_literal"], out
+    assert out["pi_alone"] == out["pi_literal"] == out["p_alone"], out
+    [two_pi] = out["two_pi"]
+    [pi] = out["pi_alone"]
+    assert type(two_pi) is Fraction and two_pi == 2 * pi, out
+    if solver == "holzbaur":
+        # The port reads a float through 1.3.3's float_rat, so the folded
+        # value is exactly what its own #(pi) gave (normal_form_number).
+        from clausal.logic.clpq import normal_form as nf
+        [m] = nf.normal_form(("#", "pi"))
+        assert pi == Fraction(*m.coefficient) == Fraction(245850922, 78256779)
+    else:
+        # The legacy solver takes a float's exact binary value.
+        assert pi == Fraction(3.141592653589793)
+    assert out["e_is"] == [2.718281828459045], out
+    assert out["pi_constant"] == [3.141592653589793], out
+    assert out["zero"] == [1] and out["zero_data"] == [0], out
+    assert out["half"] == [3.141592653589793], out
+    # A cell built at run time is still no constant reference.
+    assert out["late"] == [("type_error", "evaluable", ("/", "#", 1))], out
+    # No module global: the atom pi is not the constant.
+    assert out["pi_global"] != 3.141592653589793, out
+
+
+def test_the_library_values_are_the_ports_monash_constants():
+    from clausal.tools.iso_l3 import CLPQ_LIBRARY_CONSTANTS
+    from clausal.logic.clpq import normal_form as nf
+    for name, value in CLPQ_LIBRARY_CONSTANTS.items():
+        assert nf.monash_constant(name) == value or name == "zero", name
+        assert ([(m.coefficient, m.powers) for m in nf.normal_form(("#", name))]
+                == [(m.coefficient, m.powers) for m in nf.normal_form(value)]
+                ), name
+
+
+def test_the_atoms_stay_atoms_with_clpq_loaded(native):
+    src = """\
+        :- use_module(library(clpq)).
+        names(L) :- L = [p, pi, e, zero].
+        f(pi).
+        g(X) :- X = e.
+    """
+    for suffix in (".clausal", ".pl"):
+        mod = _load(native, "hc_atoms" + suffix[1:], src, suffix=suffix)
+        assert _all(mod, "names", V) == [(["p", "pi", "e", "zero"],)]
+        assert _all(mod, "f", V) == [("pi",)]
+        assert _all(mod, "g", V) == [("e",)]
+        assert vars(mod).get("e", "e") == "e"
+        assert vars(mod).get("pi", "pi") == "pi"
+    seam = native.load("hc_atoms_seam", textwrap.dedent("""\
+        -private([pi, e])
+        f(pi),
+        g(X) <- (X is e)
+    """), suffix=".seam", frontend=None)
+    assert _all(seam, "f", V) == [("pi",)]
+    assert _all(seam, "g", V) == [("e",)]
+
+
+def test_a_declared_or_imported_name_wins_over_clpqs(native):
+    _load(native, "hc_pi_prov", """\
+        :- module(hc_pi_prov, [e/0]).
+        :- constant_value(e, 10).
+        :- end_module(hc_pi_prov).
+    """)
+    mod = _load(native, "hc_pi_imp", """\
+        :- use_module(library(clpq)).
+        :- use_module(hc_pi_prov, [e]).
+        q(X) :- {X = 2 * #(e)}.
+        i(X) :- X is constant(e).
+    """)
+    assert _all(mod, "q", V) == [(20,)]
+    assert _all(mod, "i", V) == [(10,)]

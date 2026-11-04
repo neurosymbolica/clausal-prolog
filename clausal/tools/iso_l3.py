@@ -170,11 +170,29 @@ _CLPQ_BINARY = {"+": "Add", "-": "Sub", "*": "Mult", "/": "Div"}
 _CLPQ_FUNCTIONS = {("abs", 1), ("sin", 1), ("cos", 1), ("tan", 1),
                    ("min", 2), ("max", 2), ("exp", 2), ("pow", 2), ("^", 2)}
 _CLPQ_POWERS = {"exp", "pow"}
-#: clp(q,r) 1.3.3's named constants (nf.pl ``monash_constant/2``: ``#(p)``,
-#: ``#(pi)``, ``#(e)``, ``#(zero)``).  Inside a ``{}/1`` an UNDECLARED one is
-#: lowered exactly as before ``#(Name)`` folded (operator ruling 2026-11-04,
-#: "Declared wins"): a declared or imported constant of that name wins.
-_CLPQ_NAMED_CONSTANTS = frozenset({"p", "pi", "e", "zero"})
+#: The constants ``library(clpq)`` declares (operator ruling 2026-11-04:
+#: "let CLPQ declare them too"): clp(q,r) 1.3.3's named constants, nf.pl
+#: ``monash_constant/2``, with the values the port's
+#: ``normal_form.monash_constant`` gives (``zero`` is Q's arithmetic
+#: epsilon, 0).  In scope for ``constant/1`` and ``#/1`` only, in a module
+#: that loads library(clpq), and only where nothing declares or imports
+#: the name ("Declared wins").  No module global is bound, so the ATOMS
+#: ``pi``, ``e`` ... stay atoms.
+CLPQ_LIBRARY_CONSTANTS = {"p": 3.141592653589793, "pi": 3.141592653589793,
+                          "e": 2.718281828459045, "zero": 0}
+
+
+def library_constant(ctx, name: str):
+    """library(clpq)'s constant *name* (``CLPQ_LIBRARY_CONSTANTS``) when
+    *ctx* loads library(clpq) and does not declare or import *name*; else
+    None.  Shared by clause lowering and a declaration's value."""
+    if name not in CLPQ_LIBRARY_CONSTANTS or ctx is None \
+            or not getattr(ctx, "clpq", False):
+        return None
+    t = getattr(ctx, "_t", None)
+    if t is not None and (name in t._constants or name in t._import_remap):
+        return None
+    return CLPQ_LIBRARY_CONSTANTS[name]
 
 
 def _hash_constant_name(t: Any) -> "str | None":
@@ -340,7 +358,6 @@ class _ClauseLowering:
         # so a group there binds nothing.
         self.regex_group_names: set[str] = set()
         self._meta_depth = 0    # > 0 while lowering a meta-argument goal
-        self._clpq_depth = 0    # > 0 while lowering a clpq {}/1 goal's argument
 
     # ── variables ──
 
@@ -392,8 +409,7 @@ class _ClauseLowering:
             if t[0] == "constant" and len(t) == 2:
                 return self._constant(t[1], sp)
             hashed = _hash_constant_name(t)
-            if hashed is not None and not (
-                    self._clpq_depth and self._clpq_named_constant(hashed)):
+            if hashed is not None:
                 return self._constant(hashed, sp, spelling="#")
             if t[0] == "." and len(t) == 3:
                 return self._cons(t, sp)
@@ -401,16 +417,6 @@ class _ClauseLowering:
                 chain = self._long_chain(t, sp)
                 if chain is not None:
                     return chain
-            if t[0] == "{}" and len(t) == 2 and self._clpq_braces():
-                # A clpq ``{C}`` as data (a meta-call's ``call({C})``, the
-                # clause/2 source term, ``G = {C}``): an undeclared
-                # ``#(pi)`` ... in it stays the cell it was, as in the goal.
-                self._clpq_depth += 1
-                try:
-                    return ast.Tuple(elts=[_const("{}"), self.term(
-                        t[1], _arg_spans(sp, 1)[0])], ctx=ast.Load())
-                finally:
-                    self._clpq_depth -= 1
             spans = _arg_spans(sp, len(t) - 1)
             return ast.Tuple(
                 elts=[_const(t[0])]
@@ -491,6 +497,12 @@ class _ClauseLowering:
                 f"{_show_cell(name)}: the argument is a name, never an "
                 f"expression. Write constant(max_fine)", _top_span(sp))
         if not self._constant_in_scope(name):
+            library = library_constant(self._ctx, name)
+            if library is not None:
+                # library(clpq)'s constant: its value, as if written (a
+                # float in {}/1 then meets the solver as a literal does --
+                # the port's normal_form_number, as its own #(pi) did).
+                return _const(library)
             raise LoweringRefused(
                 f"{spelling}({name}): nothing declares `{name}`. Declare it "
                 f"with :- constant_value({name}, <value>). or "
@@ -502,21 +514,6 @@ class _ClauseLowering:
         t = getattr(self._ctx, "_t", None)
         return t is not None and (name in t._constants
                                   or name in t._import_remap)
-
-    def _clpq_braces(self) -> bool:
-        """``{}/1`` is clpq's constraint here (``library(clpq)`` or
-        ``library(clpr)`` in force)."""
-        return self._ctx is not None and bool(getattr(self._ctx, "clpq",
-                                                      False))
-
-    def _clpq_named_constant(self, name: str) -> bool:
-        """Whether ``#(name)`` inside a ``{}/1`` is clp(q,r)'s own named
-        constant rather than a constant reference: one of
-        ``_CLPQ_NAMED_CONSTANTS`` that nothing declares or imports.  Such a
-        cell is lowered exactly as it was before ``#(Name)`` folded
-        (operator ruling 2026-11-04, "Declared wins")."""
-        return (name in _CLPQ_NAMED_CONSTANTS
-                and not self._constant_in_scope(name))
 
     def _constant_units_goal(self, args: tuple, spans: list, sp, pos):
         """``constant_number_units(Name, N, U)`` -> the seam's COMPILE-TIME
@@ -698,7 +695,8 @@ class _ClauseLowering:
                              position=_pos_expr(pos))
             if name == ":" and len(args) == 2:
                 return self._qualified(args, spans, sp, pos)
-            if name == "{}" and len(args) == 1 and self._clpq_braces():
+            if (name == "{}" and len(args) == 1 and self._ctx is not None
+                    and self._ctx.clpq):
                 return self._clpq(args[0], spans[0], sp, pos)
             if (name == "if_" and len(args) == 3 and self._ctx is not None
                     and self._ctx.reif):
@@ -955,11 +953,7 @@ class _ClauseLowering:
             parts.append((c[1], s2[0]))
             c, c_sp = c[2], s2[1]
         parts.append((c, c_sp))
-        self._clpq_depth += 1
-        try:
-            nodes = [self._clpq_constraint(p, s) for p, s in parts]
-        finally:
-            self._clpq_depth -= 1
+        nodes = [self._clpq_constraint(p, s) for p, s in parts]
         arg = nodes[0] if len(nodes) == 1 else _node(
             "TupleLiteral", elements=ast.List(elts=nodes, ctx=ast.Load()),
             position=_pos_expr(self._pos.of(_top_span(c_sp))))
@@ -1008,9 +1002,8 @@ class _ClauseLowering:
             # seam's ``{Q == 100 * constant(one_euro)}`` folds it too).
             return self._constant(e[1], sp)
         hashed = _hash_constant_name(e)
-        if hashed is not None and not self._clpq_named_constant(hashed):
-            # ``#(Name)``: the same fold (operator ruling 2026-11-04); an
-            # undeclared ``#(pi)`` ... falls through, as before.
+        if hashed is not None:
+            # ``#(Name)``: the same fold (operator ruling 2026-11-04).
             return self._constant(hashed, sp, spelling="#")
         if (type(e) is tuple and len(e) >= 2 and type(e[0]) is str
                 and (e[0], len(e) - 1) in _CLPQ_FUNCTIONS):

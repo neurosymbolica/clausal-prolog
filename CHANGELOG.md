@@ -16,12 +16,17 @@ surface described in [docs/public-api.md](docs/public-api.md).
   folded: expressions, data terms, heads, list tails, CLP(Q) `{}/1`
   constraints and another constant's declared value (`#max_fine` too, under
   `library(clpz)`'s prefix `#`). An undeclared name is a load error in
-  constant/1's words, spelled `#(foo)`. A declared `pi` shadows clp(q,r)'s;
-  undeclared, `#(p)`, `#(pi)`, `#(e)` and `#(zero)` inside a clpq/clpr
-  `{}/1` are lowered exactly as before, under both solvers (written at the
-  top of a comparison that is still the load refusal "not an arithmetic
-  expression"; under a function or built at run time,
-  `type_error(evaluable, (#)/1)`). CLP(Z)'s `#X` / `#3` markers are
+  constant/1's words, spelled `#(foo)`. Follow-up operator ruling
+  2026-11-04: "#(pi) undeclared, etc: error is ok for now. let CLPQ declare
+  them too." -- a module that loads `library(clpq)` has clp(q,r) 1.3.3's
+  `p`/`pi` (3.141592653589793), `e` (2.718281828459045) and `zero` (0)
+  declared for `#/1` and `constant/1`, in `{}/1`, `is/2` and data; the
+  module's own declaration or import of the name wins, and the ATOMS `pi`,
+  `e` ... are unchanged (no module global is bound). In `{}/1` the folded
+  float is a float literal: the port reads it through 1.3.3's float_rat
+  (`#(pi)` is 245850922/78256779, as its own `#(pi)` was), the default
+  solver takes its exact binary value. Without library(clpq), `#(pi)` is
+  undeclared. CLP(Z)'s `#X` / `#3` markers are
   untouched, and a `#(Name)` term built at run time stays a term (spliced
   verbatim into an asserted rule), as a run-time `constant(Name)` term does.
   Docs: directives.md, clpq.md. Tests: `tests/iso_l3/test_l3_hash_constant.py`.

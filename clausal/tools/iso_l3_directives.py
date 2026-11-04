@@ -245,13 +245,8 @@ class Uses:
                     continue
                 if t[0] == "#" and len(t) == 2 and type(t[1]) is str:
                     # ``#(Name)``, the same fold (operator ruling
-                    # 2026-11-04).  clp(q,r)'s ``#(pi)`` ... is counted as
-                    # before (inside a {}/1 an undeclared one is not
-                    # folded); clpz's ``#X`` / ``#3`` is data.
-                    from clausal.tools.iso_l3 import (  # noqa: PLC0415
-                        _CLPQ_NAMED_CONSTANTS)
-                    if t[1] not in _CLPQ_NAMED_CONSTANTS:
-                        continue
+                    # 2026-11-04); clpz's ``#X`` / ``#3`` is data.
+                    continue
                 if t[0] != ".":
                     self.functors.setdefault(t[0], set()).add(len(t) - 1)
                 stack.extend(t[1:])
@@ -1642,13 +1637,18 @@ def _const_value(ctx, cell, span, what, *, units: bool) -> ast.expr:
             return ast.Tuple(elts=[ast.Constant(value="$chars"),
                                    ast.Constant(value=cell[1])],
                              ctx=ast.Load())
-        if cell[0] == "#" and len(cell) == 2 and type(cell[1]) is str:
-            return _name(cell[1])       # ``#(Earlier)``: constant(Earlier)
-        if cell[0] == "constant" and len(cell) == 2:
+        if cell[0] in ("constant", "#") and len(cell) == 2 \
+                and (cell[0] == "constant" or type(cell[1]) is str):
+            # ``constant(Earlier)``, and ``#(Earlier)`` the same (operator
+            # ruling 2026-11-04).
             if type(cell[1]) is not str:
                 raise _refused(f"{what}: constant() takes the name of a "
                                f"declared constant, got {_show(cell[1])}",
                                span)
+            from clausal.tools.iso_l3 import library_constant  # noqa: PLC0415
+            library = library_constant(ctx, cell[1])
+            if library is not None:
+                return ast.Constant(value=library)   # library(clpq)'s
             return _name(cell[1])
         return ast.Tuple(
             elts=[ast.Constant(value=cell[0])]
