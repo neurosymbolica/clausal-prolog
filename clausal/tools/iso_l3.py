@@ -182,16 +182,21 @@ CLPQ_LIBRARY_CONSTANTS = {"p": 3.141592653589793, "pi": 3.141592653589793,
                           "e": 2.718281828459045, "zero": 0}
 
 
-def library_constant(ctx, name: str):
+def library_constant(ctx, name: str, line: "int | None" = None):
     """library(clpq)'s constant *name* (``CLPQ_LIBRARY_CONSTANTS``) when
     *ctx* loads library(clpq) and does not declare or import *name*; else
-    None.  Shared by clause lowering and a declaration's value."""
+    None.  Shared by clause lowering and a declaration's value.  The first
+    use of each is recorded (``ctx.library_constant_uses``, name -> line),
+    so a later declaration or import of the name is refused naming it."""
     if name not in CLPQ_LIBRARY_CONSTANTS or ctx is None \
             or not getattr(ctx, "clpq", False):
         return None
     t = getattr(ctx, "_t", None)
     if t is not None and (name in t._constants or name in t._import_remap):
         return None
+    uses = getattr(ctx, "library_constant_uses", None)
+    if uses is not None:
+        uses.setdefault(name, line)
     return CLPQ_LIBRARY_CONSTANTS[name]
 
 
@@ -497,7 +502,8 @@ class _ClauseLowering:
                 f"{_show_cell(name)}: the argument is a name, never an "
                 f"expression. Write constant(max_fine)", _top_span(sp))
         if not self._constant_in_scope(name):
-            library = library_constant(self._ctx, name)
+            library = library_constant(self._ctx, name,
+                                       self._pos.line(_top_span(sp)))
             if library is not None:
                 # library(clpq)'s constant: its value, as if written (a
                 # float in {}/1 then meets the solver as a literal does --

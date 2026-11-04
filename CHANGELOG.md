@@ -22,7 +22,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `p`/`pi` (3.141592653589793), `e` (2.718281828459045) and `zero` (0)
   declared for `#/1` and `constant/1`, in `{}/1`, `is/2` and data; the
   module's own declaration or import of the name wins, and the ATOMS `pi`,
-  `e` ... are unchanged (no module global is bound). In `{}/1` the folded
+  `e` ... are unchanged (no module global is bound). A declaration
+  (`constant_value`, `constant_number_units`, the table forms) or an import
+  of one of those names AFTER a use of clpq's is a load error naming the
+  use's line, so one name never means two values in one file. In `{}/1` the folded
   float is a float literal: the port reads it through 1.3.3's float_rat
   (`#(pi)` is 245850922/78256779, as its own `#(pi)` was), the default
   solver takes its exact binary value. Without library(clpq), `#(pi)` is

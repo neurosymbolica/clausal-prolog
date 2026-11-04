@@ -389,3 +389,65 @@ def test_a_declared_or_imported_name_wins_over_clpqs(native):
     """)
     assert _all(mod, "q", V) == [(20,)]
     assert _all(mod, "i", V) == [(10,)]
+
+
+# ── a later declaration of a name used above as clpq's constant ─────────────
+
+
+@pytest.mark.parametrize("decl", [
+    ":- constant_value(pi, 3).",
+    ":- constant_number_units(pi, 3, euro).",
+])
+def test_declaring_a_clpq_name_after_its_use_is_refused(native, decl):
+    """Above it, ``#(pi)`` folded to library(clpq)'s pi; below, it would be
+    the module's: one name, two values in one file.  Refused at the
+    declaration, naming the first use's line."""
+    err = _refusal(native, "hc_late_decl", f"""\
+        :- use_module(library(clpq)).
+        :- use_module(european_union, [euro]).
+        q(X) :- {{X = 2 * #(pi)}}.
+        {decl}
+        r(X) :- X is constant(pi).
+    """)
+    assert err.lineno == 4, err
+    head = decl[3:decl.index(",")]
+    assert (f"{head}, …): `pi` is already used above as library(clpq)'s "
+            f"constant (line 3); declare it before its first use") in str(err), err
+
+
+def test_a_use_in_a_declared_value_counts(native):
+    err = _refusal(native, "hc_late_val", """\
+        :- use_module(library(clpq)).
+        :- constant_value(half_turn, #(e)).
+        :- constant_value(e, 3).
+    """)
+    assert err.lineno == 3, err
+    assert "`e` is already used above as library(clpq)'s constant (line 2)" \
+        in str(err), err
+
+
+def test_importing_a_clpq_name_after_its_use_is_refused(native):
+    _load(native, "hc_e_prov", """\
+        :- module(hc_e_prov, [e/0]).
+        :- constant_value(e, 10).
+        :- end_module(hc_e_prov).
+    """)
+    err = _refusal(native, "hc_late_imp", """\
+        :- use_module(library(clpq)).
+        q(X) :- X is #(e) + 1.
+        :- use_module(hc_e_prov, [e]).
+    """)
+    assert err.lineno == 3, err
+    assert ("use_module(hc_e_prov, …): `e` is already used above as "
+            "library(clpq)'s constant (line 2)") in str(err), err
+
+
+def test_declaring_before_the_first_use_is_fine(native):
+    mod = _load(native, "hc_early_decl", """\
+        :- use_module(library(clpq)).
+        q(X) :- {X = 2 * #(e)}.
+        :- constant_value(pi, 3).
+        r(X) :- X is #(pi).
+    """)
+    assert _all(mod, "r", V) == [(3,)]
+    assert len(_all(mod, "q", V)) == 1

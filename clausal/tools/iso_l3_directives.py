@@ -506,6 +506,11 @@ class DirectiveContext:
         from clausal.end_module import EndModuleCheck  # noqa: PLC0415
         self.end_module = EndModuleCheck()
         self._t = None
+        #: library(clpq)'s constants (``iso_l3.CLPQ_LIBRARY_CONSTANTS``)
+        #: used so far, name -> the line of the first use: a declaration or
+        #: import of one of those names after it is refused (one name, one
+        #: value per file).
+        self.library_constant_uses: dict = {}
 
     # ── the seam transformer, one per file ──
 
@@ -702,7 +707,33 @@ class DirectiveContext:
         handler = _DIRECTIVES.get(key)
         if handler is None:
             raise _refused(_unknown(key), span)
-        return handler(self, args, arg_spans, span)
+        out = handler(self, args, arg_spans, span)
+        if self.library_constant_uses and self._t is not None:
+            self._check_library_constant_uses(key, args, span)
+        return out
+
+    def line_of(self, span) -> "int | None":
+        """The 1-based line a span starts on, or None."""
+        start = _top(span)
+        if start is None or self._source is None or start[0] < 0:
+            return None
+        return self._source.count("\n", 0, start[0]) + 1
+
+    def _check_library_constant_uses(self, key, args, span) -> None:
+        """Refuse a directive that declared or imported a name already used
+        above as library(clpq)'s constant: the uses above folded to clpq's
+        value, the ones below would get this one -- one name, two values in
+        one file, silently."""
+        t = self._t
+        for name, line in self.library_constant_uses.items():
+            if name in t._constants or name in t._import_remap:
+                head = (f"{key[0]}({_show(args[0])}, …)" if args
+                        else key[0])
+                where = f" (line {line})" if line is not None else ""
+                raise _refused(
+                    f"{head}: `{name}` is already used above as "
+                    f"library(clpq)'s constant{where}; declare it before "
+                    f"its first use", span)
 
     def auto_declare(self, uses: "Uses", span=None) -> list:
         """Declare every atom and data functor the file USES (ruling
@@ -1646,7 +1677,7 @@ def _const_value(ctx, cell, span, what, *, units: bool) -> ast.expr:
                                f"declared constant, got {_show(cell[1])}",
                                span)
             from clausal.tools.iso_l3 import library_constant  # noqa: PLC0415
-            library = library_constant(ctx, cell[1])
+            library = library_constant(ctx, cell[1], ctx.line_of(span))
             if library is not None:
                 return ast.Constant(value=library)   # library(clpq)'s
             return _name(cell[1])

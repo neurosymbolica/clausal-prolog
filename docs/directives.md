@@ -636,7 +636,10 @@ loads `library(clpq)` has clp(q,r)'s four named constants declared (ruled
 them too."): `p` and `pi` are `3.141592653589793`, `e` is
 `2.718281828459045` and `zero` is `0`, for `#(Name)` and `constant(Name)`
 alike, in `{}/1`, `is/2` and data. A declaration or import of the same
-name in the module wins. Only the references change: the atoms `pi`, `e`
+name in the module wins, provided it comes before the first use: a declaration or import of
+`pi` below a `#(pi)` that already meant clpq's is refused at load ("`pi` is
+already used above as library(clpq)'s constant (line N); declare it before
+its first use"). Only the references change: the atoms `pi`, `e`
 ... written as data stay atoms, and no module global is bound. A
 `#` over a variable or an integer — CLP(Z)'s `#X` / `#3` markers — is not a
 constant reference and is untouched, and a `#(Name)` term built at run time
