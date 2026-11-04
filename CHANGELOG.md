@@ -39,6 +39,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A predicate dispatched on a list argument answers in clause order.**
+  Where a clause's head has `[]` or `[_|_]` at an argument and others a
+  variable, the compiled dispatch ran the `[]` (`[_|_]`) clauses first and
+  the variable-headed ones after, and an unbound argument ran the `[]`,
+  then the `[_|_]`, then the variable-headed clauses: `lo(_, any).  lo([],
+  nil).` (as rules) gave `lo([], X)` as nil, any where ISO and Scryer give
+  any, nil, and `numlist(0, 0, L)` in `clausal/examples/nqueens.clausal`
+  gave `[0]` before `[]`.  Each branch now runs its clauses in source order.
+  Tests: `tests/test_list_dispatch_clause_order.py`.
+
 - **Last-call optimisation no longer reverses the order of answers.**  A
   tail-recursive clause restarts its predicate in place, but only after the
   clauses below it have run, so where one of those answers the same call its
