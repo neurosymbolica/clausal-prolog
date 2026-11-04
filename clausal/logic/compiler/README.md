@@ -578,7 +578,10 @@ Things that are true at phase boundaries, and where they are enforced.
    on every code path.**
    Enforced by construction in the emitting helpers (`_assign_mark` +
    `_undo_stmt` come in pairs; ITE and catch arms wrap with
-   `try/finally` or emit the undo on every branch).
+   `try/finally` or emit the undo on every branch).  A balance check
+   (`invariants.assert_mark_undo_paired`, not flow-sensitive) walks every
+   compiled function when `CLAUSAL_CHECK_COMPILED_FUNCTIONS=1`; the test
+   suite turns it on (`tests/conftest.py`).
 
 4. **Trampoline generators yield `(parent, DONE)` exactly once per
    call, after all solutions.** Enforced by `_build_predicate_trampoline_funcdef`
@@ -603,8 +606,10 @@ Things that are true at phase boundaries, and where they are enforced.
    `Match` boilerplate, trampoline `DONE` yield, bucket selectors)
    — inherited from the enclosing `FunctionDef`'s position via
    `propagate_synthetic_positions` and marked `_g_synthetic=True`.
-   Enforced by `assert_all_nodes_located(..., allow_synthetic=True)`
-   run on every compiled `FunctionDef` via `maybe_assert_located`.
+   `maybe_assert_located` runs the propagation on every compiled
+   `FunctionDef`; `assert_all_nodes_located(..., allow_synthetic=True)`
+   then has nothing left to find under a located `FunctionDef`, so it
+   runs only on one with no position of its own.
    No `ast.fix_missing_locations` anywhere in the compiler — the
    strict walker is the single source of truth and surfaces any
    un-located node as a loud emitter bug (set
