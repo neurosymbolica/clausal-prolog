@@ -683,7 +683,13 @@ def head_first_arg_key(clause: Clause, arity: int,
     a body unification as :func:`_extract_arg_key` also does -- or
     ``_INDEX_VAR``.  A call whose first argument keys differently cannot
     unify with this head at all (the property indexing relies on)."""
-    arg = _head_arg(clause, 0, arity)
+    return head_arg_key(clause, 0, arity, env)
+
+
+def head_arg_key(clause: Clause, pos: int, arity: int,
+                 env: "dict | None" = None) -> Any:
+    """:func:`head_first_arg_key` for the head's argument at *pos*."""
+    arg = _head_arg(clause, pos, arity)
     if arg is _INDEX_VAR:
         return _INDEX_VAR
     key = _arg_to_index_key(arg, env)
@@ -701,8 +707,9 @@ def head_first_arg_key(clause: Clause, arity: int,
         goal.left if goal.right is arg else None)
     if other is None:
         return _INDEX_VAR
-    for pos in range(1, arity):
-        if _mentions_var(_head_arg(clause, pos, arity), arg):
+    for other_pos in range(arity):
+        if other_pos != pos and _mentions_var(
+                _head_arg(clause, other_pos, arity), arg):
             return _INDEX_VAR
     return _arg_to_index_key(other, env)
 
@@ -1227,10 +1234,11 @@ def _make_secondary_dispatch_impl(
 
     if tro_state is not None:
         def dispatch(*args):
-            # The level-0/level-1 buckets are compiled without TRO, but
-            # fallback_fn is the shared SIGNAL-mode `{functor}__all` — a
-            # tail call signalled there must re-dispatch (the updated args
-            # may now key into a level-0 bucket), not be dropped.
+            # fallback_fn is the shared SIGNAL-mode `{functor}__all`, and a
+            # level-0/level-1 bucket is SIGNAL-mode too when one of its
+            # clauses restarts in place -- a tail call signalled there must
+            # re-dispatch (the updated args may now key into another
+            # bucket), not be dropped.
             args_list = None
             while True:
                 tro_state[0] = False

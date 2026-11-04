@@ -318,16 +318,18 @@ def test_cut_after_a_nondeterministic_goal_before_the_tail():
     assert len(_answers(db, "wn", 1, list(range(300)))) == 1
 
 
-def test_cut_in_a_later_clause_keeps_an_earlier_clauses_tro_restart():
-    """The first arm takes the restart; the second arm's cut must not drop
-    it.  (The engine runs the later arm before the restart, as it does
-    without a cut, so only the answer COUNT is compared.)"""
+def test_cut_in_a_later_clause_after_an_earlier_clauses_tail_call():
+    """The second arm answers every call the first arm's tail call is made
+    from, so the first arm makes the ordinary call rather than a restart
+    (which would run the second arm, cut and all, before the tail call's
+    answers: tests/test_tro_clause_order.py); the second arm's cut cuts
+    only its own activation."""
     db = Database()
     pat, t = _cons()
     db.assertz(Clause(head=("wa", pat), body=[nodes.Unify(left=Var(), right=1), _call("wa", t)]))
     db.assertz(Clause(head=("wa", Var()), body=[nodes.Cut()]))
     code = _compile_capturing(db, "wa", 1)
-    assert any("_tro = True" in c for c in code)
+    assert not any("_tro = True" in c for c in code)
     assert len(_answers(db, "wa", 1, [1, 2])) == 3
     assert len(_answers(db, "wa", 1, list(range(300)))) == 301
 

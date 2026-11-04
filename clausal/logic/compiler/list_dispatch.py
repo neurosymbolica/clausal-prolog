@@ -514,16 +514,21 @@ def _build_list_dispatch_guard(
     arity: int,
     subject: ast.expr,
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]],
+    arm_guard: "Callable[[list, int], ast.expr | None] | None" = None,
 ) -> list[ast.stmt]:
     """Build the isinstance/is_var structural dispatch guard for list predicates.
+
+    *arm_guard(subset, k)*, when given, is the test under which the arm of
+    ``subset[k]`` in a branch running *subset* in that order runs at all
+    (None: always) -- a pending TRO restart skips later arms.
 
     Generates:
 
         if isinstance(_d_pos, (list, str, bytes)):
             if not _d_pos:          # nil branch
-                <nil_clauses + var_clauses>
+                <nil and var clauses, in source order>
             else:                   # cons branch
-                <cons_clauses + var_clauses>
+                <cons and var clauses, in source order>
         elif is_var(_d_pos):        # unbound — try all clauses
             <all clauses>
         else:                       # int/tuple/SegList/… → all-clauses scan
@@ -547,7 +552,7 @@ def _build_list_dispatch_guard(
 
     def _match_stmts(subset: list[Clause]) -> list[ast.stmt]:
         stmts: list[ast.stmt] = []
-        for clause in subset:
+        for k, clause in enumerate(subset):
             vc: dict[int, str] = {}
             _head_arg_patterns(clause.head, vc, arity)
             body_stmts = body_compiler(clause, vc)
@@ -557,19 +562,31 @@ def _build_list_dispatch_guard(
                 var_context=vc,
                 arity=arity,
             )
-            stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+            arm = ast.Match(subject=subject, cases=[case_arm])
+            guard = arm_guard(subset, k) if arm_guard is not None else None
+            if guard is not None:
+                arm = ast.If(test=guard, body=[arm], orelse=[])
+            stmts.append(arm)
         return stmts or [ast.Pass()]
 
-    nil_body = _match_stmts(nil_clauses + var_clauses)
-    cons_body = _match_stmts(cons_clauses + var_clauses)
-    var_body = _match_stmts(nil_clauses + cons_clauses + var_clauses)
+    # Each branch runs its clauses in SOURCE order: a variable-headed clause
+    # written before a ``[]`` (or ``[_|_]``) clause answers first, as ISO
+    # clause order has it.  (Collecting the nil/cons clauses first and the
+    # variable-headed ones after gave their answers in the wrong order.)
+    nil_set = {id(c) for c in nil_clauses}
+    cons_set = {id(c) for c in cons_clauses}
+    nil_or_var = [c for c in clauses if id(c) not in cons_set]
+    cons_or_var = [c for c in clauses if id(c) not in nil_set]
+    nil_body = _match_stmts(nil_or_var)
+    cons_body = _match_stmts(cons_or_var)
+    var_body = _match_stmts(list(clauses))
     # A02-F002: callers that are neither list/str/bytes nor an unbound Var
     # (int, tuple, a non-ground SegList, …) previously fell through to DONE,
     # silently losing every clause the arg would unify with. Run all clauses
     # through their match arms — the nil/cons arms fail their list guards on a
     # non-list, and the cons guard routes SegLists through
     # ``$head_list_unify_input`` — so this matches the un-dispatched compile.
-    other_body = _match_stmts(nil_clauses + cons_clauses + var_clauses)
+    other_body = _match_stmts(list(clauses))
 
     deref_name = f"_d{dispatch_pos}"
 

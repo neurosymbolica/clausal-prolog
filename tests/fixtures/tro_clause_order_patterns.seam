@@ -1,0 +1,15 @@
+# The seam twin of tro_clause_order_patterns.pl: a restart beside a later
+# clause whose head has a pattern where the restarting head has one too
+# (tests/test_tro_clause_order.py).  The seam writes a compound head as a
+# tuple, and its arithmetic as a Python escape, which is not known ground.
+-module(tro_clause_order_patterns_seam, [ls(L, N), gc(F, N), walk(S, N, R), gl(L, N, X, R)])
+ls([], N) <- (N > 0, M is ++(N - 1), ls([], M))
+ls([], N) <- (N <= 0)
+gc(('f', 1), N) <- (N > 0, M is ++(N - 1), gc(('f', 1), M))
+gc(('f', 1), N) <- (N <= 0)
+walk(('s', A), N, R) <- (N > 0, M is ++(N - 1), A1 is ++(A + 1), walk(('s', A1), M, R))
+walk(('s', A), N, A) <- (N <= 0)
+gl(_, N, X, R) <- (X == 7, R is ('seven', N))
+gl([], N, X, R) <- (N > 0, M is ++(N - 1), gl([], M, X, R))
+gl([], N, X, R) <- (N <= 0, R is ('zero', N))
+gl([_, *T], N, X, R) <- gl(T, N, X, R)

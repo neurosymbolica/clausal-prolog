@@ -39,6 +39,76 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A tail-recursive clause whose head has a list pattern binds an unbound
+  argument before restarting.**  The head meets an unbound argument by
+  binding it to its list pattern only at the answer, which the in-place
+  restart skips: `pq([], N) :- N > 0, M is N - 1, pq([], M).  pq([], 0).`
+  answered `pq(L, 2)` with L left unbound (ISO and Scryer: `L = []`), in
+  `.pl`, `.clausal` and `.seam`, since before 1.4.0.  Such a call now makes
+  the ordinary tail call; a loop over a list it is given keeps restarting.
+  Tests: `tests/test_tro_deferred_list.py`.
+
+- **A predicate dispatched on a list argument answers in clause order.**
+  Where a clause's head has `[]` or `[_|_]` at an argument and others a
+  variable, the compiled dispatch ran the `[]` (`[_|_]`) clauses first and
+  the variable-headed ones after, and an unbound argument ran the `[]`,
+  then the `[_|_]`, then the variable-headed clauses: `lo(_, any).  lo([],
+  nil).` (as rules) gave `lo([], X)` as nil, any where ISO and Scryer give
+  any, nil, and `numlist(0, 0, L)` in `clausal/examples/nqueens.clausal`
+  gave `[0]` before `[]`.  Each branch now runs its clauses in source order.
+  Tests: `tests/test_list_dispatch_clause_order.py`.
+
+- **Last-call optimisation no longer reverses the order of answers.**  A
+  tail-recursive clause restarts its predicate in place, but only after the
+  clauses below it have run, so where one of those answers the same call its
+  answer came first: `p(N, X) :- N > 0, M is N - 1, p(M, X).  p(N, N).` gave
+  `p(3, X)` as X = 3, 2, 1, 0 (ISO and Scryer: 0, 1, 2, 3), and `once/1` the
+  wrong first answer, in `.pl`, `.clausal` and `.seam`.  A clause now
+  restarts in place only where no later clause can answer first: it is the
+  last clause, it cuts before its tail call, every later head cannot unify
+  with its head, an arithmetic comparison it made before the tail refutes the
+  later clause (`down(N) :- N > 0, ..., down(M).` before `down(N) :- N =<
+  0.`; `up(I, N) :- I < N, ..., up(I1, N).` before `up(N, N).`), or the
+  later clauses are keyed out by the call's bound argument, a runtime test
+  (`cnt(N) :- N > 0, ..., cnt(M).` before `cnt(0).`).  Elsewhere the tail is
+  an ordinary call and memory grows with the depth of the recursion, as it
+  must where a later clause is still to be tried (`p/2` above).  Index
+  buckets follow the same rule.  A predicate none of whose clauses may
+  restart is compiled as with the optimisation off.
+  Once a restart is pending, the clauses below it are skipped: they used to
+  run first, and a head among them binding a frozen argument woke its goal
+  ahead of the tail call's answers -- `freeze(X, (X == 0 -> throw(oops) ;
+  true)), w2(1, X)` threw where Scryer answers `X = done` first.  A later
+  clause whose head binds something of the call before its guard fails now
+  lets the restart be taken only where that binding can wake no goal:
+  the restarting head's term there is ground (`[]`, `f(1)`, `s(A)` with A
+  evaluated; a seam tuple head reads as the compound it builds), or the
+  later pattern is one functor over fresh variables (`s(A)`, `[H|T]`, not
+  `[H]` or `[H, G|T]`, which bind into a partial list), or a run-time check
+  finds the argument atomic or an unbound variable without attributes.  The runtime key test
+  also passes an argument of another type than the later clauses' keys
+  (`a(N) :- N > 0, ..., a(M).` before `a(x).  a(y).` called with an
+  integer).  A restarting index bucket's answers are marked last again
+  where they are.
+  Tests: `tests/test_tro_clause_order.py`.
+
+- **A loop through an indexed predicate runs in constant space again.**
+  A predicate indexed on an argument is compiled into one function per index
+  bucket, and a tail-recursive clause in one restarts the predicate in place
+  through the dispatch loop.  Since 2026-09-05 no bucket, default or fallback
+  function did: its compile asked whether the tail call is a self call under
+  the function's own name (`count__p0_b1`), so every iteration made an
+  ordinary call and held its frame.  `count(go, K, A, N) :- K > 0, K1 is K -
+  1, A1 is A + 1, count(go, K1, A1, N).` beside three other `count/4` clauses
+  peaked at 445 MB over 100000 iterations; it is now under 1 MB and twice as
+  fast, in `.pl`, `.clausal` and `.seam` alike (a seam step written
+  `K1 == K - 1` is still not taken as binding `K1`; see
+  `todo/tro-seam-arithmetic-equals-does-not-count-as-binding-2026-11-04.md`).  A bucket restarts only from a
+  clause that has no later clause in it or cuts before its tail call, so the
+  order of answers is unchanged; a dynamic predicate keeps its clause-
+  generation check.  Joint and two-level index buckets restart too, where one
+  of their clauses may.
+
 - **A tail call of a dynamic predicate sees the clauses its own clause
   asserted or retracted before it (the logical update view, ISO 7.5.4).**
   Tail-recursion optimisation restarts the predicate in place over the

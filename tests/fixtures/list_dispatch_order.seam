@@ -1,0 +1,12 @@
+# A predicate dispatched on a list argument answers in clause order: a
+# clause with a variable there, written before the [] and [_, *_] clauses,
+# answers first (tests/test_list_dispatch_clause_order.py).
+-module(list_dispatch_order_seam, [lo(L, X), gz(L, N, X, R)])
+lo(_, X) <- (X is 'any')
+lo([], X) <- (X is 'nil')
+lo([_, *_], X) <- (X is 'cons')
+lo(_, X) <- (X is 'last')
+gz(_, N, X, R) <- (X == 7, R is ('seven', N))
+gz([], N, X, R) <- (N > 0, M is ++(N - 1), gz([], M, X, R))
+gz([], N, _, R) <- (N <= 0, R is ('zero', N))
+gz([_, *T], N, X, R) <- gz(T, N, X, R)
