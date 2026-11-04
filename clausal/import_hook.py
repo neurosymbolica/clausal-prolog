@@ -48,6 +48,7 @@ from .atom_diagnostics import truth_literal_hint_lines
 from .import_diagnostics import exec_with_import_diagnostics
 from .syntax_diagnostics import clausal_syntax_diagnostics
 from .templating.term_rewriting import EmbedTransformer, TermTransformer
+from .codegen import fix_missing_locations
 from .logic.database import Module as LogicModule
 from .logic.predicate import (
     begin_loading_declarations, end_loading_declarations,
@@ -958,6 +959,25 @@ class _ClausalSourceLoader(SourceLoader):
                 raise
 
 
+def _parse_seam(source, filename):
+    """``ast.parse`` of seam source, with CPython's own ``RecursionError``
+    (a flat operator chain some thousands long, which the parser reads as a
+    left-nested ``BinOp``: "maximum recursion depth exceeded during ast
+    construction") refused as a named ``SyntaxError``: ISO's
+    resource_error(stack).  CPython does not say where; deep BRACKETED
+    nesting it refuses itself, as ``MemoryError: Parser stack overflowed``."""
+    try:
+        return ast.parse(source, filename=filename)
+    except RecursionError:
+        err = SyntaxError(
+            f"{filename}: the source nests too deep for Python's parser: "
+            f"its recursion limit was reached building the syntax tree -- "
+            f"resource_error(stack). An operator chain some thousands "
+            f"long (`1 + 1 + ... + 1`) is a term nested as deep")
+        err.filename = filename
+        raise err from None
+
+
 def transform_seam_source(source, filename, prolog_singletons=False):
     """Parse + EmbedTransformer a seam source string, executing nothing.
 
@@ -975,13 +995,13 @@ def transform_seam_source(source, filename, prolog_singletons=False):
             "ignore", message="'str' object is not callable",
             category=SyntaxWarning,
         )
-        tree = ast.parse(source, filename=filename)
+        tree = _parse_seam(source, filename)
         source_lines = source.splitlines(keepends=True)
         transformer = EmbedTransformer(
             source_lines=source_lines, filename=filename,
             prolog_singletons=prolog_singletons)
         tree = transformer.visit(tree)
-        ast.fix_missing_locations(tree)
+        fix_missing_locations(tree)
         return tree, transformer
 
 
@@ -1000,8 +1020,38 @@ def _parse_clausal_source(source, filename, prolog_singletons=False):
             "ignore", message="'str' object is not callable",
             category=SyntaxWarning,
         )
-        code = compile(tree, filename=filename, mode="exec")
+        try:
+            code = compile(tree, filename=filename, mode="exec")
+        except RecursionError:
+            raise _too_deep_to_compile(tree, filename) from None
     return code, transformer
+
+
+def _too_deep_to_compile(tree, filename):
+    """The named, located ``SyntaxError`` for a generated seam module CPython
+    ran out of recursion compiling (an ``and``/``or`` chain thousands long
+    lowers to constructor calls nested as deep).  CPython does not say
+    where: the first top-level statement that fails alone is the one named.
+    Only on this failure path, so a module that compiles pays nothing."""
+    lineno = None
+    for stmt in tree.body:
+        try:
+            compile(ast.Module(body=[stmt], type_ignores=[]), filename, "exec")
+        except RecursionError:
+            lineno = getattr(stmt, "lineno", None)
+            break
+        except SyntaxError:
+            continue
+    where = f"{filename}:{lineno}" if lineno else f"{filename}"
+    err = SyntaxError(
+        f"{where}: this item nests too deep to compile: Python's recursion "
+        f"limit was reached compiling the code it lowers to -- "
+        f"resource_error(stack). A conjunction of any length is fine; a "
+        f"term, an operator chain or an `and`/`or` chain nested some "
+        f"thousands deep is not")
+    err.filename = filename
+    err.lineno = lineno
+    return err
 
 
 def _extract_module_items(source, filename, prolog_singletons=False):
@@ -1012,7 +1062,7 @@ def _extract_module_items(source, filename, prolog_singletons=False):
             "ignore", message="'str' object is not callable",
             category=SyntaxWarning,
         )
-        tree = ast.parse(source, filename=filename)
+        tree = _parse_seam(source, filename)
         source_lines = source.splitlines(keepends=True)
         transformer = EmbedTransformer(
             source_lines=source_lines, filename=filename,

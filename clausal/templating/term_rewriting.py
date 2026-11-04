@@ -7,6 +7,7 @@ import os as _os
 import re
 import sys
 
+from .ast_walks import copy_tree
 from .parser import is_template_func
 from .compiler import compile_template_func
 from .desugar import desugar_surface, dotted_attr_chain, is_dict_attr_access
@@ -1452,7 +1453,7 @@ def _lower_dict_reads(head_ast, body_ast, excluded=frozenset()):
     implicit variables and reordering goals is an evaluation strategy, not a
     spelling.  See ``clausal/templating/desugar.py``.
     """
-    body_ast = desugar_surface(deepcopy(body_ast), excluded)
+    body_ast = desugar_surface(copy_tree(body_ast), excluded)
     taken = {node.id for node in walk(body_ast) if isinstance(node, Name)}
     taken.update(node.id for node in walk(head_ast) if isinstance(node, Name))
     counter = [0]
@@ -2544,20 +2545,25 @@ def _mark_arith_position_names(tree) -> None:
     argument of a quoted ``'is'``/``'=:='``/``'<'``... or of ``eval_``, and
     below those only through arithmetic operators and evaluable functors."""
     from clausal.logic.exact_arith import EVALUABLE  # noqa: PLC0415
-    def expr(node):
-        if isinstance(node, Name):
-            if node.id in _ARITH_CONSTANTS:
-                setattr(node, _ARITH_MARK, True)
-        elif isinstance(node, BinOp):
-            expr(node.left)
-            expr(node.right)
-        elif isinstance(node, UnaryOp):
-            expr(node.operand)
-        elif isinstance(node, Call) and not node.keywords:
-            name = _call_name(node.func)
-            if name is not None and (name, len(node.args)) in EVALUABLE:
-                for a in node.args:
-                    expr(a)
+    def expr(root):
+        # An explicit stack, not recursion: ``1 + 1 + ... + 1`` is a BinOp
+        # chain as deep as it is long.  Marking is idempotent, so the order
+        # of the visits does not matter.
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, Name):
+                if node.id in _ARITH_CONSTANTS:
+                    setattr(node, _ARITH_MARK, True)
+            elif isinstance(node, BinOp):
+                stack.append(node.right)
+                stack.append(node.left)
+            elif isinstance(node, UnaryOp):
+                stack.append(node.operand)
+            elif isinstance(node, Call) and not node.keywords:
+                name = _call_name(node.func)
+                if name is not None and (name, len(node.args)) in EVALUABLE:
+                    stack.extend(reversed(node.args))
 
     for node in _ast_module.walk(tree):
         if isinstance(node, Compare):
@@ -4454,13 +4460,16 @@ def _dotted_name_from_ast(node):
     Returns a dotted string like ``"myapp.graphs.utils"``, or ``None`` if the
     node is not a valid dotted-name chain.
     """
-    if isinstance(node, Name):
-        return node.id
-    if isinstance(node, Attribute) and isinstance(node.attr, str):
-        prefix = _dotted_name_from_ast(node.value)
-        if prefix is not None:
-            return f"{prefix}.{node.attr}"
-    return None
+    # A loop, not recursion: ``a.b.c...`` parses as an Attribute chain as
+    # deep as it is long, and the prepass reading -import_module runs before
+    # any statement is walked (outside ``EmbedTransformer.visit``'s refusal).
+    attrs = []
+    while isinstance(node, Attribute) and isinstance(node.attr, str):
+        attrs.append(node.attr)
+        node = node.value
+    if not isinstance(node, Name):
+        return None
+    return ".".join([node.id, *reversed(attrs)])
 
 
 # Map bare import names to ``clausal.modules.<file_basename>`` for the
@@ -6027,6 +6036,35 @@ def _rewrite_edcg_sequence(elements, acc_states, pass_states,
 # ─── Embed Transformer ────────────────────────────────────────────────────────
 
 
+#: The refusal of a seam statement whose rewriting ran out of Python's
+#: recursion limit, worded as the ISO front end's (``iso_l3._TOO_DEEP``).
+#: Bracketed nesting is capped first by CPython's own parser (``MemoryError:
+#: Parser stack overflowed``, near 200 levels of ``('f', ...)``); what
+#: reaches this is an operator chain (``1 + 1 + ... + 1`` is a left-nested
+#: ``BinOp``) a few hundred long.  ISO's term for it is
+#: ``resource_error(stack)`` (7.12.2 h).
+_TOO_DEEP_TO_REWRITE = (
+    "{where}: this {what} nests too deep to compile: Python's recursion "
+    "limit was reached rewriting it -- resource_error(stack). A "
+    "conjunction of any length is fine; a term or an operator chain "
+    "nested a few hundred deep is not")
+
+
+def _too_deep_to_rewrite(transformer, node) -> SyntaxError:
+    """The located ``SyntaxError`` for statement *node*, which nests too deep
+    for the rewriter (see ``EmbedTransformer.visit``)."""
+    lineno = getattr(node, "lineno", None)
+    what = "item" if isinstance(node, Expr) else "statement"
+    where = transformer._site(lineno) if lineno else (
+        transformer._filename or "<seam>")
+    err = SyntaxError(_TOO_DEEP_TO_REWRITE.format(where=where, what=what))
+    err.filename = transformer._filename
+    err.lineno = lineno
+    err.offset = (node.col_offset + 1) if lineno else None
+    err.text = transformer._source_snippet(lineno) or None
+    return err
+
+
 class EmbedTransformer(NodeTransformer):
     """Walk Python source and expand DSL escapes into simple_ast constructor calls.
 
@@ -6049,6 +6087,19 @@ class EmbedTransformer(NodeTransformer):
                   node; other statements yield the statement node itself.
       _name       In outer Python code, rewrites to _name.value (unbox logic var).
     """
+
+    def visit(transformer, node):
+        # A statement whose rewriting runs out of Python's recursion limit
+        # (a clause body nested a few hundred deep: the term rewriter
+        # recurses per level) is refused with its position and ISO's name
+        # for it, never a raw RecursionError.  The innermost statement
+        # refuses; an enclosing one lets the SyntaxError through.
+        if not isinstance(node, stmt):
+            return super().visit(node)
+        try:
+            return super().visit(node)
+        except RecursionError:
+            raise _too_deep_to_rewrite(transformer, node) from None
 
     def __init__(transformer, source_lines=None, implicit_atoms_default=False,
                  filename=None, interactive=False, reify=False,
