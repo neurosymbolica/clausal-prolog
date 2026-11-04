@@ -521,6 +521,35 @@ def no_symbolic_solution() -> LogicException:
     return LogicException(system_error("no_symbolic_solution"))
 
 
+#: Newton steps at most, when polishing a numeric root (see ``_polish``).
+POLISH_STEPS = 20
+
+
+def _polish(equation_magnitude: Any, symbol: Any, value: Any) -> Any:
+    """*value* refined by Newton's method at NUMERIC_DIGITS on the equation
+    in SI magnitudes, stopping when a step no longer shrinks (or is zero),
+    after at most POLISH_STEPS.  SymPy computes a float equation's roots in
+    double precision, where a small root beside a large one (X**2 -
+    3.0 X + 1e-6) has lost its digits to cancellation and would fail the
+    residual test; polished, it passes, and is reported rounded to double."""
+    derivative = _sp.diff(equation_magnitude, symbol)
+    previous_step = None
+    for _ in range(POLISH_STEPS):
+        slope = _sp.N(derivative.subs(symbol, value), NUMERIC_DIGITS)
+        height = _sp.N(equation_magnitude.subs(symbol, value), NUMERIC_DIGITS)
+        if not (slope.is_number and height.is_number) or slope == 0 \
+                or not slope.is_extended_real or not height.is_extended_real:
+            break
+        step = height / slope
+        if previous_step is not None and abs(step) >= abs(previous_step):
+            break
+        value = _sp.Float(value - step, NUMERIC_DIGITS)
+        if step == 0:
+            break
+        previous_step = step
+    return value
+
+
 def numeric_polynomial_roots(equation: Any, symbol: Any, units: Any) -> list | None:
     """All roots of *equation* as a polynomial in *symbol* alone,
     numerically (to NUMERIC_DIGITS), each times *units*, as ``(root, 1)``.
@@ -552,7 +581,8 @@ def real_roots(equation: Any, symbol: Any, roots: list) -> list:
       it is, after the ground ones (so "real only" applies to GROUND roots;
       ``X**2 + Y**2 * 1(metre**2)`` answers ``+-I*y*(metre)``).
     * A ground root SymPy gives exactly and knows is real is kept as it is.
-    * Any other ground root is evaluated (``real_value``) and kept iff it is
+    * Any other ground root is evaluated (``real_value``), polished by
+      Newton's method at NUMERIC_DIGITS (``_polish``), and kept iff it is
       real and satisfies the equation when substituted back
       (``_satisfies``), both relative to the tolerance the input's
       precision sets (``tolerance_for``).  SymPy's candidates for a
@@ -579,9 +609,10 @@ def real_roots(equation: Any, symbol: Any, roots: list) -> list:
             value = real_value(magnitude, root_tolerance)
             if value is None:
                 continue
-            if checkable and not _satisfies(equation_magnitude, symbol,
-                                            _sp.N(value, NUMERIC_DIGITS), root_tolerance):
-                continue
+            if checkable:
+                value = _polish(equation_magnitude, symbol, _sp.N(value, NUMERIC_DIGITS))
+                if not _satisfies(equation_magnitude, symbol, value, root_tolerance):
+                    continue
         units = _unit_product(dimension.known.dims) if dimension is not None else 1
         ground.append((_sp.N(value, NUMERIC_DIGITS), value, value * units,
                        multiplicity, root_tolerance, exact))

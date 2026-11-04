@@ -56,7 +56,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   its roots are found numerically. `roots/3` of a non-polynomial is
   `type_error(polynomial, _)`; a known function with the wrong arity is
   `type_error(evaluable, Name/Arity)`. SymPy has no time limit here (a
-  todo).
+  todo; measured: the LMTD inverse 8.7 s, U * A * LMTD 19.1 s, the
+  float-input LMTD inverse 94.5 s, the inverse from 12.34/18.20 kelvin and
+  Colebrook over 120 s). A numeric root is polished by Newton's method at
+  50 digits before its residual is tested, and a polynomial with a float
+  coefficient is solved numerically at 50 digits, not by SymPy in double
+  precision, so a small root beside large ones (X**2 - 3.0 X + 1e-6, in
+  metres) is no longer lost; mpmath not converging is
+  `no_symbolic_solution`. Near-double float roots may still come back as
+  one (as SymPy and mpmath see them). `^/2` follows SymPy, not ISO:
+  `2^-1` is 1/2 (ISO: a type error), and unit-free `solve_all(X^2 - 4, X,
+  R)` now works (it was a raw `NotImplementedError`). Unit-free, `0^-1`
+  and `atan2(0, 0)` come back as SymPy's `zoo` and `nan`.
   `gcd/3`, `lcm/3` and `sym_equal/2` refuse mixed dimensions, `subs/3` a
   quantity as its key (`type_error(variable, _)`). Tests:
   `packages/clausal-sympy/tests/fixtures/sympy_units.seam`,

@@ -746,10 +746,13 @@ def _real_roots(ctx: _ConversionContext, eq_expr, var_expr, roots):
     if not ctx._has_units:
         return [(r, m, None) for r, m in roots]
     expected = _variable_dimension(ctx, var_expr)
-    if not roots:
+    if not roots or eq_expr.has(_sp.Float):
         # SymPy answers [] when it gives up on a polynomial (a quintic): a
-        # polynomial has roots, so find them numerically.  [] stands for an
-        # equation that is not a polynomial.
+        # polynomial has roots, so find them numerically.  And SymPy solves
+        # a FLOAT polynomial in double precision, where a small real root
+        # beside large ones can come back as a complex number and be lost;
+        # its roots are found numerically at 50 digits instead.  [] stands
+        # for an equation that is not a polynomial.
         found = _numeric_roots(eq_expr, var_expr, expected)
         if found is not None:
             roots = found
@@ -787,6 +790,12 @@ def _solving(ctx: _ConversionContext, call, *args):
     except NotImplementedError:
         if ctx._has_units:
             raise LogicException(system_error("no_symbolic_solution"))
+        raise
+    except Exception as exc:
+        # mpmath's NoConvergence (SymPy's numeric roots of a float
+        # polynomial, e.g. (X - 1 metre)**10 expanded): the same give-up.
+        if ctx._has_units and type(exc).__name__ == "NoConvergence":
+            raise LogicException(system_error("no_symbolic_solution")) from exc
         raise
 
 
@@ -1328,11 +1337,17 @@ def _roots_3(this_generator, _proceed, _fail, _catcher, equation, var, root, tra
         ctx, eq_expr, var_expr = _convert_multi(equation, var)
         if ctx._has_units:
             try:
-                root_dict = _solving(ctx, _sp.roots, eq_expr, var_expr)
-                complete = sum(root_dict.values()) == _sp.degree(eq_expr, var_expr)
+                _sp.Poly(_sympy_units.real_magnitude(eq_expr), var_expr)
             except _sp.PolynomialError:
                 # roots/3 is for polynomials; exp(X / 1 kelvin) - 2 is not one.
                 raise LogicException(type_error("polynomial", equation, "roots/3"))
+            if eq_expr.has(_sp.Float):
+                # A float polynomial: _real_roots finds its roots at 50
+                # digits (SymPy's double-precision ones can lose a root).
+                root_dict, complete = {}, True
+            else:
+                root_dict = _solving(ctx, _sp.roots, eq_expr, var_expr)
+                complete = sum(root_dict.values()) == _sp.degree(eq_expr, var_expr)
             candidates = list(root_dict.items())
             if not complete:
                 # SymPy found only some: all of them numerically instead.

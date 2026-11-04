@@ -677,3 +677,58 @@ class TestMoreFunctions:
         with pytest.raises(LogicException) as caught:
             answers(simplify, ("abs", kelvin(3), kelvin(4)), Var())
         assert caught.value.term[1] == ("type_error", "evaluable", ("/", "abs", 2))
+
+
+# ── Fourth review (45371c2d) ────────────────────────────────────────────────
+
+
+def polynomial_in_metres(x, coefficients):
+    """sum coefficients[i] * x**(n-i) * metre**i, highest power first."""
+    n = len(coefficients) - 1
+    total = None
+    for i, coefficient in enumerate(coefficients):
+        degree_of_x = n - i
+        unit = Pow(left=metre(1), right=i) if i else 1
+        term = Mult(left=coefficient, right=unit)
+        if degree_of_x:
+            term = Mult(left=term, right=Pow(left=x, right=degree_of_x))
+        total = term if total is None else Add(left=total, right=term)
+    return total
+
+
+def magnitudes(found):
+    return [r.value for r in found]
+
+
+class TestFloatRootsFarApart:
+    """Blocker: a small real root beside large ones in a FLOAT polynomial
+    is found (at 50 digits, Newton-polished), and agrees with roots/3 and
+    with the roots of the same equation written exactly."""
+
+    @pytest.mark.parametrize("coefficients, exact", [
+        ([1.0, -3.0, 1e-6], [1, -3, Fraction(1, 10 ** 6)]),
+        ([1.0, 0.0, -3.0, 1e-6], [1, 0, -3, Fraction(1, 10 ** 6)]),
+        ([1.0, 0.0, -3.0, 1e-9], [1, 0, -3, Fraction(1, 10 ** 9)]),
+        ([1.0, -(1e9 + 1e-9), 1.0], [1, -(10 ** 9 + Fraction(1, 10 ** 9)), 1]),
+    ], ids=["quadratic 3 and 3.3e-7", "cubic with 3.3e-7", "cubic with 3.3e-10",
+            "pair 1e-9 and 1e9"])
+    def test_every_real_root_is_kept(self, coefficients, exact):
+        x = Var()
+        found = solutions(polynomial_in_metres(x, coefficients), x)
+        assert all(dict(r.dims) == {"metre": 1} for r in found)
+        x = Var()
+        reference = solutions(polynomial_in_metres(x, exact), x)
+        assert len(found) == len(reference) == len(coefficients) - 1
+        expected = [float(r.value) for r in reference]
+        assert magnitudes(found) == pytest.approx(expected, rel=1e-9)
+        x = Var()
+        rooted = [a[2] for a in answers(roots, polynomial_in_metres(x, coefficients), x, Var())]
+        assert [r[0] for r in rooted] == found and all(r[1] == 1 for r in rooted)
+
+    def test_numeric_give_up_is_a_named_error(self):
+        # (X - 1 metre)**10 with float coefficients: mpmath does not converge.
+        from math import comb
+        x = Var()
+        equation = polynomial_in_metres(x, [float(comb(10, k) * (-1) ** k) for k in range(11)])
+        with no_symbolic_solution():
+            answers(roots, equation, x, Var())

@@ -130,7 +130,12 @@ What comes back:
     1e30 metre all survive, and two exact roots are merged only if equal);
   - any other root (a float coefficient, a cubic's real roots written with
     complex radicals, a `LambertW` branch) is evaluated to 50 significant
-    digits. It is kept, as a float quantity of its real part, only if its
+    digits and polished by Newton's method at 50 digits on the equation in
+    SI magnitudes (at most 20 steps, stopping when a step stops
+    shrinking). A polynomial with a float coefficient is not solved by
+    SymPy at all (it works in double precision, where a small root beside
+    large ones loses its digits): its roots are found numerically at 50
+    digits. A root is kept, as a float quantity of its real part, only if its
     imaginary part is negligible relative to its size, and if substituting
     it back leaves a residual negligible relative to the equation's own
     terms there (|sum of the terms| <= tolerance * sum of |each term|).
@@ -148,7 +153,18 @@ What comes back:
     that error as well, never a partial list. `roots/3` of an equation that
     is not a polynomial is `type_error(polynomial, Equation)`;
   - an equation without quantities is answered as SymPy gives it, complex
-    roots included.
+    roots included;
+  - two float roots that differ only in the last digits of a double (a
+    near-double root of a float polynomial) may come back as one, as SymPy
+    and mpmath see them; mpmath not converging at all (`(X - 1(metre))**10`
+    with float coefficients) is `no_symbolic_solution`.
+
+`^` follows SymPy, not ISO: `2^-1` is `1/2` (ISO's `^` is a type error for
+a negative integer exponent) and `X^2` is `X**2`, so a unit-free
+`solve_all(X^2 - 4, X, R)` now gives `[-2, 2]` (it used to be a raw
+`NotImplementedError`). Without quantities, `0^-1` and `atan2(0, 0)` come
+back as SymPy's values `zoo` and `nan`; with a quantity such a value is
+`evaluation_error(undefined)`.
 - a VALUE that is complex, infinite or NaN (`sqrt(-4(metre**2))`) is
   `evaluation_error(undefined)`, as is a quantity whose magnitude is
   infinite or NaN on the way in;
@@ -206,11 +222,13 @@ candidate roots; exactly one is real and satisfies the equation:
 --8<-- "tests/fixtures/sympy_units.seam:log_mean_temperature_difference_inverse"
 ```
 
-**Limitations.** There is no time limit on a SymPy call. Some ordinary
-equations keep SymPy busy for minutes: the log mean temperature difference
-solved backwards from 12.34(kelvin) and 18.20(kelvin), the Colebrook
-friction equation. A time limit is a todo, and the sandbox budget should
-allow for it meanwhile.
+**Limitations.** There is no time limit on a SymPy call (a todo; the
+sandbox budget should allow for it meanwhile). Measured on review of
+45371c2d: the log mean temperature difference solved backwards (from
+10(kelvin) to 18(kelvin)) takes 8.7 s; duty = U * A * LMTD solved for the
+hot-end difference, 19.1 s; the same inverse with float inputs, 94.5 s; the
+inverse from 12.34(kelvin) and 18.20(kelvin), and the Colebrook friction
+equation, more than 120 s.
 
 A zero that SymPy produces AFTER the input has been
 checked carries no dimension, so it comes back as a plain `0`: `subs/3`
