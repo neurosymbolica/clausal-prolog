@@ -11,7 +11,9 @@ seeded corpus of workloads (_workloads.py: 2 to 200 variables; chains,
 dense and banded rows, tied optima, equations, strict and non-strict
 bounds, disequations, var-var and var-number bindings, bb_inf/5, sup, inf,
 maximize, minimize, entailed, dump/3 onto subsets, non-linear constraints
-that wait and wake, marks and undos) and compares, per workload, with the
+that wait and wake, abs/min/max/product/quotient bases, long rows that
+share their tails across marks and undos, marks and undos; and programs
+run through the engine, _engine.py) and compares, per workload, with the
 golden files recorded from the port (_golden.py):
 
 * the OBSERVATION: each step's success, failure or error term, every
@@ -43,7 +45,10 @@ the observation diff of the first few.
 import os
 import re
 
-from tests.clpq_port.differential import _golden
+import pytest
+
+from clausal.logic.clpq import SOLVER
+from tests.clpq_port.differential import _engine, _golden
 from tests.clpq_port.differential._workloads import corpus
 
 FULL = os.environ.get("CLPQ_DIFFERENTIAL") == "full"
@@ -53,8 +58,19 @@ _PRODUCT = re.compile(r"(X|_T|_Q)\d+\s*\*\s*(X|_T|_Q)\d+")
 
 
 def test_every_workload_answers_and_decides_as_recorded():
+    _compare(corpus(full=FULL))
+
+
+@pytest.mark.skipif(SOLVER != "holzbaur",
+                    reason="the engine reaches the port with CLAUSAL_CLPQ=holzbaur")
+def test_every_engine_workload_answers_and_decides_as_recorded():
+    # Programs run through the engine (_engine.py): .pl and .clausal, with
+    # freeze/2, dif/2, CLP(FD), findall/3, catch/3, negation, copy_term/2.
+    _compare(_engine.corpus(full=FULL))
+
+
+def _compare(workloads):
     index, observations = _golden.load()
-    workloads = corpus(full=FULL)
     problems, details = _golden.compare(workloads, index, observations)
     message = "\n".join(
         [f"{len(problems)} of {len(workloads)} workloads differ from the "
@@ -71,7 +87,7 @@ def test_the_corpus_is_deterministic_and_reaches_every_step_kind():
     kinds = {step[0] for w in workloads for step in w["steps"]}
     assert kinds == {"post", "nonlinear", "bind", "alias", "mark", "undo",
                      "sup", "inf", "maximize", "minimize", "bb_inf",
-                     "entailed", "dump", "unify"}
+                     "entailed", "dump", "unify", "nlpost"}
     assert max(w["variables"] for w in workloads) >= 100
     assert corpus(full=False) == workloads
 

@@ -58,12 +58,32 @@ unification": the order in which the bound variables' work is done):
   fires inside the unification), with the implied variable bound in the
   same unification before or after, to its implied value or another;
   bindings after a mark and an undo.
+
+Two families close gaps a review of the harness found:
+
+* ``base_skeletons``: constraints over abs/1, min/2, max/2, products and
+  quotients (``["nlpost", rel, tree, constant]``, the tree's nodes
+  ``["x", i]``, ``["n", c]``, ``["+"|"-"|"*"|"/"|"min"|"max", A, B]``,
+  ``["abs", A]``), so a normal form holds power products whose bases are
+  skeletons, which compare_power_products hands to the standard order of
+  terms; bindings, one at a time, in one unification and var-var, wake
+  them;
+* ``long_row_tails``: rows of 14 to 24 terms that all hold the variables
+  bound first, so a binding shares each row's tail
+  (linear_forms._SharedTail) and the next one shares the tail again; the
+  shared rows stay in the store across marks, are undone and are read or
+  shared again after the undo.
+
+The engine-driver workloads (programs run through the engine, with
+freeze/2, dif/2, CLP(FD), findall/3, catch/3, negation and copy_term/2)
+are in _engine.py.
 """
 import random
 from fractions import Fraction
 
 FAMILIES = ("chain", "dense", "banded", "degenerate", "mixed",
-            "chain_bind", "dense_bind", "implied_bind")
+            "chain_bind", "dense_bind", "implied_bind", "base_skeletons",
+            "long_row_tails")
 
 RELATIONS = ("=<", "<", ">=", ">", "=:=", "=\\=")
 
@@ -506,10 +526,255 @@ def implied_bind(rng, n):
     return steps
 
 
+# ------------------------------------------------- non-linear bases (F1)
+
+#: The skeletons nf.pl makes a base of (nonlin_1/4, nonlin_2/6), and the
+#: two operators that make a product or a quotient of normal forms.
+_UNARY = ("abs",)
+_BINARY = ("min", "max", "/", "*")
+
+
+def evaluate(tree, point):
+    """The exact value of a ``nlpost`` expression tree at *point*, or None
+    where it divides by zero."""
+    kind = tree[0]
+    if kind == "x":
+        return Fraction(point[tree[1]])
+    if kind == "n":
+        return value_of(tree[1])
+    values = [evaluate(argument, point) for argument in tree[1:]]
+    if any(value is None for value in values):
+        return None
+    if kind == "abs":
+        return abs(values[0])
+    if kind == "min":
+        return min(values)
+    if kind == "max":
+        return max(values)
+    if kind == "+":
+        return values[0] + values[1]
+    if kind == "-":
+        return values[0] - values[1]
+    if kind == "*":
+        return values[0] * values[1]
+    if kind == "/":
+        return None if values[1] == 0 else values[0] / values[1]
+    raise ValueError(f"unknown expression {tree!r}")
+
+
+def _leaf(rng, n):
+    k = rng.random()
+    i = rng.randrange(n)
+    if k < 0.6:
+        return ["x", i]
+    if k < 0.85:                                # c*Xi + d
+        return ["+", ["*", ["n", rng.choice([-2, -1, 2, 3])], ["x", i]],
+                ["n", rng.randint(-3, 3)]]
+    return ["-", ["x", i], ["x", rng.randrange(n)]]
+
+
+def _nonlinear_tree(rng, n, depth):
+    """A base: abs(E), min(E, F), max(E, F), E/F or E*F over leaves, an
+    argument a base itself at *depth* > 0."""
+    def argument():
+        if depth and rng.random() < 0.35:
+            return _nonlinear_tree(rng, n, depth - 1)
+        return _leaf(rng, n)
+    kind = rng.choice(_UNARY + _BINARY + _BINARY[:2])
+    if kind in _UNARY:
+        return [kind, argument()]
+    return [kind, argument(), argument()]
+
+
+def _nonlinear_constraint(rng, n, point):
+    """``["nlpost", rel, tree, constant]`` that holds at *point*: a sum of
+    one to three bases and a linear part, so one normal form holds several
+    power products whose bases are skeletons (compare_power_products'
+    fallback to the standard order of terms)."""
+    while True:
+        tree = _nonlinear_tree(rng, n, 1)
+        for _ in range(rng.randint(0, 2)):
+            other = _nonlinear_tree(rng, n, 1) if rng.random() < 0.7 \
+                else ["*", ["n", _coefficient(rng, -3, 3)], ["x", rng.randrange(n)]]
+            tree = [rng.choice(["+", "-"]), tree, other]
+        at = evaluate(tree, point)
+        if at is not None:
+            break
+    k = rng.random()
+    if k < 0.3:
+        return ["nlpost", "=:=", tree, number(at)]
+    if k < 0.4:
+        return ["nlpost", "=\\=", tree, number(at + rng.choice([-1, 1]))]
+    relation = rng.choice(["=<", "<", ">=", ">"])
+    slack = rng.randint(0, 2) + (1 if relation in ("<", ">") else 0)
+    return ["nlpost", relation, tree,
+            number(at + (slack if relation in ("=<", "<") else -slack))]
+
+
+def base_skeletons(rng, n):
+    """Constraints over abs/1, min/2, max/2, products and quotients that
+    wait (non-linear), mixed with linear rows, all holding at a hidden
+    point that keeps every divisor nonzero; then bindings (one at a time,
+    several in one unification, aliases of variables equal at the point)
+    that wake them, so they are renormalized with some bases bound to
+    numbers, under marks with optima and dumps, and undone."""
+    point = [rng.choice([-3, -2, -1, 1, 2, 3, 4]) for _ in range(n)]
+    steps = []
+    for i in range(n):
+        if rng.random() < 0.7:
+            steps.append(["post", ">=", [[i, 1]], point[i] - rng.randint(1, 4)])
+            steps.append(["post", "=<", [[i, 1]], point[i] + rng.randint(1, 4)])
+    constraints = [_nonlinear_constraint(rng, n, point)
+                   for _ in range(rng.randint(2, 4 + n // 2))]
+    rows = _rows_at(rng, n, point, rng.randint(0, n), 3) if n > 1 else []
+    mixed = constraints + rows
+    rng.shuffle(mixed)
+    steps += mixed
+    everything = list(range(n))
+    steps.append(["dump", everything])
+
+    def binding(i):
+        return _num(point[i] if rng.random() < 0.85
+                    else point[i] + rng.choice([-1, 1]))
+
+    def episode():
+        k = rng.random()
+        chosen = _orders(rng, _subset(rng, n, max(1, n // 2)))
+        if k < 0.35:
+            return [["bind", i, binding(i)[1]] for i in chosen]
+        if k < 0.75 or n < 2:
+            return [_unify(rng, [(_var(i), binding(i)) for i in chosen])]
+        pairs = []
+        for i in chosen:
+            twins = [j for j in range(n) if j != i and point[j] == point[i]]
+            if twins:
+                pairs.append((_var(i), _var(rng.choice(twins))))
+            else:
+                pairs.append((_var(i), binding(i)))
+        return [_unify(rng, pairs)]
+
+    def probe():
+        objective = _objective(rng, n, 2)
+        return [[rng.choice(["sup", "inf"]), objective],
+                ["dump", _subset(rng, n, n)]]
+
+    for _ in range(rng.randint(2, 4)):
+        steps.append(["mark"])
+        steps += episode()
+        steps += probe()
+        if rng.random() < 0.4:
+            steps.append(_nonlinear_constraint(rng, n, point))
+            steps += [["mark"]] + episode() + [["dump", everything], ["undo"]]
+        steps.append(["undo"])
+    keep = rng.sample(everything, rng.randint(0, max(0, n - 1)))
+    steps += [["bind", i, point[i]] for i in _orders(rng, keep)]
+    steps += probe()
+    return steps
+
+
+# ------------------------------------------------------ shared tails (F3)
+
+#: The largest long_row_tails store dumped at all.
+_LONG_ROW_DUMP = 30
+
+
+def long_row_tails(rng, n):
+    """Wide equations (14 to 24 nonzeros) at a hidden point, so the solved
+    rows are long, and bindings of the variables first in the order (X0,
+    X1, ...): each deletes the first term of most rows, which shares the
+    rest of the row (linear_forms._SharedTail) and, on a row already
+    sharing, its tail again (_delete_factor_from_tail).  A binding made
+    outside any mark leaves shared rows in the store; then, under a mark,
+    the next variables are bound (in some order, to the point or off it,
+    or to another variable) and optima pivot over the rows, and the undo
+    puts the shared rows back, which the next optimum, dump or binding
+    reads or shares again."""
+    point = [rng.randint(-2, 4) for _ in range(n)]
+    steps = []
+    # few bounds: a binding that moves no bounded variable pivots nothing,
+    # so the rows it shares are not read until a later step
+    bounded = rng.random() < 0.5
+    for i in range(n):
+        if bounded and rng.random() < 0.3:
+            steps.append(["post", ">=", [[i, 1]], point[i] - rng.randint(0, 6)])
+        if bounded and rng.random() < 0.3:
+            steps.append(["post", "=<", [[i, 1]], point[i] + rng.randint(0, 6)])
+    # every row holds X0..X7, the variables bound first, so each binding
+    # deletes the first term of the rows (and of their shared tails)
+    low = set(range(min(n, 8)))
+    for _ in range(max(3, n // 2)):
+        width = rng.randint(min(n, 14), min(n, 24))
+        chosen = low | set(rng.sample(range(len(low), n), width - len(low)))
+        terms = [[i, _coefficient(rng, -3, 3, rational=0.05)]
+                 for i in sorted(chosen)]
+        at = sum(value_of(c) * point[i] for i, c in terms)
+        if rng.random() < 0.8:
+            steps.append(["post", "=:=", terms, number(at)])
+        else:
+            steps.append(["post", rng.choice(["=<", "<"]), terms,
+                          number(at + rng.randint(1, 3))])
+    shown = sorted({n // 2, n - 2, n - 1})
+    # a projection of these stores past 30 variables can pass the
+    # clpq_projection cap, and where it raises depends on the work count
+    dumps = n <= _LONG_ROW_DUMP
+
+    def objective():
+        return [[rng.randrange(n), _coefficient(rng, -2, 2)]
+                for _ in range(rng.randint(1, 3))]
+
+    def probe():
+        # unbounded, an optimum fails at once: mostly dumps then
+        k = rng.random() * (1 if bounded else 0.5) + (0 if bounded else 0.5)
+        if k < 0.4:
+            return [["sup", objective()]]
+        if k < 0.7 or not dumps:
+            return [["inf", objective()]]
+        return [["dump", shown]]
+
+    bound = 0
+    for _ in range(rng.randint(2, min(5, n - 4))):
+        # outside any mark: the rows that start with X(bound) share the rest
+        if rng.random() < 0.3 and bound + 2 < n:
+            steps.append(_unify(rng, [(_var(bound), _num(point[bound])),
+                                      (_var(bound + 1), _num(point[bound + 1]))]))
+            bound += 2
+        else:
+            steps.append(["bind", bound, point[bound]])
+            bound += 1
+        nexts = list(range(bound, min(n, bound + rng.randint(1, 3))))
+        # under a mark: the next variables, in some order, then undone
+        steps.append(["mark"])
+        for i in _orders(rng, nexts):
+            steps.append(["bind", i, point[i]])
+        if rng.random() < 0.5:
+            steps += probe()
+        steps.append(["undo"])
+        steps.append(["mark"])
+        k = rng.random()
+        if k < 0.35:
+            twins = [j for j in range(bound + 1, n) if point[j] == point[bound]]
+            steps.append(["alias", bound, rng.choice(twins) if twins
+                          else rng.randrange(bound + 1, n)])
+        elif k < 0.6:
+            steps.append(["bind", bound, point[bound] + rng.choice([-1, 1])])
+        else:
+            steps.append(_unify(rng, [(_var(i), _num(point[i]))
+                                      for i in _orders(rng, nexts)]))
+        steps += probe() + [["undo"]]
+        # after the undo: the shared rows are read again, or shared again
+        # by the next round's binding
+        if rng.random() < 0.5:
+            steps += probe()
+    steps += [["sup", objective()], ["inf", objective()]]
+    steps += [["dump", shown]] if dumps else []
+    return steps
+
+
 _BUILDERS = {"chain": chain, "dense": dense, "banded": banded,
              "degenerate": degenerate, "mixed": mixed,
              "chain_bind": chain_bind, "dense_bind": dense_bind,
-             "implied_bind": implied_bind}
+             "implied_bind": implied_bind,
+             "base_skeletons": base_skeletons, "long_row_tails": long_row_tails}
 
 
 def workload(family, size, seed):
@@ -517,7 +782,9 @@ def workload(family, size, seed):
     return {"id": f"{family}-{size}-{seed}", "variables": size,
             "steps": _BUILDERS[family](rng, size),
             # the observation's closing dump of every variable
-            "final_dump": not (family == "dense" and size > _DENSE_DUMP)}
+            "final_dump": not ((family == "dense" and size > _DENSE_DUMP)
+                               or (family == "long_row_tails"
+                                   and size > _LONG_ROW_DUMP))}
 
 
 #: (family, sizes, seeds per size).  The default corpus runs in a few
@@ -533,6 +800,9 @@ _DEFAULT_PLAN = [
     ("chain_bind", (2, 3, 6, 12, 40), 3),
     ("dense_bind", (3, 5, 8, 12), 3),
     ("implied_bind", (2, 4, 8, 20), 3),
+    ("base_skeletons", (2, 3, 5, 8), 3),
+    ("long_row_tails", (16,), 2),
+    ("long_row_tails", (24,), 3),
 ]
 
 _FULL_PLAN = [
@@ -553,6 +823,8 @@ _FULL_PLAN = [
     ("dense_bind", (16, 20, 24), 3),
     ("implied_bind", (2, 3, 4, 5, 6, 8, 10, 12, 20, 30), 12),
     ("implied_bind", (60, 100, 200), 3),
+    ("base_skeletons", (2, 3, 4, 5, 6, 8, 10, 12), 15),
+    ("long_row_tails", (16, 20, 24, 30, 40, 60), 6),
 ]
 
 

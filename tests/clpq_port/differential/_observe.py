@@ -35,7 +35,7 @@ from clausal.logic.clpq import bounded_simplex, branch_and_bound, fourier_motzki
 from clausal.logic.clpq import holzbaur
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Trail, Var, deref, is_var, unify
-from clausal.terms import Add, Mult
+from clausal.terms import Add, Div, Mult, Sub
 
 from tests.clpq_port.differential._workloads import value_of
 
@@ -110,6 +110,25 @@ def expression(terms, variables):
     return 0 if result is None else result
 
 
+_TREE_NODES = {"+": Add, "-": Sub, "*": Mult, "/": Div}
+
+
+def tree_expression(tree, variables):
+    """A ``nlpost`` expression tree as the API's terms: operator nodes for
+    + - * /, compound cells ``("abs", E)``, ``("min", E, F)``, ... for the
+    skeletons, as the reader hands them to ``{}/1``."""
+    kind = tree[0]
+    if kind == "x":
+        return variables[tree[1]]
+    if kind == "n":
+        return _constant(tree[1])
+    arguments = [tree_expression(argument, variables) for argument in tree[1:]]
+    node = _TREE_NODES.get(kind)
+    if node is not None:
+        return node(left=arguments[0], right=arguments[1])
+    return (kind, *arguments)
+
+
 def _constant(spelt):
     value = value_of(spelt)
     return int(value) if value.denominator == 1 else value
@@ -145,6 +164,10 @@ class _Run:
         if kind == "nonlinear":
             _, relation, i, j, constant = step
             return _POST[relation](Mult(left=xs[i], right=xs[j]),
+                                   _constant(constant), trail), None
+        if kind == "nlpost":
+            _, relation, tree, constant = step
+            return _POST[relation](tree_expression(tree, xs),
                                    _constant(constant), trail), None
         if kind == "bind":
             return unify(xs[step[1]], _constant(step[2]), trail), None
@@ -248,7 +271,10 @@ def _restore(previous):
 
 def observe(workload):
     """(observation, trace) of *workload* on the port; see the module
-    docstring."""
+    docstring.  An engine workload (``"driver": "engine"``) runs through
+    the engine instead (_engine.py)."""
+    if workload.get("driver") == "engine":
+        return _observe_engine(workload)
     run = _Run(workload)
     previous = _install(run.event)
     try:
@@ -256,6 +282,25 @@ def observe(workload):
     finally:
         _restore(previous)
     return observation, run.trace
+
+
+def _observe_engine(workload):
+    from tests.clpq_port.differential import _engine
+    trace = []
+    previous = []
+
+    def event_hook(namer):
+        def event(*event):
+            trace.append(canon(list(event), namer))
+        previous.append(_install(event))
+        return event
+
+    try:
+        observation, _ = _engine.observe(workload, event_hook)
+    finally:
+        if previous:
+            _restore(previous[0])
+    return observation, trace
 
 
 def canonical_json(data):
