@@ -9,6 +9,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **clause/2 and retract/1 read a clause whose head holds a partial list**
+  (`.pl`, `.clausal` and seam): on a dynamic `p([H|T], H-T)`,
+  `clause(p([a,b], X), B)` found no clause, `clause(p(L, X), true)` bound
+  `L` to `[_, StarUnpack(_)]`, and `retract(p([a,b], _))` removed nothing.
+  `clause_ops.clause_terms` handed back the compiler's head pattern
+  `[H, StarUnpack(T)]`, which unifies with no term; the Head is now the
+  engine's partial list, its tail shared with the body, at any depth (nested
+  lists, compound arguments). As in Scryer. Its output contract (terms in
+  the runtime representation, no head pattern node, one fresh renaming
+  shared by Head and Body) is documented on the function and pinned in
+  `tests/test_clause_terms_shape.py`.
+
 - **A clause head qualified with the file's own module defines the
   predicate** (`.pl` and `.clausal`): in a file whose `module/2` names `m`,
   `m:foo(1).` and `m:bar(X) :- ...` are clauses of `foo/1` and `bar/1`, as
