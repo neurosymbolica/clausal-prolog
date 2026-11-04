@@ -719,13 +719,14 @@ def _compile_tro_tail(
                 )],
                 value=_name(f"_tro_arg{i}"),
             ))
+        # THIS activation's pending tail, in a local: the later arms skip
+        # on it, and the shared ``$tro_state`` cell can be clobbered by a
+        # re-entrant call of the predicate.
+        tro_set_stmts.append(_assign(TRO_SIG_NAME, ast.Constant(True)))
         if ctx.cut_tro_restart == "signal":
-            # ISO cut: the shared ``$tro_state`` cell is clobbered by a
-            # re-entrant call of the predicate, so a cut exit must not read
-            # it.  Record THIS activation's pending tail in locals too; the
-            # cut exit tests ``_tro_sig`` and writes ``_tro_sig_args`` back
-            # before it returns.  Emitted only in predicates with a cut.
-            tro_set_stmts.append(_assign(TRO_SIG_NAME, ast.Constant(True)))
+            # ISO cut: the cut exit tests ``_tro_sig`` and writes
+            # ``_tro_sig_args`` back before it returns.  Emitted only in
+            # predicates with a cut.
             tro_set_stmts.append(_assign(TRO_SIG_ARGS_NAME, ast.List(
                 elts=[_name(f"_tro_arg{i}") for i in range(arity)], ctx=ast.Load())))
     else:

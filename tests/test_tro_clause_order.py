@@ -104,3 +104,101 @@ def test_a_long_loop_runs_in_bounded_memory(mod, name):
     finally:
         tracemalloc.stop()
     assert peak < 8_000_000, f"{name}: peak {peak / 1e6:.1f} MB for {n} iterations"
+
+
+# ── A pending restart skips the later clauses ───────────────────────────────
+#
+# The later clauses of a function still ran after a restart was decided,
+# before the tail call's answers.  A head among them binding a frozen
+# argument woke its goal there: early, and a goal that throws lost the
+# answers ISO gives first.  ``freeze(X, check(X)), w2(1, X)`` threw where
+# Scryer answers X = done first.  A clause whose later clause would bind
+# an attributed argument before failing now makes the ordinary call, and
+# once a restart is pending the later clauses are skipped.
+
+_WAKE = ["tro_clause_order_wake.pl", "tro_clause_order_wake.clausal",
+         "tro_clause_order_wake.seam"]
+
+
+def _load_wake(surface, monkeypatch, tro):
+    if not tro:
+        monkeypatch.setenv("CLAUSAL_DISABLE_OPT", "tro")
+    else:
+        monkeypatch.delenv("CLAUSAL_DISABLE_OPT", raising=False)
+    name = "tests.fixtures." + surface.replace(".", "_") + ("" if tro else "_tro_off")
+    return _load_module(name, os.path.join(_FIXTURES, surface))
+
+
+def _wake_observations(mod):
+    lm = mod.__dict__["$module"]
+    from clausal.terms import term_str
+    out = {}
+    for p in ("run_w", "run_w2", "run_w3"):
+        v = Var()
+        out[p] = [term_str(deref(v)) for _ in call(p, v, module=lm)]
+    seen = []
+    v = Var()
+    try:
+        for _ in call("first_w2", v, module=lm):
+            seen.append(term_str(deref(v)))
+    except Exception as exc:  # noqa: BLE001 -- the woken throw(oops)
+        seen.append(f"raised {exc}")
+    out["first_w2"] = seen
+    return out
+
+
+@pytest.mark.parametrize("surface", _WAKE)
+def test_woken_goals_run_as_without_the_restart(surface, monkeypatch):
+    with_tro = _wake_observations(_load_wake(surface, monkeypatch, True))
+    without = _wake_observations(_load_wake(surface, monkeypatch, False))
+    assert with_tro == without
+
+
+@pytest.mark.parametrize("surface", _WAKE[:2])
+def test_woken_goals_run_in_iso_order(surface, monkeypatch):
+    """Scryer: every clause's head binding of X wakes the frozen goal after
+    the answer; the throwing goal comes after X = done."""
+    obs = _wake_observations(_load_wake(surface, monkeypatch, True))
+    for p in ("run_w", "run_w2", "run_w3"):
+        assert obs[p] == ["[woke, answer, woke, woke]"], (p, obs[p])
+    assert obs["first_w2"][0] == "done"
+    assert "oops" in obs["first_w2"][1]
+
+
+@pytest.mark.parametrize("surface", _WAKE)
+def test_atom_keyed_later_clauses_let_an_integer_loop_restart(surface, monkeypatch):
+    """``cnt(N) :- N > 0, ..., cnt(M).  cnt(x).  cnt(y).``: an integer
+    argument is outside the atom keys, so the restart is taken (89 MB at
+    40000 iterations when only an atom argument could be)."""
+    mod = _load_wake(surface, monkeypatch, True)
+    assert _restarts_in_place(mod, "cnt", 1)
+    lm = mod.__dict__["$module"]
+    tracemalloc.start()
+    try:
+        assert sum(1 for _ in call("cnt", 30000, module=lm)) == 0
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 8_000_000, f"peak {peak / 1e6:.1f} MB"
+
+
+def test_a_runtime_tested_restart_beside_body_segments():
+    """A later clause long enough to be cut into body segments, and a
+    restart guarded by the runtime key test (``seg(-1, ..)`` is not refuted
+    by ``N =\\= 0``)."""
+    mod = _load_module("tests.fixtures.tro_clause_order_segments",
+                       os.path.join(_FIXTURES, "tro_clause_order_segments.pl"))
+    lm = mod.__dict__["$module"]
+    fn = lm.db.get_dispatch("seg", 3)
+    assert any(k.startswith("$seg") and k[4:].isdigit() for k in fn.__code__.co_names)
+    assert "commit_fresh" in fn.__code__.co_names
+    assert "$first_arg_excludes" in fn.__code__.co_names
+    assert _answers(mod, "seg", 0, 7) == [7]
+    assert _answers(mod, "seg", 3, 10) == [13]
+    tracemalloc.start()
+    try:
+        assert _answers(mod, "seg", 30000, 0) == [30000]
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 8_000_000, f"peak {peak / 1e6:.1f} MB"

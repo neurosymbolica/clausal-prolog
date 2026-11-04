@@ -2,12 +2,13 @@
 order of answers.
 
 A TRO restart is taken at the END of the predicate's function: the clause
-sets the restart flag (``_tro`` in loop mode, ``$tro_state`` in signal
-mode), every later clause of the same function still runs, and only then
-does the function start over with the tail call's arguments.  An answer of
-a later clause would therefore come out before every answer of the tail
-call -- clause order reversed.  A clause may restart only when no later
-clause of its function can answer in that activation:
+sets the restart flag (``_tro`` in loop mode, ``$tro_state`` and the local
+``_tro_sig`` in signal mode) and the function starts over with the tail
+call's arguments.  Whatever a later clause of the function did in that
+activation would come before every answer of the tail call -- clause order
+reversed.  A clause may restart only when no later clause of its function
+can answer or act in that activation, and once it has, the later clauses
+are skipped (the builder's arm guards):
 
 - it is the function's last clause;
 - it cuts before its tail call (the cut exit skips the later clauses);
@@ -22,7 +23,10 @@ clause of its function can answer in that activation:
   needs two of them identical (``p(N, N)`` after ``I < N``), or a constant
   the comparison rules out, cannot match, and a later clause whose body
   starts with comparisons, one of them the other way (``N =< 0`` after
-  ``N > 0``), fails before it does anything else; or
+  ``N > 0``), fails before it does anything else -- except bind what its
+  head binds, which must wake nothing: each such argument ground, or
+  checked at run time to be atomic or an unbound variable without
+  attributes (``plain_arg``; ``w(N, 0) :- N =< 0`` with X frozen); or
 - for the later clauses whose heads might unify, all of them key one
   argument position (``arg_index.head_arg_key``) and the call's argument
   there, bound at entry, keys outside them all -- a runtime test, taken
@@ -31,6 +35,12 @@ clause of its function can answer in that activation:
 
 Any other eligible clause makes its tail an ordinary call, as an ISO
 machine does while the clause still has an alternative.
+
+The unifications a front end puts at the start of a body for a head
+argument (``p(0)`` written ``p(X) :- X = 0``, a ``Unify`` node) are read
+as part of the head; a ``=/2`` written in the source is a goal of its own.
+In the seam both are ``Unify``, so a seam body's leading ``X is 0`` counts
+as head there.
 """
 from __future__ import annotations
 
@@ -80,28 +90,45 @@ def _occurs(var: Any, term: Any, depth: int = 0) -> bool:
     return False
 
 
-def effective_head_args(clause, arity: int) -> list | None:
+def effective_head_args(clause, arity: int, iso_unify: bool = True):
     """The head's arguments with the clause's LEADING body unifications of
     a variable folded in (the front ends write ``p(0)`` as ``p(X) :- X = 0``),
-    or None when the head has no readable arguments."""
+    or None when the head has no readable arguments.
+
+    *iso_unify* folds a ``=/2`` goal written in the source too.  That is
+    right for the restarting clause (every goal before its tail ran, binding
+    nothing older), but not for a later clause, whose written ``X = 0``
+    runs as a goal -- after its head, waking what it binds -- where the
+    front end's ``Unify`` is part of the head (see
+    :func:`folded_head_args`)."""
+    return folded_head_args(clause, arity, iso_unify)[0]
+
+
+def folded_head_args(clause, arity: int, iso_unify: bool = False):
+    """``(args, n)``: :func:`effective_head_args` and how many leading body
+    goals it folded."""
     args = [_head_arg(clause, i, arity) for i in range(arity)]
     if any(a is _INDEX_VAR for a in args):
-        return None
+        return None, 0
+    n = 0
     for goal in clause.body or ():
-        sides = _unify_sides(goal)
-        if sides is None:
+        if isinstance(goal, Unify):
+            left, right = goal.left, goal.right
+        elif iso_unify and _unify_sides(goal) is not None:
+            left, right = _unify_sides(goal)
+        else:
             break
-        left, right = sides
         if is_var(left) and not is_var(right):
             var, value = left, right
         elif is_var(right) and not is_var(left):
             var, value = right, left
         else:
             break
-        if _occurs(var, value):
+        if _occurs(var, value) or not any(_occurs(var, a) for a in args):
             break
         args = [_subst(a, var, value) for a in args]
-    return args
+        n += 1
+    return args, n
 
 
 def _unify_sides(goal: Any):
@@ -289,77 +316,108 @@ def _replace_positions(expr: Any, subst: dict) -> Any:
     return expr
 
 
-def guard_facts(clause, arity: int) -> list:
-    """The comparisons over the head's arguments that the body of the TRO
-    clause *clause* makes before its tail call (every goal but the last
-    runs before the restart)."""
+def guard_facts(clause, arity: int):
+    """``(facts, ground)``: the comparisons over the head's arguments that
+    the body of the TRO clause *clause* makes before its tail call (every
+    goal but the last runs before the restart), and the argument positions
+    known ground whenever the clause restarts -- compared bare by an ISO
+    comparison (which raises on an unbound one), or an atomic constant of
+    its head."""
     args = [_head_arg(clause, i, arity) for i in range(arity)]
     if any(a is _INDEX_VAR for a in args):
-        return []
+        return [], frozenset()
     positions = _positions(args)
     facts = []
+    ground = set()
     for goal in list(clause.body or ())[:-1]:
         c = _comparison(goal, positions)
         if c is not None:
             facts.append(c)
-    return facts
+            if isinstance(goal, Call):          # ISO arithmetic comparison
+                for side in c[1:]:
+                    if type(side) is tuple and side[0] == "$pos":
+                        ground.add(side[1])
+    mine = effective_head_args(clause, arity)
+    for k, a in enumerate(mine or ()):
+        if type(a) in (int, str):
+            ground.add(k)
+    return facts, frozenset(ground)
 
 
-def _guard_refutes(facts: list, later, later_args: list | None,
-                   arity: int) -> bool:
-    """True when the comparisons *facts* (which held on the call's
-    arguments) show the clause *later* cannot answer the same call."""
+def _guard_refutes(facts: list, ground, later, arity: int):
+    """None when the comparisons *facts* (which held on the call's
+    arguments) do not show the clause *later* cannot answer the same call;
+    otherwise the argument positions that must hold no attributed variable
+    for it to be passed over without a trace (empty: none).
+
+    Passed over, the later clause must also do nothing ISO would let it do
+    before it fails.  A head that cannot unify does nothing (goals woken by
+    a head unification run only once it has succeeded).  A head that
+    unifies and then fails a comparison has bound what it binds first, and
+    an attributed variable bound wakes its goals -- so each argument it
+    binds must be ground (*ground*) or, at run time, atomic or an unbound
+    variable with no attributes (``plain_arg``)."""
+    later_args, folded = folded_head_args(later, arity)
     if not facts or later_args is None:
-        return False
+        return None
     # Its head: constants it needs at some positions, and positions it
     # needs identical to an earlier one (the same variable).
     subst: dict = {}
     first_at: dict = {}
+    binds: set = set()
     for k, a in enumerate(later_args):
-        if type(a) is int:
-            subst[k] = a
-        elif is_var(a):
+        if is_var(a):
             if id(a) in first_at:
                 subst[k] = ("$pos", first_at[id(a)])
+                binds.update((k, first_at[id(a)]))
             else:
                 first_at[id(a)] = k
+        else:
+            binds.add(k)
+            if type(a) is int:
+                subst[k] = a
     for op, left, right in facts:
         l2 = _replace_positions(left, subst)
         r2 = _replace_positions(right, subst)
         lv, rv = _evaluate(l2), _evaluate(r2)
         if lv is not None and rv is not None and not _holds(op, lv, rv):
-            return True
+            return frozenset()
         if l2 == r2 and op in ("<", ">", "=\\="):
-            return True
-    # Its body, after its leading unifications: comparisons, the first of
-    # them that cannot hold where the facts did refuting it.  A comparison
-    # before that one must not be able to raise (or the later clause would
-    # raise before the tail call's answers): each of its sides is an int
-    # or a side some fact compared, evaluated without error then.
+            return frozenset()
+    # Its body, after the unifications that are part of its head:
+    # comparisons, the first of them that cannot hold where the facts did
+    # refuting it.  A comparison before that one must not be able to raise
+    # (or the later clause would raise before the tail call's answers):
+    # each of its sides is an int or a side some fact compared, evaluated
+    # without error then.
     raw = [_head_arg(later, i, arity) for i in range(arity)]
     positions = _positions(raw)
     seen = {side for _, left, right in facts for side in (left, right)}
-    body = list(later.body or ())
-    k = 0
-    while k < len(body) and _unify_sides(body[k]) is not None:
-        k += 1
-    for goal in body[k:]:
+    for goal in list(later.body or ())[folded:]:
         if goal is True:            # ``true``
             continue
         c = _comparison(goal, positions)
         if c is None:
-            return False
+            return None
         op2, l2, r2 = c
         for op, left, right in facts:
-            if (left, right) == (l2, r2) and op2 in _EXCLUDES[op]:
-                return True
-            if (left, right) == (r2, l2) and _FLIP[op2] in _EXCLUDES[op]:
-                return True
-            if _interval_disjoint(op, left, right, op2, l2, r2):
-                return True
+            if ((left, right) == (l2, r2) and op2 in _EXCLUDES[op]) or (
+                    (left, right) == (r2, l2) and _FLIP[op2] in _EXCLUDES[op]) or (
+                    _interval_disjoint(op, left, right, op2, l2, r2)):
+                return frozenset(binds - ground)
         if not all(type(x) is int or x in seen for x in (l2, r2)):
-            return False
-    return False
+            return None
+    return None
+
+
+def plain_arg(d) -> bool:
+    """Runtime: binding the dereferenced argument *d* in a head wakes no
+    goal -- it is an int, float or atom, or an unbound variable without
+    attributes.  (Anything else may hold an attributed variable.)"""
+    t = type(d)
+    if t is int or t is str or t is float:
+        return True
+    return is_var(d) and getattr(d, "attrs", None) is None
 
 
 def _bound(op: str, left: Any, right: Any):
@@ -409,44 +467,57 @@ def _cuts_before_tail(clause, db) -> bool:
 
 def order_safe_restarts(clauses: list, tro_indices, arity: int, db,
                         env) -> dict:
-    """``{clause index: None | (pos, keys)}`` for the TRO-eligible clauses
-    (*tro_indices*) of one function that may restart in place: None for an
-    unconditional restart, ``(pos, keys)`` for one taken only when the
-    argument at *pos*, bound at entry, keys outside *keys* (see the module
-    docstring).  The other eligible clauses make the ordinary call."""
+    """``{clause index: condition}`` for the TRO-eligible clauses
+    (*tro_indices*) of one function that may restart in place, the others
+    making the ordinary call (see the module docstring).  The condition is
+    None for an unconditional restart, else ``(keys, plain)``: *keys* None
+    or ``(pos, key set)`` -- the argument at *pos*, bound at entry, keys
+    outside the set -- and *plain* the positions whose argument must pass
+    ``plain_arg``.  When a clause restarts, no later clause of its function
+    can answer or act, and the function skips them."""
     last = len(clauses) - 1
     out: dict = {}
     heads: dict = {}
 
     def head(j):
         if j not in heads:
-            heads[j] = effective_head_args(clauses[j], arity)
+            heads[j] = effective_head_args(clauses[j], arity, iso_unify=False)
         return heads[j]
 
     for i in sorted(tro_indices):
         if i == last or _cuts_before_tail(clauses[i], db):
             out[i] = None
             continue
-        mine = head(i)
-        facts = guard_facts(clauses[i], arity)
-        rest = [j for j in range(i + 1, len(clauses))
-                if heads_may_unify(mine, head(j), env)
-                and not _guard_refutes(facts, clauses[j], head(j), arity)]
-        if not rest:
-            out[i] = None
-            continue
-        for pos in range(arity):
-            # Where this clause's own head keys the argument, a restart
-            # has it keyed so, and that key is among the later ones (or
-            # those heads could not unify): the test could never pass.
-            if head_arg_key(clauses[i], pos, arity, env) is not _INDEX_VAR:
+        mine = effective_head_args(clauses[i], arity)
+        facts, ground = guard_facts(clauses[i], arity)
+        rest = []
+        plain: set = set()
+        for j in range(i + 1, len(clauses)):
+            if not heads_may_unify(mine, head(j), env):
                 continue
-            keys = [head_arg_key(clauses[j], pos, arity, env) for j in rest]
-            if any(k is _INDEX_VAR for k in keys):
+            need = _guard_refutes(facts, ground, clauses[j], arity)
+            if need is None:
+                rest.append(j)
+            else:
+                plain |= need
+        keys = None
+        if rest:
+            for pos in range(arity):
+                # Where this clause's own head keys the argument, a restart
+                # has it keyed so, and that key is among the later ones (or
+                # those heads could not unify): the test could never pass.
+                if head_arg_key(clauses[i], pos, arity, env) is not _INDEX_VAR:
+                    continue
+                ks = [head_arg_key(clauses[j], pos, arity, env) for j in rest]
+                if any(k is _INDEX_VAR for k in ks):
+                    continue
+                try:
+                    keys = (pos, frozenset(ks))
+                except TypeError:
+                    continue
+                break
+            if keys is None:
                 continue
-            try:
-                out[i] = (pos, frozenset(keys))
-            except TypeError:
-                continue
-            break
+        out[i] = None if keys is None and not plain else (
+            keys, frozenset(plain))
     return out

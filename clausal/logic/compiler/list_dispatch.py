@@ -514,8 +514,13 @@ def _build_list_dispatch_guard(
     arity: int,
     subject: ast.expr,
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]],
+    arm_guard: "Callable[[list, int], ast.expr | None] | None" = None,
 ) -> list[ast.stmt]:
     """Build the isinstance/is_var structural dispatch guard for list predicates.
+
+    *arm_guard(subset, k)*, when given, is the test under which the arm of
+    ``subset[k]`` in a branch running *subset* in that order runs at all
+    (None: always) -- a pending TRO restart skips later arms.
 
     Generates:
 
@@ -547,7 +552,7 @@ def _build_list_dispatch_guard(
 
     def _match_stmts(subset: list[Clause]) -> list[ast.stmt]:
         stmts: list[ast.stmt] = []
-        for clause in subset:
+        for k, clause in enumerate(subset):
             vc: dict[int, str] = {}
             _head_arg_patterns(clause.head, vc, arity)
             body_stmts = body_compiler(clause, vc)
@@ -557,7 +562,11 @@ def _build_list_dispatch_guard(
                 var_context=vc,
                 arity=arity,
             )
-            stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+            arm = ast.Match(subject=subject, cases=[case_arm])
+            guard = arm_guard(subset, k) if arm_guard is not None else None
+            if guard is not None:
+                arm = ast.If(test=guard, body=[arm], orelse=[])
+            stmts.append(arm)
         return stmts or [ast.Pass()]
 
     nil_body = _match_stmts(nil_clauses + var_clauses)

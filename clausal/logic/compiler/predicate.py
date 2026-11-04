@@ -214,6 +214,7 @@ from .arg_index import (
     _make_call_site_bucket_trampoline,
 )
 from .compile_ctx import CompilationContext
+from .tro_order import plain_arg as _tro_plain_arg
 from .strategy import ShallowStrategy, TrampolineStrategy
 from .goal_shallow import (
     compile_body, _make_body_compiler,
@@ -550,6 +551,9 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     "$FINAL": FINAL,
     "$ONCE": _ONCE_RANGE,
     "$first_arg_excludes": _first_arg_excludes,
+    # A later clause passed over by a TRO restart binds nothing that wakes a
+    # goal (compiler/tro_order.py).
+    "$tro_plain_arg": _tro_plain_arg,
     # A test that only asks whether a unification succeeds (``not in``) runs
     # the goals it woke to a first answer (clausal/logic/pending.py).
     "$run_first": _pending_run_first,
@@ -881,7 +885,7 @@ def _later_clauses_excluded(clauses, matches, arity, env):
     return out, frozenset(id(m) for m in matches)
 
 
-def _exclusion_test(later_keys, name, env, pos=0):
+def _exclusion_test(later_keys, name, env, pos=0, mixed=False):
     """The test that the call's first argument (or the one at *pos*) keys
     outside *later_keys*.
 
@@ -890,25 +894,57 @@ def _exclusion_test(later_keys, name, env, pos=0):
     dereferenced at entry, of that very type and not among them.  (An
     entry value of any other type -- unbound, a float, a compound -- fails
     the type test and excludes nothing.)  Otherwise the general runtime
-    key, ``$first_arg_excludes``, a Python call made only at the answer."""
+    key, ``$first_arg_excludes``, a Python call made only at the answer.
+
+    With *mixed*, an entry value of another type goes to the general key
+    too (an integer is outside every atom key), not to "excludes nothing":
+    the TRO restart (``tro_order``) asks this at every iteration of a loop
+    whose later clauses are keyed by another type than its counter."""
     from .arg_index import _INDEX_VAR  # noqa: F401
+    d, a = f"_d{pos}", f"arg{pos}"
     ints = all(type(k) is int for k in later_keys)
     atoms = all(type(k) is tuple and len(k) == 2 and k[1] == 0
                 and type(k[0]) is str and k[0] for k in later_keys)
+    general = ast.Call(func=_name("$first_arg_excludes"),
+                       args=[_name(d), _name(a), _name(name)], keywords=[])
     if ints or atoms:
         raw = frozenset(later_keys) if ints else frozenset(k[0] for k in later_keys)
-        env[name] = raw
-        return ast.BoolOp(op=ast.And(), values=[
-            ast.Compare(left=ast.Attribute(value=_name(f"_d{pos}"), attr="__class__",
-                                           ctx=ast.Load()),
-                        ops=[ast.Is()],
-                        comparators=[_name("$int" if ints else "$str")]),
-            ast.Compare(left=_name(f"_d{pos}"), ops=[ast.NotIn()],
+        typ = _name("$int" if ints else "$str")
+        same_type = ast.Compare(
+            left=ast.Attribute(value=_name(d), attr="__class__", ctx=ast.Load()),
+            ops=[ast.Is()], comparators=[typ])
+        inline = ast.BoolOp(op=ast.And(), values=[
+            same_type,
+            ast.Compare(left=_name(d), ops=[ast.NotIn()],
                         comparators=[_name(name)])])
+        if not mixed:
+            env[name] = raw
+            return inline
+        env[name] = raw
+        env[name + "_keys"] = frozenset(later_keys)
+        general.args[2] = _name(name + "_keys")
+        other_type = ast.Compare(
+            left=ast.Attribute(value=_name(d), attr="__class__", ctx=ast.Load()),
+            ops=[ast.IsNot()], comparators=[typ])
+        return ast.BoolOp(op=ast.Or(), values=[
+            inline, ast.BoolOp(op=ast.And(), values=[other_type, general])])
     env[name] = later_keys
-    return ast.Call(func=_name("$first_arg_excludes"),
-                    args=[_name(f"_d{pos}"), _name(f"arg{pos}"), _name(name)],
-                    keywords=[])
+    return general
+
+
+def _restart_condition(cond, env):
+    """The runtime test of a TRO restart condition from
+    ``tro_order.order_safe_restarts``: ``(keys, plain)``."""
+    keys, plain = cond
+    tests = []
+    if keys is not None:
+        n = env.get("$final_keys_count", 0)
+        env["$final_keys_count"] = n + 1
+        tests.append(_exclusion_test(keys[1], f"$final_keys_{n}", env,
+                                     pos=keys[0], mixed=True))
+    for p in sorted(plain):
+        tests.append(_call(_name("$tro_plain_arg"), _name(f"_d{p}")))
+    return tests[0] if len(tests) == 1 else ast.BoolOp(op=ast.And(), values=tests)
 
 
 def _build_predicate_trampoline_funcdef(*args, **kwargs) -> ast.FunctionDef:
@@ -1031,11 +1067,8 @@ def _build_predicate_trampoline_funcdef_impl(
         _restart_tests: dict = {}
         for _ri, _cond in _restarts.items():
             if _cond is not None:
-                _n = ctx_template.base_globals.get("$final_keys_count", 0)
-                ctx_template.base_globals["$final_keys_count"] = _n + 1
-                _restart_tests[id(clauses[_ri])] = _exclusion_test(
-                    _cond[1], f"$final_keys_{_n}", ctx_template.base_globals,
-                    pos=_cond[0])
+                _restart_tests[id(clauses[_ri])] = _restart_condition(
+                    _cond, ctx_template.base_globals)
         _orig_bc = body_compiler
         _tro_m = tro_mode
         _tro_ctx = ctx_template
@@ -1170,6 +1203,25 @@ def _build_predicate_trampoline_funcdef_impl(
     # untouched.
     ctx_template.cut_tro_restart = (
         tro_mode if use_tro and _clauses_have_cut(clauses, db) else None)
+    # A restart is taken only where no later clause can answer or act
+    # (``tro_order``), so once one is pending the later arms are skipped:
+    # run, they would bind, and wake goals on, what ISO's clause order
+    # leaves for after the tail call's answers.  An arm is skipped under an
+    # earlier restarting clause of the SAME function; a list-dispatch
+    # branch runs its clauses in another order, so an arm there is guarded
+    # only when every restarting clause before it comes before it in the
+    # source too.
+    _restart_pos = {id(clauses[i]): i for i in _restarts} if use_tro else {}
+    _src_pos = {id(c): i for i, c in enumerate(clauses)}
+    _pending_name = "_tro" if tro_mode == "loop" else _TRO_SIG_NAME
+
+    def _arm_guard(subset, k):
+        if not _restart_pos:
+            return None
+        before = [_restart_pos[id(c)] for c in subset[:k] if id(c) in _restart_pos]
+        if not before or max(before) >= _src_pos.get(id(subset[k]), -1):
+            return None
+        return ast.UnaryOp(op=ast.Not(), operand=_name(_pending_name))
     try:
         if dispatch_pos is not None:
             # List-dispatch arms are built without ``skip_trail``: they always
@@ -1177,7 +1229,8 @@ def _build_predicate_trampoline_funcdef_impl(
             ctx_template.clause_mark_name = "_mark"
             loop_stmts.extend(
                 _build_list_dispatch_guard(
-                    clauses, dispatch_pos, arity, subject, body_compiler
+                    clauses, dispatch_pos, arity, subject, body_compiler,
+                    arm_guard=_arm_guard,
                 )
             )
         else:
@@ -1207,8 +1260,12 @@ def _build_predicate_trampoline_funcdef_impl(
                     )
                 finally:
                     _pop_position()
-                _clause_matches[-1] = ast.Match(subject=subject, cases=[case_arm])
-                loop_stmts.append(_clause_matches[-1])
+                _arm = ast.Match(subject=subject, cases=[case_arm])
+                _guard = _arm_guard(clauses, ci)
+                if _guard is not None:
+                    _arm = ast.If(test=_guard, body=[_arm], orelse=[])
+                _clause_matches[-1] = _arm
+                loop_stmts.append(_arm)
     finally:
         (ctx_template.clause_mark_name, ctx_template.cut_tro_restart,
          ctx_template.body_segments) = _saved_cut_fields
@@ -1261,23 +1318,17 @@ def _build_predicate_trampoline_funcdef_impl(
         )
         loop_stmts.append(ast.Break())
     elif use_tro and tro_mode == "signal":
-        if _mentions_name(loop_stmts, _TRO_SIG_NAME):
-            # ISO cut: this activation's own pending-tail flag (see the
-            # signal-mode cut exit).
-            loop_stmts.insert(0, _assign(_TRO_SIG_NAME, ast.Constant(False)))
-        # Signal mode (bucket): _tro_state was set by _compile_tro_tail.
-        # NOTE: _compile_tro_tail emits only the $tro_state stores — there is
-        # NO per-arm early exit, so match arms AFTER a signalling TRO arm
-        # still run with the flag set. If one of those arms re-enters the
-        # same predicate, the nested dispatch resets the shared flag and the
-        # pending tail call is dropped (lost solutions) — see
-        # todo/tro-signal-flag-clobbered-by-later-match-arms.md.
-        # The single flag check below runs after ALL match arms:
+        # This activation's own pending-tail flag: set by the tail beside
+        # the shared ``$tro_state`` cell, read by the later arms' guards
+        # (a pending restart skips them), the ISO cut exit and the check
+        # below.
+        loop_stmts.insert(0, _assign(_TRO_SIG_NAME, ast.Constant(False)))
+        # This activation's own flag (set beside ``$tro_state`` by the
+        # tail): the shared cell may have been reset by a re-entrant call,
+        # and a plain name keeps the arms' last answers markable FINAL.
         loop_stmts.append(
             ast.If(
-                test=ast.Subscript(
-                    value=_name("$tro_state"), slice=ast.Constant(0), ctx=ast.Load(),
-                ),
+                test=_name(_TRO_SIG_NAME),
                 body=[ast.Return(value=ast.Constant(None))],
                 orelse=[],
             )
@@ -1337,9 +1388,14 @@ def _build_predicate_trampoline_funcdef_impl(
         # Raises SegmentRefused (the wrapper rebuilds without segments).
         from .body_segments import hoist_segments
         _segment_funcs = hoist_segments(func_def, _segment_list)
-    if not use_tro and "final_yield" in ctx_template.enabled_optimisations:
+    if (not use_tro or tro_mode == "signal") and (
+            "final_yield" in ctx_template.enabled_optimisations):
         # Answers known to be the last go out as FINAL (CONTINUATION_TCO_PLAN
-        # Phase 4).  Never in a TRO function: its body restarts in place.
+        # Phase 4).  Never in a loop-mode TRO function: its body restarts in
+        # place.  A signal-mode one returns to its dispatch loop, which
+        # restarts only on a tail this activation signalled -- and once one
+        # is pending its later arms are skipped, so no answer comes after
+        # it (``_arm_guard``).
         from .final_yields import mark_final_yields
         mark_final_yields(
             func_def, self_name=ctx_template.self_name,

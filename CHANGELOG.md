@@ -56,6 +56,17 @@ surface described in [docs/public-api.md](docs/public-api.md).
   must where a later clause is still to be tried (`p/2` above).  Index
   buckets follow the same rule.  A predicate none of whose clauses may
   restart is compiled as with the optimisation off.
+  Once a restart is pending, the clauses below it are skipped: they used to
+  run first, and a head among them binding a frozen argument woke its goal
+  ahead of the tail call's answers -- `freeze(X, (X == 0 -> throw(oops) ;
+  true)), w2(1, X)` threw where Scryer answers `X = done` first.  A later
+  clause whose head binds an argument before its guard fails now lets the
+  restart be taken only when that argument is ground, atomic or an unbound
+  variable without attributes (checked at run time).  The runtime key test
+  also passes an argument of another type than the later clauses' keys
+  (`a(N) :- N > 0, ..., a(M).` before `a(x).  a(y).` called with an
+  integer).  A restarting index bucket's answers are marked last again
+  where they are.
   Tests: `tests/test_tro_clause_order.py`.
 
 - **A loop through an indexed predicate runs in constant space again.**
