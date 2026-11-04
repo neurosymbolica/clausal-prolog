@@ -493,11 +493,76 @@ def _feed_input(descriptions) -> None:
                     return
 
 
+class _Alarm:
+    """SIGALRM bounding one quad: after *timeout* seconds, and then again
+    every ``_REPEAT`` seconds until disarmed, the handler raises
+    ``_Timeout`` in the main thread.
+
+    One alarm is not enough.  A handler's exception raised while the
+    interpreter runs a garbage-collector callback, a ``__del__`` finaliser,
+    a weakref callback or a generator close it reports as "unraisable" is
+    printed and dropped, and code under test may swallow it with ``except
+    BaseException``.  A one-shot alarm lost that way left the query running
+    with no limit (a spinning query in a long pytest session grew until the
+    process was killed), so the alarm repeats until the quad's code has seen
+    it and disarmed it.  Where the platform has no SIGALRM (Windows), or off
+    the main thread, nothing is armed and the query runs without a limit.
+    """
+
+    _REPEAT = 0.1
+
+    def __init__(self, timeout: float):
+        self.timeout = timeout
+        self.on = False
+        self._old = None
+        self._usable = (hasattr(signal, "SIGALRM")
+                        and hasattr(signal, "setitimer")
+                        and threading.current_thread()
+                        is threading.main_thread())
+
+    def _fire(self, signum, frame):
+        if self.on:
+            raise _Timeout()
+        signal.setitimer(signal.ITIMER_REAL, 0)     # a late alarm: stop it
+
+    def arm(self) -> None:
+        if not self._usable:
+            return
+        self._old = signal.signal(signal.SIGALRM, self._fire)
+        self.on = True
+        signal.setitimer(signal.ITIMER_REAL, self.timeout, self._REPEAT)
+
+    def disarm(self) -> None:
+        """Stop the alarm and restore the previous handler.  An alarm that
+        arrives while this runs is absorbed: it never ends a disarm half
+        done, which would leave the timer repeating for later code."""
+        if not self._usable:
+            return
+        while True:
+            try:
+                self.on = False
+                signal.setitimer(signal.ITIMER_REAL, 0)
+                if self._old is not None:
+                    signal.signal(signal.SIGALRM, self._old)
+                    self._old = None
+                return
+            except _Timeout:
+                continue
+
+
 def run_quad(module, quad: Quad, timeout: float = 10.0) -> Result:
     """Run one quad; the limit *timeout* is for this quad alone."""
+    alarm = _Alarm(timeout)
     try:
-        return _run_quad(module, quad, timeout)
-    except _Timeout:        # an alarm in the unwinding of _run_quad itself
+        try:
+            alarm.arm()
+            return _run_quad(module, quad, timeout)
+        finally:
+            alarm.disarm()
+    except _Timeout:
+        # an alarm in the unwinding of _run_quad itself, or one that struck
+        # before the disarm above began
+        alarm.disarm()
         return Result(quad, "failed", f"no answer within {timeout:g} s")
 
 
@@ -505,21 +570,7 @@ def _run_quad(module, quad: Quad, timeout: float) -> Result:
     if not quad.descriptions:
         return Result(quad, "skipped", "no answer description")
     descriptions = _alternatives(quad)
-
-    # SIGALRM bounds a query that never answers; where the platform has
-    # none (Windows), or off the main thread, the query runs without a limit.
-    timed = (hasattr(signal, "SIGALRM") and hasattr(signal, "setitimer")
-             and threading.current_thread() is threading.main_thread())
-    old = None
-
-    def alarm(signum, frame):
-        signal.setitimer(signal.ITIMER_REAL, 0)     # once: nothing fires again
-        raise _Timeout()
-
     try:
-        if timed:
-            old = signal.signal(signal.SIGALRM, alarm)
-            signal.setitimer(signal.ITIMER_REAL, timeout)
         _feed_input(descriptions)
         actual = _Actual(module, quad)
         skipped = ""
@@ -552,10 +603,6 @@ def _run_quad(module, quad: Quad, timeout: float) -> Result:
     finally:
         from clausal.logic import streams  # noqa: PLC0415
         streams.USER_INPUT.take_unread()        # no input leaks to the next quad
-        if timed:
-            signal.setitimer(signal.ITIMER_REAL, 0)
-            if old is not None:
-                signal.signal(signal.SIGALRM, old)
 
 
 def run_quads(module, source: str, op_table, filename: str = "<quads>",

@@ -319,6 +319,17 @@ def _collect_bound_vars_ir(op: Any, out: set[int]) -> None:
         case _ir.Sequence(ops=ops):
             for child in ops:
                 _collect_bound_vars_ir(child, out)
+        # The ISO text surfaces' ``is/2`` and ``=/2`` arrive as calls of the
+        # built-in predicates (no clause may define either: ISO
+        # permission_error), and bind as ``ArithEval`` / ``Unify`` do.
+        case _ir.SubCall(fname="is", arity=2, args=[lhs, _]):
+            if is_var(lhs):
+                out.add(lhs._id)
+        case _ir.SubCall(fname="=", arity=2, args=[lhs, rhs]):
+            if is_var(lhs):
+                out.add(lhs._id)
+            if is_var(rhs):
+                out.add(rhs._id)
 
 
 # ── Tail Recursion Optimization (TRO) ─────────────────────────────────────────
@@ -418,6 +429,12 @@ _DETERMINISTIC_BUILTINS: frozenset[tuple[str, int]] = frozenset({
     # and sub_atom/5 (enumerates matches) are NONdeterministic — removed. The
     # remaining entries are semidet in every mode.
     ("upcase_atom", 2), ("downcase_atom", 2),
+    # ISO built-ins the text surfaces call by name (none may be redefined:
+    # ISO permission_error(modify, static_procedure, PI)); each answers at
+    # most once.  is/2 and =/2 bind (``_collect_bound_vars_ir``).
+    ("is", 2), ("=", 2), ("\\=", 2),
+    ("=:=", 2), ("=\\=", 2), ("<", 2), (">", 2), ("=<", 2), (">=", 2),
+    ("==", 2), ("\\==", 2), ("@<", 2), ("@>", 2), ("@=<", 2), ("@>=", 2),
 })
 
 
