@@ -1,5 +1,7 @@
 # clause_terms hands back a partial-list head as the compiler's head pattern
 
+**Status: FIXED 2026-11-04 (commit 4106ecee).** `clause_ops._pattern_as_term` builds every head list pattern as the engine's partial list before `head_matches` probes and `clause_terms` copies the head. Pinned in tests/iso/test_clause_partial_list_head_scryer.py::test_clause_partial_list_head_engine (and its Scryer twin) and tests/test_clause_terms_shape.py.
+
 Reported 2026-11-04 by a team using `clause_ops.clause_terms` for
 explanation/provenance over loaded programs. Severity: high for clause/2 and
 retract/1 on any dynamic procedure with a `[H|T]` head.
