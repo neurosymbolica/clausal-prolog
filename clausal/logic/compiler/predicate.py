@@ -1090,9 +1090,16 @@ def _build_predicate_trampoline_funcdef_impl(
     _saved_cut_fields = (ctx_template.clause_mark_name, ctx_template.cut_tro_restart,
                          ctx_template.body_segments)
     # Long conjunctions in these arms may be cut into segment functions
-    # (``body_segments``), hoisted below; never in a TRO function, whose
-    # body restarts in place.
-    _segment_list: "list | None" = [] if (_segments and not use_tro) else None
+    # (``body_segments``), hoisted below.  In a TRO function only in loop
+    # mode and with no cut: the restart (``continue``, the ``_tro`` locals)
+    # and the TRO cut exit must stay in the predicate's own frame.  A segment
+    # that would hold the TRO tail is refused by the hoister (it stores
+    # names read outside it), and the predicate is rebuilt without
+    # segments; the ISO front ends' ``is/2`` loops made a TRO clause beside
+    # a long one common (2026-11-04).
+    _segment_list: "list | None" = [] if (
+        _segments and not (use_tro and (
+            tro_mode != "loop" or _clauses_have_cut(clauses, db)))) else None
     ctx_template.body_segments = _segment_list
     # The clause arms in order (the plain, non-list-dispatch shape), for the
     # FINAL pass: an arm's answer is final when every later arm's first-

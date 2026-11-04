@@ -149,7 +149,11 @@ def fold_sequence(ops, ctx, k_stmts, recurse):
     segments = ctx.body_segments
     height, split_above, min_ops = settings()
     if (segments is None or len(ops) < min_ops
-            or not isinstance(ctx.strategy, TrampolineStrategy)):
+            or not isinstance(ctx.strategy, TrampolineStrategy)
+            # A TRO clause's body: its tail restarts the predicate's own
+            # loop, which no segment may hold (the hoister would refuse it
+            # and the whole predicate would lose its segments).
+            or getattr(ctx, "tro_plan", None) is not None):
         return _fold_plain(ops, ctx, k_stmts, recurse)
     if split_above >= 0:
         # Fold as always; only a sequence that turns out deeper than the
