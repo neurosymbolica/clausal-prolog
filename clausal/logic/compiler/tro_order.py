@@ -48,7 +48,7 @@ from typing import Any
 
 from clausal.logic.variables import is_var
 from clausal.terms import Call, LoadName, Unify
-from clausal.pythonic_ast.nodes import StarUnpack
+from clausal.pythonic_ast.nodes import StarUnpack, TupleLiteral
 from clausal.logic.cells import CHARS_TAG
 
 from .arg_index import (
@@ -110,6 +110,7 @@ def folded_head_args(clause, arity: int, iso_unify: bool = False):
     args = [_head_arg(clause, i, arity) for i in range(arity)]
     if any(a is _INDEX_VAR for a in args):
         return None, 0
+    args = [_as_cells(a) for a in args]
     n = 0
     for goal in clause.body or ():
         if isinstance(goal, Unify):
@@ -124,11 +125,30 @@ def folded_head_args(clause, arity: int, iso_unify: bool = False):
             var, value = right, left
         else:
             break
+        value = _as_cells(value)
         if _occurs(var, value) or not any(_occurs(var, a) for a in args):
             break
         args = [_subst(a, var, value) for a in args]
         n += 1
     return args, n
+
+
+def _as_cells(term: Any, depth: int = 0) -> Any:
+    """*term* with the seam's tuple-literal nodes (``('f', 1)`` in a head,
+    which the seam front end leaves as ``TupleLiteral``) read as the cells
+    they build; lists and cells are walked, everything else is kept."""
+    if depth > _DEPTH:
+        return term
+    if isinstance(term, TupleLiteral):
+        return tuple(_as_cells(x, depth + 1) for x in term.elements)
+    if type(term) is list:
+        return [_as_cells(x, depth + 1) for x in term]
+    if type(term) is tuple and term and type(term[0]) is str:
+        return (term[0], *(_as_cells(x, depth + 1) for x in term[1:]))
+    if isinstance(term, StarUnpack):
+        inner = _as_cells(term.value, depth + 1)
+        return term if inner is term.value else StarUnpack(value=inner)
+    return term
 
 
 def _unify_sides(goal: Any):
@@ -409,8 +429,10 @@ def _shallow(p) -> bool:
         if parts is None:
             return False
         fixed, star = parts
-        return bool(fixed) and all(is_var(x) for x in fixed) and (
-            not star or is_var(_list_tail(p)))
+        # Exactly [H|T]: one cell.  [H] is '.'(H, []) and [H, G|T] two
+        # cells deep -- against a partial list they bind its tail.
+        return (len(fixed) == 1 and star and is_var(fixed[0])
+                and is_var(_list_tail(p)))
     return False
 
 
@@ -421,12 +443,17 @@ def head_bind_checks(later_args: list, mine: list, ground: frozenset):
 
     A check is ``("plain", k)`` -- the argument at k atomic or an unbound
     variable without attributes (``plain_arg``) --, ``("noatt", k)`` -- not
-    an unbound variable with attributes (``not_attvar``) -- or ``("pair",
+    an unbound variable with attributes (``not_attvar``) --, ``("pair",
     k, q)`` -- binding the arguments at k and q to each other wakes nothing
-    (``safe_pair``).  Where *mine* has a ground term (``ground``: the
+    (``safe_pair``) -- or ``("subnoatt", k, path)`` -- the subterm of
+    argument k at *path* is no attributed variable (``sub_not_attvar``).  Where *mine* has a ground term (``ground``: the
     variables a comparison or ``is/2`` evaluated), the argument IS that
     term, and the later pattern binds only its own fresh variables there."""
-    seen: dict = {}         # id(var) -> "ground" | ("top", k) | "nested"
+    # id(var) -> "ground" | ("top", k) | ("nested", k, path): the value the
+    # later variable was bound to -- ground, argument k itself, or the
+    # subterm of argument k at *path* (cell argument indices; None when the
+    # way to it is not through cells only).
+    seen: dict = {}
     checks: set = set()
 
     def bind_values(a, b):
@@ -434,16 +461,24 @@ def head_bind_checks(later_args: list, mine: list, ground: frozenset):
         are unified.  True when the checks added show it wakes nothing."""
         if a == "ground" and b == "ground":
             return True
-        if a == "nested" or b == "nested":
+        if a == "ground" or b == "ground":
+            other = b if a == "ground" else a
+            if other[0] != "top":
+                return False
+            checks.add(("plain", other[1]))
+            return True
+        if a[0] == "top" and b[0] == "top":
+            if a[1] != b[1]:
+                checks.add(("pair", min(a[1], b[1]), max(a[1], b[1])))
+            return True
+        # One argument and one subterm of an argument: the argument atomic
+        # or a plain variable, and the subterm no attributed variable (of
+        # two variables the newer is bound).
+        top, nested = (a, b) if a[0] == "top" else (b, a)
+        if top[0] != "top" or nested[2] is None:
             return False
-        if a == "ground":
-            checks.add(("plain", b[1]))
-            return True
-        if b == "ground":
-            checks.add(("plain", a[1]))
-            return True
-        if a[1] != b[1]:
-            checks.add(("pair", min(a[1], b[1]), max(a[1], b[1])))
+        checks.add(("plain", top[1]))
+        checks.add(("subnoatt", nested[1], nested[2]))
         return True
 
     def meet(var, value):
@@ -452,11 +487,13 @@ def head_bind_checks(later_args: list, mine: list, ground: frozenset):
         seen[id(var)] = value
         return True
 
-    def match(p, r, k, top):
+    def match(p, r, k, path):
         """Unify later pattern *p* with the argument subterm the restarting
-        pattern *r* describes (at top level of argument k when *top*)."""
+        pattern *r* describes: argument k itself when *path* is (), else
+        its subterm at *path* (None: not reachable through cells)."""
+        top = path == ()
         value = "ground" if _is_ground(r, ground) else (
-            ("top", k) if top else "nested")
+            ("top", k) if top else ("nested", k, path))
         if is_var(p):
             return meet(p, value)
         pv = _pattern_vars(p)
@@ -477,18 +514,20 @@ def head_bind_checks(later_args: list, mine: list, ground: frozenset):
                 # itself an attributed variable.  A constant or a deeper
                 # pattern inside would bind into the argument.
                 checks.add(("noatt", k))
-                for v in pv:
-                    seen[id(v)] = "nested"
+                cell = _is_cell(p)
+                for j, v in enumerate(p[1:] if cell else pv, 1):
+                    seen[id(v)] = ("nested", k, (j,) if cell else None)
                 return True
             # An argument that is atomic or a plain variable: the pattern
             # fails, or the variable is bound to a copy of it.
             checks.add(("plain", k))
             for v in pv:
-                seen.setdefault(id(v), "nested")
+                seen.setdefault(id(v), ("nested", k, None))
             return True
         # Both structured: follow the shape the call already has.
         if _is_cell(p) and _is_cell(r) and len(p) == len(r) and p[0] == r[0]:
-            return all(match(x, y, k, False) for x, y in zip(p[1:], r[1:]))
+            return all(match(x, y, k, None if path is None else path + (j,))
+                       for j, (x, y) in enumerate(zip(p[1:], r[1:]), 1))
         if type(p) is list and type(r) is list:
             pp, rp = _list_parts(p), _list_parts(r)
             if pp is None or rp is None:
@@ -496,15 +535,15 @@ def head_bind_checks(later_args: list, mine: list, ground: frozenset):
             (fp, sp), (fr, sr) = pp, rp
             if len(fp) != len(fr) or sp != sr:
                 return False
-            if not all(match(x, y, k, False) for x, y in zip(fp, fr)):
+            if not all(match(x, y, k, None) for x, y in zip(fp, fr)):
                 return False
-            return not sp or match(_list_tail(p), _list_tail(r), k, False)
+            return not sp or match(_list_tail(p), _list_tail(r), k, None)
         return False
 
     if mine is None or later_args is None or len(mine) != len(later_args):
         return None
     for k, (p, r) in enumerate(zip(later_args, mine)):
-        if not match(p, r, k, True):
+        if not match(p, r, k, ()):
             return None
     return frozenset(checks)
 
@@ -576,18 +615,34 @@ def not_attvar(d) -> bool:
     return not is_var(d) or getattr(d, "attrs", None) is None
 
 
+def sub_not_attvar(d, path) -> bool:
+    """Runtime: the subterm of the dereferenced argument *d* at *path*
+    (cell argument indices) exists and is not an unbound variable with
+    attributes."""
+    from clausal.logic.variables import deref
+    t = d
+    for i in path:
+        t = deref(t)
+        if type(t) is not tuple or len(t) <= i:
+            return False
+        t = t[i]
+    return not_attvar(deref(t))
+
+
 def safe_pair(a, b) -> bool:
     """Runtime: unifying the dereferenced arguments *a* and *b* wakes no
     goal.  A variable without attributes bound to a term wakes nothing;
     of two variables the newer is bound, so both must be plain; two
     non-variables bind nothing when one is atomic."""
     av, bv = is_var(a), is_var(b)
+    a_plain = av and getattr(a, "attrs", None) is None
+    b_plain = bv and getattr(b, "attrs", None) is None
     if av and bv:
-        return a.attrs is None and b.attrs is None
+        return a_plain and b_plain
     if av:
-        return a.attrs is None
+        return a_plain
     if bv:
-        return b.attrs is None
+        return b_plain
     return type(a) in (int, str, float) or type(b) in (int, str, float)
 
 

@@ -216,7 +216,8 @@ from .arg_index import (
 from .compile_ctx import CompilationContext
 from .tro_order import (plain_arg as _tro_plain_arg,
                         not_attvar as _tro_not_attvar,
-                        safe_pair as _tro_safe_pair)
+                        safe_pair as _tro_safe_pair,
+                        sub_not_attvar as _tro_sub_not_attvar)
 from .strategy import ShallowStrategy, TrampolineStrategy
 from .goal_shallow import (
     compile_body, _make_body_compiler,
@@ -558,6 +559,7 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     "$tro_plain_arg": _tro_plain_arg,
     "$tro_not_attvar": _tro_not_attvar,
     "$tro_safe_pair": _tro_safe_pair,
+    "$tro_sub_not_attvar": _tro_sub_not_attvar,
     # A test that only asks whether a unification succeeds (``not in``) runs
     # the goals it woke to a first answer (clausal/logic/pending.py).
     "$run_first": _pending_run_first,
@@ -947,8 +949,12 @@ def _restart_condition(cond, env):
         tests.append(_exclusion_test(keys[1], f"$final_keys_{n}", env,
                                      pos=keys[0], mixed=True))
     _fn = {"plain": "$tro_plain_arg", "noatt": "$tro_not_attvar",
-           "pair": "$tro_safe_pair"}
+           "pair": "$tro_safe_pair", "subnoatt": "$tro_sub_not_attvar"}
     for check in sorted(checks):
+        if check[0] == "subnoatt":
+            tests.append(_call(_name(_fn["subnoatt"]), _name(f"_d{check[1]}"),
+                               ast.Constant(value=tuple(check[2]))))
+            continue
         tests.append(_call(_name(_fn[check[0]]),
                            *[_name(f"_d{p}") for p in check[1:]]))
     return tests[0] if len(tests) == 1 else ast.BoolOp(op=ast.And(), values=tests)
@@ -1214,10 +1220,10 @@ def _build_predicate_trampoline_funcdef_impl(
     # (``tro_order``), so once one is pending the later arms are skipped:
     # run, they would bind, and wake goals on, what ISO's clause order
     # leaves for after the tail call's answers.  An arm is skipped under an
-    # earlier restarting clause of the SAME function; a list-dispatch
-    # branch runs its clauses in another order, so an arm there is guarded
-    # only when every restarting clause before it comes before it in the
-    # source too.
+    # earlier restarting clause of the SAME function: one that comes
+    # before it in the source too (a list-dispatch branch runs a source-
+    # ordered subset of the clauses, so in practice every arm after a
+    # restarting one).
     _restart_pos = {id(clauses[i]): i for i in _restarts} if use_tro else {}
     _src_pos = {id(c): i for i, c in enumerate(clauses)}
     _pending_name = "_tro" if tro_mode == "loop" else _TRO_SIG_NAME

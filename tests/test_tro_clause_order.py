@@ -209,10 +209,11 @@ def test_a_runtime_tested_restart_beside_body_segments():
 
 # ── Later heads with a pattern where the restarting head has one ─────────────
 
-@pytest.fixture(scope="module")
-def patterns():
-    return _load_module("tests.fixtures.tro_clause_order_patterns",
-                        os.path.join(_FIXTURES, "tro_clause_order_patterns.pl"))
+@pytest.fixture(scope="module", params=["tro_clause_order_patterns.pl",
+                                        "tro_clause_order_patterns.seam"])
+def patterns(request):
+    return _load_module("tests.fixtures." + request.param.replace(".", "_"),
+                        os.path.join(_FIXTURES, request.param))
 
 
 @pytest.mark.parametrize("name,args,arity", [
@@ -225,7 +226,10 @@ def test_a_ground_pattern_keeps_the_restart(patterns, name, args, arity):
     """The restarting head's ``[]``, ``f(1)``, ``s(A)`` (A evaluated) are
     ground at the restart, so the later head binds nothing there: 94 to
     163 MB at 40000 iterations when every such position needed a run-time
-    check no list or compound could pass."""
+    check no list or compound could pass.  In the seam (tuple heads, A
+    computed by a Python escape) ``walk`` checks at run time that the
+    result argument is plain and ``s(A)``'s A no attributed variable: 54
+    MB, and ``gc`` 37 MB, while a seam tuple head was not read at all."""
     if name != "gl":        # gl/4 is indexed: its restart is in a bucket
         assert _restarts_in_place(patterns, name, arity)
     lm = patterns.__dict__["$module"]
@@ -244,9 +248,47 @@ def test_pattern_answers(patterns):
     assert _answers(patterns, "gl", [], 2, 0) == [("zero", 0)]
 
 
-def test_a_constant_inside_a_later_head_wakes_after_the_answer(patterns):
+def test_a_constant_inside_a_later_head_wakes_after_the_answer():
+    patterns = _load_module(
+        "tests.fixtures.tro_clause_order_patterns_pl",
+        os.path.join(_FIXTURES, "tro_clause_order_patterns.pl"))
     lm = patterns.__dict__["$module"]
     from clausal.terms import term_str
     v = Var()
     assert [term_str(deref(v)) for _ in call("run_b", v, module=lm)] == [
         "[woke, answer, woke, woke]"]
+
+
+# ── Later list patterns deeper than one cell ────────────────────────────────
+#
+# ``[_]`` is '.'(_, []) and ``[_, _|_]`` two cells deep: against a partial
+# list [a|Z] they bind Z, so a later clause with one must not be passed
+# over while Z may be frozen -- ISO wakes Z's goal there, after the tail
+# call's answer.  Only ``[H|T]`` binds nothing of the call.
+
+_LISTS = ["tro_clause_order_lists.pl", "tro_clause_order_lists.clausal",
+          "tro_clause_order_lists.seam"]
+
+
+def _list_observations(mod):
+    from clausal.terms import term_str
+    lm = mod.__dict__["$module"]
+    out = {}
+    for which in ("q", "q2", "q3"):
+        v = Var()
+        out[which] = [term_str(deref(v))
+                      for _ in call("run_q", which, v, module=lm)]
+    return out
+
+
+@pytest.mark.parametrize("surface", _LISTS)
+def test_a_deep_later_list_pattern_wakes_as_without_the_restart(surface, monkeypatch):
+    with_tro = _list_observations(_load_wake(surface, monkeypatch, True))
+    without = _list_observations(_load_wake(surface, monkeypatch, False))
+    assert with_tro == without
+
+
+@pytest.mark.parametrize("surface", _LISTS[:2])   # not the seam: see above
+def test_a_deep_later_list_pattern_wakes_in_iso_order(surface, monkeypatch):
+    obs = _list_observations(_load_wake(surface, monkeypatch, True))
+    assert obs == {w: ["[woke, answer, woke, woke]"] for w in ("q", "q2", "q3")}

@@ -82,9 +82,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   clause whose head binds something of the call before its guard fails now
   lets the restart be taken only where that binding can wake no goal:
   the restarting head's term there is ground (`[]`, `f(1)`, `s(A)` with A
-  evaluated), or the later pattern is one functor over fresh variables, or a
-  run-time check finds the argument atomic or an unbound variable without
-  attributes.  The runtime key test
+  evaluated; a seam tuple head reads as the compound it builds), or the
+  later pattern is one functor over fresh variables (`s(A)`, `[H|T]`, not
+  `[H]` or `[H, G|T]`, which bind into a partial list), or a run-time check
+  finds the argument atomic or an unbound variable without attributes.  The runtime key test
   also passes an argument of another type than the later clauses' keys
   (`a(N) :- N > 0, ..., a(M).` before `a(x).  a(y).` called with an
   integer).  A restarting index bucket's answers are marked last again
