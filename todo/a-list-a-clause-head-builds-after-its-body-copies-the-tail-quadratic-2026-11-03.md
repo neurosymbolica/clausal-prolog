@@ -1,12 +1,16 @@
 # A list a clause head builds after its body copies the tail: quadratic
 
-**Status: PARTLY FIXED 2026-11-03 (commit f4248cbb).** Option 2 landed: the
-unbound-tail build no longer walks every element at every level (54.5 s to
-2.0 s at 16k; pinned in tests/test_head_list_build_scaling.py).  Option 1
-was prototyped, measured and left out (below): it makes the build linear
-but makes every read of the list pay a walk of the chain.  Still open: the
-`[]`- and unbound-tailed builds copy the rest at every level, quadratic in
-time and memory (over 8 GB at 64k); and, separately, recursing down an
+**Status: PARTLY FIXED 2026-11-03 (commit f4248cbb; commit 27a16c81).**
+Option 2 landed first: the unbound-tail build no longer walks every
+element at every level (54.5 s to 2.0 s at 16k; pinned in
+tests/test_head_list_build_scaling.py).  Then the hybrid ("link during
+the build, flatten to a plain list on first read", operator ruling
+2026-11-03) landed for the `[]` tail: the build is linear (1.81 s to
+0.23 s and 3.4 GB to 360 MB at 16k; 1.1 s and 1.3 GB at 64k, which
+passed 8 GB before) and no reader regresses (section "The hybrid" below;
+pinned in tests/test_head_link_build.py).  Still open: the unbound-tail
+build still copies the rest at every level (quadratic; a link there was
+measured and left out, below), and, separately, recursing down an
 open-tailed list with `[_|T]` is quadratic whichever way it was built.
 
 Found 2026-11-03 while measuring
@@ -220,3 +224,94 @@ reader, not to this output.
 Recommendation: 2 first (no representation change), 1 only with benchmark
 evidence.  Ruled 2026-11-03 as recommended; 2 landed, 1 measured and left
 out (above).
+
+## The hybrid, landed 2026-11-03 for the `[]` tail
+
+Operator ruling 2026-11-03 (R10): benchmark "link during the build,
+flatten to a plain list on first read"; land it only if the build becomes
+linear AND no reader regresses beyond noise.
+
+What it does (clausal/terms.py, "A list a clause head built, linked,
+flattened on first read"; `_head_list_unify_output` in
+clausal/logic/runtime/_list_unify.c and its twin in list_unify.py):
+
+* When the star is a plain list of `LIST_VIEW_MIN` (64) elements or more,
+  a list view, or a link, nothing follows it, and the copy would not be
+  promoted to text, the output builds a `HeadLink` (the dereferenced
+  elements before the star, the star's variable) instead of the copy.
+* The first read flattens the chain in C (`_head_link_flatten`), once,
+  and the object becomes a `SegListView` of the whole flat list
+  (`__class__` swap; the two share their slots).
+* `deref` (`py_deref` -> `headlink_rebind` in _variables.c) rebinds a
+  variable bound to a link, or to a view of a whole list, untrailed, to
+  the plain list, so every later read through it is a read of a plain
+  list.  `Var.value` and `walk` flatten too.  The build reads its star
+  with the new `deref_raw`, which does not flatten.
+* Sound because everything a link reads was bound before it was built;
+  the binding holding it is undone first.  Residual: a HeadLink object
+  that Python code holds directly (not through a variable), first read
+  after backtracking past its star, reads the star as it is then.  No
+  engine path does this; `deref`, `walk` and `.value` never hand an
+  unflattened link out.
+
+The benchmark gained three readers called once per element (`nth1/3` and
+`length/2` on the list, `nth1/3` on it inside `s/1`), the risk that killed
+option 1.
+
+`benchmarks/bench_head_list_build.py` rows, CPU seconds, minimum of three
+runs, main (e1b23bfb, built in a scratch copy) and the branch run
+interleaved, a shared box under load:
+
+| row (nil tail) | 1k main | 1k branch | 4k main | 4k branch | 16k main | 16k branch | 64k branch |
+|---|---|---|---|---|---|---|---|
+| build | 0.0168 | 0.0128 | 0.129 | **0.046** | 1.813 | **0.229** | 1.076 (main: over 8 GB) |
+| build_inc | 0.0208 | 0.0119 | 0.255 | 0.067 | 1.983 | 0.293 | 1.061 |
+| peak RSS (MB) | 77 | 66 | 317 | 124 | 3 403 | 360 | 1 304 |
+| length | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 |
+| nth1 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 |
+| member | 0.0001 | 0.0001 | 0.0004 | 0.0004 | 0.0014 | 0.0014 | 0.0055 |
+| append | 0.0000 | 0.0000 | 0.0001 | 0.0000 | 0.0001 | 0.0001 | 0.0002 |
+| msort | 0.0001 | 0.0001 | 0.0002 | 0.0002 | 0.0007 | 0.0007 | 0.0030 |
+| sum_list | 0.0003 | 0.0003 | 0.0012 | 0.0012 | 0.0046 | 0.0046 | 0.0186 |
+| findall_member | 0.0008 | 0.0008 | 0.0033 | 0.0033 | 0.0133 | 0.0133 | 0.0515 |
+| findall_copy | 0.0000 | 0.0000 | 0.0001 | 0.0001 | 0.0004 | 0.0005 | 0.0017 |
+| `==` | 0.0004 | 0.0004 | 0.0149 | 0.0020 | 0.0626 | 0.0090 | 0.0330 |
+| `=` | 0.0001 | 0.0001 | 0.0003 | 0.0002 | 0.0009 | 0.0010 | 0.0037 |
+| compare | 0.0020 | 0.0012 | 0.0044 | 0.0055 | 2.275 | 0.0203 | 0.0775 |
+| copy_term | 0.0000 | 0.0000 | 0.0001 | 0.0000 | 0.0002 | 0.0002 | 0.0007 |
+| term_to_atom | 0.0008 | 0.0008 | 0.0024 | 0.0026 | 0.0092 | 0.0093 | 0.0374 |
+| write_to_string | 0.0006 | 0.0006 | 0.0023 | 0.0024 | 0.0088 | 0.0095 | 0.0365 |
+| recurse | 0.0043 | 0.0043 | 0.0437 | 0.0177 | 0.0679 | 0.0706 | 0.733 |
+| nth1_each | 0.0195 | 0.0176 | 0.0724 | 0.0689 | 1.938 | 0.439 | 1.672 |
+| length_each | 0.0159 | 0.0158 | 0.0605 | 0.0610 | 1.994 | 0.455 | 1.736 |
+| nth1_each_in_s | 0.0188 | 0.0186 | 0.233 | 0.145 | 2.157 | 0.564 | 3.42 |
+
+The build grows x3.6, x5.0, x4.7 per x4 of N (main: x7.7, x14, then the
+8 GB cap).  Every reader is within noise of main (the bench's floor is
+about 0.01 s); the largest move against the branch is `compare` at 4k,
+0.0044 -> 0.0055 s (it was 0.0049 -> 0.0055 and 0.0048 -> 0.0050 in two
+earlier rounds, and faster on the branch at 1k and 16k).  Main's 16k
+`compare` and the per-element rows are slower because they include a
+collection over its 3.4 GB heap.  The 64k recursion (0.73 s) is x10 the
+16k one on the branch; the improper tail, whose code is unchanged, does
+the same (0.072 -> 0.64 s on both main and the branch), so it is the
+recursion, not the list.  The improper tail is unchanged (every row
+within 5% of main, 1k to 64k).
+
+### An open-tail link, measured and left out
+
+The prototype also linked an open star (a SegList of concrete segments
+ending in a hole still unbound at the build, or such a link), flattening
+to `SegList([ConcreteSeg(all), VarSeg(Z)])`, the term the copy was.  The
+build became linear (16k: 1.92 s to 0.24 s, 3.1 GB to 1.2 GB), but two
+readers regressed repeatably, in two interleaved rounds of three:
+`L == L2` 0.0002 -> 0.0004 s at 1k, 0.0008 -> 0.0012 at 4k, 0.0032 ->
+0.0045 at 16k (both lists are flattened at that first read), and
+`compare/3` 0.0207 -> 0.0413 s at 4k (0.0037 -> 0.0045 at 1k; equal at
+16k).  So the open tail is still copied.  With it left out, the open rows match
+main (16k, main / branch: build 1.883 / 1.871 s, `==` 0.0028 / 0.0029,
+`compare` 0.0424 / 0.0433, recursion 82.6 / 84.9 s; peak 3 124 MB both).
+
+The general workloads (benchmarks/workloads.py: fib, nqueens, qsort,
+graph, naf_ite) are within run-to-run spread of main; fib(22), interleaved
+three times: main 1.955 / 1.917 / 1.933 s, branch 1.901 / 1.890 / 1.989 s.

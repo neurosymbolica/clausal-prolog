@@ -25,7 +25,10 @@ for ``=``, ``==`` and ``compare``):
 * nil: length/2, nth1/3 (the last element), member/2 (the last element),
   append/3, msort/2, sum_list/2, findall/3 over member/2, findall/3 copying
   the list, ==, =, compare/3, copy_term/2, term_to_atom/2,
-  write_to_string/2, and a clause recursing down it with ``[_|T]``;
+  write_to_string/2, a clause recursing down it with ``[_|T]``, and three
+  readers called once per element (nth1/3 and length/2 on the list, nth1/3
+  on it as the argument of ``s/1``), where a list that reads in O(N) where
+  a flat list reads in O(1) would turn quadratic;
 * open and improper: the ones that are defined on such a list
   (==, =, compare/3, copy_term/2, findall/3 copying it, term_to_atom/2,
   write_to_string/2, and the recursion, last because on an open list it
@@ -75,6 +78,15 @@ walk([_|T]) :- walk(T).
 walk_improper(foo).
 walk_improper([_|T]) :- walk_improper(T).
 
+% A reader called once per element: a list that reads in O(N) where a
+% flat list read in O(1) turns these quadratic.
+each_nth1(I, N, _) :- I > N.
+each_nth1(I, N, L) :- I =< N, nth1(I, L, _), I1 is I+1, each_nth1(I1, N, L).
+each_length(I, N, _) :- I > N.
+each_length(I, N, L) :- I =< N, length(L, _), I1 is I+1, each_length(I1, N, L).
+each_nth1_in(I, N, _) :- I > N.
+each_nth1_in(I, N, s(L)) :- I =< N, nth1(I, L, _), I1 is I+1, each_nth1_in(I1, N, s(L)).
+
 tail_of(nil, []).
 tail_of(open, _).
 tail_of(improper, foo).
@@ -107,6 +119,9 @@ READERS = {
         ("term_to_atom", "term_to_atom(L, _)"),
         ("write_to_string", "write_to_string(L, _)"),
         ("recurse", "walk(L)"),
+        ("nth1_each", "each_nth1(1, N, L)"),
+        ("length_each", "each_length(1, N, L)"),
+        ("nth1_each_in_s", "each_nth1_in(1, N, s(L2))"),
     ],
     "open": [
         ("build", "mk(N, Z, L)"),

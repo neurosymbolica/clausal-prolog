@@ -137,6 +137,21 @@ surface described in [docs/public-api.md](docs/public-api.md).
   the runtime representation, no head pattern node, one fresh renaming
   shared by Head and Body) is documented on the function and pinned in
   `tests/test_clause_terms_shape.py`.
+- **A long list a clause head builds after its body is built in linear
+  time** (operator ruling 2026-11-03, R10). `mk(N, L, [N|T]) :- ...,
+  mk(N1, L, T).` with a `[]` tail copied the rest at every level: N^2/2
+  element copies, and every copy stayed alive (3.4 GB at 16 000 elements,
+  over 8 GB at 64 000). When the star is a list of 64 or more elements, a
+  list view or such a link, the head now builds a link
+  (`clausal.terms.HeadLink`), flattened into one list on its first read;
+  `deref` then rebinds the variable to that plain list, so every later
+  read costs what it did. 16 000 elements: 1.9 s to 0.22 s, 3.4 GB to
+  350 MB. Answers, element identity and promotion to text are unchanged
+  (a copy that would be text is still built as text). An open-tailed list
+  is still copied (a link there slowed `==` and `compare/3`). New:
+  `clausal.logic.variables.deref_raw`, `deref` without the rebind. Pinned in
+  `tests/test_head_link_build.py`; numbers in
+  `todo/a-list-a-clause-head-builds-after-its-body-copies-the-tail-quadratic-2026-11-03.md`.
 
 - **A clause head qualified with the file's own module defines the
   predicate** (`.pl` and `.clausal`): in a file whose `module/2` names `m`,
@@ -280,6 +295,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
   cubic (todo/tabled-scc-relead-rederives-every-answer-cubic-on-a-ring-
   2026-11-03.md).  `CLAUSAL_TABLING_SEMINAIVE=0` turns it off.  Pinned in
   `tests/test_tabling_idle_relead.py`.
+- **Entries pushed onto a trail while an undo runs are ruled the contract**
+  (operator ruling 2026-11-03; no behaviour change). `trail.undo(mark)`
+  releases only the entries present when it began; an entry an undo
+  callback or finaliser pushes survives the backtrack, with what it did,
+  until the next undo past it. A nested undo keeps what is pushed during it,
+  and the outer undo then releases those. Documented in
+  `docs/python_integration.md` ("Entries pushed while an undo runs"); pinned
+  in `tests/test_trail_undo_pushed_entries.py`.
+
 - **A digit group separator is one `_` between two digits** in an ISO
   reader number (`1_000`, `1_0.5`). `1_000_` and `1__000`, which read as
   1000, are now `syntax_error(cannot_parse_big_int)`, as in Scryer. The

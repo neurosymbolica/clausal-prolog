@@ -19,6 +19,10 @@
 
 static PyObject *fn_unify  = NULL;  /* clausal.logic.variables.unify */
 static PyObject *fn_deref  = NULL;  /* clausal.logic.variables.deref */
+/* deref_raw: deref without the head-link rebind (py_deref in _variables.c).
+ * The output reads its STAR with it: deref would flatten the link the star
+ * is bound to, and every level of a build would copy the rest again. */
+static PyObject *fn_deref_raw = NULL;
 static PyObject *fn_is_var = NULL;  /* clausal.logic.variables.is_var */
 
 /* clausal.logic.runtime.list_unify._seglist_input_fallback, looked up on
@@ -37,6 +41,7 @@ static PyTypeObject *SegBytesType    = NULL;
 static PyTypeObject *ConcreteSegType = NULL;
 static PyTypeObject *VarSegType      = NULL;
 static PyTypeObject *SegListViewType = NULL;   /* clausal.terms.SegListView */
+static PyTypeObject *HeadLinkType    = NULL;   /* clausal.terms.HeadLink */
 
 /* ================================================================
  * Helpers
@@ -793,7 +798,7 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
     }
 
     if (star_val != Py_None) {
-        PyObject *s0 = call_deref(star_val);
+        PyObject *s0 = PyObject_CallOneArg(fn_deref_raw, star_val);
         if (!s0) { Py_DECREF(d); return NULL; }
         PyObject *fast = is_chars_carrier(s0)
             ? carrier_star_concat(var_vals, s0, after_vals) : Py_NewRef(Py_None);
@@ -816,7 +821,7 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
      * element.  The cheap C checks keep the common [H|T] construction (S a
      * variable, a list, text, bytes) off the Python helper. */
     if (star_val != Py_None && PyList_GET_SIZE(after_vals) == 0) {
-        PyObject *s0 = call_deref(star_val);
+        PyObject *s0 = PyObject_CallOneArg(fn_deref_raw, star_val);
         if (!s0) { Py_DECREF(d); return NULL; }
         /* A Seg* star is walked once by its own arm below, which handles an
          * improper walk there: walking it here too doubled the cost of
@@ -884,8 +889,44 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
 
     /* Handle star_val */
     if (has_star) {
-        PyObject *s = call_deref(star_val);
+        PyObject *s = PyObject_CallOneArg(fn_deref_raw, star_val);
         if (!s) goto error;
+
+        /* A link instead of a copy of the rest (terms.HeadLink, whose
+         * comment says why it is sound): the star a link, a long list or a
+         * view, nothing after it, and a copy that would not be promoted to
+         * text (every element a char; for a view, whenever the elements
+         * before it are all chars).  Twin: list_unify._links. */
+        if (n_after == 0) {
+            int link = 0;
+            if (Py_TYPE(s) == HeadLinkType) {
+                link = 1;
+            } else if ((PyList_CheckExact(s)
+                        && PyList_GET_SIZE(s) >= LIST_VIEW_MIN)
+                       || Py_TYPE(s) == SegListViewType) {
+                int all_chars = 1;
+                for (Py_ssize_t i = 0; all_chars && i < PyList_GET_SIZE(result); i++)
+                    all_chars = is_char_atom_obj(PyList_GET_ITEM(result, i));
+                if (all_chars && PyList_CheckExact(s)) {
+                    for (Py_ssize_t i = 0; all_chars && i < PyList_GET_SIZE(s); i++)
+                        all_chars = is_char_atom_obj(PyList_GET_ITEM(s, i));
+                }
+                link = !all_chars;
+            }
+            if (link) {
+                Py_DECREF(s);
+                PyObject *hl = PyObject_CallFunctionObjArgs(
+                    (PyObject *)HeadLinkType, result, star_val, NULL);
+                if (!hl) goto error;
+                int ok = call_unify(d, hl, trail);
+                Py_DECREF(hl);
+                Py_DECREF(d);
+                Py_DECREF(result);
+                if (ok < 0) return NULL;
+                if (ok) Py_RETURN_TRUE;
+                Py_RETURN_FALSE;
+            }
+        }
 
         int s_text = 0;
         if (is_chars_carrier(s)) {
@@ -1317,11 +1358,111 @@ error:
 }
 
 
+
+/* ================================================================
+ * HeadLink flatten (terms.HeadLink._flatten, Python twin there)
+ * ================================================================ */
+
+/* The byte offsets of SegListView's slots, which a HeadLink shares. */
+static Py_ssize_t hl_off_base = -1, hl_off_mat, hl_off_lo, hl_off_hi;
+#define HL_SLOT(o, off) (*(PyObject **)((char *)(o) + (off)))
+
+static int
+hl_offsets(void)
+{
+    if (hl_off_base >= 0) return 0;
+    const char *names[4] = {"_base", "_mat", "_lo", "_hi"};
+    Py_ssize_t *offs[4] = {&hl_off_base, &hl_off_mat, &hl_off_lo, &hl_off_hi};
+    for (int i = 0; i < 4; i++) {
+        PyObject *d = PyDict_GetItemString(SegListViewType->tp_dict, names[i]);
+        if (!d || !Py_IS_TYPE(d, &PyMemberDescr_Type)) {
+            PyErr_Format(PyExc_TypeError, "SegListView has no slot %s", names[i]);
+            return -1;
+        }
+        *offs[i] = ((PyMemberDescrObject *)d)->d_member->offset;
+    }
+    return 0;
+}
+
+static PyObject *
+py_head_link_flatten(PyObject *Py_UNUSED(module), PyObject *self)
+{
+    if (Py_TYPE(self) != HeadLinkType) Py_RETURN_NONE;
+    if (hl_offsets() < 0) return NULL;
+    /* The chain: each link's elements, down to the first star that is no
+     * link (a list or a view).  Every star is read raw: deref would flatten
+     * the links below one by one. */
+    PyObject *parts = PyList_New(0);
+    if (!parts) return NULL;
+    Py_ssize_t total = 0;
+    PyObject *node = self;
+    PyObject *v = NULL;
+    for (;;) {
+        PyObject *b = HL_SLOT(node, hl_off_base);
+        if (!b || !PyList_Check(b)) {
+            Py_DECREF(parts);
+            PyErr_SetString(PyExc_TypeError, "HeadLink: its elements are not a list");
+            return NULL;
+        }
+        if (PyList_Append(parts, b) < 0) { Py_DECREF(parts); return NULL; }
+        total += PyList_GET_SIZE(b);
+        v = PyObject_CallOneArg(fn_deref_raw, HL_SLOT(node, hl_off_mat));
+        if (!v) { Py_DECREF(parts); return NULL; }
+        if (Py_TYPE(v) != HeadLinkType)
+            break;
+        node = v;                  /* kept alive by the star's binding */
+        Py_DECREF(v);
+    }
+    PyObject *tail;
+    if (Py_TYPE(v) == SegListViewType)
+        tail = PyObject_CallMethod(v, "elements", NULL);
+    else if (PyList_Check(v))
+        tail = Py_NewRef(v);
+    else {
+        PyErr_SetString(PyExc_TypeError, "HeadLink: its star is not a list");
+        tail = NULL;
+    }
+    Py_DECREF(v);
+    if (!tail) { Py_DECREF(parts); return NULL; }
+    Py_ssize_t nt = PyList_GET_SIZE(tail);
+    PyObject *flat = PyList_New(total + nt);
+    if (!flat) { Py_DECREF(tail); Py_DECREF(parts); return NULL; }
+    Py_ssize_t k = 0;
+    for (Py_ssize_t i = 0; i < PyList_GET_SIZE(parts); i++) {
+        PyObject *b = PyList_GET_ITEM(parts, i);
+        for (Py_ssize_t j = 0; j < PyList_GET_SIZE(b); j++)
+            PyList_SET_ITEM(flat, k++, Py_NewRef(PyList_GET_ITEM(b, j)));
+    }
+    for (Py_ssize_t j = 0; j < nt; j++)
+        PyList_SET_ITEM(flat, k++, Py_NewRef(PyList_GET_ITEM(tail, j)));
+    Py_DECREF(tail);
+    Py_DECREF(parts);
+    /* The object becomes the view of the whole flat list. */
+    PyObject *zero = PyLong_FromLong(0);
+    PyObject *len = PyLong_FromSsize_t(PyList_GET_SIZE(flat));
+    int rc = (zero && len) ? PyObject_SetAttrString(self, "_base", flat) : -1;
+    Py_DECREF(flat);
+    if (rc == 0) rc = PyObject_SetAttrString(self, "_lo", zero);
+    if (rc == 0) rc = PyObject_SetAttrString(self, "_hi", len);
+    if (rc == 0) rc = PyObject_SetAttrString(self, "_mat", Py_None);
+    Py_XDECREF(zero);
+    Py_XDECREF(len);
+    if (rc == 0)
+        rc = PyObject_SetAttrString(self, "__class__", (PyObject *)SegListViewType);
+    if (rc < 0) return NULL;
+    Py_RETURN_NONE;
+}
+
 /* ================================================================
  * Module definition and init
  * ================================================================ */
 
 static PyMethodDef module_methods[] = {
+    {"_head_link_flatten", py_head_link_flatten, METH_O,
+     "_head_link_flatten(link)\n"
+     "\n"
+     "Flatten a terms.HeadLink in place into the SegListView of its list\n"
+     "(twin: terms.HeadLink._flatten_py)."},
     {"_head_list_unify_input", py_head_list_unify_input, METH_VARARGS,
      "_head_list_unify_input(target, var_vals, star_val, after_vals, trail)\n"
      "\n"
@@ -1350,6 +1491,7 @@ PyInit__list_unify(void)
 
     fn_unify  = PyObject_GetAttrString(var_mod, "unify");
     fn_deref  = PyObject_GetAttrString(var_mod, "deref");
+    fn_deref_raw = PyObject_GetAttrString(var_mod, "deref_raw");
     fn_is_var = PyObject_GetAttrString(var_mod, "is_var");
     Py_DECREF(var_mod);
 
@@ -1365,9 +1507,11 @@ PyInit__list_unify(void)
     PyObject *cs = PyObject_GetAttrString(terms_mod, "ConcreteSeg");
     PyObject *vs = PyObject_GetAttrString(terms_mod, "VarSeg");
     PyObject *lv = PyObject_GetAttrString(terms_mod, "SegListView");
+    PyObject *hl = PyObject_GetAttrString(terms_mod, "HeadLink");
     Py_DECREF(terms_mod);
 
-    if (!sl || !ss || !sb || !cs || !vs || !lv) return NULL;
+    if (!sl || !ss || !sb || !cs || !vs || !lv || !hl) return NULL;
+    HeadLinkType    = (PyTypeObject *)hl;
     SegListViewType = (PyTypeObject *)lv;
     SegListType     = (PyTypeObject *)sl;
     SegStringType   = (PyTypeObject *)ss;

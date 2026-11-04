@@ -80,9 +80,10 @@ from __future__ import annotations
 
 from clausal.logic.cells import (chars, is_chars, chars_text,  # stage 1: the chars carrier
                                  chars_payload, text_concat, CHARS_TAG)
-from clausal.logic.variables import is_var, deref, unify
+from clausal.logic.variables import is_var, deref, deref_raw, unify
 from clausal.terms import (
-    SegList, SegListView, ConcreteSeg, VarSeg, list_rest,
+    SegList, SegListView, HeadLink, ConcreteSeg, VarSeg, list_rest,
+    LIST_VIEW_MIN,
     SegString, SegBytes, _is_cons_cell, _unify_seglist_cons,
     _hole_is_nil, _not_a_list,
 )
@@ -246,7 +247,7 @@ def _improper_star(before, star_val):
     ``T = foo, X = [a|T]``), never S as one more element.  None otherwise.
     Shared with the C twin (``_list_unify.c``), which calls it."""
     from clausal.terms import _is_improper_tail   # noqa: PLC0415
-    s = deref(star_val)
+    s = deref_raw(star_val)
     # A SegList star is NOT walked here: the SegList arm of the caller walks
     # it once and hands an improper walk to :func:`_cons_star`.  Walking it
     # here too made forward hole-building (``build(N, [x|H], T)``) walk
@@ -306,6 +307,21 @@ def _promote_through_deref(result):
     return maybe_promote_to_str(derefed)
 
 
+def _links(result, s):
+    """Whether ``[*result, *S]`` (S dereferenced, nothing after it) is built
+    as a :class:`~clausal.terms.HeadLink` rather than copied: S a link, or a
+    long list or a view, unless the copy would be promoted to text (every
+    element a char; for a view, whenever *result* is all chars).  C twin:
+    the HeadLink arm of ``py_head_list_unify_output``."""
+    if type(s) is HeadLink:
+        return True
+    if type(s) is list and len(s) >= LIST_VIEW_MIN or type(s) is SegListView:
+        if not all(is_char_atom(e) for e in result):
+            return True
+        return type(s) is list and not all(is_char_atom(e) for e in s)
+    return False
+
+
 def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
     """Output-mode list pattern unification: construct list from bound vars.
 
@@ -317,7 +333,7 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
         return _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail)
     result = [deref(v) for v in var_vals]
     if star_val is not None:
-        fast = _carrier_star_concat(result, deref(star_val), after_vals)
+        fast = _carrier_star_concat(result, deref_raw(star_val), after_vals)
         if fast is not None:
             return unify(d, fast, trail)
     if star_val is not None and not after_vals:
@@ -333,7 +349,10 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
     # of chars IS the string, and building the compact representation is
     # not a back door — it is R-S2's rule that a string stays a string.
     if star_val is not None:
-        s = deref(star_val)
+        s = deref_raw(star_val)
+        if not after_vals and _links(result, s):
+            # A link, not a copy of the rest (clausal.terms.HeadLink).
+            return unify(d, HeadLink(result, star_val), trail)
         s_text = is_chars(s)
         if s_text:
             s = chars_text(s)          # a carrier-bound star splats as its chars
@@ -485,6 +504,9 @@ try:
     from clausal.logic.runtime._list_unify import (  # noqa: F811
         _head_list_unify_input,
         _head_list_unify_output,
+        _head_link_flatten as _c_head_link_flatten,
     )
+    import clausal.terms as _terms
+    _terms._head_link_flatten = _c_head_link_flatten
 except ImportError:
     pass

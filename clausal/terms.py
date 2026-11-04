@@ -1575,6 +1575,8 @@ class SegListView(SegList):
                 and other._hi == self._hi)
 
     def __eq__(self, other):
+        if type(other) is HeadLink:
+            other._flatten()
         if type(other) is SegListView:
             return self._same_window(other) or (
                 len(other) == len(self) and other.elements() == self.elements())
@@ -1589,6 +1591,8 @@ class SegListView(SegList):
 
     def __unify__(self, other, trail):
         unify = _hook_unifier(trail)
+        if type(other) is HeadLink:
+            other._flatten()
         if type(other) is SegListView:
             if self._same_window(other):
                 return True
@@ -1610,6 +1614,121 @@ class SegListView(SegList):
 
     def __repr__(self) -> str:
         return repr(self.elements())
+
+
+# ── A list a clause head built, linked, flattened on first read ──────────────
+#
+# ``mk(N, L, [N|T]) :- ..., mk(N1, L, T).`` builds its list at the solution,
+# after the body bound ``T``.  Copying ``[N, *T]`` at every level was N^2/2
+# element copies, and every level's copy stayed alive (todo/a-list-a-clause-
+# head-builds-after-its-body-copies-the-tail-quadratic-2026-11-03.md).  When
+# ``T`` is a long list (``LIST_VIEW_MIN`` elements or more), a list view or
+# another link, and nothing follows the star, the head output builds a
+# HeadLink instead: the elements before the star and the star's variable.
+# The first read flattens the chain of links below it into one list, once,
+# and the object becomes a SegListView of that list (a ``__class__`` swap:
+# the two have the same slots), which every reader reads in place.  The
+# engine's ``deref`` then rebinds a variable bound to it to the plain list
+# itself (``headlink_rebind`` in _variables.c), so reads through that
+# variable cost what they cost on the copy.
+#
+# Sound because everything a link reads was bound BEFORE the link was built:
+# the star's binding, and every link below it.  Backtracking undoes the
+# binding that holds the link before any of those, so the flattened list is
+# the list the copy would have been for as long as the link is reachable
+# from a binding.  (A HeadLink object Python code holds directly, not
+# through a variable, read only after backtracking past its star, reads the
+# star as it is then.  ``deref``, ``walk`` and ``Var.value`` never hand an
+# unflattened link out.)
+#
+# The copy is built instead whenever it would have been promoted to text
+# (every element a char), so a link never stands for text.  An open tail is
+# still copied: a link there made ``==`` and ``compare/3`` on the built list
+# measurably slower (the todo has the numbers).
+#
+# Raw slots, until flattened: ``_base`` the elements before the star (a
+# list, each already dereferenced, as the copy held them), ``_mat`` the
+# star (its variable), ``_lo`` -1, ``_hi`` 0.  The flatten is in C
+# (``_list_unify._head_link_flatten``); ``_flatten_py`` is its twin.
+
+
+class HeadLink(SegListView):
+    __slots__ = ()
+
+    def __new__(cls, *args):
+        # ``type(t)(segments)`` is how a copier rebuilds a Seg* (as for a view).
+        if len(args) == 1:
+            return SegList(args[0])
+        return object.__new__(cls)
+
+    def __init__(self, before, star):
+        self._base = before
+        self._mat = star
+        self._lo = -1
+        self._hi = 0
+
+    def _flatten(self):
+        _head_link_flatten(self)
+
+    def _flatten_py(self):
+        if type(self) is not HeadLink:
+            return
+        parts = []
+        node = self
+        while True:
+            parts.append(node._base)
+            v = _deref_raw(node._mat)
+            if type(v) is HeadLink:
+                node = v
+                continue
+            break
+        if type(v) is SegListView:
+            v = v.elements()
+        flat = []
+        for p in parts:
+            flat.extend(p)
+        flat.extend(v)
+        self._base = flat
+        self._lo = 0
+        self._hi = len(flat)
+        self._mat = None
+        self.__class__ = SegListView
+
+
+def _head_link_reader(name):
+    def read(self, *args, **kwargs):
+        HeadLink._flatten(self)
+        return getattr(self, name)(*args, **kwargs)
+    read.__name__ = name
+    return read
+
+
+def _head_link_attr(name):
+    def get(self):
+        HeadLink._flatten(self)
+        return getattr(self, name)
+    return property(get)
+
+
+# Every SegListView reader flattens first; the raw slots are read only by
+# code that checks for an exact SegListView.
+for _name in ("__eq__", "__unify__", "__repr__", "__reduce__", "__len__",
+              "__iter__", "__getitem__", "__contains__", "__walk__",
+              "_walk_raw", "_walk_seq", "_walk_once", "elements",
+              "is_ground", "to_list", "_same_window", "__bool__",
+              "_concrete_prefix"):
+    if hasattr(SegListView, _name):
+        setattr(HeadLink, _name, _head_link_reader(_name))
+for _name in ("_segments", "segments", "base", "lo", "hi"):
+    setattr(HeadLink, _name, _head_link_attr(_name))
+HeadLink.__hash__ = SegList.__hash__
+del _name
+from .logic.variables._variables import (     # noqa: E402
+    deref_raw as _deref_raw, _register_head_link)
+_register_head_link(HeadLink, SegListView)
+# list_unify replaces this with the C flatten once _list_unify is loaded
+# (it imports this module first).
+_head_link_flatten = HeadLink._flatten_py
 
 
 def plain_deref(term):
