@@ -522,14 +522,25 @@ class TestRealRoots:
         with no_symbolic_solution():
             answers(solve_all, equation, x, Var())
 
-    def test_roots_that_finds_only_some_is_a_named_error(self):
-        # x**5 - x - 1 (in metres): roots/1 finds none of the five.
+    def test_quintic_sympy_gives_up_on_is_solved_numerically(self):
+        # x**5 - x * 1 metre**4 - 1 metre**5: SymPy answers [] (solve) or
+        # finds none (roots); the one real root is 1.16730397826... metre.
         x = Var()
         equation = Sub(left=Sub(left=Pow(left=x, right=5),
                                 right=Mult(left=x, right=Pow(left=metre(1), right=4))),
                        right=Pow(left=metre(1), right=5))
-        with no_symbolic_solution():
+        for found in (answers(solve_all, equation, x, Var())[0][2],
+                      [a[2] for a in answers(solve, equation, x, Var())],
+                      [a[2][0] for a in answers(roots, equation, x, Var())]):
+            assert len(found) == 1 and dict(found[0].dims) == {"metre": 1}
+            assert found[0].value == pytest.approx(1.1673039782614187, rel=1e-15)
+
+    def test_roots_of_a_non_polynomial_is_a_named_error(self):
+        x = Var()
+        equation = Sub(left=("exp", Div(left=x, right=kelvin(1))), right=2)
+        with pytest.raises(LogicException) as caught:
             answers(roots, equation, x, Var())
+        assert caught.value.term[1][:2] == ("type_error", "polynomial")
 
     def test_plain_equations_are_unchanged(self):
         x = Var()
@@ -558,3 +569,111 @@ class TestZeroDerivative:
         # Nothing says what X is, so 3 kelvin per X has no known dimension.
         x = Var()
         assert answers(diff, kelvin(3), x, Var())[0][2] == 0
+
+
+# ── Third review (0998b60e, b032b556) ───────────────────────────────────────
+
+
+def solutions(equation, x):
+    return answers(solve_all, equation, x, Var())[0][2]
+
+
+class TestFloatsInTheEquation:
+    """Blocker 1: a float in the equation must not drop its roots."""
+
+    def test_float_coefficient_quadratic(self):
+        x = Var()
+        found = solutions(Sub(left=Pow(left=x, right=2), right=metre(2.0) * metre(1)), x)
+        assert [r.value for r in found] == pytest.approx([-2 ** 0.5, 2 ** 0.5])
+        assert all(dict(r.dims) == {"metre": 1} for r in found)
+
+    def test_float_linear(self):
+        x = Var()
+        found = solutions(Sub(left=Mult(left=x, right=metre(2.5)), right=metre(1)), x)
+        assert found == [pytest.approx(0.4)]
+
+    def test_standard_gravity(self):
+        x = Var()
+        acceleration = metre(1) / second(1) / second(1)
+        found = solutions(Sub(left=Mult(left=x, right=units.standard_gravity),
+                              right=acceleration), x)
+        assert found == [pytest.approx(1 / 9.80665)]
+
+    def test_chain_log_mean_temperature_difference_to_area(self):
+        # L = LMTD(30 kelvin, 10 kelvin) is a float; then which area A gives
+        # a 27000 watt duty at U = 500 watt / (metre**2 kelvin)?
+        hot, cold = kelvin(30), kelvin(10)
+        (answer,) = answers(simplify, Div(left=Sub(left=hot, right=cold),
+                                          right=("log", Div(left=hot, right=cold))), Var())
+        mean = answer[1]
+        assert isinstance(mean.value, float)
+        coefficient = units.watt(500) / metre(1) / metre(1) / kelvin(1)
+        area = Var()
+        equation = Sub(left=Mult(left=Mult(left=coefficient, right=area), right=mean),
+                       right=units.watt(27000))
+        (found,) = solutions(equation, area)
+        assert dict(found.dims) == {"metre": 2}
+        assert found.value == pytest.approx(27000 / (500 * mean.value), rel=1e-12)
+        assert [a[2] for a in answers(solve, equation, area, Var())] == [found]
+
+
+class TestScale:
+    """Blocker 2: the tolerance follows the equation's own terms, not the
+    size of a root or a coefficient."""
+
+    def cubic(self, x, roots_in_metres):
+        a, b, c = roots_in_metres
+        m = metre(1)
+        return Add(left=Add(left=Sub(left=Pow(left=x, right=3),
+                                     right=Mult(left=Pow(left=x, right=2), right=m * (a + b + c))),
+                            right=Mult(left=x, right=m * m * (a * b + b * c + a * c))),
+                   right=-(m * m * m * (a * b * c)))
+
+    def test_exact_roots_far_apart(self):
+        x = Var()
+        roots_in_metres = (Fraction(1, 10 ** 30), 1, 10 ** 30)
+        found = solutions(self.cubic(x, roots_in_metres), x)
+        assert found == [metre(r) for r in roots_in_metres]
+
+    def test_two_exact_roots_closer_than_any_tolerance_stay_two(self):
+        x = Var()
+        equation = Mult(left=Sub(left=x, right=metre(1)),
+                        right=Sub(left=x, right=metre(1 + Fraction(1, 10 ** 30))))
+        assert len(solutions(equation, x)) == 2
+
+    @pytest.mark.parametrize("scale", [10 ** 30, Fraction(1, 10 ** 30)],
+                             ids=["coefficients 1e30", "coefficients 1e-30"])
+    def test_scaled_cubic_keeps_all_three_roots(self, scale):
+        # scale * (x**3 - 3 x + 1), in metres: three real roots near 1.
+        x = Var()
+        m = metre(1)
+        equation = Add(left=Sub(left=Mult(left=scale, right=Pow(left=x, right=3)),
+                                right=Mult(left=Mult(left=3 * scale, right=x), right=m * m)),
+                       right=m * m * m * scale)
+        found = solutions(equation, x)
+        assert [r.value for r in found] == pytest.approx(
+            [-1.8793852415718169, 0.3472963553338607, 1.532088886237956], rel=1e-14)
+
+
+class TestMoreFunctions:
+    def test_atan2_takes_one_dimension_and_gives_an_angle(self):
+        (answer,) = answers(simplify, ("atan2", metre(3), metre(4)), Var())
+        assert not isinstance(answer[1], Quantity)
+        with refused_as_units_mismatch():
+            answers(simplify, ("atan2", metre(3), kelvin(4)), Var())
+
+    def test_hypot_keeps_the_dimension(self):
+        assert answers(simplify, ("hypot", metre(3), metre(4)), Var())[0][1] == metre(5)
+        with refused_as_units_mismatch():
+            answers(simplify, ("hypot", metre(3), kelvin(4)), Var())
+
+    def test_sign_of_any_dimension_is_a_number(self):
+        assert answers(simplify, ("sign", kelvin(-3)), Var())[0][1] == -1
+
+    def test_caret_is_a_power(self):
+        assert answers(simplify, ("^", metre(2), 2), Var())[0][1] == metre(2) * metre(2)
+
+    def test_wrong_arity_is_a_named_error(self):
+        with pytest.raises(LogicException) as caught:
+            answers(simplify, ("abs", kelvin(3), kelvin(4)), Var())
+        assert caught.value.term[1] == ("type_error", "evaluable", ("/", "abs", 2))

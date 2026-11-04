@@ -429,7 +429,15 @@ def _to_sympy_value(term: Any, ctx: _ConversionContext) -> _sp.Expr:
         sp_args = [_to_sympy_ctx(a, ctx) for a in term[1:]]
         sp_fn = _SYMPY_FUNCTIONS.get(fn_name)
         if sp_fn is not None:
-            return sp_fn(*sp_args)
+            try:
+                return sp_fn(*sp_args)
+            except TypeError:
+                if ctx._has_units:
+                    # abs(3 kelvin, 4 kelvin): the wrong arity, named as the
+                    # engine's own `is` names it.
+                    raise LogicException(type_error(
+                        "evaluable", ("/", fn_name, len(sp_args)), "sympy"))
+                raise
         # Unknown functor -> SymPy Function
         return _sp.Function(fn_name)(*sp_args)
 
@@ -457,6 +465,10 @@ _SYMPY_FUNCTIONS: dict[str, Any] = {
     "ln": _sp.log,
     "sqrt": _sp.sqrt,
     "cbrt": _sp.cbrt,
+    "atan2": _sp.atan2,
+    "sign": _sp.sign,
+    "hypot": lambda a, b: _sp.sqrt(a ** 2 + b ** 2),
+    "^": _sp.Pow,
     "abs": _sp.Abs,
     "factorial": _sp.factorial,
     "gamma": _sp.gamma,
@@ -734,8 +746,25 @@ def _real_roots(ctx: _ConversionContext, eq_expr, var_expr, roots):
     if not ctx._has_units:
         return [(r, m, None) for r, m in roots]
     expected = _variable_dimension(ctx, var_expr)
+    if not roots:
+        # SymPy answers [] when it gives up on a polynomial (a quintic): a
+        # polynomial has roots, so find them numerically.  [] stands for an
+        # equation that is not a polynomial.
+        found = _numeric_roots(eq_expr, var_expr, expected)
+        if found is not None:
+            roots = found
     return [(r, m, expected)
             for r, m in _sympy_units.real_roots(eq_expr, var_expr, roots)]
+
+
+def _numeric_roots(eq_expr, var_expr, expected):
+    """All roots of a polynomial equation numerically, in the unknown's
+    dimension, or None if it is not a polynomial in the unknown alone."""
+    units = _sympy_units._unit_product(expected.dims) if expected is not None else None
+    found = _sympy_units.numeric_polynomial_roots(eq_expr, var_expr, units or 1)
+    if found is not None and units is None:
+        raise _sympy_units.no_symbolic_solution()   # no dimension to give them
+    return found
 
 
 def _derivative_dimension(ctx: _ConversionContext, var_expr):
@@ -1297,14 +1326,27 @@ def _roots_3(this_generator, _proceed, _fail, _catcher, equation, var, root, tra
     var = deref(var)
     try:
         ctx, eq_expr, var_expr = _convert_multi(equation, var)
-        root_dict = _solving(ctx, _sp.roots, eq_expr, var_expr)
-        if ctx._has_units and sum(root_dict.values()) < _sp.degree(eq_expr, var_expr):
-            # roots/1 found only some: SymPy could not solve the rest.
-            raise LogicException(system_error("no_symbolic_solution"))
+        if ctx._has_units:
+            try:
+                root_dict = _solving(ctx, _sp.roots, eq_expr, var_expr)
+                complete = sum(root_dict.values()) == _sp.degree(eq_expr, var_expr)
+            except _sp.PolynomialError:
+                # roots/3 is for polynomials; exp(X / 1 kelvin) - 2 is not one.
+                raise LogicException(type_error("polynomial", equation, "roots/3"))
+            candidates = list(root_dict.items())
+            if not complete:
+                # SymPy found only some: all of them numerically instead.
+                candidates = _numeric_roots(
+                    eq_expr, var_expr, _variable_dimension(ctx, var_expr))
+                if candidates is None:
+                    raise _sympy_units.no_symbolic_solution()
+        else:
+            root_dict = _solving(ctx, _sp.roots, eq_expr, var_expr)
+            candidates = list(root_dict.items())
     except (TypeError, ValueError):
         yield (_fail, DONE)
         return
-    for r, mult, expected in _real_roots(ctx, eq_expr, var_expr, list(root_dict.items())):
+    for r, mult, expected in _real_roots(ctx, eq_expr, var_expr, candidates):
         mark = trail.mark()
         pair = (_to_pyval(r, expected), int(mult))
         if unify(root, pair, trail):

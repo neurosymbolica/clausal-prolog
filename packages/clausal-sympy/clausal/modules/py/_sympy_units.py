@@ -70,7 +70,7 @@ from fractions import Fraction
 from typing import Any, Callable
 
 from clausal.logic.cells import is_chars
-from clausal.logic.exceptions import LogicException, evaluation_error
+from clausal.logic.exceptions import LogicException, evaluation_error, system_error
 from clausal.logic.variables import is_var
 from clausal.modules.py import _import_stdlib
 from clausal.terms import (
@@ -315,9 +315,11 @@ def require_dimensionless(name: str, dimension: Dimension | None,
 # Every function the wrapper can build is in exactly one class, by name (the
 # Clausal functor, or the SymPy class name of what it becomes):
 #
-# * DIMENSION-PRESERVING: abs, max, min.  All arguments must share one
-#   dimension, and the value has it.
-# * POWERS: sqrt (1/2) and cbrt (1/3), judged as ``**``.
+# * DIMENSION-PRESERVING: abs, max, min, hypot.  All arguments must share
+#   one dimension, and the value has it.
+# * SAME DIMENSION IN, DIMENSIONLESS OUT: atan2 (an angle from two lengths).
+# * ANY DIMENSION IN, DIMENSIONLESS OUT: sign.
+# * POWERS: sqrt (1/2), cbrt (1/3) and ``^`` (as ``**``).
 # * Everything else NEEDS DIMENSIONLESS ARGUMENTS and gives a dimensionless
 #   value: the wrapper's own functions (log, exp, sin, ..., floor, ceiling,
 #   gamma, factorial), SymPy's other functions, and any name the wrapper
@@ -326,7 +328,9 @@ def require_dimensionless(name: str, dimension: Dimension | None,
 #   therefore REFUSED with units_mismatch: its dimension cannot be judged,
 #   and putting the magnitude back without its unit would be wrong.
 
-_PRESERVING_NAMES = frozenset({"abs", "Abs", "max", "Max", "min", "Min"})
+_PRESERVING_NAMES = frozenset({"abs", "Abs", "max", "Max", "min", "Min", "hypot"})
+_SAME_DIMENSION_TO_DIMENSIONLESS = frozenset({"atan2"})
+_ANY_DIMENSION_TO_DIMENSIONLESS = frozenset({"sign"})
 _POWER_NAMES = {"sqrt": _sp.Rational(1, 2), "cbrt": _sp.Rational(1, 3)}
 
 
@@ -335,6 +339,11 @@ def _function_dimension(name: str, args: list, analysis: "Analysis") -> Dimensio
         return _power(args[0], dimensionless(), _POWER_NAMES[name], analysis)
     if name in _PRESERVING_NAMES:
         return analysis.sum(args)
+    if name in _SAME_DIMENSION_TO_DIMENSIONLESS:
+        analysis.sum(args)
+        return dimensionless()
+    if name in _ANY_DIMENSION_TO_DIMENSIONLESS:
+        return dimensionless()
     for a in args:
         require_dimensionless(f"{name}/{len(args)}", a, analysis)
     return dimensionless()
@@ -371,6 +380,8 @@ def term_dimension(term: Any, analysis: Analysis, *,
             base, exponent = walk(t.left), walk(t.right)
             return _power(base, exponent, to_sympy(t.right), analysis)
         if type(t) is tuple and len(t) >= 2 and type(t[0]) is str:
+            if t[0] == "^" and len(t) == 3:
+                return _power(walk(t[1]), walk(t[2]), to_sympy(t[2]), analysis)
             return _function_dimension(t[0], [walk(a) for a in t[1:]], analysis)
         return sympy_dimension(to_sympy(t), analysis)
     return walk(term)
@@ -420,7 +431,7 @@ def same_dimension(first: Dimension | None, second: Dimension | None) -> None:
     Analysis().sum([first, second])
 
 
-# -- Back to Clausal ---------------------------------------------------------
+# -- Magnitudes ---------------------------------------------------------------
 
 
 def real_magnitude(expr: Any) -> Any:
@@ -439,18 +450,32 @@ def _unit_product(dims) -> Any:
 # A quantity is real.  Where SymPy cannot say whether a magnitude is real
 # (a cubic's three real roots written with complex radicals, a LambertW
 # branch), it is evaluated to NUMERIC_DIGITS significant digits and kept iff
-# its imaginary part is at most TOLERANCE * (1 + |real part|); the value is
-# then the real part, a float.
+# its imaginary part is negligible RELATIVE to its size; the value is then
+# the real part, a float.  "Negligible" is set by the input's precision:
+# EXACT_TOLERANCE when every number in it is exact, FLOAT_TOLERANCE when a
+# float is in it (a float carries ~16 digits, so SymPy's answer does too).
 
 NUMERIC_DIGITS = 50
-TOLERANCE = _sp.Float("1e-25", NUMERIC_DIGITS)
+EXACT_TOLERANCE = _sp.Float("1e-25", NUMERIC_DIGITS)
+FLOAT_TOLERANCE = _sp.Float("1e-12", NUMERIC_DIGITS)
 
 
-def real_value(magnitude: Any) -> Any:
+def tolerance_for(*exprs: Any) -> Any:
+    return FLOAT_TOLERANCE if any(e.has(_sp.Float) for e in exprs) else EXACT_TOLERANCE
+
+
+def _negligible(small: Any, scale: Any, tolerance: Any) -> bool:
+    """``|small| <= tolerance * |scale|`` (exactly zero when scale is 0)."""
+    return abs(small) <= tolerance * abs(scale)
+
+
+def real_value(magnitude: Any, tolerance: Any = None) -> Any:
     """*magnitude* (no dimension symbols, no variables) as a real SymPy
     number: itself when SymPy knows it is real, else its numeric real part
-    when the imaginary part is negligible.  None when it is not real, or
-    not finite."""
+    when the imaginary part is negligible relative to the whole.  None when
+    it is not real, or not finite."""
+    if tolerance is None:
+        tolerance = tolerance_for(magnitude)
     if magnitude is _sp.nan or magnitude.is_finite is False:
         return None
     real = magnitude.is_extended_real
@@ -466,15 +491,56 @@ def real_value(magnitude: Any) -> Any:
     re_part, im_part = numeric.as_real_imag()
     if not (re_part.is_finite and im_part.is_finite):
         return None
-    if abs(im_part) > TOLERANCE * (1 + abs(re_part)):
+    if not _negligible(im_part, _sp.sqrt(re_part ** 2 + im_part ** 2), tolerance):
         return None
     return _sp.Float(re_part, NUMERIC_DIGITS)
 
 
-class NoSymbolicSolution(Exception):
-    """SymPy could not solve an equation holding a quantity; the wrapper
-    reports ``error(system_error(no_symbolic_solution), _)`` rather than a
-    partial or empty answer."""
+def _is_exact_real(magnitude: Any) -> bool:
+    """A root SymPy gives exactly and knows is real: correct by
+    construction, so it is not substituted back."""
+    return (magnitude.is_extended_real is True and not magnitude.has(_sp.I)
+            and not magnitude.has(_sp.Float)
+            and not magnitude.has(_sp.core.function.AppliedUndef))
+
+
+def _satisfies(equation_magnitude: Any, symbol: Any, numeric: Any, tolerance: Any) -> bool:
+    """The equation's residual at *numeric* is negligible RELATIVE to the
+    size of its own terms there: |sum t_i| <= tolerance * sum |t_i|.  So the
+    test does not depend on the scale of the root or of the coefficients."""
+    terms = _sp.Add.make_args(_sp.expand(equation_magnitude))
+    values = [_sp.N(t.subs(symbol, numeric), NUMERIC_DIGITS) for t in terms]
+    if not all(v.is_number for v in values):
+        return False
+    residual = sum(values)
+    scale = sum(abs(v) for v in values)
+    return _negligible(residual, scale, tolerance)
+
+
+def no_symbolic_solution() -> LogicException:
+    return LogicException(system_error("no_symbolic_solution"))
+
+
+def numeric_polynomial_roots(equation: Any, symbol: Any, units: Any) -> list | None:
+    """All roots of *equation* as a polynomial in *symbol* alone,
+    numerically (to NUMERIC_DIGITS), each times *units*, as ``(root, 1)``.
+    None when it is not such a polynomial.  For when SymPy gives up on one
+    (a quintic) by answering nothing or only some roots.  The numerics
+    failing is ``system_error(no_symbolic_solution)``."""
+    magnitude = real_magnitude(equation)
+    if free_variables(magnitude) - {symbol}:
+        return None
+    try:
+        polynomial = _sp.Poly(magnitude, symbol)
+    except (_sp.PolynomialError, _sp.polys.polyerrors.GeneratorsNeeded):
+        return None
+    if polynomial.degree() < 1:
+        return None
+    try:
+        found = polynomial.nroots(n=NUMERIC_DIGITS, maxsteps=200)
+    except Exception as exc:                # mpmath.NoConvergence and kin
+        raise no_symbolic_solution() from exc
+    return [(r * units, 1) for r in found]
 
 
 def real_roots(equation: Any, symbol: Any, roots: list) -> list:
@@ -482,38 +548,58 @@ def real_roots(equation: Any, symbol: Any, roots: list) -> list:
     order, each once, as ``(root, multiplicity)``: *roots* is a list of
     ``(root, multiplicity)`` from SymPy.
 
-    A root with other variables in it is kept as it is (it cannot be
-    classified) and comes after the ground ones.  A ground root is kept iff
-    ``real_value`` gives a real number AND it satisfies the equation when
-    substituted back, numerically to TOLERANCE (SymPy's candidates for a
-    transcendental equation include spurious ones).  Two roots within
-    TOLERANCE of each other are one root.
+    * A root with another variable in it cannot be classified: it is kept as
+      it is, after the ground ones (so "real only" applies to GROUND roots;
+      ``X**2 + Y**2 * 1(metre**2)`` answers ``+-I*y*(metre)``).
+    * A ground root SymPy gives exactly and knows is real is kept as it is.
+    * Any other ground root is evaluated (``real_value``) and kept iff it is
+      real and satisfies the equation when substituted back
+      (``_satisfies``), both relative to the tolerance the input's
+      precision sets (``tolerance_for``).  SymPy's candidates for a
+      transcendental equation include spurious ones.
+    * Two exact roots are one root iff they are equal; otherwise roots whose
+      difference is negligible relative to their size are one root.  Either
+      way their multiplicities are added.
     """
+    tolerance = tolerance_for(equation)
     ground, symbolic = [], []
     equation_magnitude = real_magnitude(equation)
+    checkable = not (free_variables(equation_magnitude) - {symbol})
     for root, multiplicity in roots:
         if free_variables(root):
             symbolic.append((root, multiplicity))
             continue
         dimension = sympy_dimension(root, Analysis())
-        value = real_value(real_magnitude(root))
-        if value is None:
-            continue
-        numeric = _sp.N(value, NUMERIC_DIGITS)
-        if not free_variables(equation_magnitude) - {symbol}:
-            residual = _sp.N(equation_magnitude.subs(symbol, numeric), NUMERIC_DIGITS)
-            if not residual.is_number or abs(residual) > TOLERANCE * (1 + abs(numeric)):
+        magnitude = real_magnitude(root)
+        root_tolerance = max(tolerance, tolerance_for(magnitude))
+        exact = _is_exact_real(magnitude)
+        if exact:
+            value = magnitude
+        else:
+            value = real_value(magnitude, root_tolerance)
+            if value is None:
+                continue
+            if checkable and not _satisfies(equation_magnitude, symbol,
+                                            _sp.N(value, NUMERIC_DIGITS), root_tolerance):
                 continue
         units = _unit_product(dimension.known.dims) if dimension is not None else 1
-        ground.append((numeric, value * units, multiplicity))
+        ground.append((_sp.N(value, NUMERIC_DIGITS), value, value * units,
+                       multiplicity, root_tolerance, exact))
     ground.sort(key=lambda entry: entry[0])
     distinct: list[list] = []
-    for numeric, root, multiplicity in ground:
-        if distinct and abs(numeric - distinct[-1][0]) <= TOLERANCE * (1 + abs(numeric)):
-            distinct[-1][2] += multiplicity
-            continue
-        distinct.append([numeric, root, multiplicity])
-    return [(root, multiplicity) for _, root, multiplicity in distinct] + symbolic
+    for numeric, value, root, multiplicity, root_tolerance, exact in ground:
+        if distinct:
+            previous_numeric, previous_value, _, _, previous_exact = distinct[-1]
+            if exact and previous_exact:
+                same = value == previous_value       # two exact roots: equal or not
+            else:
+                same = _negligible(numeric - previous_numeric,
+                                   max(abs(numeric), abs(previous_numeric)), root_tolerance)
+            if same:
+                distinct[-1][3] += multiplicity
+                continue
+        distinct.append([numeric, value, root, multiplicity, exact])
+    return [(entry[2], entry[3]) for entry in distinct] + symbolic
 
 
 # -- Back to Clausal ---------------------------------------------------------
@@ -525,6 +611,8 @@ def real_roots(equation: Any, symbol: Any, roots: list) -> list:
 #: ``strip_units/2`` like any other.  True: exact, as ``Magnitude *
 #: Quantity(1, dims)`` (an arithmetic term the caller must evaluate before
 #: comparing).  A RATIONAL magnitude is exact either way.  The one switch.
+#: With True, the constants e and pi in such a term come back as the atoms
+#: ``e`` and ``pi`` (which the engine evaluates), not as numbers.
 EXACT_IRRATIONAL_RESULTS = False
 
 
@@ -581,7 +669,7 @@ def result_to_clausal(expr: Any, symbolic: Callable, exact_term: Callable,
     if free_variables(expr):
         return symbolic(expr)
     expr = _lattice(expr)
-    value = real_value(real_magnitude(expr))
+    value = real_value(real_magnitude(expr), tolerance_for(expr))
     if value is None:
         raise _undefined()
     if value.has(_sp.core.function.AppliedUndef):

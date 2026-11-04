@@ -43,7 +43,20 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `abs`, `max`, `min` keep one dimension; `sqrt`, `cbrt` are powers; every
   other function, including one the wrapper does not know (`log10`,
   `sinh`, `f`), needs dimensionless arguments, so a quantity inside it is
-  refused rather than stripped. `cbrt/1` is now SymPy's cube root.
+  refused rather than stripped. `cbrt/1` is now SymPy's cube root, the
+  PRINCIPAL one, so `cbrt(-8)` is complex (and refused for a quantity), not
+  -2. `atan2/2` (one dimension in, a number out), `hypot/2` (one dimension,
+  kept), `sign/1` (any dimension in, a number out) and `^/2` (a power) are
+  now SymPy functions too, also without quantities (`sign(-3)` is -1,
+  `hypot(3, 4)` is 5). A real root SymPy gives exactly is kept without a
+  numeric check; any other is checked relative to the equation's own terms,
+  to 1e-12 when the equation holds a float and 1e-25 when it is exact, so a
+  float coefficient, `standard_gravity` or a float log mean temperature
+  difference no longer drops the roots. When SymPy gives up on a polynomial
+  its roots are found numerically. `roots/3` of a non-polynomial is
+  `type_error(polynomial, _)`; a known function with the wrong arity is
+  `type_error(evaluable, Name/Arity)`. SymPy has no time limit here (a
+  todo).
   `gcd/3`, `lcm/3` and `sym_equal/2` refuse mixed dimensions, `subs/3` a
   quantity as its key (`type_error(variable, _)`). Tests:
   `packages/clausal-sympy/tests/fixtures/sympy_units.seam`,
