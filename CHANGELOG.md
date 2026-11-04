@@ -39,6 +39,25 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A predicate recompiled after `assertz`/`retract` compiles as a fresh
+  compile does; it no longer lowers its clause bodies against the first
+  compile's context.** The lazy recompile handed the next compile the
+  previous compile's body compiler, bound to that compile's context, so
+  every recompile used the first compile's per-predicate settings and its
+  body-IR cache, keyed by `id(clause)` of clauses long since freed. A
+  tail-recursive dynamic predicate recompiled to different code from a
+  fresh compile of the same clauses (its tail call without the
+  `trail.commit_fresh` check). When CPython reused a freed clause's address
+  for a new clause, the recompile compiled the dead clause's body in its
+  place: with a deep ground term in it, a `NameError` on a
+  `$headlit_<id>` global
+  (`test_deep_data_in_a_rule_goes_as_deep_as_in_a_fact`, depending on the
+  hash seed and on what ran earlier in the process); with plain constants,
+  the dead clause's answers. The recompile now takes the caller's own body
+  compiler and optimisation set, and each body-IR cache entry holds its
+  clause and is used only for that clause. Pinned by
+  `tests/test_recompile_context.py`.
+
 - **A deep seam clause body loads, or is refused by name and line; the seam
   compiler no longer leaks a raw `RecursionError`.** A `.seam` body nested
   170 deep (`X is ('f', ('f', ...))`) raised `RecursionError` with no

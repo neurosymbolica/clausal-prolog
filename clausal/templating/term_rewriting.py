@@ -6165,7 +6165,9 @@ class EmbedTransformer(NodeTransformer):
         # runtime class).
         transformer._titlecase_seen: set[str] = set()
         transformer._scale_name_seen: set[str] = set()
-        transformer._retired_q_seen: set[int] = set()
+        # Keyed by id() and holding the node itself, so a node freed
+        # mid-file cannot pass its id on to one never linted.
+        transformer._retired_q_seen: dict[int, object] = {}
         transformer._retired_q_records: list = []
         transformer._retired_q_file_has_q = None
         transformer._titlecase_imported: set[str] = set()
@@ -8131,7 +8133,7 @@ class EmbedTransformer(NodeTransformer):
         for top in nodes:
             if top is None or id(top) in transformer._retired_q_seen:
                 continue
-            transformer._retired_q_seen.add(id(top))
+            transformer._retired_q_seen[id(top)] = top
             head, body = top, None
             if isinstance(top, Compare):
                 try:

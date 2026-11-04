@@ -662,7 +662,8 @@ def _sweep_tro_eligible(
 
     Builds each clause's body IR via :func:`terms_to_goalop` once, runs
     :func:`optimisations.tro.analyse`, and stashes both the IR and the
-    resulting :class:`TROPlan` on *ctx_template* (keyed by ``id(clause)``)
+    resulting :class:`TROPlan` on *ctx_template* (keyed by ``id(clause)``,
+    each value a ``(clause, value)`` pair that keeps the key's clause alive)
     so later stages can reuse them:
 
     - :func:`_compile_body_impl` reads ``ctx.clause_ir_cache`` to skip a
@@ -687,9 +688,12 @@ def _sweep_tro_eligible(
     eligible: list[int] = []
     for i, clause in enumerate(clauses):
         body_ir = terms_to_goalop(clause.body, db=db)
-        ctx_template.clause_ir_cache[id(clause)] = body_ir
+        # Each entry holds its CLAUSE beside the value, so the id it is
+        # keyed by cannot be freed and handed to another clause while the
+        # entry lives; a reader takes a hit only for that very clause.
+        ctx_template.clause_ir_cache[id(clause)] = (clause, body_ir)
         plan = _tro_analyse(body_ir, clause.head, functor, arity, db=db)
-        ctx_template.clause_tro_plans[id(clause)] = plan
+        ctx_template.clause_tro_plans[id(clause)] = (clause, plan)
         if plan.eligible:
             eligible.append(i)
     return frozenset(eligible)
@@ -1374,6 +1378,13 @@ def _compile_predicate_trampoline_impl(
     via ``StepGenerator`` wrappers.
     """
     _effective_db = db if db is not None else _GlobalsDb(globals_ or {})
+    # The body compiler the CALLER gave (None for the default), kept for
+    # the lazy recompile below.  The local is rebound to a closure over
+    # THIS compile's ``ctx_template``; handing that closure to the next
+    # compile made every recompile lower its clause bodies against the
+    # first compile's context -- its ``clause_ir_cache``, keyed by the ids
+    # of clauses long since freed, among them.
+    _given_body_compiler = body_compiler
 
     # Ctx template: mutated below after base_globals analysis; captured
     # by reference inside body_compiler so mutations are visible at
@@ -2046,9 +2057,13 @@ def _compile_predicate_trampoline_impl(
             # The ``db=None`` path: the clauses this compile was given are the
             # only store (a class's private row was, until W4b-3 slice 7).
             next_clauses = clauses
+        # A fresh compile in every respect: the caller's body compiler
+        # (bound to the recompile's own context, not this one's) and the
+        # caller's optimisation set.
         return compile_predicate_trampoline(
             functor, arity, next_clauses, db,
-            body_compiler=body_compiler, globals_=globals_, pred_cls=pred_cls,
+            body_compiler=_given_body_compiler, globals_=globals_,
+            pred_cls=pred_cls, enabled_optimisations=enabled_optimisations,
         )
 
     # The installed function, not ``fn``: for a tabled predicate ``_install``
@@ -2404,6 +2419,9 @@ def _compile_predicate_shallow_impl(
         strategy=ShallowStrategy(),
     )
 
+    # The caller's body compiler, for the lazy recompile (see the
+    # trampoline compile: the local below is bound to THIS compile's ctx).
+    _given_body_compiler = body_compiler
     if body_compiler is None:
         body_compiler = _make_body_compiler(_effective_db, ctx_template=ctx_template)
 
@@ -2772,7 +2790,8 @@ def _compile_predicate_shallow_impl(
             next_clauses = clauses
         return compile_predicate_shallow(
             functor, arity, next_clauses, db,
-            body_compiler=body_compiler, globals_=globals_, pred_cls=pred_cls,
+            body_compiler=_given_body_compiler, globals_=globals_,
+            pred_cls=pred_cls,
         )
 
     _install(db, functor, arity, tramp_fn, lazy_recompile=_recompile_shallow, pred_cls=pred_cls)

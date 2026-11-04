@@ -558,7 +558,9 @@ def _make_body_compiler_impl(
         # already built (see ``_build_predicate_trampoline_funcdef``).
         cached_ir = None
         if ctx_template.clause_ir_cache is not None:
-            cached_ir = ctx_template.clause_ir_cache.get(id(clause))
+            hit = ctx_template.clause_ir_cache.get(id(clause))
+            if hit is not None and hit[0] is clause:
+                cached_ir = hit[1]
         return cut_guard_entry(guard, _compile_body_impl(
             goals, ctx, head=clause.head, body_ir=cached_ir,
         ))

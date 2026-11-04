@@ -244,15 +244,17 @@ class CompilationContext:
     # for TRO-eligible clauses via ``optimisations.tro.analyse``: the
     # analyse call needs the body IR, and ``_compile_body_impl`` needs
     # the same IR a moment later.  Caching avoids a second
-    # ``terms_to_goalop`` build per clause.  Keyed by ``id(clause)`` —
-    # entries are created only for clauses whose body is inside the IR
-    # subset (``terms_to_goalop`` did not raise).  ``None`` in contexts
-    # that bypass the predicate-trampoline path.
+    # ``terms_to_goalop`` build per clause.  Keyed by ``id(clause)``, each
+    # value a ``(clause, ir)`` pair: holding the clause keeps its id from
+    # being reused by another clause while the entry lives, and a reader
+    # takes the IR only when ``hit[0] is clause``.  Entries are created
+    # only for clauses whose body is inside the IR subset
+    # (``terms_to_goalop`` did not raise).  ``None`` in contexts that
+    # bypass the predicate-trampoline path.
     clause_ir_cache: "dict[int, Any] | None" = None
 
-    # Parallel to ``clause_ir_cache`` — the ``TROPlan`` for each clause
-    # (present iff the clause made it into the IR cache).  The TRO-aware
-    # body_compiler wrapper reads this instead of re-running analyse.
+    # Parallel to ``clause_ir_cache`` — ``(clause, TROPlan)`` for each
+    # clause (present iff the clause made it into the IR cache).
     clause_tro_plans: "dict[int, Any] | None" = None
 
     # ── Slice G: source-position scope stack ─────────────────────────────

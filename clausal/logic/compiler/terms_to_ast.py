@@ -82,7 +82,12 @@ def headlit_global_key(term: Any) -> str:
 
     Keyed by ``id()`` (like ``_pyt_<id>`` for PyThunks) so the collector in
     globals_env and the guard emitter in head_match reference the SAME entry.
-    The value is kept alive by the clause head, so the id is stable.
+    Both walk the clauses of ONE compile, which hold the value (or the
+    :class:`DeepLiteral` leaf) for the whole compile, and the name is read
+    only from that compile's own globals: the id is stable for as long as
+    it matters.  It must never reach another compile -- an IR or a cache
+    carried over from an earlier compile names leaves this compile's
+    globals do not have.
     """
     return f"$headlit_{id(term)}"
 
