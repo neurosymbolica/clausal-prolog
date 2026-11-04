@@ -33,6 +33,26 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A predicate with thousands of clauses compiles in linear time and
+  memory.** The first call of a dynamic predicate after many asserts (and
+  the load of a file with a large fact table) compiled one Python function
+  per index bucket, each holding a copy of the compile's globals, and the
+  FINAL pass built a set of every later clause's key for every clause:
+  4.5 s at 2,000 asserted facts, 14 GB (killed) at 10,000. From 256 clauses
+  a predicate now compiles to a clause table: plain-data facts stay terms,
+  unified left to right with the call's arguments; other clauses are
+  compiled one by one; dict indexes on each argument choose the candidates
+  (`clausal/logic/compiler/clause_table.py`). 20,000 asserted facts: first
+  call 0.3 s; 3,000 rules 4 s (each compiled once); a 10,000-fact `.pl`
+  file loads in 3.4 s. Answers, their order, the logical update view,
+  retract/clause/2 and errors are unchanged. Below 256 clauses the code is
+  as before, except that the one-function compile's functions share their
+  globals and the FINAL "no later clause can match" test covers only the
+  last 64 clauses. Not observable in answers: a table fact binds the call's
+  variables left to right (woken goals run in that order), a table
+  predicate's rules get no tail-recursion optimisation, and "last answer"
+  is detected per indexed argument. Tests: `tests/test_clause_table.py`.
+
 - **A clause head qualified with the file's own module defines the
   predicate** (`.pl` and `.clausal`): in a file whose `module/2` names `m`,
   `m:foo(1).` and `m:bar(X) :- ...` are clauses of `foo/1` and `bar/1`, as

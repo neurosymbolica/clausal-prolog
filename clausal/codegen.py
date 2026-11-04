@@ -815,6 +815,8 @@ def functiondef_to_function(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
     globals_: dict | None = None,
     filename: str = "<template>",
+    *,
+    share_globals: bool = False,
 ):
     """Compile an ast.FunctionDef (or AsyncFunctionDef) into a Python callable.
 
@@ -827,6 +829,15 @@ def functiondef_to_function(
     :class:`GeneratedCodeError` naming the function and the source file and
     line of the code it came from, never a bare ``SyntaxError`` about
     ``<template>``.
+
+    The function's globals are a COPY of *globals_*, unless *share_globals*
+    is set: then they are *globals_* itself (its entry under the function's
+    name is put back as it was).  The predicate compiler shares one dict
+    among the many functions one compile makes (an indexed predicate makes
+    one per bucket); a copy each made a predicate of n clauses cost
+    O(n * len(globals_)) memory, gigabytes at a few thousand clauses
+    (todo/done/dynamic-predicate-first-call-after-many-asserts-is-super-linear-2026-11-04.md).
+    A function whose code names itself is still given a copy.
     """
     module = ast.Module(body=[node], type_ignores=[])
     _fix_missing_locations(module)
@@ -856,9 +867,33 @@ def functiondef_to_function(
     # identity (clausal.logic.cells, the compiled-constant certificate).
     from clausal.logic.cells import register_compiled_constants  # noqa: PLC0415
     register_compiled_constants(code)
+    if share_globals and globals_ is not None \
+            and not _code_names(code, node.name):
+        missing = object()
+        before = globals_.get(node.name, missing)
+        exec(code, globals_)
+        fn = globals_[node.name]
+        if before is missing:
+            del globals_[node.name]
+        else:
+            globals_[node.name] = before
+        return fn
     ns = dict(globals_ or {})
     exec(code, ns)
     return ns[node.name]
+
+
+def _code_names(code, name: str) -> bool:
+    """True when a code object nested in the module *code* (the function,
+    and anything defined in it) names the global *name* (``co_names``);
+    the module's own code names it only to bind the ``def``."""
+    stack = [k for k in code.co_consts if isinstance(k, type(code))]
+    while stack:
+        c = stack.pop()
+        if name in c.co_names:
+            return True
+        stack.extend(k for k in c.co_consts if isinstance(k, type(code)))
+    return False
 
 
 def stmts_to_function(

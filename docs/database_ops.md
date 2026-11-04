@@ -162,8 +162,10 @@ As in ISO (8.9.3) and Scryer, `retract` of a name nothing declares simply
 fails — there is no clause to remove — while a static predicate, a declared
 data functor or a builtin raises
 `error(permission_error(modify, static_procedure, Name/Arity), retract/1)`, and
-an unbound `Term` raises `instantiation_error`. (`retractall/1` and
-`abolish/1` are not provided.)
+an unbound `Term` raises `instantiation_error`. `retractall(Head)` (ISO 8.9.5)
+removes every clause whose head unifies with `Head` and always succeeds;
+`abolish(Name/Arity)` (ISO 8.9.4) removes a dynamic procedure altogether, so a
+later call is an `existence_error`.
 
 `retract` uses unification for matching, so you can retract by pattern:
 
