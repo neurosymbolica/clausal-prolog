@@ -1,6 +1,6 @@
 # CLP(Q) optima over CLP(FD) variables read a relaxation (2026-11-03)
 
-**Status: FIXED 2026-11-03 (COMMIT), option A (operator ruling
+**Status: FIXED 2026-11-03 (8f019988), option A (operator ruling
 2026-11-03).** Both cases below raise now, on both solvers: an FD
 variable with holes anywhere in the objective's component raises
 `representation_error(fd_domain_with_holes)`, and a maximize/minimize
