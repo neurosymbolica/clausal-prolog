@@ -184,6 +184,16 @@ ROWS = [
      "Vs = [_A], dif:dif(_A,a).", None),
 ]
 
+#: Clausal's answer where the port of clp(Q,R) 1.3.3 (CLAUSAL_CLPQ=holzbaur)
+#: answers otherwise: its toplevel projection solves the equation for Z, as
+#: its printer shows it, and call_residue_vars/2 lists the slack variable
+#: its library creates, as Scryer's does.
+HOLZBAUR = {
+    "{X + Z = 3}, copy_term(X-Z,Y,Gs)":
+        "Y = _A-_B, Gs = [{_B=3-_A}], {Z = 3 - X}.",
+    "call_residue_vars({A >= 2}, Vs)": "Vs = [A,_A], {A >= 2}.",
+}
+
 #: (goal, Clausal's error, Scryer's): only the context differs.
 ERROR_ROWS = [
     ("copy_term(X,Y,foo)",
@@ -245,8 +255,9 @@ def _unqualified(text: str) -> str:
 def test_clausal_answers(tmp_path, mode, suffix):
     lines, err = _clausal(tmp_path, mode, suffix, [g for g, *_ in ROWS])
     assert len(lines) == len(ROWS), (lines, err)
+    port = os.environ.get("CLAUSAL_CLPQ") == "holzbaur"
     wrong = [(g, want, got) for (g, want, *_), got in zip(ROWS, lines)
-             if got != want]
+             if got != (HOLZBAUR.get(g, want) if port else want)]
     assert not wrong, wrong
 
 

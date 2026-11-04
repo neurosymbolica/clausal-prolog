@@ -249,12 +249,9 @@ def _has_residual(shown, trail) -> bool:
     free: dict = {}
     for _, v in (*shown, *getattr(shown, "hidden", ())):
         cli._term_vars(_deref_walk(v), free)
-    for d in residuals.residue_variables(trail, 0, free):
-        free[id(d)] = d
-    variables = list(free.values())
-    return bool(residuals.dif_residuals(variables)
-                or residuals.fd_residuals(variables)
-                or residuals.coroutine_residuals(variables))
+    hidden = residuals.residue_variables(trail, 0, free)
+    # what the printer shows (cli._answer), every kind of constraint
+    return bool(residuals.residual_items(free.values(), trail, hidden))
 
 
 # ── comparing ─────────────────────────────────────────────────────────────

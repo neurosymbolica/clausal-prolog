@@ -15,8 +15,10 @@ Goal forms are plain, as the printers show them (operator rulings
 - CLP(Z): ``X in 1..3``, ``X #< Y``, ``all_different([X, Y])``,
   ``scalar_product(Cs, Vs, #=, C)``, ``X #= A*B``;
 - ``freeze/2`` and ``when/2``: ``freeze(X, G)``, ``when(Cond, G)``;
-- CLP(B): ``sat(F)``, one per Boolean network, F written with ``+``, ``*``
-  and ``~`` (the syntax ``sat/1`` reads);
+- CLP(B): ``sat(F)`` per Boolean network, F written with ``+``, ``*`` and
+  ``~`` (the syntax ``sat/1`` reads), a shared BDD node as a helper
+  variable N with ``sat(N =:= F)``, and ``sat(X =:= X)`` for a variable
+  that is only Boolean;
 - CLP(R): ``in_real(X)``, ``in_real(X, Lo, Hi)``, ``X #>= Lo``,
   ``X #=< Hi``, and the constraints still pending (``X #< Y``);
 - CLP(Q): ``{X >= 2}``, the projection the toplevel shows
@@ -37,6 +39,9 @@ class Residual(NamedTuple):
     names) and ``name_of(var)`` names one variable (CLP(Q)'s writer)."""
     goal: Any
     render: Callable[[Callable, Callable], str]
+    #: "clpq" for a CLP(Q) goal, whose variables the solver's writer names
+    #: (``_Q1``, ...); "plain" for the others
+    kind: str = "plain"
 
 
 def _spelled(goal) -> Residual:
@@ -270,73 +275,158 @@ def coroutine_residuals(variables) -> list[Residual]:
 # ── CLP(B) ──────────────────────────────────────────────────────────────────
 
 
-def _bdd_formula(bdd, var_of, memo: dict):
-    """A BDD as a formula over ``+``, ``*`` and ``~``: each node ``V`` with
-    branches ``H`` (V = 1) and ``L`` (V = 0) is ``V*H + ~V*L``, simplified
-    where a branch is a constant."""
-    from clausal.logic.clpb import BDD_TRUE, BDDNode  # noqa: PLC0415
-    from clausal.logic.variables import is_var  # noqa: PLC0415
-    if not isinstance(bdd, BDDNode):
-        return 1 if bdd == BDD_TRUE else 0
-    key = id(bdd)
-    if key in memo:
-        return memo[key]
-    v = var_of(bdd.var_id)
-    if not is_var(v):           # bound since: its branch is the formula
-        out = _bdd_formula(bdd.high if v == 1 else bdd.low, var_of, memo)
-        memo[key] = out
-        return out
-    high = _bdd_formula(bdd.high, var_of, memo)
-    low = _bdd_formula(bdd.low, var_of, memo)
-    def is_(f, n):
-        return type(f) is int and f == n
-    if is_(high, 1) and is_(low, 0):
-        out = v
-    elif is_(high, 0) and is_(low, 1):
-        out = ("~", v)
-    elif is_(high, 1):
-        out = ("+", v, low)
-    elif is_(low, 1):
-        out = ("+", ("~", v), high)
-    elif is_(high, 0):
-        out = ("*", ("~", v), low)
-    elif is_(low, 0):
-        out = ("*", v, high)
-    else:
-        out = ("+", ("*", v, high), ("*", ("~", v), low))
-    memo[key] = out
-    return out
+def _clpb_network_goals(bdd, var_of) -> tuple[list, set]:
+    """The goals of one CLP(B) network whose BDD is *bdd*, and the ids of
+    the variables they mention.
+
+    Each node ``V`` with branches ``H`` (V = 1) and ``L`` (V = 0) is
+    ``V*H + ~V*L``, simplified where a branch is a constant; a variable
+    bound since is followed to its branch.  The spelling is linear in the
+    BDD: a node two others share is spelled once, as a helper variable N
+    with its own goal ``sat(N =:= F)``, and every other node is written in
+    place, so a BDD whose subterms are shared does not grow into a tree.
+    The helper is a function of the network's variables, so calling the
+    goals puts back the same constraint on them.  An explicit stack: a
+    long chain of nodes nests no frames."""
+    from clausal.logic.clpb import BDDNode  # noqa: PLC0415
+    from clausal.logic.variables import Var, is_var  # noqa: PLC0415
+
+    def follow(node):
+        # the node a bound variable's branch leads to, or a constant 0/1
+        while isinstance(node, BDDNode):
+            v = var_of(node.var_id)
+            if is_var(v):
+                return node
+            node = node.high if v == 1 else node.low
+        return 1 if node == 1 else 0
+
+    root = follow(bdd)
+    if not isinstance(root, BDDNode):
+        return [], set()
+    # the effective DAG: each node's two branches, and how many parents
+    branches: dict[int, tuple] = {}
+    parents: dict[int, int] = {}
+    nodes: dict[int, Any] = {}
+    order: list[int] = []       # pre-order, the root first
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        key = id(node)
+        if key in branches:
+            continue
+        nodes[key] = node
+        order.append(key)
+        high, low = follow(node.high), follow(node.low)
+        branches[key] = (high, low)
+        for child in (low, high):
+            if isinstance(child, BDDNode):
+                parents[id(child)] = parents.get(id(child), 0) + 1
+                stack.append(child)
+
+    def literal(key):
+        high, low = branches[key]
+        return not isinstance(high, BDDNode) and not isinstance(low, BDDNode)
+
+    helper = {key: Var() for key in order[1:]
+              if parents.get(key, 0) >= 2 and not literal(key)}
+    spelled: dict[int, Any] = {}
+    mentioned: set[int] = set()
+
+    def term_of(child):
+        if not isinstance(child, BDDNode):
+            return child
+        key = id(child)
+        if type(spelled[key]) is int or key not in helper:
+            return spelled[key]
+        return helper[key]
+
+    # children before parents: the reverse of a pre-order is not enough
+    # for a DAG, so a post-order by an explicit stack
+    done: set[int] = set()
+    stack2 = [(root, False)]
+    while stack2:
+        node, expanded = stack2.pop()
+        key = id(node)
+        if key in done:
+            continue
+        high, low = branches[key]
+        if not expanded:
+            stack2.append((node, True))
+            for child in (low, high):
+                if isinstance(child, BDDNode) and id(child) not in done:
+                    stack2.append((child, False))
+            continue
+        done.add(key)
+        v = var_of(node.var_id)
+        h, lo = term_of(high), term_of(low)
+
+        def is_(f, n):
+            return type(f) is int and f == n
+        if type(h) is int and type(lo) is int and h == lo:
+            out = h             # both branches agree: V does not matter
+        elif is_(h, 1) and is_(lo, 0):
+            out = v
+        elif is_(h, 0) and is_(lo, 1):
+            out = ("~", v)
+        elif is_(h, 1):
+            out = ("+", v, lo)
+        elif is_(lo, 1):
+            out = ("+", ("~", v), h)
+        elif is_(h, 0):
+            out = ("*", ("~", v), lo)
+        elif is_(lo, 0):
+            out = ("*", v, h)
+        else:
+            out = ("+", ("*", v, h), ("*", ("~", v), lo))
+        if type(out) is not int:
+            mentioned.add(id(v))
+        spelled[key] = out
+    goals = []
+    if type(spelled[id(root)]) is not int:
+        goals.append(("sat", spelled[id(root)]))
+    for key in order[1:]:
+        if key in helper and type(spelled[key]) is not int:
+            goals.append(("sat", ("=:=", helper[key], spelled[key])))
+    return goals, mentioned
 
 
 def clpb_residuals(variables) -> list[Residual]:
-    """``sat(F)`` for each CLP(B) network a variable of *variables* is in,
-    F its BDD as a formula.  A variable that is only declared Boolean
-    (its BDD is the variable itself) is ``sat(V+ ~V)``."""
-    from clausal.logic.clpb import B_KEY, BDDNode, _get_var_for_id  # noqa: PLC0415
-    from clausal.logic.variables import Var, deref, get_attr  # noqa: PLC0415
+    """The ``sat/1`` goals of each CLP(B) network a variable of *variables*
+    is in (see :func:`_clpb_network_goals`), and ``sat(V =:= V)`` for each
+    variable of a network the goals no longer mention, which still may
+    take only 0 or 1, as Scryer writes it."""
+    from clausal.logic.clpb import (  # noqa: PLC0415
+        B_KEY, _collect_bdd_var_ids, _get_var_for_id)
+    from clausal.logic.variables import Var, deref, get_attr, is_var  # noqa: PLC0415
+
+    def var_of(var_id):
+        found = _get_var_for_id(var_id)
+        return deref(found) if found is not None else Var()
     out: list[Residual] = []
     seen: set[int] = set()
+    plain: set[int] = set()
     for v in variables:
         state = get_attr(v, B_KEY)
-        if state is None or id(state.bdd) in seen:
+        if state is None:
+            continue
+        if state.sat_expr is None:
+            # declared Boolean by sat_count/taut/labeling, no formula
+            if id(v) not in plain:
+                plain.add(id(v))
+                out.append(_spelled(("sat", ("=:=", v, v))))
+            continue
+        if id(state.bdd) in seen:
             continue
         seen.add(id(state.bdd))
-        bdd = state.bdd
-        if not isinstance(bdd, BDDNode):
-            continue
-        if state.sat_expr is None and type(bdd.high) is int \
-                and type(bdd.low) is int:
-            # declared Boolean by a sat_count/taut/labeling, no formula:
-            # it still may take only 0 or 1
-            formula = ("+", v, ("~", v))
-        else:
-            def var_of(var_id):
-                found = _get_var_for_id(var_id)
-                return deref(found) if found is not None else Var()
-            formula = _bdd_formula(bdd, var_of, {})
-            if type(formula) is int:    # every variable of it is bound
-                continue
-        out.append(_spelled(("sat", formula)))
+        goals, mentioned = _clpb_network_goals(state.bdd, var_of)
+        out.extend(_spelled(g) for g in goals)
+        ids: set = set()
+        _collect_bdd_var_ids(state.bdd, ids)
+        for var_id in sorted(ids):
+            w = var_of(var_id)
+            if is_var(w) and id(w) not in mentioned and id(w) not in plain:
+                plain.add(id(w))
+                out.append(_spelled(("sat", ("=:=", w, w))))
     return out
 
 
@@ -436,10 +526,10 @@ def clpq_residuals(targets, trail, attributed=()) -> list[Residual]:
     for goal in clpq.residual_q_goals(targets, trail, attributed):
         if type(goal) is tuple and len(goal) == 3 and goal[0] in Q_RELATIONS:
             out.append(Residual(("{}", goal), lambda _s, name_of, g=goal:
-                                "{" + format_term(g, name_of) + "}"))
+                                "{" + format_term(g, name_of) + "}", "clpq"))
         else:
             out.append(Residual(goal, lambda _s, name_of, g=goal:
-                                format_term(g, name_of)))
+                                format_term(g, name_of), "clpq"))
     return out
 
 

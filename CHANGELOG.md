@@ -21,7 +21,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `tests/iso/test_copy_term_3_scryer.py` (plain goals, Clausal's own
   CLP(Z) and CLP(B) forms, `{}/1` around CLP(Q) relations).
 - **The answer printers show CLP(B) and CLP(R) constraints** (`sat(X+Y)`,
-  `in_real(X,0.0,2.0)`, `X #< Y`), which they hid behind `true` before.
+  `in_real(X,0.0,2.0)`, `X #< Y`), which they hid behind `true` before. A
+  CLP(B) network is spelled linearly in its BDD: a shared node is a helper
+  variable with its own `sat(N=:=F)` goal; a variable left only Boolean is
+  `sat(X=:=X)`, as Scryer prints it. Quads count these as residuals
+  (`maybe`).
 - **`sat/1`, `taut/2` and `sat_count/2` read library(clpb)'s connectives**
   from `.clausal` and `.pl`: `+`, `*`, `'#'/2`, `~/1`, `=:=`, `=\=`, `=<`,
   `>=`, `<`, `>` as terms. They raised `TypeError` before.
