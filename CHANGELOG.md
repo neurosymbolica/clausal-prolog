@@ -458,6 +458,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **findall/3, bagof/3 and setof/3 keep dropping attribute constraints**
+  (operator ruling 2026-11-04, follow Scryer). A collected answer carries no
+  `dif/2`, `freeze/2` or CLP(Z) constraint, as in Scryer and Trealla. To keep
+  them, collect them as data: `findall(X-Gs, (Goal, copy_term(X, X, Gs)), L)`.
+
 - **Fact predicates load and grow in linear time with a small constant.**
   Loading 200 facts of arity 8 took 7 s, about 5 ms per argument per fact:
   every argument position where all facts have the same constant was an

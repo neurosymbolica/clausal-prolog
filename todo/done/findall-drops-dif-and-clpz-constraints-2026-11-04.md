@@ -1,6 +1,6 @@
 # findall/3 and bagof/3 drop dif and CLP(Z) constraints from the collected answers
 
-**Status: open, needs a ruling.**
+**Status: RESOLVED 2026-11-04 (operator ruling: "ok follow Scryer").** No change: findall/3, bagof/3 and setof/3 keep dropping attributes, as Scryer and Trealla do. To keep the constraints, collect them as data with `findall(X-Gs, (Goal, copy_term(X, X, Gs)), L)` (copy_term/3, 720e0e75).
 
 `copy_term/2` keeps `dif/2` on the copy (`dif(X,a), copy_term(X,Y)` gives
 `dif(Y,a)`), but `findall/3` does not:
