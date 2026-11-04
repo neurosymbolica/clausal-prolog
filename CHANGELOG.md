@@ -39,6 +39,22 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A deep seam clause body loads, or is refused by name and line; the seam
+  compiler no longer leaks a raw `RecursionError`.** A `.seam` body nested
+  170 deep (`X is ('f', ('f', ...))`) raised `RecursionError` with no
+  position from `copy.deepcopy` in the dict-read lowering. That copy (and the
+  `fix_missing_locations` pass over the generated module, the arithmetic
+  `pi`/`e` marking prepass and the dotted-path reader) now run on an
+  explicit stack and give byte-identical output, so a bracketed term loads
+  up to CPython's own parser limit (197 levels of `('f', ...)`, 199 of
+  `[...]`; past that CPython refuses it itself). What still recurses (the
+  term rewriter, goal expansion, CPython's `compile()` of the generated
+  module) refuses an item it cannot finish as a `SyntaxError` naming
+  `resource_error(stack)` and the item's line, as the `.clausal` front end
+  does: an operator chain `1 + 1 + ...` a few hundred long, an `and`/`or`
+  chain about 1000 long. A chain long enough that `ast.parse` itself runs
+  out (about 10,000) is refused naming the file.
+
 - **A call whose arguments are all ground and nested past the deep-literal
   bound loads.** `call((g1, ..., g20, call((...))))` nested 12 deep, a fact
   `h(T)` with `T` a 300-term `a+a+...+a`, or `X is 1+1+...+1` failed to load

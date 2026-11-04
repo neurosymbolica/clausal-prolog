@@ -118,10 +118,20 @@ def run_goal_expansion(
 
     Returns a new list of predicate nodes with expanded goals.
     """
+    from clausal.logic.compiler.predicate import too_deep_named  # noqa: PLC0415
+    from clausal.logic.database import head_key  # noqa: PLC0415
     ctx = _ExpansionContext(module_dict)
     expanded = []
     for pred in predicate_nodes:
-        expanded.append(_expand_predicate(pred, ctx))
+        # The walks here recurse per level of a body; one nested too deep (a
+        # long ``and``/``or`` chain from the seam) is refused like the
+        # compiler's own passes, named and located, not a raw RecursionError.
+        try:
+            expanded.append(_expand_predicate(pred, ctx))
+        except RecursionError:
+            functor, arity = head_key(pred.head)
+            with too_deep_named(functor, arity, [pred], module_dict):
+                raise
     return expanded
 
 
