@@ -310,6 +310,8 @@ class _Query:
             if (entry.status == "evaluating" and entry.owner is self
                     and store.get(key) is entry):
                 del store[key]
+                from clausal.logic import tabling as _tabling  # noqa: PLC0415
+                _tabling._bump()        # a table dropped ("Idle re-leads")
         if gen is not None and not getattr(gen, "gi_running", False):
             saved = _install(self.state)
             try:
