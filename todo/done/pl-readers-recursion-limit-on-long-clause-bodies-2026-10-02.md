@@ -2,6 +2,8 @@
 
 **Status: FIXED 2026-11-03 (commit dcc1a5fb).** The parser's operator loop, the reader's term transform, the lowering's walks (Uses, _show, clause/2's source body, DCG bodies), the compiler's final_yields pass and the translator's collectors are iterative and produce what the recursive walks did; long `;` chains compile as a balanced Or tree and long one-operator chains are built over flat lists, so the generated AST stays shallow. Pinned in tests/test_long_pl_bodies_no_recursion.py.
 
+**Status: the first two items below FIXED 2026-11-03 (commit b2acc21c, operator ruling 2026-11-03).** A conjunction that nests past CPython's block limit is cut into segments of bounded nesting, each a module-level generator run as a trampoline frame (`clausal/logic/compiler/body_segments.py`), and the FINAL pass no longer rescans the rest of a block per statement. Measured after (same machine, `.pl`, load): conjunction 1 000 goals 1.5 s, 5 000 6.3 s, 10 000 12.6 s, 50 000 78 s, 100 000 157 s; disjunction 10 000 22 s, 30 000 67 s, 50 000 111 s, 100 000 225 s. Pinned in tests/test_body_segments.py. The other items below are still open.
+
 What is left (not this todo's walks):
 
 - **The engine's code generation is the real limit for a long conjunction.**
