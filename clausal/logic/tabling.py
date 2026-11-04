@@ -34,6 +34,7 @@ After SLG completion, a simplification pass resolves delayed negations:
 """
 
 from __future__ import annotations
+import itertools
 import os
 import threading
 from decimal import Decimal as _Decimal
@@ -483,6 +484,7 @@ def _repair_lead(entry: "TableEntry", lead, table_store, store_key) -> None:
     against a fresh entry installed since under the same key."""
     if entry.lead is not lead:
         return
+    _bump()
     if table_store.get(store_key) is entry:
         del table_store[store_key]
     _close_suspended(entry)
@@ -555,6 +557,7 @@ def end_drive_episode() -> None:
                 # dormant SCC member within this same drive changes the token
                 # but keeps the owner, and is still ours to repair.)
                 continue
+            _bump()
             if store.get(key) is entry:
                 del store[key]
             _close_suspended(entry)
@@ -656,6 +659,89 @@ def _check_scc_members(members, table_store) -> None:
             f"scan {scanned!r}")
 
 
+# ── Idle re-leads (operator ruling 2026-11-03, R12) ──────────────────────
+#
+# A dormant SCC member is re-led on every pass of each enclosing leader's
+# fixpoint, and a re-lead replays its rows to the caller and then re-runs its
+# clauses to a fixpoint of their own.  When nothing the member's clauses can
+# read has changed since a pass of its that found nothing new, that re-run is
+# a replay of that pass: it derives the same answers in the same order, all
+# already in the tables, and changes no condition.  Such a re-lead skips its
+# fixpoint loop and hands back its rows only.  It does not re-lead the members
+# beneath it either, which is where the saving is: on a ring of n variant
+# tables, about two thirds of the leader pushes and four fifths of the
+# add_answer calls.  The ring stays cubic; see todo/tabled-scc-relead-
+# rederives-every-answer-cubic-on-a-ring-2026-11-03.md for what is left.
+# The skip is also off under query_wfs/judged_answers (below).
+#
+# "Nothing has changed" is a stamp (``_quiet_stamp``), taken at the end of a
+# pass that started and ended on the same stamp, found no new answer and
+# incurred no delay, and compared just before the next re-lead's loop:
+#
+# * ``_epoch``: a fresh value whenever any table anywhere gains a row, revives
+#   a failed one, changes a row's conditions, completes, or is dropped
+#   (A04-F007 repair);
+# * ``database._mutations``: a fresh value per clause write (``Database.mutate``,
+#   every assert/retract channel) and per abolished table;
+# * the lead token of the leader BELOW the member on the leader stack: while
+#   that frame lives, every entry beneath it stays on the stack, and an entry
+#   the member's clauses reach is consumed (on the stack) or re-led (off it)
+#   exactly as it was in the quiet pass.  Without this, an entry the quiet
+#   pass re-led could now be an ancestor that a re-run would CONSUME, and the
+#   SCC edge to it (``scc_deps``) would be lost.
+#
+# Never skipped, so these paths run as before: a member with a CLP(Q) residue
+# row, a call with an attributed variable in its arguments, any judging leader
+# on the stack (``seam.judged_answers``) or detached segment, a clausal.aio
+# drive.  What a stamp cannot see is state outside the engine: a clause body
+# whose answers depend on a Python escape's mutable state or on I/O is assumed
+# to derive the same answers when re-run over the same tables, the assumption
+# the no-confirming-pass rule already makes (D74 Q4, provisional).
+#
+# CLAUSAL_TABLING_SEMINAIVE=0 turns the skip off (every re-lead re-runs).
+
+_SEMINAIVE = os.environ.get("CLAUSAL_TABLING_SEMINAIVE", "1") not in ("", "0")
+_epoch_ticks = itertools.count(1)
+# Unique values from a counter, not ``+= 1``: under free threading two racing
+# increments can write the same value, and a stamp taken between them would
+# then miss the second write.  A unique value written late cannot recreate
+# a stamp.
+_epoch = 0
+# How many re-leads skipped their loop, for tests and measurements.
+_idle_releads = 0
+
+
+def _bump() -> None:
+    """A table changed: invalidate every quiet stamp."""
+    global _epoch
+    _epoch = next(_epoch_ticks)
+
+
+def _quiet_stamp(entry):
+    """What a quiet pass of *entry*, the leader on top of the stack, read;
+    None when a re-lead of it must not skip its loop whatever happens."""
+    ctx = _leader_ctx
+    if (ctx.detached or ctx.driven_stores or entry.residues
+            or _drive_ctx.owner is not None):
+        return None
+    stack = ctx.stack
+    if not stack or stack[-1] is not entry:
+        return None
+    parent = stack[-2].lead if len(stack) > 1 else None
+    return (_epoch, _database_mod()._mutations, parent)
+
+
+_database = None
+
+
+def _database_mod():
+    global _database
+    if _database is None:
+        from clausal.logic import database  # noqa: PLC0415
+        _database = database
+    return _database
+
+
 def _complete_scc(root: TableEntry, table_store) -> None:
     """Mark *root* complete, then sweep dormant SCC members (A04-F001).
 
@@ -674,6 +760,7 @@ def _complete_scc(root: TableEntry, table_store) -> None:
     fixpoint under *root* and completes as a group.
     """
     root.status = "complete"
+    _bump()
     # Only entries this drive owns: completing another query's abandoned
     # entry would freeze its partial answers for good (rule 3).  Walked from
     # the store's registry of candidates, not the whole store (see "Dormant
@@ -716,6 +803,7 @@ def _complete_scc(root: TableEntry, table_store) -> None:
     for e in members:
         if id(e) not in blocked:
             e.status = "complete"
+            _bump()
 
 
 # ── Table entry ───────────────────────────────────────────────────────────
@@ -746,7 +834,7 @@ class TableEntry:
                  "nonground", "residues", "_residue_shapes", "suspended",
                  "conditions",
                  "_current_delays",
-                 "scc_deps", "_sources", "owner", "lead", "pi")
+                 "scc_deps", "_sources", "owner", "lead", "pi", "_quiet")
 
     def __init__(self, pi: "tuple[str, int] | None" = None):
         self.status: str = "evaluating"       # "evaluating" | "complete"
@@ -792,6 +880,9 @@ class TableEntry:
         # for a judging leader that wants the consumed ROW rather than the
         # delay set that row happened to hold at the moment of consumption.
         self._sources: dict | None = None
+        # The stamp of this entry's last quiet pass, or None ("Idle
+        # re-leads"): a re-lead whose stamp still matches skips its loop.
+        self._quiet = None
 
     def add_answer(self, answer: tuple, delay_set: frozenset | None = None,
                    trail=None, residue=_RESIDUE_FROM_TRAIL) -> int | None:
@@ -893,8 +984,12 @@ class TableEntry:
                 # returning None here would silently drop it from their
                 # joins (a lost solution, not a duplicate).
                 self.conditions[idx] = _simplify_disjuncts(frozenset({ds}))
+                _bump()               # "Idle re-leads": a table changed
                 return idx
-            self.conditions[idx] = _simplify_disjuncts(conds | {ds})
+            new = _simplify_disjuncts(conds | {ds})
+            self.conditions[idx] = new
+            if new is not conds and new != conds:
+                _bump()               # "Idle re-leads": a table changed
             return None
         self.answer_set.add(key)
         idx = len(self.answers)
@@ -909,6 +1004,7 @@ class TableEntry:
             self.nonground.add(idx)
         self.answers.append(answer)
         self.conditions.append(_simplify_disjuncts(frozenset({ds})))
+        _bump()                       # "Idle re-leads": a table changed
         return idx
 
     def row(self, i: int) -> tuple:
@@ -1981,11 +2077,13 @@ def _resolve_conditions(entry, table_store) -> bool:
 
             if not new_disjuncts:
                 entry.conditions[i] = _FAILED
+                _bump()
                 changed = any_change = True
             else:
                 new_conds = _simplify_disjuncts(frozenset(new_disjuncts))
                 if new_conds != conds:
                     entry.conditions[i] = new_conds
+                    _bump()
                     changed = any_change = True
     return any_change
 
@@ -2114,6 +2212,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
                 pop_leader(entry)
 
         entry.status = "complete"
+        _bump()
         if not _leader_ctx.stack:
             _resolve_all_conditions(table_store)  # A04-F003 root-exit pass
         for i in range(len(entry.answers)):
@@ -2346,10 +2445,24 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             # solution sets clause-order-independent for single-table recursion;
             # mutual recursion additionally needs SCC-aware completion (below).
             changed = True
+            if (_SEMINAIVE and _srec is not None
+                    and entry._quiet is not None
+                    and entry._quiet == _quiet_stamp(entry)
+                    and not _has_attributed_var(args)):
+                # An idle re-lead (see "Idle re-leads"): the replay above
+                # handed back every row; a re-run would only repeat the
+                # quiet pass.  Release consumers the replay's caller may
+                # have parked on this entry, as that pass's end would.
+                changed = False
+                _close_suspended(entry)
+                global _idle_releads
+                _idle_releads += 1
+            entry._quiet = None
             while changed:
                 changed = False
                 pass_delays = False
                 reads_at_start = _leader_ctx.incomplete_reads
+                epoch_at_start = _epoch
                 _gen = StepGenerator(original_dispatch, this_generator,
                                      this_generator, this_generator, *args, trail)
                 _st = yield (_gen, None)
@@ -2433,6 +2546,10 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     # That is Q4, provisional under operator ruling D74,
                     # 2026-10-19: accepted and documented, not yet final.
                     changed = False
+                if (_SEMINAIVE and not changed and not pass_delays
+                        and _epoch == epoch_at_start):
+                    # A quiet pass (see "Idle re-leads").
+                    entry._quiet = _quiet_stamp(entry)
                 entry._current_delays.clear()
                 # Consumers that suspended during this pass are re-derived by the
                 # next pass; finish their parked generators cleanly.

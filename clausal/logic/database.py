@@ -9,6 +9,7 @@ Components:
 from __future__ import annotations
 
 import contextlib
+import itertools
 import dataclasses
 from collections import namedtuple
 from typing import Any, Callable
@@ -552,6 +553,18 @@ _BACKEND_INSTALLERS: dict[str, Callable] = {}
 # ── Database ───────────────────────────────────────────────────────────────────
 
 
+# A fresh value per clause write and per abolished table: tabling's idle
+# re-lead stamp reads it (clausal.logic.tabling, "Idle re-leads").  Unique
+# values from a counter, for the reason given there.
+_mutation_ticks = itertools.count(1)
+_mutations = 0
+
+
+def _note_mutation() -> None:
+    global _mutations
+    _mutations = next(_mutation_ticks)
+
+
 class TableStore(dict):
     """A database's table store: ``(functor, arity, variant_key) -> TableEntry``.
 
@@ -567,6 +580,7 @@ class TableStore(dict):
     def clear(self) -> None:
         super().clear()
         self.scc_candidates.clear()
+        _note_mutation()
 
 
 class Database:
@@ -1200,6 +1214,7 @@ class Database:
             failed = True
             raise
         finally:
+            _note_mutation()
             for row in opened:
                 row._txn -= 1
             stamp = f"{detail} (failed)" if failed else detail
@@ -1666,6 +1681,7 @@ class Database:
         Entries are keyed as (functor, arity, variant_key) in _table_store.
         This removes all variant entries for the given predicate.
         """
+        _note_mutation()
         to_remove = [k for k in self._table_store
                      if k[0] == functor and k[1] == arity]
         for k in to_remove:

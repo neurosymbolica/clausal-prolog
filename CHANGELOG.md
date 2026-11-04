@@ -240,6 +240,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **A re-led tabled SCC member skips a re-run that could find nothing
+  new** (operator ruling 2026-11-03).  When nothing its clauses can read has
+  changed since a pass of theirs that found nothing (no table changed, no
+  clause written, the same leader below it), the re-lead hands back its rows
+  without re-running, and without re-leading the members beneath it.  Every
+  table gets the same answers in the same order with the same WFS truth
+  values.  Right recursion round a 400-node ring: 209 s -> 37 s; still
+  cubic (todo/tabled-scc-relead-rederives-every-answer-cubic-on-a-ring-
+  2026-11-03.md).  `CLAUSAL_TABLING_SEMINAIVE=0` turns it off.  Pinned in
+  `tests/test_tabling_idle_relead.py`.
 - **A digit group separator is one `_` between two digits** in an ISO
   reader number (`1_000`, `1_0.5`). `1_000_` and `1__000`, which read as
   1000, are now `syntax_error(cannot_parse_big_int)`, as in Scryer. The
