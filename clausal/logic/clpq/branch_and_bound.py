@@ -54,12 +54,17 @@ TRACE = None
 DEFAULT_EPSILON = 0.001
 
 
-def bb_inf(integer_variables, term, infimum, trail, vertex=None, epsilon=None):
+def bb_inf(integer_variables, term, infimum, trail, vertex=None, epsilon=None,
+           *, vertex_out=None):
     """bb.pl, bb_inf/3 and bb_inf/5: the infimum of *term* when every term
     of *integer_variables* is integral, posted as `{Infimum =:= value}`,
     and the rounded values of *integer_variables* there unified with
     *vertex*.  True or False.  bb_inf/3 is bb_inf/5 with a fresh Vertex
-    and Eps 0.001.  Like inf, it waits until *term* is linear."""
+    and Eps 0.001.  Like inf, it waits until *term* is linear.
+
+    *vertex_out*: the variable bb_inf/3's fresh Vertex is, when the caller
+    wants to read it (holzbaur.bb_inf); None makes one here.  Ignored when
+    *vertex* is given."""
     if vertex is None and epsilon is None:
         refuse_inside_attribute_hooks(
             trail, ("bb_inf", integer_variables, term, infimum), "bb_inf", 3)
@@ -69,7 +74,7 @@ def bb_inf(integer_variables, term, infimum, trail, vertex=None, epsilon=None):
                     culprit_argument(vertex), culprit_argument(epsilon)),
             "bb_inf", 5)
     if vertex is None:
-        vertex = Var()
+        vertex = Var() if vertex_out is None else vertex_out
     if epsilon is None:
         epsilon = DEFAULT_EPSILON
     epsilon_form = normal_form(epsilon)

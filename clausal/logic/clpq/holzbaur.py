@@ -87,6 +87,8 @@ from clausal.logic.clpq.attributes import (
     CLPQ_KEY, ON_ANOTHER_TRAIL, culprit_argument,
     dispatching_on_another_trail, inside_attribute_hooks,
     refuse_inside_attribute_hooks, state_of)
+from clausal.logic.clpq.components import (
+    component_all_variables, list_elements)
 from clausal.logic.clpq.legacy import (
     _block_cell_as_node, _cell_as_node, _cells_as_nodes, _units_result,
     _units_strip, _units_strip_expr)
@@ -94,7 +96,7 @@ from clausal.logic.clpz_surface import _proper_list
 from clausal.logic.exceptions import (
     LogicException, instantiation_error, representation_error, type_error)
 from clausal.logic.variables import (
-    PlainVar, Var, deref, get_attr, is_var, present_number, unify)
+    PlainVar, Var, del_attr, deref, get_attr, is_var, present_number, unify)
 from clausal.pythonic_ast.nodes import (
     ArithEq, ArithNeq, CompareChain, Gt, GtE, Lt, LtE)
 
@@ -201,6 +203,103 @@ def refuse_fd_holes(variable, context):
     if fd_state is not None and len(fd_state.domain) > 1:
         raise LogicException(
             representation_error("fd_domain_with_holes", context))
+
+
+def _fd_variables_reached(terms):
+    """The FD variables of the components of the variables in *terms*:
+    every variable the store links to them, written in them or not
+    (class.pl's component member lists).  A variable of *terms* in no
+    component is its own."""
+    from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+    found = []
+    seen_variables = set()
+    seen_components = set()
+
+    def visit(variable):
+        if variable._id in seen_variables:
+            return
+        seen_variables.add(variable._id)
+        if get_attr(variable, FD_KEY) is not None:
+            found.append(variable)
+
+    for variable in _variables_of(*terms):
+        if type(variable) is PlainVar:
+            continue
+        visit(variable)
+        state = state_of(variable)
+        if state is None or state.component is None:
+            continue
+        component = deref(state.component)
+        if id(component) in seen_components:
+            continue
+        seen_components.add(id(component))
+        for member in list_elements(component_all_variables(component)):
+            member = deref(member)
+            if is_var(member) and type(member) is not PlainVar:
+                visit(member)
+    return found
+
+
+def refuse_fd_holes_reached(terms, context):
+    """representation_error(fd_domain_with_holes) for an FD variable with
+    holes anywhere in the components of *terms*, the objective of
+    maximize, minimize or bb_inf (and bb_inf's integers): the store holds
+    only its hull, so a value the optimum gives it, or gives the objective
+    through it, can lie in a hole (operator ruling 2026-11-03,
+    DEVIATIONS.md D29).  Returns the FD variables reached."""
+    reached = _fd_variables_reached(terms)
+    for variable in reached:
+        refuse_fd_holes(variable, context)
+    return reached
+
+
+def _is_integral(value):
+    if is_var(value):
+        return True
+    try:
+        return Fraction(value).denominator == 1
+    except (TypeError, ValueError):
+        return True
+
+
+def _post_optimum(post, expr, fd_variables, context, trail):
+    """bv.pl maximize/1 or minimize/1 (*post*), and where it fails with FD
+    variables in the objective's component, why: the same post again with
+    their FD attributes set aside, the relaxation alone.  When that
+    succeeds and gives one of them a value that is not an integer, the
+    failure was clpfd refusing the relaxation's optimum, so
+    representation_error(fd_relaxation_not_integral) is raised (operator
+    ruling 2026-11-03, DEVIATIONS.md D29).  Otherwise the failure stands.
+    Either way the store is as the failed post left it.  The success path
+    is 1.3.3's, unchanged."""
+    mark = trail.mark()
+    if _without_a_queue(trail, lambda: post(expr, trail)):
+        return True
+    if not fd_variables:
+        return False
+    trail.undo(mark)
+    from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+    relaxed = fractional = False
+    try:
+        for variable in fd_variables:
+            if is_var(deref(variable)):
+                del_attr(deref(variable), FD_KEY, trail)
+        if _without_a_queue(trail, lambda: post(expr, trail)):
+            relaxed = True
+            fractional = not all(_is_integral(deref(variable))
+                                 for variable in fd_variables)
+    finally:
+        trail.undo(mark)
+    if fractional:
+        raise LogicException(
+            representation_error("fd_relaxation_not_integral", context))
+    if relaxed:
+        # Integral, and in the domains (holes were refused before the
+        # post): what clpfd refused is a constraint of its own that the
+        # store does not hold (posted before promotion, or not linear).
+        raise LogicException(
+            representation_error("fd_constraint_not_in_relaxation", context))
+    return False
 
 
 def promote_fd_to_q(variable, fd_state, trail):
@@ -544,6 +643,8 @@ def _objective(expr, context, trail, exact=False):
     if not _promote_fd_variables(expr, 0, trail,
                                  context if exact else None):
         return None, None
+    if exact:
+        refuse_fd_holes_reached([expr], context)
     return expr, dims
 
 
@@ -579,8 +680,8 @@ def maximize(expr, result_var, trail):
     if not _without_a_queue(
             trail, lambda: _bounded_simplex.sup(expr, value, trail)):
         return False
-    if not _without_a_queue(
-            trail, lambda: _bounded_simplex.maximize(expr, trail)):
+    if not _post_optimum(_bounded_simplex.maximize, expr,
+                         _fd_variables_reached([expr]), "maximize/2", trail):
         return False
     return _bind_optimum(value, result_var, dims, trail)
 
@@ -596,8 +697,8 @@ def minimize(expr, result_var, trail):
     if not _without_a_queue(
             trail, lambda: _bounded_simplex.inf(expr, value, trail)):
         return False
-    if not _without_a_queue(
-            trail, lambda: _bounded_simplex.minimize(expr, trail)):
+    if not _post_optimum(_bounded_simplex.minimize, expr,
+                         _fd_variables_reached([expr]), "minimize/2", trail):
         return False
     return _bind_optimum(value, result_var, dims, trail)
 
@@ -634,10 +735,64 @@ def bb_inf(int_vars, expr, result_var, trail, vertex=None, epsilon=None):
     if not _promote_fd_variables(
             [v for v in integers if is_var(deref(v))], 0, trail, context):
         return False
-    return _optimum(
-        lambda objective, value, trail: _branch_and_bound.bb_inf(
-            integers, objective, value, trail, vertex, epsilon),
-        expr, deref(result_var), dims, trail)
+    refuse_fd_holes_reached([v for v in integers if is_var(deref(v))],
+                            context)
+    # bb_inf/3 is bb_inf/5 with a fresh Vertex (bb.pl); the fresh Vertex
+    # is made here, so the integral point can be read back.
+    point = Var() if vertex is None else vertex
+    if not _optimum(
+            lambda objective, value, trail: _branch_and_bound.bb_inf(
+                integers, objective, value, trail, vertex, epsilon,
+                vertex_out=point),
+            expr, deref(result_var), dims, trail):
+        return False
+    _refuse_fd_vertex(integers, point, context, trail)
+    return True
+
+
+def _refuse_fd_vertex(integers, vertex, context, trail):
+    """bb_inf's integral point (*vertex*) gives the FD variables among
+    *integers* values in their domains (holes were refused).  If clpfd
+    refuses those values through a constraint of its own that the store
+    does not hold (posted before promotion, or not linear), while the
+    store alone takes them, the infimum is the relaxation's, not an
+    answer: representation_error(fd_constraint_not_in_relaxation)
+    (operator ruling 2026-11-03, DEVIATIONS.md D29).  A trial binding,
+    undone either way; bb.pl's answer is not changed."""
+    from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+    values = deref(vertex)
+    if not isinstance(values, list):
+        return
+    pairs = []
+    for variable, value in zip(integers, values):
+        variable, value = deref(variable), deref(value)
+        if (is_var(variable) and type(variable) is not PlainVar
+                and not is_var(value)
+                and get_attr(variable, FD_KEY) is not None):
+            pairs.append((variable, value))
+    if not pairs:
+        return
+
+    def bind_all():
+        return _without_a_queue(trail, lambda: all(
+            unify(variable, value, trail) for variable, value in pairs))
+
+    mark = trail.mark()
+    relaxed = False
+    try:
+        if bind_all():
+            return
+        trail.undo(mark)
+        for variable, _ in pairs:
+            variable = deref(variable)
+            if is_var(variable):
+                del_attr(variable, FD_KEY, trail)
+        relaxed = bind_all()
+    finally:
+        trail.undo(mark)
+    if relaxed:
+        raise LogicException(representation_error(
+            "fd_constraint_not_in_relaxation", context))
 
 
 # ---------------------------------------------------------------- entailed

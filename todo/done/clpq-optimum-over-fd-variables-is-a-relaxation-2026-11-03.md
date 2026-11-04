@@ -1,6 +1,19 @@
 # CLP(Q) optima over CLP(FD) variables read a relaxation (2026-11-03)
 
-**Status: OPEN (partly guarded).** An FD variable enters CLP(Q) with its
+**Status: FIXED 2026-11-03 (8f019988), option A (operator ruling
+2026-11-03).** Both cases below raise now, on both solvers: an FD
+variable with holes anywhere in the objective's component raises
+`representation_error(fd_domain_with_holes)`, and a maximize/minimize
+whose relaxed optimum gives an FD variable a non-integer raises
+`representation_error(fd_relaxation_not_integral)`. Pinned by
+tests/test_clpq_fd_promotion_optima.py::
+test_an_optimum_the_relaxation_cannot_answer_is_refused (and
+test_an_optimum_the_relaxation_answers_is_kept for the cases that still
+answer). Left open, documented in D29 and docs/clpq.md: CLP(FD)
+constraints between FD variables (`X #= Y + 3`) are not in the CLP(Q)
+store, so an optimum clpfd's propagation refuses still fails.
+
+Earlier status: OPEN (partly guarded). An FD variable enters CLP(Q) with its
 domain's hull (DEVIATIONS.md D20, D29): a rational relaxation without the
 holes and without integrality.
 

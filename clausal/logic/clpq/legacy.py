@@ -29,6 +29,7 @@ from clausal.logic.variables import (
     Var,
     Trail,
     deref,
+    del_attr,
     is_var,
     unify,
     put_attr,
@@ -2211,7 +2212,64 @@ _ENTAILED_RELATIONS = frozenset(
     ("=<", "<=", ">=", "=>", "<", ">", "=", "=:=", "\\=", "=\\="))
 
 
-def _bind_optimal(tableau: Tableau, trail: Trail) -> bool:
+def _refuse_fd_holes_linked(tableau: Tableau, vids, context: str) -> None:
+    """representation_error(fd_domain_with_holes) for an FD variable with
+    holes linked to *vids* (the objective's variables, and bb_inf's
+    integers) through the tableau's rows, parametric definitions and
+    disequations: the tableau holds only its hull, so the optimum can put
+    it, or the objective through it, in a hole (operator ruling
+    2026-11-03; the port reads the same set off its components)."""
+    from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+    groups = [set(row) | {bv} for bv, row in tableau.rows.items()]
+    groups.extend(set(coeffs) | {vid}
+                  for vid, (coeffs, _) in tableau.parametric.items())
+    groups.extend(set(coeffs) for _, coeffs, _ in tableau.diseqs)
+    reach = set(vids)
+    changed = True
+    while changed:
+        changed = False
+        rest = []
+        for group in groups:
+            if reach.isdisjoint(group):
+                rest.append(group)
+            else:
+                reach |= group
+                changed = True
+        groups = rest
+    for vid in reach:
+        var = tableau._var_map.get(vid)
+        if var is None:
+            continue
+        var = deref(var)
+        if not is_var(var):
+            continue
+        fd_state = get_attr(var, FD_KEY)
+        if fd_state is not None and len(fd_state.domain) > 1:
+            raise LogicException(
+                representation_error("fd_domain_with_holes", context))
+
+
+def _refuse_fd_relaxation(var: Any, value: Fraction, context: str) -> None:
+    """The optimum binds every tableau variable.  A value clpfd would
+    refuse is the relaxation's, not an answer: not an integer is
+    representation_error(fd_relaxation_not_integral), an integer in a hole
+    of the domain representation_error(fd_domain_with_holes) (operator
+    ruling 2026-11-03).  It used to fail."""
+    from clausal.logic.clpfd import FD_KEY, domain_contains  # noqa: PLC0415
+    fd_state = get_attr(var, FD_KEY)
+    if fd_state is None:
+        return
+    if value.denominator != 1:
+        raise LogicException(
+            representation_error("fd_relaxation_not_integral", context))
+    if (len(fd_state.domain) > 1
+            and not domain_contains(fd_state.domain, int(value))):
+        raise LogicException(
+            representation_error("fd_domain_with_holes", context))
+
+
+def _bind_optimal(tableau: Tableau, trail: Trail,
+                  context: str | None = None) -> bool:
     """Bind all user variables to their optimal assignments.
 
     Called after ``optimize`` to commit the optimal point.  Variables
@@ -2226,13 +2284,58 @@ def _bind_optimal(tableau: Tableau, trail: Trail) -> bool:
     for vid, var in list(tableau._var_map.items()):
         if vid in tableau.parametric or vid in tableau.assign:
             values[vid] = tableau.concrete_value(vid, delta)
-    for vid, var in list(tableau._var_map.items()):
-        var = deref(var)
-        if not is_var(var) or vid not in values:
-            continue
-        if not unify(var, present_number(values[vid]), trail):
-            return False
-    return True
+    if context is not None:
+        for vid, var in tableau._var_map.items():
+            var = deref(var)
+            if is_var(var) and vid in values:
+                _refuse_fd_relaxation(var, values[vid], context)
+    items = list(tableau._var_map.items())
+
+    def bind_all():
+        for vid, var in items:
+            var = deref(var)
+            if not is_var(var) or vid not in values:
+                continue
+            if not unify(var, present_number(values[vid]), trail):
+                return False
+        return True
+
+    if context is None:
+        return bind_all()
+    mark = trail.mark()
+    if bind_all():
+        return True
+    _refuse_fd_constraint_outside(items, values, bind_all, mark, trail,
+                                  context)
+    return False
+
+
+def _refuse_fd_constraint_outside(items, values, bind_all, mark, trail,
+                                  context: str) -> None:
+    """The optimum's values are integral and in their FD domains (checked
+    before binding), yet binding them failed.  Bind them again with the
+    FD attributes set aside: when that succeeds, clpfd refused them
+    through a constraint of its own that the tableau does not hold
+    (posted before promotion, or not linear), so the relaxation's optimum
+    is no answer: representation_error(fd_constraint_not_in_relaxation)
+    (operator ruling 2026-11-03, never a silent failure).  Otherwise the
+    failure stands.  The trail is undone to *mark* either way."""
+    from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+    trail.undo(mark)
+    relaxed = False
+    try:
+        held = False
+        for vid, var in items:
+            var = deref(var)
+            if is_var(var) and vid in values and get_attr(var, FD_KEY) is not None:
+                del_attr(var, FD_KEY, trail)
+                held = True
+        relaxed = held and bind_all()
+    finally:
+        trail.undo(mark)
+    if relaxed:
+        raise LogicException(
+            representation_error("fd_constraint_not_in_relaxation", context))
 
 
 def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
@@ -2253,11 +2356,12 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
         raise _not_linear("maximize/1", expr)
     coeffs, const = lc
     tableau = _get_tableau(trail)
+    _refuse_fd_holes_linked(tableau, coeffs, "maximize/2")
     _snapshot_tableau(trail)
     opt = tableau.optimize(coeffs, 'max')
     if opt is None or type(opt) is DQ:
         return False    # unbounded, or a supremum not attained
-    if not _bind_optimal(tableau, trail):
+    if not _bind_optimal(tableau, trail, "maximize/2"):
         return False
     return unify(result_var, _units_result(opt + const, dims), trail)
 
@@ -2280,11 +2384,12 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
         raise _not_linear("minimize/1", expr)
     coeffs, const = lc
     tableau = _get_tableau(trail)
+    _refuse_fd_holes_linked(tableau, coeffs, "minimize/2")
     _snapshot_tableau(trail)
     opt = tableau.optimize(coeffs, 'min')
     if opt is None or type(opt) is DQ:
         return False    # unbounded, or an infimum not attained
-    if not _bind_optimal(tableau, trail):
+    if not _bind_optimal(tableau, trail, "minimize/2"):
         return False
     return unify(result_var, _units_result(opt + const, dims), trail)
 
@@ -2693,6 +2798,7 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
     obj_coeffs, obj_const = lc
 
     tableau = _get_tableau(trail)
+    _refuse_fd_holes_linked(tableau, set(obj_coeffs) | int_ids, context)
     best_val, best_tab = _bb_solve(tableau, obj_coeffs, obj_const, int_ids)
     if best_val is None:
         return False
@@ -2701,7 +2807,7 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
     _snapshot_tableau(trail)
     tid = id(trail)
     _tableaux[tid] = best_tab
-    if not _bind_optimal(best_tab, trail):
+    if not _bind_optimal(best_tab, trail, context):
         return False
     if vertex is not None and not unify(
             vertex, [deref(v) for v in shadows], trail):

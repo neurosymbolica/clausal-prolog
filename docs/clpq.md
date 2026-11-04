@@ -736,16 +736,18 @@ fd_eq(l, r, trail):
     1. Fast path: type(l) is int and type(r) is int → Python ==
     2. _resolve expression trees
     3. _check_no_mixed_rational_real(l, r) → TypeError if mixed
-    4. _any_rational(l, r) → CLP(Q) via q_eq
-    5. _any_real(l, r)     → CLP(R) via real_eq
-    6. Expression linearization → ScalarProductConstraint
-    7. _both_ground(l, r)  → Python ==
-    8. At least one Var    → CLP(Z) EqConstraint
+    4. integer-linear, every variable with FD state and one with Q
+       state → CLP(Q) via q_eq, then CLP(FD) (_post_shared_fd_q)
+    5. _any_rational(l, r) → CLP(Q) via q_eq
+    6. _any_real(l, r)     → CLP(R) via real_eq
+    7. Expression linearization → ScalarProductConstraint
+    8. _both_ground(l, r)  → Python ==
+    9. At least one Var    → CLP(Z) EqConstraint
 ```
 
 `_any_rational` checks: is either operand a `Fraction` instance, or a `Var` with a `"clpq"` attribute? Before dispatching, `_check_no_mixed_rational_real` raises `TypeError` if one operand is rational and the other is a float or CLP(R) variable.
 
-The C extension mirrors these checks. During module initialization, it imports `_check_no_mixed_rational_real`, `_any_rational` from the Python `clpfd` module and `q_eq`, `q_ne`, `q_lt`, `q_le` from `clpq`. The dispatch in C calls the Python functions through the C-API.
+Step 4 runs in the Python wrappers around the C entry points, ahead of them. The C extension mirrors the other checks. During module initialization, it imports `_check_no_mixed_rational_real`, `_any_rational` from the Python `clpfd` module and `q_eq`, `q_ne`, `q_lt`, `q_le` from `clpq`. The dispatch in C calls the Python functions through the C-API.
 
 ---
 
@@ -835,6 +837,18 @@ A variable can have **both** FD and Q attributes simultaneously, just like FD an
 3. FD enforces integrality and domain holes; Q handles rational constraint propagation
 4. When FD narrows (via `_narrow`), Q bounds are tightened to match
 5. Integer-valued `Fraction` results (like `Fraction(3)`) are accepted by the FD hook
+6. A `#` comparison whose variables all have FD state, one of them Q state
+   too, and which is linear with integer coefficients, is posted to **both**
+   stores: CLP(Q) gets the relaxation, CLP(FD) narrows the domains, and a
+   domain that becomes a single value binds the variable, which CLP(Q) then
+   sees. `X #>= 0, X #=< 5, {X + Y = 7}, X #> 4` gives `X = 5, Y = 2`, as in
+   Scryer (it left X unbound when the post went to CLP(Q) alone). A `#`
+   comparison with a variable that has Q state and no FD state (a rational
+   variable, or a fresh one) stays CLP(Q)'s alone.
+
+CLP(Q)'s own posts do not narrow an FD domain: `X in 1..5, {X > 4}` leaves
+X unbound (`label([X])` gives 5), as Scryer, whose clpz and clpq are
+separate, leaves it.
 
 A CLP(Z) variable enters a CLP(Q) context through a comparison (`{X =< 7}`),
 `in_q/1,3`, or the objective of `sup/2`, `inf/2`, `maximize`, `minimize` and
@@ -842,11 +856,49 @@ A CLP(Z) variable enters a CLP(Q) context through a comparison (`{X =< 7}`),
 along: `X #\= 3` has none, so `sup(X, S)` fails, as it does for a variable
 the store does not know.
 
-Only the domain's hull comes along, a rational relaxation: with
+Only the domain's hull comes along, a rational relaxation: no holes and no
+integrality. `sup/2` and `inf/2` answer on the relaxation: with
 `X in 1..3 \/ 7..9` and `{X >= 4}`, `inf(X, I)` gives 4, not 7. An optimum
-that binds cannot be read off the hull, so `maximize`, `minimize` and
-`bb_inf` raise `representation_error(fd_domain_with_holes)` when a variable
-of the objective (or of `bb_inf`'s integer list) has a domain with a hole.
+that binds, or must be integral, cannot be read off the relaxation, so
+`maximize`, `minimize` and `bb_inf` never give its answer, nor fail where
+the FD side refuses it (operator ruling 2026-11-03):
+
+- They raise `representation_error(fd_domain_with_holes)` when an FD
+  variable whose domain has a hole is in the objective's component of the
+  store: in the objective (or `bb_inf`'s integer list), or linked to it by
+  constraints. `X in 0..2 \/ 8..10, {Y = X, Y =< 7}, maximize(Y)` raises
+  it. An FD variable with holes that no constraint links to the objective
+  does not count.
+- `maximize` and `minimize` raise
+  `representation_error(fd_relaxation_not_integral)` when the relaxed
+  optimum gives an FD variable a value that is not an integer:
+  `X in 1..5, {2*X >= 3}, minimize(X)` raises it (the relaxation's
+  optimum is 3/2). Where the optimum is integral they answer as before.
+- `bb_inf` makes integral only the variables of its integer list. Under
+  the `holzbaur` solver it binds nothing, so `X in 1..5, {2*X >= 3},
+  bb_inf([], X, I)` gives `I = 3/2`, the relaxation, as asked; list `X` for
+  `I = 2`. The default solver binds the store at the optimum and raises
+  `fd_relaxation_not_integral` there.
+- An FD constraint posted between FD variables before they had CLP(Q)
+  state (`X #= Y + 3` ahead of `{D = X - Y}`) is not in the CLP(Q) store.
+  When clpfd refuses the relaxation's optimum through such a constraint
+  (one posted before promotion, a non-linear or global one such as
+  `all_different/1`, or a domain narrowed after promotion), while the
+  store alone takes it, `maximize`, `minimize` and `bb_inf` raise
+  `representation_error(fd_constraint_not_in_relaxation)` (operator
+  ruling 2026-11-03): `X in 1..5, Y in 1..5, X #= Y + 3, {D = X - Y},
+  maximize(D)` failed, since the relaxation's `D = 4` binds `X = 5, Y = 1`,
+  and `bb_inf([X, Y], -D, I)` gave `I = -4` under `holzbaur`. For
+  `bb_inf` the check is a trial binding of the FD variables of its
+  integer list to the integral point; the store is left as it was. An
+  optimum the FD constraints allow answers as before (`X #=< Y,
+  {D = X + Y}, maximize(D)` gives `D = 20`). The check does not search:
+  where the program has no integer solution at all, it raises too, as the
+  integrality refusal does. Posted after promotion (`{D = X - Y},
+  X #= Y + 3`), the constraint reaches both stores, and `D = 3`. (Scryer
+  fails both orders: its clpq does not see clpz's bounds.) Constraints
+  that are not CLP(FD)'s, such as `dif/2`, are not checked: an optimum
+  they refuse fails.
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:fd_q_coexistence"
@@ -857,6 +909,7 @@ of the objective (or of `bb_inf`'s integer list) has a domain with a hole.
 | Situation | Behaviour |
 |---|---|
 | `in_q(X, 0, 10)` then `X #= 3` | CLP(Q): X has `"clpq"` attribute, `3` is treated as `Fraction(3)` |
+| `in_domain(X, 0, 5)`, `{X + Y = 7}` then `X #> 4` | Both stores: FD narrows X to 5 and binds it, CLP(Q) gives `Y = 2` |
 | `in_domain(X, 1, 10)` then `X #= 1 rdiv 3` | **Fails**: the rational triggers Q dispatch, the FD var is promoted to Q with bounds `[1, 10]`, and `1/3` is outside them |
 | `in_domain(X, 1, 10)` then `X #= 1 rdiv 2` | **Fails**: `1/2` is not an integer, FD hook rejects |
 | `X #= 1/0` | **Fails** |

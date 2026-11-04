@@ -52,6 +52,43 @@ surface described in [docs/public-api.md](docs/public-api.md).
   variables left to right (woken goals run in that order), a table
   predicate's rules get no tail-recursion optimisation, and "last answer"
   is detected per indexed argument. Tests: `tests/test_clause_table.py`.
+- **A `#` comparison on a variable that has both CLP(FD) and CLP(Q) state
+  posts to both stores**, both solvers. It went to CLP(Q) alone, so clpfd
+  never narrowed or bound the variable: `X #>= 0, X #=< 5, {X + Y = 7},
+  X #> 4` left X unbound, where Scryer (clpz and clpq together) gives
+  `X = 5, Y = 2`, as Clausal now does. Applies to a comparison that is
+  linear with integer coefficients over variables that all have FD state;
+  one with a rational or fresh variable stays CLP(Q)'s alone, and `{}/1`
+  still does not narrow an FD domain (as in Scryer) (DEVIATIONS.md D20,
+  docs/clpq.md).
+
+- **CLP(Q) optima refuse what clpfd's own constraints rule out**
+  (operator ruling 2026-11-03), both solvers. An FD constraint posted
+  before its variables had CLP(Q) state, a non-linear or global one, or a
+  domain narrowed after promotion is not in the relaxation:
+  `X in 1..5, Y in 1..5, X #= Y + 3, {D = X - Y}, maximize(D)` failed
+  (the relaxation's `D = 4` binds `X = 5, Y = 1`), and `bb_inf([X, Y], -D,
+  I)` answered `I = -4` under `holzbaur`. When clpfd refuses the
+  relaxation's optimum that way, `maximize`, `minimize` and `bb_inf` raise
+  `representation_error(fd_constraint_not_in_relaxation)`. Optima the FD
+  constraints allow keep their answers (DEVIATIONS.md D29, docs/clpq.md;
+  replaying such constraints into CLP(Q) is open in
+  `todo/clpq-fd-constraints-posted-before-promotion-are-not-in-the-relaxation-2026-11-04.md`).
+
+- **CLP(Q) optima over CLP(FD) variables never answer from the
+  relaxation** (operator ruling 2026-11-03), both solvers. `maximize`,
+  `minimize` and `bb_inf` raise `representation_error(fd_domain_with_holes)`
+  when an FD variable with a hole is anywhere in the objective's component
+  of the store, not only in the objective: `X in 0..2 \/ 8..10,
+  {Y = X, Y =< 7}, maximize(Y)` failed, and with `{Y = 2*X + Z, ...}` the
+  `holzbaur` solver answered `Y = 7`, a value only the hole allows.
+  `maximize` and `minimize` whose relaxed optimum gives an FD variable a
+  value that is not an integer raise
+  `representation_error(fd_relaxation_not_integral)`: `X in 1..5,
+  {2*X >= 3}, minimize(X)` failed though `X = 2` exists. So does the
+  default solver's `bb_inf`, which binds the store, for an FD variable not
+  in its integer list. Optima that answered keep their answers
+  (DEVIATIONS.md D29, docs/clpq.md).
 
 - **A clause head qualified with the file's own module defines the
   predicate** (`.pl` and `.clausal`): in a file whose `module/2` names `m`,
