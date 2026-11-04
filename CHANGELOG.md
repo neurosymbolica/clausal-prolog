@@ -79,9 +79,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   run first, and a head among them binding a frozen argument woke its goal
   ahead of the tail call's answers -- `freeze(X, (X == 0 -> throw(oops) ;
   true)), w2(1, X)` threw where Scryer answers `X = done` first.  A later
-  clause whose head binds an argument before its guard fails now lets the
-  restart be taken only when that argument is ground, atomic or an unbound
-  variable without attributes (checked at run time).  The runtime key test
+  clause whose head binds something of the call before its guard fails now
+  lets the restart be taken only where that binding can wake no goal:
+  the restarting head's term there is ground (`[]`, `f(1)`, `s(A)` with A
+  evaluated), or the later pattern is one functor over fresh variables, or a
+  run-time check finds the argument atomic or an unbound variable without
+  attributes.  The runtime key test
   also passes an argument of another type than the later clauses' keys
   (`a(N) :- N > 0, ..., a(M).` before `a(x).  a(y).` called with an
   integer).  A restarting index bucket's answers are marked last again

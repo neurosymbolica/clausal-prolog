@@ -25,8 +25,8 @@ are skipped (the builder's arm guards):
   starts with comparisons, one of them the other way (``N =< 0`` after
   ``N > 0``), fails before it does anything else -- except bind what its
   head binds, which must wake nothing: each such argument ground, or
-  checked at run time to be atomic or an unbound variable without
-  attributes (``plain_arg``; ``w(N, 0) :- N =< 0`` with X frozen); or
+  checked at run time to wake nothing (``head_bind_checks``;
+  ``w(N, 0) :- N =< 0`` with X frozen); or
 - for the later clauses whose heads might unify, all of them key one
   argument position (``arg_index.head_arg_key``) and the call's argument
   there, bound at entry, keys outside them all -- a runtime test, taken
@@ -141,6 +141,14 @@ def _unify_sides(goal: Any):
             and not goal.kwargs):
         return goal.args[0], goal.args[1]
     return None
+
+
+def _list_tail(term: list):
+    """The tail of a list pattern whose last element is a star (stars of
+    list values flattened as in :func:`_list_parts`)."""
+    while type(term) is list and term and isinstance(term[-1], StarUnpack):
+        term = term[-1].value
+    return term
 
 
 def _list_parts(term: list):
@@ -319,32 +327,189 @@ def _replace_positions(expr: Any, subst: dict) -> Any:
 def guard_facts(clause, arity: int):
     """``(facts, ground)``: the comparisons over the head's arguments that
     the body of the TRO clause *clause* makes before its tail call (every
-    goal but the last runs before the restart), and the argument positions
-    known ground whenever the clause restarts -- compared bare by an ISO
-    comparison (which raises on an unbound one), or an atomic constant of
-    its head."""
+    goal but the last runs before the restart), and the ids of the
+    variables known ground whenever the clause restarts -- evaluated by an
+    ISO comparison or the right side of ``is/2`` before the tail (either
+    raises on an unbound one)."""
     args = [_head_arg(clause, i, arity) for i in range(arity)]
     if any(a is _INDEX_VAR for a in args):
         return [], frozenset()
     positions = _positions(args)
     facts = []
-    ground = set()
+    ground: set = set()
     for goal in list(clause.body or ())[:-1]:
         c = _comparison(goal, positions)
         if c is not None:
             facts.append(c)
-            if isinstance(goal, Call):          # ISO arithmetic comparison
-                for side in c[1:]:
-                    if type(side) is tuple and side[0] == "$pos":
-                        ground.add(side[1])
-    mine = effective_head_args(clause, arity)
-    for k, a in enumerate(mine or ()):
-        if type(a) in (int, str):
-            ground.add(k)
+        if (isinstance(goal, Call) and isinstance(goal.func, LoadName)
+                and len(goal.args) == 2 and not goal.kwargs):
+            if goal.func.name in _CMP_NAMES:
+                _vars_of(goal.args, ground)
+            elif goal.func.name == "is":
+                _vars_of(goal.args, ground)
     return facts, frozenset(ground)
 
 
-def _guard_refutes(facts: list, ground, later, arity: int):
+def _vars_of(term: Any, out: set, depth: int = 0) -> None:
+    """Add the ids of the variables in *term* (lists, cells, stars) to
+    *out*."""
+    if depth > _DEPTH:
+        return
+    if is_var(term):
+        out.add(id(term))
+    elif type(term) is list or (type(term) is tuple and term):
+        for x in term:
+            _vars_of(x, out, depth + 1)
+    elif isinstance(term, StarUnpack):
+        _vars_of(term.value, out, depth + 1)
+
+
+def _is_ground(term: Any, ground: frozenset, depth: int = 0) -> bool:
+    """True when *term*, a head pattern, is ground whenever the clause
+    restarts: no variable in it but ones in *ground*."""
+    if depth > _DEPTH:
+        return False
+    if is_var(term):
+        return id(term) in ground
+    if type(term) is list or (type(term) is tuple and term):
+        return all(_is_ground(x, ground, depth + 1) for x in term)
+    if isinstance(term, StarUnpack):
+        return _is_ground(term.value, ground, depth + 1)
+    return type(term) in (int, float, str, bytes, bool) or term is None
+
+
+def _pattern_vars(term: Any, depth: int = 0) -> list:
+    """The variables of a head pattern, in order, repeats included; None
+    for a node this reading does not know."""
+    if depth > _DEPTH:
+        return None
+    if is_var(term):
+        return [term]
+    if type(term) is list or (type(term) is tuple and term):
+        out = []
+        for x in term:
+            sub = _pattern_vars(x, depth + 1)
+            if sub is None:
+                return None
+            out.extend(sub)
+        return out
+    if isinstance(term, StarUnpack):
+        return _pattern_vars(term.value, depth + 1)
+    if type(term) in (int, float, str, bytes, bool) or term is None:
+        return []
+    return None
+
+
+def _shallow(p) -> bool:
+    """A cell or list pattern every element of which is a variable."""
+    if _is_cell(p):
+        return all(is_var(x) for x in p[1:])
+    if type(p) is list:
+        parts = _list_parts(p)
+        if parts is None:
+            return False
+        fixed, star = parts
+        return bool(fixed) and all(is_var(x) for x in fixed) and (
+            not star or is_var(_list_tail(p)))
+    return False
+
+
+def head_bind_checks(later_args: list, mine: list, ground: frozenset):
+    """What unifying the later head *later_args* with a call that is an
+    instance of the restarting head *mine* binds, as the run-time checks
+    under which none of it wakes a goal; None when that cannot be shown.
+
+    A check is ``("plain", k)`` -- the argument at k atomic or an unbound
+    variable without attributes (``plain_arg``) --, ``("noatt", k)`` -- not
+    an unbound variable with attributes (``not_attvar``) -- or ``("pair",
+    k, q)`` -- binding the arguments at k and q to each other wakes nothing
+    (``safe_pair``).  Where *mine* has a ground term (``ground``: the
+    variables a comparison or ``is/2`` evaluated), the argument IS that
+    term, and the later pattern binds only its own fresh variables there."""
+    seen: dict = {}         # id(var) -> "ground" | ("top", k) | "nested"
+    checks: set = set()
+
+    def bind_values(a, b):
+        """A later variable met again: its value *a* and the subterm *b*
+        are unified.  True when the checks added show it wakes nothing."""
+        if a == "ground" and b == "ground":
+            return True
+        if a == "nested" or b == "nested":
+            return False
+        if a == "ground":
+            checks.add(("plain", b[1]))
+            return True
+        if b == "ground":
+            checks.add(("plain", a[1]))
+            return True
+        if a[1] != b[1]:
+            checks.add(("pair", min(a[1], b[1]), max(a[1], b[1])))
+        return True
+
+    def meet(var, value):
+        if id(var) in seen:
+            return bind_values(seen[id(var)], value)
+        seen[id(var)] = value
+        return True
+
+    def match(p, r, k, top):
+        """Unify later pattern *p* with the argument subterm the restarting
+        pattern *r* describes (at top level of argument k when *top*)."""
+        value = "ground" if _is_ground(r, ground) else (
+            ("top", k) if top else "nested")
+        if is_var(p):
+            return meet(p, value)
+        pv = _pattern_vars(p)
+        if pv is None:
+            return False
+        if value == "ground":
+            # The argument is that ground term: the pattern's variables are
+            # bound to ground subterms, nothing of the call is bound.
+            return all(meet(v, "ground") for v in pv)
+        if is_var(r):
+            if not top:
+                return False
+            ids = [id(v) for v in pv]
+            if (_shallow(p) and len(set(ids)) == len(ids)
+                    and not any(i in seen for i in ids)):
+                # One functor over distinct fresh variables (``s(A)``,
+                # ``[H|T]``): binds only them -- unless the argument is
+                # itself an attributed variable.  A constant or a deeper
+                # pattern inside would bind into the argument.
+                checks.add(("noatt", k))
+                for v in pv:
+                    seen[id(v)] = "nested"
+                return True
+            # An argument that is atomic or a plain variable: the pattern
+            # fails, or the variable is bound to a copy of it.
+            checks.add(("plain", k))
+            for v in pv:
+                seen.setdefault(id(v), "nested")
+            return True
+        # Both structured: follow the shape the call already has.
+        if _is_cell(p) and _is_cell(r) and len(p) == len(r) and p[0] == r[0]:
+            return all(match(x, y, k, False) for x, y in zip(p[1:], r[1:]))
+        if type(p) is list and type(r) is list:
+            pp, rp = _list_parts(p), _list_parts(r)
+            if pp is None or rp is None:
+                return False
+            (fp, sp), (fr, sr) = pp, rp
+            if len(fp) != len(fr) or sp != sr:
+                return False
+            if not all(match(x, y, k, False) for x, y in zip(fp, fr)):
+                return False
+            return not sp or match(_list_tail(p), _list_tail(r), k, False)
+        return False
+
+    if mine is None or later_args is None or len(mine) != len(later_args):
+        return None
+    for k, (p, r) in enumerate(zip(later_args, mine)):
+        if not match(p, r, k, True):
+            return None
+    return frozenset(checks)
+
+
+def _guard_refutes(facts: list, ground, later, arity: int, mine=None):
     """None when the comparisons *facts* (which held on the call's
     arguments) do not show the clause *later* cannot answer the same call;
     otherwise the argument positions that must hold no attributed variable
@@ -354,9 +519,9 @@ def _guard_refutes(facts: list, ground, later, arity: int):
     before it fails.  A head that cannot unify does nothing (goals woken by
     a head unification run only once it has succeeded).  A head that
     unifies and then fails a comparison has bound what it binds first, and
-    an attributed variable bound wakes its goals -- so each argument it
-    binds must be ground (*ground*) or, at run time, atomic or an unbound
-    variable with no attributes (``plain_arg``)."""
+    an attributed variable bound wakes its goals -- so what it binds must be
+    shown to wake nothing (``head_bind_checks`` against the restarting head
+    *mine*), statically or by run-time checks.  Returns the checks."""
     later_args, folded = folded_head_args(later, arity)
     if not facts or later_args is None:
         return None
@@ -364,18 +529,14 @@ def _guard_refutes(facts: list, ground, later, arity: int):
     # needs identical to an earlier one (the same variable).
     subst: dict = {}
     first_at: dict = {}
-    binds: set = set()
     for k, a in enumerate(later_args):
         if is_var(a):
             if id(a) in first_at:
                 subst[k] = ("$pos", first_at[id(a)])
-                binds.update((k, first_at[id(a)]))
             else:
                 first_at[id(a)] = k
-        else:
-            binds.add(k)
-            if type(a) is int:
-                subst[k] = a
+        elif type(a) is int:
+            subst[k] = a
     for op, left, right in facts:
         l2 = _replace_positions(left, subst)
         r2 = _replace_positions(right, subst)
@@ -404,10 +565,30 @@ def _guard_refutes(facts: list, ground, later, arity: int):
             if ((left, right) == (l2, r2) and op2 in _EXCLUDES[op]) or (
                     (left, right) == (r2, l2) and _FLIP[op2] in _EXCLUDES[op]) or (
                     _interval_disjoint(op, left, right, op2, l2, r2)):
-                return frozenset(binds - ground)
+                return head_bind_checks(later_args, mine, ground)
         if not all(type(x) is int or x in seen for x in (l2, r2)):
             return None
     return None
+
+
+def not_attvar(d) -> bool:
+    """Runtime: *d* is not an unbound variable with attributes."""
+    return not is_var(d) or getattr(d, "attrs", None) is None
+
+
+def safe_pair(a, b) -> bool:
+    """Runtime: unifying the dereferenced arguments *a* and *b* wakes no
+    goal.  A variable without attributes bound to a term wakes nothing;
+    of two variables the newer is bound, so both must be plain; two
+    non-variables bind nothing when one is atomic."""
+    av, bv = is_var(a), is_var(b)
+    if av and bv:
+        return a.attrs is None and b.attrs is None
+    if av:
+        return a.attrs is None
+    if bv:
+        return b.attrs is None
+    return type(a) in (int, str, float) or type(b) in (int, str, float)
 
 
 def plain_arg(d) -> bool:
@@ -470,10 +651,9 @@ def order_safe_restarts(clauses: list, tro_indices, arity: int, db,
     """``{clause index: condition}`` for the TRO-eligible clauses
     (*tro_indices*) of one function that may restart in place, the others
     making the ordinary call (see the module docstring).  The condition is
-    None for an unconditional restart, else ``(keys, plain)``: *keys* None
+    None for an unconditional restart, else ``(keys, checks)``: *keys* None
     or ``(pos, key set)`` -- the argument at *pos*, bound at entry, keys
-    outside the set -- and *plain* the positions whose argument must pass
-    ``plain_arg``.  When a clause restarts, no later clause of its function
+    outside the set -- and *checks* those of ``head_bind_checks``.  When a clause restarts, no later clause of its function
     can answer or act, and the function skips them."""
     last = len(clauses) - 1
     out: dict = {}
@@ -495,7 +675,7 @@ def order_safe_restarts(clauses: list, tro_indices, arity: int, db,
         for j in range(i + 1, len(clauses)):
             if not heads_may_unify(mine, head(j), env):
                 continue
-            need = _guard_refutes(facts, ground, clauses[j], arity)
+            need = _guard_refutes(facts, ground, clauses[j], arity, mine)
             if need is None:
                 rest.append(j)
             else:

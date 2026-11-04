@@ -214,7 +214,9 @@ from .arg_index import (
     _make_call_site_bucket_trampoline,
 )
 from .compile_ctx import CompilationContext
-from .tro_order import plain_arg as _tro_plain_arg
+from .tro_order import (plain_arg as _tro_plain_arg,
+                        not_attvar as _tro_not_attvar,
+                        safe_pair as _tro_safe_pair)
 from .strategy import ShallowStrategy, TrampolineStrategy
 from .goal_shallow import (
     compile_body, _make_body_compiler,
@@ -554,6 +556,8 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # A later clause passed over by a TRO restart binds nothing that wakes a
     # goal (compiler/tro_order.py).
     "$tro_plain_arg": _tro_plain_arg,
+    "$tro_not_attvar": _tro_not_attvar,
+    "$tro_safe_pair": _tro_safe_pair,
     # A test that only asks whether a unification succeeds (``not in``) runs
     # the goals it woke to a first answer (clausal/logic/pending.py).
     "$run_first": _pending_run_first,
@@ -934,16 +938,19 @@ def _exclusion_test(later_keys, name, env, pos=0, mixed=False):
 
 def _restart_condition(cond, env):
     """The runtime test of a TRO restart condition from
-    ``tro_order.order_safe_restarts``: ``(keys, plain)``."""
-    keys, plain = cond
+    ``tro_order.order_safe_restarts``: ``(keys, checks)``."""
+    keys, checks = cond
     tests = []
     if keys is not None:
         n = env.get("$final_keys_count", 0)
         env["$final_keys_count"] = n + 1
         tests.append(_exclusion_test(keys[1], f"$final_keys_{n}", env,
                                      pos=keys[0], mixed=True))
-    for p in sorted(plain):
-        tests.append(_call(_name("$tro_plain_arg"), _name(f"_d{p}")))
+    _fn = {"plain": "$tro_plain_arg", "noatt": "$tro_not_attvar",
+           "pair": "$tro_safe_pair"}
+    for check in sorted(checks):
+        tests.append(_call(_name(_fn[check[0]]),
+                           *[_name(f"_d{p}") for p in check[1:]]))
     return tests[0] if len(tests) == 1 else ast.BoolOp(op=ast.And(), values=tests)
 
 
@@ -1221,7 +1228,10 @@ def _build_predicate_trampoline_funcdef_impl(
         before = [_restart_pos[id(c)] for c in subset[:k] if id(c) in _restart_pos]
         if not before or max(before) >= _src_pos.get(id(subset[k]), -1):
             return None
-        return ast.UnaryOp(op=ast.Not(), operand=_name(_pending_name))
+        test = ast.UnaryOp(op=ast.Not(), operand=_name(_pending_name))
+        _guard_tests.add(id(test))
+        return test
+    _guard_tests: set = set()
     try:
         if dispatch_pos is not None:
             # List-dispatch arms are built without ``skip_trail``: they always
@@ -1273,6 +1283,23 @@ def _build_predicate_trampoline_funcdef_impl(
     if clauses and arity > 0:
         _finalize_subject_depths(_subject_assigns, loop_stmts, subject)
 
+    if _guard_tests and not _emits_tro_commit(loop_stmts):
+        # No arm took the restart after all (a lifted clause can lose its
+        # eligibility on the recompute): the pending flag is never set, so
+        # its guards are dead.
+        class _Unguard(ast.NodeTransformer):
+            def visit_If(self, node):
+                self.generic_visit(node)
+                if id(node.test) in _guard_tests and not node.orelse:
+                    return node.body
+                return node
+        _unwrapped = {id(m): m.body[0] for m in _clause_matches
+                      if type(m) is ast.If and id(m.test) in _guard_tests}
+        _clause_matches[:] = [_unwrapped.get(id(m), m) for m in _clause_matches]
+        loop_stmts[:] = [_Unguard().visit(st) for st in loop_stmts]
+        loop_stmts[:] = [x for st in loop_stmts
+                         for x in (st if isinstance(st, list) else [st])]
+
     if use_tro and _emits_tro_commit(loop_stmts):
         # A TRO tail restarts this function body in place of a recursive
         # call, so it must not leave anything on the trail the continuation
@@ -1321,18 +1348,22 @@ def _build_predicate_trampoline_funcdef_impl(
         # This activation's own pending-tail flag: set by the tail beside
         # the shared ``$tro_state`` cell, read by the later arms' guards
         # (a pending restart skips them), the ISO cut exit and the check
-        # below.
-        loop_stmts.insert(0, _assign(_TRO_SIG_NAME, ast.Constant(False)))
-        # This activation's own flag (set beside ``$tro_state`` by the
-        # tail): the shared cell may have been reset by a re-entrant call,
-        # and a plain name keeps the arms' last answers markable FINAL.
-        loop_stmts.append(
-            ast.If(
-                test=_name(_TRO_SIG_NAME),
-                body=[ast.Return(value=ast.Constant(None))],
-                orelse=[],
+        # below.  A function no arm of which signals (none restarts, or a
+        # lifted clause lost its eligibility on the recompute) has neither.
+        _signals = _emits_tro_commit(loop_stmts)
+        if _signals or _mentions_name(loop_stmts, _TRO_SIG_NAME):
+            loop_stmts.insert(0, _assign(_TRO_SIG_NAME, ast.Constant(False)))
+        if _signals:
+            # This activation's own flag: the shared cell may have been
+            # reset by a re-entrant call, and a plain name keeps the arms'
+            # last answers markable FINAL.
+            loop_stmts.append(
+                ast.If(
+                    test=_name(_TRO_SIG_NAME),
+                    body=[ast.Return(value=ast.Constant(None))],
+                    orelse=[],
+                )
             )
-        )
 
     # Build the function body.
     all_stmts: list[ast.stmt]

@@ -154,6 +154,9 @@ def test_woken_goals_run_as_without_the_restart(surface, monkeypatch):
     assert with_tro == without
 
 
+# Not the seam: there a goal woken by a head unification is deferred to the
+# next yield, and dropped when the head then fails, with or without the
+# restart (the first test above pins that the restart changes nothing).
 @pytest.mark.parametrize("surface", _WAKE[:2])
 def test_woken_goals_run_in_iso_order(surface, monkeypatch):
     """Scryer: every clause's head binding of X wakes the frozen goal after
@@ -202,3 +205,48 @@ def test_a_runtime_tested_restart_beside_body_segments():
     finally:
         tracemalloc.stop()
     assert peak < 8_000_000, f"peak {peak / 1e6:.1f} MB"
+
+
+# ── Later heads with a pattern where the restarting head has one ─────────────
+
+@pytest.fixture(scope="module")
+def patterns():
+    return _load_module("tests.fixtures.tro_clause_order_patterns",
+                        os.path.join(_FIXTURES, "tro_clause_order_patterns.pl"))
+
+
+@pytest.mark.parametrize("name,args,arity", [
+    ("ls", ([], 30000), 2),
+    ("gc", (("f", 1), 30000), 2),
+    ("walk", (("s", 0), 30000, None), 3),
+    ("gl", ([], 30000, 0, None), 4),
+])
+def test_a_ground_pattern_keeps_the_restart(patterns, name, args, arity):
+    """The restarting head's ``[]``, ``f(1)``, ``s(A)`` (A evaluated) are
+    ground at the restart, so the later head binds nothing there: 94 to
+    163 MB at 40000 iterations when every such position needed a run-time
+    check no list or compound could pass."""
+    if name != "gl":        # gl/4 is indexed: its restart is in a bucket
+        assert _restarts_in_place(patterns, name, arity)
+    lm = patterns.__dict__["$module"]
+    vals = [Var() if a is None else a for a in args]
+    tracemalloc.start()
+    try:
+        assert sum(1 for _ in call(name, *vals, module=lm)) == 1
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 8_000_000, f"{name}: peak {peak / 1e6:.1f} MB"
+
+
+def test_pattern_answers(patterns):
+    assert _answers(patterns, "walk", ("s", 0), 3) == [3]
+    assert _answers(patterns, "gl", [], 2, 0) == [("zero", 0)]
+
+
+def test_a_constant_inside_a_later_head_wakes_after_the_answer(patterns):
+    lm = patterns.__dict__["$module"]
+    from clausal.terms import term_str
+    v = Var()
+    assert [term_str(deref(v)) for _ in call("run_b", v, module=lm)] == [
+        "[woke, answer, woke, woke]"]
