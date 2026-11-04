@@ -52,7 +52,8 @@ It stopped reproducing because no bucket, default or fallback function
 restarted in place at all: from 57f9a3ad (2026-09-05) their compile asked
 whether the tail call is a self call under the bucket function's own name.
 With that fixed, a bucket restarts only from a clause with no later clause
-in it, or one that cuts before its tail (`_signal_safe_tro_indices` in
+in it, or one that cuts before its tail (then `_signal_safe_tro_indices` in
 `clausal/logic/compiler/predicate.py`), so the order stays as the pin
 above has it.  The unindexed ("loop" mode) function still has this order
-bug: todo/tro-restart-from-a-non-last-clause-reverses-answer-order-2026-11-04.md.
+bug: todo/done/tro-restart-from-a-non-last-clause-reverses-answer-order-2026-11-04.md
+(fixed in f434f384, which put both modes under one rule in `tro_order.py`).

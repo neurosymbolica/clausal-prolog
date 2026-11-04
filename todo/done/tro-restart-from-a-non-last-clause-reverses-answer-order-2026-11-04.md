@@ -1,5 +1,7 @@
 # A TRO restart from a clause that is not the last reverses the answer order
 
+**Status: FIXED 2026-11-04 (commit f434f384).** A clause restarts in place only where no later clause of its function can answer (last clause, cut before the tail, later heads that cannot unify, arithmetic comparisons that refute the later clause, or a runtime argument-key test), in loop and signal mode alike (`clausal/logic/compiler/tro_order.py`). Pinned in tests/test_tro_clause_order.py::test_answers_come_in_clause_order (.pl, .clausal, .seam).
+
 Found 2026-11-04 while fixing last-call optimisation inside index buckets.
 Severity: wrong answer ORDER (the set of answers is right) for a predicate
 that is not indexed and whose tail-recursive clause has a later clause.
@@ -26,7 +28,7 @@ tail (the cut exit raises `TroCutRestart`, skipping the later arms).
 
 Index buckets, defaults and fallbacks (the "signal" mode) have the same
 mechanism.  They now restart only from such clauses
-(`_signal_safe_tro_indices` in `clausal/logic/compiler/predicate.py`);
+(then `_signal_safe_tro_indices`, now `tro_order.order_safe_restarts`);
 `tests/test_tro_nonlast_arm_clobber.py::test_nonlast_tro_arm_answers_in_clause_order`
 pins the bucket order.
 
