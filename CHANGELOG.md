@@ -63,7 +63,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   long conjunction was lowered twice per level when the outer one was cut
   into segments, 2^depth times in all; the refold now calls the segments
   the nested conjunction's own fold made instead of lowering it again, so
-  each conjunction is folded at most twice (such a body used to be refused
+  each conjunction is folded at most twice, also when its cut reaches a
+  `\+` lowered again each time or a bagof/setof over a variable goal
+  precedes it (such a body used to be refused
   segments and built by the outliner; it is now cut into segments too). The outliner for deep blocks no
   longer re-walks nested function bodies for each enclosing function, or
   looks for owners of names that no outlined scope binds. The generated

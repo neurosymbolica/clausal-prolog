@@ -51,4 +51,7 @@ every conjunction is folded at most twice. Pinned in
 tests/test_body_segments.py::test_a_long_conjunction_in_a_refolded_one_is_cut_too,
 ::test_nested_long_goals_on_the_production_path and
 ::test_a_nested_catch_in_a_body_too_long_for_the_outliner. Items 1 and 2
-remain open.
+remain open. A chain whose cut reaches a barrier lowered again, in which
+another cut outside the chain named the barrier's mark first (the chain in
+one disjunction branch, a cut in another), would still be lowered again (no
+reuse, so 2**depth for such shapes nested deep); not reproduced, none known.

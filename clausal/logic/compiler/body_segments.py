@@ -173,28 +173,63 @@ class SegmentList(list):
 class _Chain:
     """A conjunction's chain of segments, as its fold left it: what it was
     lowered from, the segments it made, and how to call it."""
-    __slots__ = ("ops", "cuts", "ctx", "before", "delta", "segs", "call",
-                 "gen", "status")
+    __slots__ = ("ops", "cuts", "ctx", "exit", "guard", "before", "delta",
+                 "segs", "call", "gen", "status")
 
 
 #: Context fields a chain does not depend on: the sequence's own
 #: continuation slot (the chain has its own proceed) and the variable
-#: table (compared by content).  Only a cut that reaches the sequence's
-#: scope reads the scope's cut exit and guard (the ``Cut`` arm), and every
-#: barrier makes new ones each time it is lowered.
-_CTX_FREE = frozenset({"proceed_name", "var_context"})
-_CTX_CUT = frozenset({"cut_exit", "cut_guard"})
+#: table (compared by content).  The scope's cut exit and guard are read
+#: only by a cut that reaches the sequence's scope (the ``Cut`` arm), and
+#: are compared apart (``_same_exit``, ``_guard_fits``): every barrier
+#: makes new ones each time it is lowered.
+_CTX_FREE = frozenset({"proceed_name", "var_context", "cut_exit", "cut_guard"})
 
 
-def _ctx_key(ctx, cuts: bool) -> tuple:
+def _ctx_key(ctx) -> tuple:
     import dataclasses
-    free = _CTX_FREE if cuts else _CTX_FREE | _CTX_CUT
     return tuple(getattr(ctx, f.name) for f in dataclasses.fields(ctx)
-                 if f.name not in free)
+                 if f.name not in _CTX_FREE)
+
+
+def _same(x, y) -> bool:
+    return x is y or (type(x) is str and x == y)
 
 
 def _same_ctx(a: tuple, b: tuple) -> bool:
-    return all(x is y or (type(x) is str and x == y) for x, y in zip(a, b))
+    return all(_same(x, y) for x, y in zip(a, b))
+
+
+def _same_exit(a, b) -> bool:
+    """Do the cut exits *a* and *b* emit the same code?  The same function,
+    or two closures made by the same expression (one code object) over the
+    same values: a barrier's lowering makes its exit afresh each time, from
+    the same ``lambda``."""
+    if a is b:
+        return True
+    ca, cb = getattr(a, "__code__", None), getattr(b, "__code__", None)
+    if ca is None or ca is not cb:
+        return False
+    if (getattr(a, "__defaults__", None) is not None
+            or getattr(b, "__defaults__", None) is not None):
+        return False
+    xa, xb = a.__closure__ or (), b.__closure__ or ()
+    try:
+        return len(xa) == len(xb) and all(
+            _same(p.cell_contents, q.cell_contents) for p, q in zip(xa, xb))
+    except ValueError:                  # an empty cell
+        return False
+
+
+def _guard_fits(recorded, current) -> bool:
+    """Can a chain whose cuts named *recorded*'s mark run in a scope whose
+    guard is *current*?  Yes if the scope has no mark name yet (it takes the
+    chain's, ``_take_chain``) or has the same one."""
+    if recorded is current:
+        return True
+    if recorded is None or current is None:
+        return False
+    return current[0] is None or current[0] == recorded[0]
 
 
 def _take_chain(ops, ctx, segments):
@@ -203,13 +238,26 @@ def _take_chain(ops, ctx, segments):
     if not segments.pools:
         return None
     var_context = ctx.var_context
+    key = None
     for pool in reversed(segments.pools):
         for i, ch in enumerate(pool):
             if len(ch.ops) != len(ops):
                 continue
-            if (_same_ctx(ch.ctx, _ctx_key(ctx, ch.cuts)) and ch.ops == ops
-                    and ch.before == var_context):
+            if key is None:
+                key = _ctx_key(ctx)
+            if not _same_ctx(ch.ctx, key):
+                continue
+            if ch.cuts and not (_same_exit(ch.exit, ctx.cut_exit)
+                                and _guard_fits(ch.guard, ctx.cut_guard)):
+                continue
+            if ch.ops == ops and ch.before == var_context:
                 del pool[i]
+                if (ch.cuts and ctx.cut_guard is not None
+                        and ctx.cut_guard is not ch.guard
+                        and ctx.cut_guard[0] is None):
+                    # The scope's entry mark is the one the chain's cut
+                    # checks read.
+                    ctx.cut_guard[0] = ch.guard[0]
                 return ch
     return None
 
@@ -280,7 +328,8 @@ def fold_sequence(ops, ctx, k_stmts, recurse):
         from .cut_scope import cut_reaches_scope
         chain.ops = ops
         chain.cuts = any(cut_reaches_scope(op) for op in ops)
-        chain.ctx = _ctx_key(ctx, chain.cuts)
+        chain.ctx = _ctx_key(ctx)
+        chain.exit, chain.guard = ctx.cut_exit, ctx.cut_guard
         chain.before = saved
         after = ctx.var_context
         chain.delta = {v: n for v, n in after.items()
@@ -590,46 +639,74 @@ def _comp_targets(node) -> set:
     return out
 
 
-def _run_order(events: list) -> list:
-    """*events* with the free-name reads of each nested ``def`` moved from
-    the ``def`` to the first read of its name: a function's body reads its
-    free names when it runs, and nothing can run it before its name is
-    read.  An if-then-else's condition ``def`` comes before the store of the
-    mark its cut check reads, so taken at the ``def`` that read looked
-    unbound.  A ``def`` whose name is bound again before that read, or is a
-    free name of another child (which could run it), stays where it is."""
-    defs = [i for i, (kind, val) in enumerate(events)
-            if kind == "c" and val.seg is None
-            and type(val.node) in (ast.FunctionDef, ast.AsyncFunctionDef)]
-    if not defs:
-        return events
-    moved: dict = {}            # event index -> the def events to run there
-    skip: set = set()
-    for i in defs:
-        child = events[i][1]
-        name = child.node.name
-        if any(kind == "c" and val is not child and name in val.free
-               for kind, val in events):
-            continue
-        j = i + 1
-        if not (j < len(events) and events[j] == ("s", name)):
-            continue
-        for k in range(j + 1, len(events)):
-            kind, val = events[k]
-            if val == name and kind == "s":
-                break
-            if val == name and kind == "l":
-                moved.setdefault(k, []).append(events[i])
-                skip.add(i)
-                break
-    if not skip:
-        return events
-    out = []
-    for i, ev in enumerate(events):
-        if i in moved:
-            out.extend(moved[i])
-        if i not in skip:
-            out.append(ev)
+def _straight_line_reads(body: list) -> dict:
+    """``{id(def): names}``: for a ``def`` in the segment's own statement
+    lists, the names that are surely bound whenever it runs, so its free
+    reads of them are not reads of a value from outside.
+
+    A function's body reads its free names when it runs, not at the
+    ``def``; an if-then-else's condition ``def`` comes before the store of
+    the mark its cut check reads (the mark looked unbound at the ``def``).
+    Only the plain shape is trusted: the ``def``, then simple statements
+    (no block, no nested scope, no use of the function's name), then the
+    one statement that reads the name -- a simple statement or a ``for``
+    whose iterable does -- in the same statement list, with no other read
+    of the name anywhere in the segment.  The names those simple statements
+    bind are then bound on every path from the ``def`` to its first call.
+    Anything else keeps the reads at the ``def``."""
+    from clausal.codegen import _child_lists
+    lists = []
+    stack = [body]
+    while stack:
+        lst = stack.pop()
+        lists.append(lst)
+        for st in lst:
+            for _, owner, field in _child_lists(st):
+                stack.append(getattr(owner, field))
+    names = {st.name for lst in lists for st in lst
+             if type(st) in (ast.FunctionDef, ast.AsyncFunctionDef)}
+    if not names:
+        return {}
+    loads: dict = {}
+    for st in body:
+        for n in ast.walk(st):
+            if type(n) is ast.Name and n.id in names and type(n.ctx) is ast.Load:
+                loads[n.id] = loads.get(n.id, 0) + 1
+
+    def simple(st) -> bool:
+        return not _child_lists(st) and not any(
+            isinstance(n, _SCOPES) for n in ast.walk(st))
+
+    def reads(node, name) -> int:
+        return sum(1 for n in ast.walk(node) if type(n) is ast.Name
+                   and n.id == name and type(n.ctx) is ast.Load)
+
+    out: dict = {}
+    for lst in lists:
+        for i, d in enumerate(lst):
+            if type(d) not in (ast.FunctionDef, ast.AsyncFunctionDef):
+                continue
+            f = d.name
+            bound: set = set()
+            for st in lst[i + 1:]:
+                if type(st) is ast.For and reads(st.iter, f):
+                    use = st.iter
+                elif simple(st) and reads(st, f):
+                    use = st
+                else:
+                    use = None
+                if use is not None:
+                    if (reads(use, f) == loads.get(f, 0)
+                            and simple(ast.Expr(value=use) if use is not st else st)):
+                        out[id(d)] = bound
+                    break
+                if not simple(st) or reads(st, f):
+                    break
+                stored = {n.id for n in ast.walk(st)
+                          if type(n) is ast.Name and type(n.ctx) is not ast.Load}
+                if f in stored:
+                    break
+                bound |= stored
     return out
 
 
@@ -726,12 +803,15 @@ def hoist_segments(func_def: ast.FunctionDef, segments: list) -> list:
         written: set = set()
         have: set = set()
         exposed: list = []
-        for kind, val in _run_order(sc.events):
+        late = _straight_line_reads(seg.body)
+        for kind, val in sc.events:
             if kind == "s":
                 written.add(val)
                 continue
+            later = (late.get(id(val.node), ()) if kind == "c" and val.seg is None
+                     else ())
             for nme in ([val] if kind == "l" else val.free):
-                if nme in written or nme in have or nme in sc.args:
+                if nme in written or nme in have or nme in sc.args or nme in later:
                     continue
                 have.add(nme)
                 exposed.append(nme)
