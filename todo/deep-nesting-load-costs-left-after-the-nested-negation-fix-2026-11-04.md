@@ -43,3 +43,12 @@ instead of first refolding (which was exponential), and the code is the same
 as before. But such a clause still goes through the outliner, whose
 `localise` remains quadratic in the size of one function's scope (`can_own`
 scans the scope's statement lists per name).
+
+**Status of this item: FIXED 2026-11-04 (commit 10c60d0b).** The refold now
+calls the chain the nested conjunction's own fold made instead of lowering
+it again, so such a body is cut into segments (no refusal, no outliner) and
+every conjunction is folded at most twice. Pinned in
+tests/test_body_segments.py::test_a_long_conjunction_in_a_refolded_one_is_cut_too,
+::test_nested_long_goals_on_the_production_path and
+::test_a_nested_catch_in_a_body_too_long_for_the_outliner. Items 1 and 2
+remain open.
