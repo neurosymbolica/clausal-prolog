@@ -1,5 +1,17 @@
 # copy_term/2 does not copy freeze/2 or CLP attributes; copy_term/3 absent
 
+**Status: open (copy_term/2); the copy_term/3 part is FIXED 2026-11-04
+(commit 720e0e75).** Row 5 and design question 3 are done: `copy_term/3`
+hands back the residual goals of every attribute kind, built on one
+residual-goal function per kind (`clausal.logic.residuals`, question 2's
+"residual-goal projection per CLP library"), pinned in
+tests/iso/test_copy_term_3_scryer.py.  copy_term/2 is unchanged and still
+drops freeze/2 and CLP attributes (rows 1-4): that needs the ruling below.
+copy_term/3 makes one answer cheap -- copy_term/2 could become
+`copy_term(T, C, Gs), maplist(call, Gs)` with the dif copier kept for
+speed -- but that changes copy_term/2's observable behaviour, so it was
+not done.
+
 Found 2026-09-30 (fix/term-walkers-partial-lists-2026-09-30, which made
 copy_term/2 copy **dif/2** through `_ATTRIBUTE_COPIERS` in
 `clausal/logic/builtins/inspection.py`).
