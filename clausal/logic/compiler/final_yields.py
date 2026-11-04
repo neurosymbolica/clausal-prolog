@@ -55,7 +55,10 @@ class _Names:
                  "later_excluded_arms")
 
     def __init__(self, self_name, proceed, fail, later_excluded=None):
-        self.self_name, self.proceed, self.fail = self_name, proceed, fail
+        self.self_name, self.proceed = self_name, proceed
+        # The names whose ``yield (name, $DONE)`` exhausts this frame: its
+        # own fail, and for a segment of a long body also the scope's.
+        self.fail = (fail,) if isinstance(fail, str) else tuple(fail)
         self.fresh = 0
         # ({id(clause arm Match): test that no later arm can match the
         # call}, {id(every clause arm Match)})
@@ -84,7 +87,8 @@ def _is_leaf_yield(stmt, n: _Names) -> bool:
 
 def _is_exhaustion(stmt, n: _Names) -> bool:
     pair = _yield_pair(stmt)
-    return pair is not None and _is_name(pair[0], n.fail) and _is_name(pair[1], _DONE)
+    return (pair is not None and type(pair[0]) is ast.Name
+            and pair[0].id in n.fail and _is_name(pair[1], _DONE))
 
 
 def _pull(stmt):
@@ -217,18 +221,32 @@ def _walk_block(stmts, conds, ok, n: _Names, out: list, end=None):
     A generator: run it with ``drive``."""
     if end is None:
         end = len(stmts)
+    # ``inert_from[i]``: ``_inert_block(stmts[i:end])``, and ``arms_to[i]``:
+    # the first index at or after i that is not a clause arm -- each one
+    # backward pass, so a long block (a long disjunction's branches, many
+    # clause arms) is not rescanned once per statement.
+    inert_from = [True] * (end + 1)
+    arms_to = list(range(end + 1))
+    if ok:
+        for k in range(end - 1, -1, -1):
+            s = stmts[k]
+            if _is_exhaustion(s, n) or type(s) in (ast.Return, ast.Break):
+                inert_from[k] = True
+            elif not _inert(s, n):
+                inert_from[k] = False
+            else:
+                inert_from[k] = inert_from[k + 1]
+            if id(s) in n.later_excluded_arms:
+                arms_to[k] = arms_to[k + 1]
     i = 0
     while i < end:
         st = stmts[i]
-        here = ok and _inert_block(stmts[i + 1:end], n)
+        here = ok and inert_from[i + 1]
         if ok and not here and id(st) in n.later_excluded:
             # A clause arm followed by later arms: final when the call's
             # first argument rules every one of them out.
-            rest = stmts[i + 1:end]
-            j = 0
-            while j < len(rest) and id(rest[j]) in n.later_excluded_arms:
-                j += 1
-            if j and _inert_block(rest[j:], n):
+            j = arms_to[i + 1]
+            if j > i + 1 and inert_from[j]:
                 yield _walk_stmt(st, stmts, conds + [n.later_excluded[id(st)]],
                                  True, n, out)
                 i += 1
@@ -236,7 +254,7 @@ def _walk_block(stmts, conds, ok, n: _Names, out: list, end=None):
         sc = _sub_call(stmts, i) if i + 2 < end else None
         if sc is not None:
             gen, args, status, loop = sc
-            here = ok and _inert_block(stmts[i + 3:end], n)
+            here = ok and inert_from[i + 3]
             if _is_name(args[1], n.proceed) and len(loop.body) == 1:
                 # A tail call: the child answers our caller directly.
                 if here:
@@ -390,19 +408,30 @@ def mark_final_yields(func_def: ast.FunctionDef, *, self_name: str,
     drive(_unshare(func_def, set()))
     sites: list[_Site] = []
     drive(_walk_block(func_def.body, [], True, n, sites))
+    # Each block rewritten once: a long block may hold many sites, and an
+    # insertion per site would shift the whole list each time.
+    by_block: dict = {}
     for site in sites:
-        idx = next(j for j, s in enumerate(site.block) if s is site.stmt)
-        if site.kind == "leaf":
-            new = ast.Expr(value=ast.Yield(value=ast.Tuple(
-                elts=[_name(proceed_name), _final_value(site.conds)],
-                ctx=ast.Load())))
-            site.block[idx] = ast.copy_location(new, site.stmt)
-        else:
-            mark = _set_tail_final(self_name)
-            if site.conds:
-                mark = ast.If(test=_cond_expr(site.conds), body=[mark], orelse=[])
-            ast.copy_location(mark, site.stmt)
-            site.block.insert(idx, mark)
+        by_block.setdefault(id(site.block), (site.block, []))[1].append(site)
+    for block, group in by_block.values():
+        at = {id(site.stmt): site for site in group}
+        new_block = []
+        for s in block:
+            site = at.get(id(s))
+            if site is None:
+                new_block.append(s)
+            elif site.kind == "leaf":
+                new = ast.Expr(value=ast.Yield(value=ast.Tuple(
+                    elts=[_name(proceed_name), _final_value(site.conds)],
+                    ctx=ast.Load())))
+                new_block.append(ast.copy_location(new, s))
+            else:
+                mark = _set_tail_final(self_name)
+                if site.conds:
+                    mark = ast.If(test=_cond_expr(site.conds), body=[mark], orelse=[])
+                new_block.append(ast.copy_location(mark, s))
+                new_block.append(s)
+        block[:] = new_block
     _name_iters(func_def)
     fix_missing_locations(func_def)
     return len(sites)

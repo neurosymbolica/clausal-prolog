@@ -577,9 +577,16 @@ def _code_names(code) -> set:
     return names
 
 
-def _thunk_names_not_called(code, names) -> list:
-    """The recorded ``_pyt_<id>`` names *code* never reads — empty is correct."""
-    called = _code_names(code)
+def _thunk_names_not_called(fn, names) -> list:
+    """The recorded ``_pyt_<id>`` names compiled function *fn* never reads —
+    empty is correct.  The segment functions of a long query body
+    (``compiler.body_segments``, globals ``$seg...`` sharing *fn*'s
+    namespace) read for it."""
+    called = set(_code_names(fn.__code__))
+    for gname, gval in fn.__globals__.items():
+        if (gname.startswith("$seg") and type(gval) is _types.FunctionType
+                and gval.__globals__ is fn.__globals__):
+            called |= set(_code_names(gval.__code__))
     return [n for n in names if n not in called]
 
 
@@ -1100,6 +1107,13 @@ def _compile_query(goal: Any, module: Module) -> Any:
         # term instead of its value.)
         for old_name, new_thunk in zip(cached_thunk_names, goal_thunks):
             new_globals[old_name] = new_thunk.fn
+        # A long query body's segment functions (compiler.body_segments)
+        # read the same globals: give them the new namespace too.
+        for gname, gval in list(new_globals.items()):
+            if (gname.startswith("$seg") and type(gval) is _types.FunctionType
+                    and gval.__globals__ is cached_fn.__globals__):
+                new_globals[gname] = _types.FunctionType(
+                    gval.__code__, new_globals, gval.__name__)
         fn = _types.FunctionType(cached_code, new_globals, cached_fn.__name__)
         return fn, param_pairs
 
@@ -1186,10 +1200,10 @@ def _compile_query(goal: Any, module: Module) -> Any:
         # serve the FIRST execution's ``++`` values.  Make that loud here,
         # where the two lists are side by side, instead of at the answer.
         assert not _thunk_names_not_called(
-            dispatch_fn.__code__, cached_thunk_names), (
+            dispatch_fn, cached_thunk_names), (
             "thunk names recorded for the cache but never called by the "
             "compiled query: " + repr(_thunk_names_not_called(
-                dispatch_fn.__code__, cached_thunk_names)))
+                dispatch_fn, cached_thunk_names)))
         # The entry records its MODULE by weak reference, and a hit is taken
         # only when it is still that module: the key is ``id(module)``, and a
         # module the caller wraps afresh on every call (``_coerce_module``

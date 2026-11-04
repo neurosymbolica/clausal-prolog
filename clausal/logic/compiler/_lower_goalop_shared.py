@@ -408,6 +408,10 @@ def _lower_shared_body(
     match ir:
 
         case Sequence(ops=ops):
+            if ctx.body_segments is not None:
+                # A long conjunction may be cut into segment functions.
+                from .body_segments import fold_sequence
+                return fold_sequence(ops, ctx, k_stmts, recurse)
             k = list(k_stmts)
             for op in reversed(ops):
                 k = recurse(op, ctx, k)

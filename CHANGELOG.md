@@ -9,6 +9,25 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A clause body of 10 000 goals or more loads, and long bodies load in
+  near-linear time** (operator ruling 2026-11-03). A trampoline clause body
+  nests one block per goal, and the old fix outlined the deep tail into
+  helpers nested inside each other: quadratic, and past ~10 000 goals
+  CPython's compiler refused it (`GeneratedCodeError`). A conjunction that
+  nests past CPython's limit is now cut into segments of bounded nesting,
+  each a module-level generator run as a trampoline frame, with the
+  conjunction's own continuation kept in the frame that runs it
+  (`clausal/logic/compiler/body_segments.py`). Answers, their order, the
+  last-answer report, exceptions, and cut, if-then-else, catch/3, `\+` and
+  findall/3 across segment boundaries are unchanged; a body under the limit
+  compiles exactly as before. A segment that could not be hoisted without
+  changing what the code does is refused and the body built as before.
+  `CLAUSAL_BODY_SEGMENT_HEIGHT=<n>` cuts every conjunction (for differential
+  testing). Measured (`q(X,V1), ..., q(Vn-1,Vn)` in a `.pl` file, load):
+  1 000 goals 2.7 s -> 1.5 s, 5 000 74 s -> 6.3 s, 10 000 refused -> 12.6 s, 50 000 78 s, 100 000 157 s (about 33 s of that is the front end). The FINAL pass over a long block (a long disjunction's
+  branches, many clause arms) no longer rescans the rest of the block per
+  statement: `p(X, Y) :- (X = 1 ; ... ; X = n), Y = X.` loads 10 000 disjuncts in 22 s (was 34 s), 50 000 in 111 s (was 584 s), 100 000 in 225 s (was ~2 500 s). Pinned by `tests/test_body_segments.py`.
+
 - **A clause head qualified with the file's own module defines the
   predicate** (`.pl` and `.clausal`): in a file whose `module/2` names `m`,
   `m:foo(1).` and `m:bar(X) :- ...` are clauses of `foo/1` and `bar/1`, as

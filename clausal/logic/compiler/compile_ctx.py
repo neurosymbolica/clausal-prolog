@@ -216,6 +216,11 @@ class CompilationContext:
     # for the error.  Read only by the Cut arm and the .pl commits.
     cut_guard: "list | None" = None
     cut_owner: "str | None" = None
+    # Long conjunctions cut into segment functions (``body_segments``): the
+    # list the fold appends each ``Segment`` to, set by the trampoline
+    # funcdef builder around its clause loop; ``None`` means "do not cut"
+    # (every other compile, and a rebuild after a refused hoist).
+    body_segments: "list | None" = None
 
     # ── Slice E6c: TRO plan for the current clause-body compile ──────────
     #
