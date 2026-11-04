@@ -45,7 +45,9 @@ from clausal.logic.variables import Var, Trail, is_var, unify
 
 from clausal.terms import plain_deref as deref  # noqa: PLC0415 -- a view leaves the engine as a list or a str
 from clausal.logic.trampoline import DONE
-from clausal.logic.exceptions import LogicException, instantiation_error, type_error
+from clausal.logic.exceptions import (
+    LogicException, instantiation_error, type_error, system_error,
+)
 from clausal.logic.cells import chars_text, is_chars
 from clausal.modules.py import (
     _import_stdlib, ModulePredicate, simple_to_trampoline, text_result, to_text,
@@ -56,6 +58,11 @@ from clausal.terms import (
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate, term_str, DictTerm,
 )
+# Quantities (units): see _sympy_units for the design.
+from decimal import Decimal as _Decimal
+from fractions import Fraction as _Fraction
+from clausal.terms import Quantity as _Quantity
+from clausal.modules.py import _sympy_units
 
 
 
@@ -231,7 +238,8 @@ def _untag_vars(term: Any) -> Any:
 class _ConversionContext:
     """Bidirectional mapping between Clausal Vars and SymPy Symbols."""
 
-    __slots__ = ("_var_to_sym", "_sym_to_var", "_counter", "_inside")
+    __slots__ = ("_var_to_sym", "_sym_to_var", "_counter", "_inside",
+                 "_has_units", "_dimensions")
 
     def __init__(self) -> None:
         self._var_to_sym: dict[int, _sp.Symbol] = {}   # Var._id -> Symbol
@@ -240,6 +248,11 @@ class _ConversionContext:
         # id() of each Var _to_sympy_ctx is currently converting through:
         # meeting one again means the term is cyclic.
         self._inside: set[int] = set()
+        # Units: set when a quantity (or a SymPy value holding a dimension
+        # symbol) is converted; then _check_units fills _dimensions with
+        # (Analysis, [Dimension per top-level term]).
+        self._has_units: bool = False
+        self._dimensions: tuple | None = None
 
     def var_to_symbol(self, v: Var) -> _sp.Symbol:
         """Get or create a SymPy Symbol for a Clausal Var."""
@@ -277,7 +290,42 @@ def _to_sympy(term: Any, ctx: _ConversionContext | None = None) -> _sp.Expr:
     """
     if ctx is None:
         ctx = _ConversionContext()
-    return _to_sympy_ctx(term, ctx)
+    expr = _to_sympy_ctx(term, ctx)
+    _check_units(ctx, [term])
+    return expr
+
+
+def _check_units(ctx: _ConversionContext, terms: list) -> None:
+    """Judge the dimensions of the top-level CLAUSAL terms (see
+    _sympy_units): raises UnitsMismatch on a mismatch, and leaves the
+    Analysis and each term's Dimension on ctx._dimensions."""
+    if not ctx._has_units:
+        return
+    analysis = _sympy_units.Analysis()
+    dimensions = [
+        _sympy_units.term_dimension(
+            t, analysis, symbol_for_var=ctx.var_to_symbol,
+            to_sympy=lambda u: _to_sympy_ctx(u, ctx))
+        for t in terms]
+    ctx._dimensions = (analysis, dimensions)
+
+
+def _expected_dimension(ctx: _ConversionContext, index: int):
+    """The determined dimension (Quantity(1, dims)) of top-level term
+    *index*, or None."""
+    if ctx._dimensions is None:
+        return None
+    d = ctx._dimensions[1][index]
+    if d is None or d.unknown:
+        return None
+    return d.known
+
+
+def _variable_dimension(ctx: _ConversionContext, symbol):
+    """The dimension the equation gives the unknown *symbol*, or None."""
+    if ctx._dimensions is None or not isinstance(symbol, _sp.Symbol):
+        return None
+    return ctx._dimensions[0].dimension_of(symbol)
 
 
 class _CyclicTerm(ValueError):
@@ -323,6 +371,14 @@ def _to_sympy_value(term: Any, ctx: _ConversionContext) -> _sp.Expr:
     if isinstance(term, float):
         return _sp.Float(term)
 
+    # Quantity -> exact magnitude * dimension symbols; Decimal and Fraction
+    # -> exact Rational (a Decimal through sympify became a Float).
+    if isinstance(term, _Quantity):
+        ctx._has_units = True
+        return _sympy_units.quantity_to_sympy(term)
+    if isinstance(term, (_Decimal, _Fraction)):
+        return _sympy_units.exact_number_to_sympy(term)
+
     # SymExpr wrapper -> unwrap
     if isinstance(term, SymExpr):
         term = term._expr
@@ -332,6 +388,8 @@ def _to_sympy_value(term: Any, ctx: _ConversionContext) -> _sp.Expr:
     # idea what that tag means, and every OTHER predicate that shares
     # this conversion path must keep seeing a plain, ctx-local Symbol.
     if isinstance(term, _sp.Basic):
+        if _sympy_units.has_units(term):
+            ctx._has_units = True
         return _detag_vars(term, ctx)
 
     # Binary arithmetic nodes
@@ -371,7 +429,15 @@ def _to_sympy_value(term: Any, ctx: _ConversionContext) -> _sp.Expr:
         sp_args = [_to_sympy_ctx(a, ctx) for a in term[1:]]
         sp_fn = _SYMPY_FUNCTIONS.get(fn_name)
         if sp_fn is not None:
-            return sp_fn(*sp_args)
+            try:
+                return sp_fn(*sp_args)
+            except TypeError:
+                if ctx._has_units:
+                    # abs(3 kelvin, 4 kelvin): the wrong arity, named as the
+                    # engine's own `is` names it.
+                    raise LogicException(type_error(
+                        "evaluable", ("/", fn_name, len(sp_args)), "sympy"))
+                raise
         # Unknown functor -> SymPy Function
         return _sp.Function(fn_name)(*sp_args)
 
@@ -398,6 +464,11 @@ _SYMPY_FUNCTIONS: dict[str, Any] = {
     "log": _sp.log,
     "ln": _sp.log,
     "sqrt": _sp.sqrt,
+    "cbrt": _sp.cbrt,
+    "atan2": _sp.atan2,
+    "sign": _sp.sign,
+    "hypot": lambda a, b: _sp.sqrt(a ** 2 + b ** 2),
+    "^": _sp.Pow,
     "abs": _sp.Abs,
     "factorial": _sp.factorial,
     "gamma": _sp.gamma,
@@ -420,6 +491,14 @@ def _from_sympy(expr: _sp.Expr, ctx: _ConversionContext | None = None) -> Any:
 
 
 def _from_sympy_ctx(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
+    # Dimension symbols -> quantities (checked; ground -> one Quantity)
+    if _sympy_units.has_units(expr):
+        if isinstance(expr, _sympy_units._UnitSymbol):
+            return _sympy_units.unit_symbol_to_clausal(expr)
+        whole = _sympy_units.result_to_clausal(expr, lambda e: None, _from_sympy)
+        if whole is not None:
+            return whole
+
     # Symbol -> Var (if known) or pass through as SymPy Symbol (ground value)
     if isinstance(expr, _sp.Symbol):
         v = ctx._sym_to_var.get(expr.name)
@@ -558,8 +637,8 @@ class SymExpr:
                 return True
 
             # Slow path: alpha-equivalence (different Symbol names)
-            free_a = self._expr.free_symbols
-            free_b = other_expr.free_symbols
+            free_a = _sympy_units.free_variables(self._expr)
+            free_b = _sympy_units.free_variables(other_expr)
             if len(free_a) != len(free_b) or len(free_a) == 0:
                 return False
             if len(free_a) <= 5:
@@ -634,8 +713,13 @@ class SymExpr:
 # -- Result helpers ----------------------------------------------------------
 
 
-def _to_pyval(expr: _sp.Basic) -> Any:
-    """Collapse trivial SymPy results to Python values, wrap the rest."""
+def _to_pyval(expr: _sp.Basic, expected: Any = None) -> Any:
+    """Collapse trivial SymPy results to Python values, wrap the rest.
+
+    *expected* is the dimension (Quantity(1, dims)) the operation implies,
+    so a zero result keeps it (see _sympy_units.result_to_clausal)."""
+    if _sympy_units.has_units(expr) or (expected is not None and expected.dims):
+        return _sympy_units.result_to_clausal(expr, SymExpr, _from_sympy, expected)
     if isinstance(expr, _sp.Integer):
         return int(expr)
     if isinstance(expr, _sp.Float):
@@ -651,13 +735,103 @@ def _to_pyval(expr: _sp.Basic) -> Any:
     return SymExpr(expr)
 
 
+def _real_roots(ctx: _ConversionContext, eq_expr, var_expr, roots):
+    """The roots to answer with, as ``(root, multiplicity, dimension)``.
+
+    An equation holding a quantity has REAL roots only, checked, sorted and
+    each once (_sympy_units.real_roots): none at all is no answer (``[]``
+    for solve_all/3), and each root carries the dimension the equation
+    gives the unknown.  A plain equation is answered as SymPy gives it,
+    complex roots included.
+
+    A polynomial with a float coefficient is not SymPy-solved at all (see
+    _candidates): its coefficients are read through their shortest repr and
+    its real roots isolated exactly, then evaluated to floats; only if that
+    fails are all its roots found at 50 digits.  SymPy answering [] for a
+    polynomial (a quintic) means it gave up: the same numeric fallback.  []
+    for an equation that is not a polynomial is a real "no root"."""
+    if not ctx._has_units:
+        return [(r, m, None) for r, m in roots]
+    expected = _variable_dimension(ctx, var_expr)
+    trusted = False
+    polynomial = _sympy_units.float_polynomial(eq_expr, var_expr)
+    if polynomial is not None:
+        found = _sympy_units.float_polynomial_real_roots(polynomial, _units_of(expected))
+        if found is not None:
+            roots, trusted = found, True
+        else:
+            roots = _numeric_roots(eq_expr, var_expr, expected) or []
+    elif not roots:
+        found = _numeric_roots(eq_expr, var_expr, expected)
+        if found is not None:
+            roots = found
+    return [(r, m, expected)
+            for r, m in _sympy_units.real_roots(eq_expr, var_expr, roots, trusted)]
+
+
+def _units_of(expected):
+    if expected is None:
+        raise _sympy_units.no_symbolic_solution()   # no dimension to give roots
+    return _sympy_units._unit_product(expected.dims)
+
+
+def _candidates(ctx: _ConversionContext, eq_expr, var_expr) -> list:
+    """SymPy's solutions, or [] without asking SymPy for a float polynomial
+    holding a quantity (_real_roots solves it; SymPy would take seconds to
+    minutes at degree 10-30 and its answer would be thrown away)."""
+    if ctx._has_units and _sympy_units.float_polynomial(eq_expr, var_expr) is not None:
+        return []
+    return _solving(ctx, _sp.solve, eq_expr, var_expr)
+
+
+def _numeric_roots(eq_expr, var_expr, expected):
+    """All roots of a polynomial equation numerically, in the unknown's
+    dimension, or None if it is not a polynomial in the unknown alone."""
+    units = _sympy_units._unit_product(expected.dims) if expected is not None else None
+    found = _sympy_units.numeric_polynomial_roots(eq_expr, var_expr, units or 1)
+    if found is not None and units is None:
+        raise _sympy_units.no_symbolic_solution()   # no dimension to give them
+    return found
+
+
+def _derivative_dimension(ctx: _ConversionContext, var_expr):
+    """The dimension of d term / d var, when both are known, so a zero
+    derivative keeps it.  A variable nothing constrains has no known
+    dimension, and then a zero derivative is a plain 0."""
+    term_dimension = _expected_dimension(ctx, 0)
+    variable_dimension = _variable_dimension(ctx, var_expr)
+    if term_dimension is None or variable_dimension is None:
+        return None
+    quotient = term_dimension / variable_dimension
+    return quotient if isinstance(quotient, _Quantity) else None
+
+
+def _solving(ctx: _ConversionContext, call, *args):
+    """``call(*args)``; for an equation holding a quantity, SymPy giving up
+    is ``system_error(no_symbolic_solution)``, never a partial answer."""
+    try:
+        return call(*args)
+    except NotImplementedError:
+        if ctx._has_units:
+            raise LogicException(system_error("no_symbolic_solution"))
+        raise
+    except Exception as exc:
+        # mpmath's NoConvergence (SymPy's numeric roots of a float
+        # polynomial, e.g. (X - 1 metre)**10 expanded): the same give-up.
+        if ctx._has_units and type(exc).__name__ == "NoConvergence":
+            raise LogicException(system_error("no_symbolic_solution")) from exc
+        raise
+
+
 def _convert_multi(*terms):
     """Convert multiple Clausal terms to SymPy using a shared context.
 
     Returns (ctx, *sympy_exprs).
     """
     ctx = _ConversionContext()
-    return (ctx,) + tuple(_to_sympy_ctx(t, ctx) for t in terms)
+    exprs = tuple(_to_sympy_ctx(t, ctx) for t in terms)
+    _check_units(ctx, list(terms))
+    return (ctx,) + exprs
 
 
 # -- Predicate: sym/2 -- named symbol (still available but rarely needed) ----
@@ -757,8 +931,9 @@ def _simplify_2(term, result, trail, k):
     """simplify/2: simplify an expression."""
     term = deref(term)
     try:
-        expr = _to_sympy(term)
-        out = _to_pyval(_sp.simplify(expr))
+        ctx = _ConversionContext()
+        expr = _to_sympy(term, ctx)
+        out = _to_pyval(_sp.simplify(expr), _expected_dimension(ctx, 0))
     except (TypeError, ValueError):
         return
     if unify(result, out, trail):
@@ -772,8 +947,9 @@ def _expand_2(term, result, trail, k):
     """expand/2: algebraically expand an expression."""
     term = deref(term)
     try:
-        expr = _to_sympy(term)
-        out = _to_pyval(_sp.expand(expr))
+        ctx = _ConversionContext()
+        expr = _to_sympy(term, ctx)
+        out = _to_pyval(_sp.expand(expr), _expected_dimension(ctx, 0))
     except (TypeError, ValueError):
         return
     if unify(result, out, trail):
@@ -787,8 +963,9 @@ def _factor_2(term, result, trail, k):
     """factor/2: factor an expression."""
     term = deref(term)
     try:
-        expr = _to_sympy(term)
-        out = _to_pyval(_sp.factor(expr))
+        ctx = _ConversionContext()
+        expr = _to_sympy(term, ctx)
+        out = _to_pyval(_sp.factor(expr), _expected_dimension(ctx, 0))
     except (TypeError, ValueError):
         return
     if unify(result, out, trail):
@@ -804,13 +981,14 @@ def _solve_3(this_generator, _proceed, _fail, _catcher, equation, var, solution,
     var = deref(var)
     try:
         ctx, eq_expr, var_expr = _convert_multi(equation, var)
-        solutions = _sp.solve(eq_expr, var_expr)
+        solutions = _candidates(ctx, eq_expr, var_expr)
     except (TypeError, ValueError):
         yield (_fail, DONE)
         return
-    for sol in solutions:
+    for sol, _, expected in _real_roots(
+            ctx, eq_expr, var_expr, [(r, 1) for r in solutions]):
         mark = trail.mark()
-        out = _to_pyval(sol)
+        out = _to_pyval(sol, expected)
         if unify(solution, out, trail):
             yield (_proceed, None)
         trail.undo(mark)
@@ -826,8 +1004,9 @@ def _solve_all_3(equation, var, solutions, trail, k):
     var = deref(var)
     try:
         ctx, eq_expr, var_expr = _convert_multi(equation, var)
-        sols = _sp.solve(eq_expr, var_expr)
-        out = [_to_pyval(s) for s in sols]
+        sols = _candidates(ctx, eq_expr, var_expr)
+        out = [_to_pyval(s, expected) for s, _, expected
+               in _real_roots(ctx, eq_expr, var_expr, [(r, 1) for r in sols])]
     except (TypeError, ValueError):
         return
     if unify(solutions, out, trail):
@@ -842,7 +1021,7 @@ def _diff_2(term, result, trail, k):
     term = deref(term)
     try:
         expr = _to_sympy(term)
-        free = list(expr.free_symbols)
+        free = list(_sympy_units.free_variables(expr))
         if len(free) != 1:
             return
         out = _to_pyval(_sp.diff(expr, free[0]))
@@ -858,7 +1037,7 @@ def _diff_3(term, var, result, trail, k):
     var = deref(var)
     try:
         ctx, expr, var_expr = _convert_multi(term, var)
-        out = _to_pyval(_sp.diff(expr, var_expr))
+        out = _to_pyval(_sp.diff(expr, var_expr), _derivative_dimension(ctx, var_expr))
     except (TypeError, ValueError):
         return
     if unify(result, out, trail):
@@ -873,7 +1052,7 @@ def _integrate_2(term, result, trail, k):
     term = deref(term)
     try:
         expr = _to_sympy(term)
-        free = list(expr.free_symbols)
+        free = list(_sympy_units.free_variables(expr))
         if len(free) != 1:
             return
         out = _to_pyval(_sp.integrate(expr, free[0]))
@@ -968,6 +1147,12 @@ def _subs_3(term, bindings, result, trail, k):
                     sp_subs[_to_sympy(pair[0])] = _to_sympy(pair[1])
         else:
             return
+        for key in sp_subs:
+            if _sympy_units.has_units(key):
+                # A dimension is not a variable: substituting for 1(kelvin) would
+                # strip the unit from 5(kelvin).
+                raise LogicException(
+                    type_error("variable", _from_sympy(key), "subs/3"))
         out = _to_pyval(expr.subs(sp_subs))
     except (TypeError, ValueError):
         return
@@ -983,7 +1168,7 @@ def _free_vars_2(term, vars_list, trail, k):
     term = deref(term)
     try:
         expr = _to_sympy(term)
-        names = sorted(str(s) for s in expr.free_symbols)
+        names = sorted(str(s) for s in _sympy_units.free_variables(expr))
     except (TypeError, ValueError):
         return
     if unify(vars_list, names, trail):
@@ -1009,6 +1194,11 @@ def _sym_equal_2(a, b, trail, k):
         ctx = _ConversionContext()
         sa = _to_sympy_ctx(a, ctx)
         sb = _to_sympy_ctx(b, ctx)
+        _check_units(ctx, [a, b])
+        if ctx._dimensions is not None:
+            # Quantities of different dimensions are not "unequal", they
+            # are incomparable, as in the engine's own comparison.
+            _sympy_units.same_dimension(*ctx._dimensions[1])
 
         # Fast path: direct symbolic equality
         if _sp.simplify(sa - sb) == 0:
@@ -1018,8 +1208,8 @@ def _sym_equal_2(a, b, trail, k):
         # Slow path: alpha-equivalence.
         # One side may be an opaque SymPy result with symbols x, y
         # and the other a Clausal term whose Vars got different names.
-        free_a = sa.free_symbols
-        free_b = sb.free_symbols
+        free_a = _sympy_units.free_variables(sa)
+        free_b = _sympy_units.free_variables(sb)
         if len(free_a) != len(free_b):
             return
 
@@ -1126,7 +1316,7 @@ def _degree_2(term, result, trail, k):
     term = deref(term)
     try:
         expr = _to_sympy(term)
-        free = list(expr.free_symbols)
+        free = list(_sympy_units.free_variables(expr))
         if len(free) != 1:
             return
         out = int(_sp.degree(expr, free[0]))
@@ -1169,13 +1359,35 @@ def _roots_3(this_generator, _proceed, _fail, _catcher, equation, var, root, tra
     var = deref(var)
     try:
         ctx, eq_expr, var_expr = _convert_multi(equation, var)
-        root_dict = _sp.roots(eq_expr, var_expr)
+        if ctx._has_units:
+            try:
+                _sp.Poly(_sympy_units.real_magnitude(eq_expr), var_expr)
+            except _sp.PolynomialError:
+                # roots/3 is for polynomials; exp(X / 1 kelvin) - 2 is not one.
+                raise LogicException(type_error("polynomial", equation, "roots/3"))
+            if eq_expr.has(_sp.Float):
+                # A float polynomial: _real_roots finds its roots at 50
+                # digits (SymPy's double-precision ones can lose a root).
+                root_dict, complete = {}, True
+            else:
+                root_dict = _solving(ctx, _sp.roots, eq_expr, var_expr)
+                complete = sum(root_dict.values()) == _sp.degree(eq_expr, var_expr)
+            candidates = list(root_dict.items())
+            if not complete:
+                # SymPy found only some: all of them numerically instead.
+                candidates = _numeric_roots(
+                    eq_expr, var_expr, _variable_dimension(ctx, var_expr))
+                if candidates is None:
+                    raise _sympy_units.no_symbolic_solution()
+        else:
+            root_dict = _solving(ctx, _sp.roots, eq_expr, var_expr)
+            candidates = list(root_dict.items())
     except (TypeError, ValueError):
         yield (_fail, DONE)
         return
-    for r, mult in root_dict.items():
+    for r, mult, expected in _real_roots(ctx, eq_expr, var_expr, candidates):
         mark = trail.mark()
-        pair = (_to_pyval(r), int(mult))
+        pair = (_to_pyval(r, expected), int(mult))
         if unify(root, pair, trail):
             yield (_proceed, None)
         trail.undo(mark)
@@ -1299,6 +1511,8 @@ def _gcd_sym_3(a, b, result, trail, k):
     b = deref(b)
     try:
         ctx, sa, sb = _convert_multi(a, b)
+        if ctx._dimensions is not None:
+            _sympy_units.same_dimension(*ctx._dimensions[1])
         out = _to_pyval(_sp.gcd(sa, sb))
     except (TypeError, ValueError):
         return
@@ -1312,6 +1526,8 @@ def _lcm_sym_3(a, b, result, trail, k):
     b = deref(b)
     try:
         ctx, sa, sb = _convert_multi(a, b)
+        if ctx._dimensions is not None:
+            _sympy_units.same_dimension(*ctx._dimensions[1])
         out = _to_pyval(_sp.lcm(sa, sb))
     except (TypeError, ValueError):
         return

@@ -46,6 +46,77 @@ surface described in [docs/public-api.md](docs/public-api.md).
   untouched, and a `#(Name)` term built at run time stays a term (spliced
   verbatim into an asserted rule), as a run-time `constant(Name)` term does.
   Docs: directives.md, clpq.md. Tests: `tests/iso_l3/test_l3_hash_constant.py`.
+
+- **clausal-sympy computes with quantities, dimensions checked by the units
+  system.** A `Quantity` in a sympy predicate's input failed silently before
+  (sympify refused it, the error was caught, the predicate had no answer),
+  so `simplify(Flow * SpecificHeat * TemperatureDifference, Duty)` and a
+  `solve/3` for the flow were "no". A quantity now goes to SymPy as its
+  exact magnitude times one dimension symbol per base unit (named by the
+  atoms keying `Quantity.dims`; `sympy.physics.units` is not used). Each
+  sum and each function argument is checked with Clausal's own `Quantity`
+  arithmetic while the term is converted, and each result again on the way
+  back: a mismatch (kelvin plus pascal, `log` of a temperature, a root that
+  adds a number to a length, a square root of a temperature) raises
+  `error(system_error(units_mismatch), _)`. A ground result is a `Quantity`
+  (exact `int`/`Fraction` magnitude); units that cancel give a plain
+  number; a result with free variables stays symbolic. Roots of `solve/3`
+  and `solve_all/3` carry their dimension (a flow solved from a duty is in
+  kilogram/second). Plain `Decimal` and `Fraction` terms also convert to
+  an exact SymPy `Rational` (a `Decimal` was a `Float`). Dimensions are
+  carried on the Clausal term before SymPy can fold a zero, so `3(kelvin) + (5(pascal)
+  - 5(pascal))`, `0(pascal) + 3(kelvin)` and `X * 1(kelvin) + X * 1(pascal)` are refused and `solve(X -
+  0(kelvin))` answers `0(kelvin)`. The dimension symbols are constants: `diff/2`,
+  `integrate/2`, `degree/2`, `free_vars/2` and `sym_equal/2` never treat
+  them as variables; they print as `(kelvin)`. An irrational magnitude (`sqrt(2)`, a log mean temperature
+  difference) is a float quantity (operator ruling 2026-11-04); a rational
+  one stays exact (`int`/`Fraction`). The switch
+  `_sympy_units.EXACT_IRRATIONAL_RESULTS` brings back the exact arithmetic
+  term `Magnitude * 1 (unit)`, used only when the engine can evaluate it. An equation holding a quantity gives its real roots only, in
+  increasing order, each once, each checked by substitution; a root SymPy
+  cannot classify is evaluated to 50 digits and kept if its imaginary part
+  is negligible; SymPy unable to solve it is
+  `error(system_error(no_symbolic_solution), _)`. A complex, infinite or
+  NaN value is `evaluation_error(undefined)`. Every function is classified:
+  `abs`, `max`, `min` keep one dimension; `sqrt`, `cbrt` are powers; every
+  other function, including one the wrapper does not know (`log10`,
+  `sinh`, `f`), needs dimensionless arguments, so a quantity inside it is
+  refused rather than stripped. `cbrt/1` is now SymPy's cube root, the
+  PRINCIPAL one, so `cbrt(-8)` is complex (and refused for a quantity), not
+  -2. `atan2/2` (one dimension in, a number out), `hypot/2` (one dimension,
+  kept), `sign/1` (any dimension in, a number out) and `^/2` (a power) are
+  now SymPy functions too, also without quantities (`sign(-3)` is -1,
+  `hypot(3, 4)` is 5). A real root SymPy gives exactly is kept without a
+  numeric check; any other is checked relative to the equation's own terms,
+  to 1e-12 when the equation holds a float and 1e-25 when it is exact, so a
+  float coefficient, `standard_gravity` or a float log mean temperature
+  difference no longer drops the roots. When SymPy gives up on a polynomial
+  its roots are found numerically. `roots/3` of a non-polynomial is
+  `type_error(polynomial, _)`; a known function with the wrong arity is
+  `type_error(evaluable, Name/Arity)`. SymPy has no time limit here (a
+  todo; measured: the LMTD inverse 8.7 s, U * A * LMTD 19.1 s, the
+  float-input LMTD inverse 94.5 s, the inverse from 12.34/18.20 kelvin and
+  Colebrook over 120 s). A numeric root is polished by Newton's method at
+  50 digits before its residual is tested. A polynomial with a float
+  coefficient is never given to SymPy's `solve`: each float is read as the
+  decimal its shortest repr shows (`Fraction(repr(f))`, 1.1 is 11/10), the
+  polynomial is split exactly into square-free factors, and each factor's
+  roots are found at 50 digits, so a small root beside large ones (X**2 -
+  3.0 X + 1e-6, in metres) is kept, a repeated root keeps its multiplicity
+  ((X - 1.1)**2 (X - 3) gives 1.1 and 3.0; (X - 1.1)**10 gives 1.1, ten
+  times in `roots/3`), and degree 20 takes under a second; mpmath not
+  converging is `no_symbolic_solution`. An infinite or NaN number beside
+  a quantity, or a float coefficient past the double range, is
+  `evaluation_error(undefined)`. A double root built from computed floats
+  and written expanded can vanish (documented: write it unexpanded). `^/2` follows SymPy, not ISO:
+  `2^-1` is 1/2 (ISO: a type error), and unit-free `solve_all(X^2 - 4, X,
+  R)` now works (it was a raw `NotImplementedError`). Unit-free, `0^-1`
+  and `atan2(0, 0)` come back as SymPy's `zoo` and `nan`.
+  `gcd/3`, `lcm/3` and `sym_equal/2` refuse mixed dimensions, `subs/3` a
+  quantity as its key (`type_error(variable, _)`). Tests:
+  `packages/clausal-sympy/tests/fixtures/sympy_units.seam`,
+  `packages/clausal-sympy/tests/test_sympy_units.py`.
+
 - **A `.pl` module asserts rules** (ISO 13211-1 8.9, operator ruling
   2026-11-03): `assertz/1`, `asserta/1`, `retract/1` and `clause/2` take
   `(Head :- Body)` with any body, cut and if-then-else included. The rule is

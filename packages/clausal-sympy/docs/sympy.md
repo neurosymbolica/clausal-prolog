@@ -80,6 +80,191 @@ Results from one predicate can be fed directly into another:
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:chaining_ex2"
 ```
 
+### Quantities (units)
+
+A [quantity](https://github.com/neurosymbolica/clausal-prolog/blob/main/docs/units.md)
+may appear anywhere in an expression. It goes to SymPy as its exact
+magnitude, in SI base units, times one dimension symbol per base unit
+(`kilogram`, `metre`, `second`, `kelvin`, ...); a `Decimal` or `Fraction`
+magnitude stays an exact `Rational`. The dimension symbols are constants,
+never variables: `diff/2`, `integrate/2`, `degree/2`, `free_vars/2` and
+`sym_equal/2` do not see them. They print as `(kelvin)`, the way a quantity
+prints its unit, so they cannot be confused with an atom `kelvin`.
+
+Dimensions are judged by Clausal's units system, as everywhere else, with
+`Quantity` arithmetic: on the Clausal term before SymPy sees it (SymPy would
+fold `5(pascal) - 5(pascal)` to a dimensionless 0), and again on every result. A plain
+number is dimensionless, as in the engine (`0 + 3(kelvin)` is a mismatch); a
+variable's dimension is unknown, but two terms with the same powers of the
+same variables must agree (`X * 1(kelvin) + X * 1(pascal)` is refused), and a sum such
+as `X - 3(kelvin)` tells `solve` that X is a temperature, so its root `0` comes
+back as `0(kelvin)`.
+
+What comes back:
+
+- a ground result with a rational magnitude is a quantity with an exact
+  magnitude; units that cancel give a plain number; a zero keeps the
+  dimension of the input (`simplify(3(kelvin) - 3(kelvin))` is `0(kelvin)`);
+- a ground result with an irrational magnitude (`sqrt(2)`, `20/log(3)`, a
+  `LambertW` root) is a FLOAT quantity, which compares, `has_units/2` and
+  `strip_units/2` like any other (operator ruling 2026-11-04). The exact
+  form is available behind the switch
+  `clausal.modules.py._sympy_units.EXACT_IRRATIONAL_RESULTS`: set to `True`,
+  such a result is the Clausal arithmetic term `Magnitude * 1 (unit)`, e.g.
+  `2**(1/2) * 1 (metre)`, when the engine can evaluate every function in it
+  (`sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `exp`, `log`, `abs`,
+  `ceiling`, `floor`, `pi`, `e`); evaluate it (`eval_(R, V)`, `V is R`)
+  before comparing or checking its units, and a further sympy call reads it
+  back exactly;
+- a result that still holds a variable stays symbolic, dimension symbols
+  included;
+- `solve/3`, `solve_all/3` and `roots/3` of an equation that holds a
+  quantity follow one rule:
+  - the answers are its real GROUND roots, in increasing order, each once
+    (`roots/3` adds up the multiplicities of roots that coincide). A root
+    with another variable in it cannot be classified and is kept as SymPy
+    gives it, after the ground ones (`X**2 + Y**2 * 1(metre**2)` answers
+    `+-I*y*(metre)`);
+  - a root SymPy gives exactly and knows is real is kept as it is, without
+    any numeric check: it is correct by construction (roots 1e-30, 1 and
+    1e30 metre all survive, and two exact roots are merged only if equal);
+  - any other root (a float coefficient, a cubic's real roots written with
+    complex radicals, a `LambertW` branch) is evaluated to 50 significant
+    digits and polished by Newton's method at 50 digits on the equation in
+    SI magnitudes (at most 20 steps, stopping when a step stops
+    shrinking). A root is kept, as a float quantity of its real part, only if its
+    imaginary part is negligible relative to its size, and if substituting
+    it back leaves a residual negligible relative to the equation's own
+    terms there (|sum of the terms| <= tolerance * sum of |each term|).
+    The tolerance follows the input's precision: 1e-12 when a float is in
+    the equation, 1e-25 when every number is exact. Neither test depends
+    on the scale of a root or a coefficient. Two such roots closer than the
+    same relative tolerance are one root;
+  - no real root means no answer: `solve/3` fails, `solve_all/3` gives
+    `[]`, `roots/3` fails (`X**2 + 4(metre**2)`);
+  - when SymPy gives up on a POLYNOMIAL (it answers `[]` for some quintics,
+    or `roots` finds fewer roots than the degree), all its roots are found
+    numerically (50 digits) and the rule above applies; only if that fails
+    too is it `error(system_error(no_symbolic_solution), _)`. SymPy unable
+    to solve any other equation (`X - cos(X / 1(kelvin)) * 1(kelvin)`) is
+    that error as well, never a partial list. `roots/3` of an equation that
+    is not a polynomial is `type_error(polynomial, Equation)`;
+  - an equation without quantities is answered as SymPy gives it, complex
+    roots included;
+  - a POLYNOMIAL WITH A FLOAT COEFFICIENT is never given to SymPy's
+    `solve` (in double precision a small root beside large ones loses its
+    digits, a repeated root splits into a complex pair, and degree 20 takes
+    minutes). Each float is read as the decimal its shortest repr shows
+    (`1.1` is 11/10), the polynomial is split exactly into square-free
+    factors, and each factor's roots are found at 50 digits; the real ones
+    come back as floats, a repeated root once with its multiplicity
+    (`(X - 1.1(metre))**2 * (X - 3(metre))` gives 1.1 and 3.0 metres;
+    `roots/3` gives multiplicities 2 and 1; `(X - 1.1(metre))**10` and
+    `(X - 1(metre))**10` give 1.1 and 1.0 metres). Only if that fails are
+    all its roots found at 50 digits and Newton-polished. A degree-20
+    polynomial takes well under a second. An ill-conditioned one (roots
+    0.5, 1, ..., 15 metres, degree 30) has its larger roots moved off the
+    real axis by the rounding of its coefficients, so fewer real roots come
+    back: the float input itself says so. Two distinct roots closer than a double can
+    tell apart come back as two equal floats;
+  - mpmath not converging at all is `no_symbolic_solution`.
+
+`^` follows SymPy, not ISO: `2^-1` is `1/2` (ISO's `^` is a type error for
+a negative integer exponent) and `X^2` is `X**2`, so a unit-free
+`solve_all(X^2 - 4, X, R)` now gives `[-2, 2]` (it used to be a raw
+`NotImplementedError`). Without quantities, `0^-1` and `atan2(0, 0)` come
+back as SymPy's values `zoo` and `nan`; with a quantity such a value is
+`evaluation_error(undefined)`.
+- a VALUE that is complex, infinite or NaN (`sqrt(-4(metre**2))`) is
+  `evaluation_error(undefined)`, as is a quantity whose magnitude is
+  infinite or NaN on the way in;
+- `gcd/3`, `lcm/3` and `sym_equal/2` refuse two quantities of different
+  dimensions with `units_mismatch`, and `subs/3` refuses a quantity as the
+  thing to substitute for (`type_error(variable, Q)`).
+
+```seam
+--8<-- "tests/fixtures/sympy_units.seam:heat_exchanger_quantities"
+```
+
+Solving backwards gives a root with its dimension, a mass flow here:
+
+```seam
+--8<-- "tests/fixtures/sympy_units.seam:solve_for_a_quantity"
+```
+
+A mismatch is the units system's own error, `error(system_error(units_mismatch), _)`:
+
+```seam
+--8<-- "tests/fixtures/sympy_units.seam:dimension_mismatch"
+```
+
+Every function is in one class. `abs`, `max`, `min` and `hypot` keep
+their arguments' one dimension (`max(3(kelvin), 5(pascal))` is refused).
+`atan2` takes two values of one dimension and gives an angle (a number).
+`sign` takes any dimension and gives a number. `sqrt`, `cbrt` and `^` are
+powers (`cbrt` of a volume is a length; `cbrt` is SymPy's principal root, so
+`cbrt(-8(metre**3))` is complex and refused, not `-2(metre)`). A known
+function with the wrong number of arguments (`abs(3(kelvin), 4(kelvin))`)
+is `type_error(evaluable, abs/2)`, as in the engine. Every other function
+needs dimensionless arguments and gives a dimensionless value:
+`log`, `exp`, the trigonometric functions, `floor`, `ceiling`, `gamma`,
+`factorial`, and any function the wrapper does not know (`log10`, `sinh`,
+`f`), whose dimension it cannot judge, so `log10(100(kelvin))` and
+`f(3(kelvin))` are refused with `units_mismatch`. A ratio of two
+temperature differences is dimensionless, and the log mean temperature
+difference comes back as a float quantity in kelvin:
+
+```seam
+--8<-- "tests/fixtures/sympy_units.seam:log_mean_temperature_difference"
+```
+
+`abs` keeps its argument's dimension and `sqrt` is a power: `sqrt` of an area
+is a length, `sqrt` of a temperature is refused (a dimension exponent must be
+an integer). A temperature is in kelvin and only differences are
+meaningful to the units system (there is no Celsius offset scale): enter a
+difference in millidegrees Celsius as kelvin over 1000, `12345(kelvin) / 1000`,
+which stays exact: 2469/200 times 1(kelvin).
+
+Solving the log mean temperature difference backwards, SymPy offers 17
+candidate roots; exactly one is real and satisfies the equation:
+
+```seam
+--8<-- "tests/fixtures/sympy_units.seam:log_mean_temperature_difference_inverse"
+```
+
+**Limitations.** A double root built from COMPUTED floats can vanish. With
+`R` the float quantity `sqrt(2(metre**2))`, `solve_all(X**2 - 2 * R * X + R
+* R, X, L)` gives `[]`: each float coefficient is read through its own
+shortest repr, and the three rationals together have a discriminant of
+about -1e-15, so the double root is a complex pair. Unexpanded,
+`(X - R)**2` gives `[R]`. Write a tangency or critical-damping condition
+unexpanded, or from exact inputs.
+
+A root that has to be evaluated numerically counts as real when its
+imaginary part is below 1e-25 times its size at 50 digits: a numerically
+found root 1 +- 1e-26 i is reported as the real root 1. A coefficient near
+the top of the double range (1e308) overflows to infinity once SymPy
+multiplies it and is `evaluation_error(undefined)`, as an infinite or NaN
+number beside a quantity is (`X * 1(metre) - inf * 1(metre)`).
+
+There is no time limit on a SymPy call (a todo; the
+sandbox budget should allow for it meanwhile). Measured on review of
+45371c2d: the log mean temperature difference solved backwards (from
+10(kelvin) to 18(kelvin)) takes 8.7 s; duty = U * A * LMTD solved for the
+hot-end difference, 19.1 s; the same inverse with float inputs, 94.5 s; the
+inverse from 12.34(kelvin) and 18.20(kelvin), and the Colebrook friction
+equation, more than 120 s.
+
+A zero that SymPy produces AFTER the input has been
+checked carries no dimension, so it comes back as a plain `0`: `subs/3`
+putting `0` (or `0(kilogram/second)`) into `M * 4186(joule/kilogram/kelvin)
+* 1(kelvin)`, `limit(X * 1(kelvin) - 2(kelvin), X, 2)`, a root that is zero
+when the equation has a second unknown, and a zero polynomial coefficient.
+For the same reason a zero derivative `diff(3(kelvin), X, R)` is a plain
+`0`: nothing says what X is, so "kelvin per X" has no known dimension
+(when the expression does say, as in `X * 1(metre) - X * 1(metre) +
+3(kelvin) * 1(metre)`, the zero derivative is `0(metre)`).
+
 ---
 
 ## Predicates
