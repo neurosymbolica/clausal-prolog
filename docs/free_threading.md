@@ -28,7 +28,7 @@ thread safety.
 |--------|---------------|
 | `Var` / `AttVar` | Binding slots use atomic loads/stores. `unify()` uses per-object critical sections to prevent double-binding. |
 | Ground terms (`int`, `str`, `list` of ground, cells of ground) | Immutable once constructed. No synchronization needed. |
-| Clause database (reads) | Compiled dispatch tables are immutable snapshots. Concurrent goal resolution is safe. |
+| Clause database (reads) | A compiled dispatch is immutable. A clause table (a fact predicate, or one of 256+ clauses) grows in place on `assertz` of a fact, but a call takes the table's length when it starts, the new fact's index entries are added before the fact itself, and a call reads index lists only up to that length, so it never sees a clause asserted after it began. Concurrent goal resolution is safe, also while another thread asserts. Concurrent *writes* to one predicate are not synchronised (two `assertz` racing on one predicate is unsupported, as before). |
 | Attribute hook registry | `register_attr_hook` / `unregister_attr_hook` are protected by a critical section on the internal dict. |
 
 ### Must be per-thread

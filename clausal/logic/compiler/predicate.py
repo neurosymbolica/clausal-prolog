@@ -1299,11 +1299,13 @@ def _build_predicate_trampoline_funcdef_impl(
             mark_final_yields(
                 _seg.func, self_name=_seg.self_name, proceed_name=_seg.proceed,
                 fail_name=(SEGMENT_FAIL, _seg.fail_name))
+    from . import invariants as _invariants
     from .invariants import (
         assert_mark_undo_paired,
         assert_trampoline_done_yield_present,
     )
-    assert_mark_undo_paired(func_def)
+    if _invariants.CHECK_COMPILED_FUNCTIONS:
+        assert_mark_undo_paired(func_def)
     if emit_done:
         assert_trampoline_done_yield_present(func_def)
     stamp_predicate_funcdef(func_def, clauses)
@@ -1598,11 +1600,12 @@ def _compile_predicate_trampoline_impl(
         # test_bucket_refs_ir_parallel.py``, D6c parity).
         pass
         # ── A large predicate: a clause table (compiler/clause_table.py) ──
-        if _use_clause_table(db, clauses, enabled_optimisations):
+        if _use_clause_table(db, clauses, enabled_optimisations,
+                             functor, arity):
             index_positions = None
             fn = _compile_clause_table(
                 functor, arity, _stored_clauses, clauses, db, _effective_db,
-                body_compiler, ctx_template, base_globals)
+                body_compiler, ctx_template, base_globals, globals_)
             # Nothing for a call site to specialise on: no bucket functions.
             _plan_row = _plan_row_for(pred_cls, db, functor, arity)
             if _plan_row is not None:
@@ -1706,6 +1709,17 @@ def _compile_predicate_trampoline_impl(
                         )
                         if _b_tro_set:
                             _b_tro = _b_tro_set
+                    if len(index["buckets"]) == 1:
+                        # Every clause has this one key here (or a variable):
+                        # the bucket is the whole predicate, so it is the
+                        # fallback, already compiled.  Compiling it again
+                        # cost a copy of the predicate per such position --
+                        # with a constant column per argument, a load time
+                        # growing with the arity (2026-11-04).  What the
+                        # position still does: a call with another key there
+                        # fails at once, through the default function.
+                        idx_dict[key] = fallback_fn
+                        continue
                     # Single-clause bucket: elide outer trail mark/undo
                     # since there is no sibling clause to backtrack to.
                     _skip_trail = len(lifted_bucket) == 1
@@ -2153,11 +2167,13 @@ def compile_predicate_trampoline_ast(
 
 def _compile_clause_table(functor, arity, stored_clauses, clauses, db,
                           effective_db, body_compiler, ctx_template,
-                          base_globals):
+                          base_globals, globals_):
     """The dispatch of a predicate of many clauses: a clause table
     (``compiler/clause_table.py``).  A clause the table does not hold as
-    data is compiled here, now, as a predicate of its one clause: its
-    answers are FINAL only when it is the predicate's last clause."""
+    data is compiled here, now, as a predicate of its one clause whose
+    answers are not FINAL; the table compiles it again, with FINAL answers,
+    when a call first needs that (no candidate clause after it) -- at run
+    time, so the compile reopens this one's lowering scope (*globals_*)."""
     final_on = "final_yield" in ctx_template.enabled_optimisations
 
     def compile_clause(clause, i, last):
@@ -2165,9 +2181,10 @@ def _compile_clause_table(functor, arity, stored_clauses, clauses, db,
         if not last:
             ctx_template.enabled_optimisations = saved - {"final_yield"}
         try:
-            fdef = _build_predicate_trampoline_funcdef(
-                f"{functor}__c{i}", arity, [clause], effective_db,
-                body_compiler, emit_done=False, ctx_template=ctx_template)
+            with lowering_scope(globals_):
+                fdef = _build_predicate_trampoline_funcdef(
+                    f"{functor}__c{i}", arity, [clause], effective_db,
+                    body_compiler, emit_done=False, ctx_template=ctx_template)
         finally:
             ctx_template.enabled_optimisations = saved
         return _shared_fn(fdef, base_globals)

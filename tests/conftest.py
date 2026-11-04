@@ -1,6 +1,7 @@
 """Fixtures shared by test files under ``tests/`` that opt in to them."""
 from __future__ import annotations
 
+import os
 import sys
 
 import pytest
@@ -27,3 +28,13 @@ def default_recursion_limit():
         yield
     finally:
         sys.setrecursionlimit(before)
+
+
+# The predicate compiler's whole-function invariant walks are off by default
+# (they cost a pass over every compiled function); the suite runs them, here
+# and in the processes it starts.
+os.environ.setdefault("CLAUSAL_CHECK_COMPILED_FUNCTIONS", "1")
+from clausal.logic.compiler import invariants as _compiler_invariants  # noqa: E402
+
+_compiler_invariants.CHECK_COMPILED_FUNCTIONS = (
+    os.environ["CLAUSAL_CHECK_COMPILED_FUNCTIONS"] not in ("", "0"))

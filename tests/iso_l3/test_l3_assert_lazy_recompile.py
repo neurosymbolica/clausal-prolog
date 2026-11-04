@@ -54,7 +54,9 @@ def test_an_assertz_fill_compiles_once_at_the_next_call(native, ans,
     assert list(call("fill", 40, module=mod))
     assert calls.count(("p", 1)) == 0, calls
     assert ans(mod, "count") == [120]
-    assert calls.count(("p", 1)) == 1, calls
+    # 80 facts compiled to a clause table (FACT_TABLE_THRESHOLD), and an
+    # assertz of a fact adds to the table in place: nothing to recompile.
+    assert calls.count(("p", 1)) == 0, calls
 
 
 def test_a_brand_new_predicate_compiles_at_its_first_assert_only(

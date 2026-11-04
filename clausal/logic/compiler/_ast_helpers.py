@@ -168,6 +168,14 @@ def maybe_assert_located(tree: ast.AST) -> None:
     located for ``compile()`` / traceback purposes).
     """
     propagate_synthetic_positions(tree)
+    if getattr(tree, "lineno", None) is not None:
+        # The propagation just located every node the walker inspects (it
+        # skips the same node types, and stamps each un-located one as
+        # synthetic), so the walk could not fail: skipped, a whole-tree walk
+        # per compiled function saved (2026-11-04).  Only a tree with no
+        # position of its own, which the propagation leaves alone, is
+        # checked.
+        return
     import os
     if os.environ.get("CLAUSAL_ASSERT_LOCATIONS") == "0":
         return

@@ -143,6 +143,15 @@ class PredRow:
     declared_at: "tuple[str, int] | None" = dataclasses.field(
         default=None, repr=False, compare=False)
     writes: list = dataclasses.field(default_factory=list)
+    # How many times a call found this predicate's dispatch invalidated by a
+    # runtime assert/retract and recompiled it (``Database.get_dispatch``): a predicate written between its
+    # calls compiles to a clause table (``compiler/clause_table.py``).
+    recompiles_after_write: int = dataclasses.field(
+        default=0, repr=False, compare=False)
+    # A runtime assert/retract invalidated the dispatch since it was last
+    # recompiled (an invalidation for another reason does not count).
+    written_since_compile: bool = dataclasses.field(
+        default=False, repr=False, compare=False)
     # (REMOVED 2026-09-22, option D.)  ``dynamic_arities`` used to live here
     # as a per-NAME set, on the argument that it "cannot be reconstructed from
     # one key's boolean".  True of ONE key; false of the SET: scanning
@@ -1223,7 +1232,11 @@ class Database:
                 if kind not in _CLAUSE_KINDS or row.dispatch_fn is not dispatch:
                     # Not a clause write, or this transaction installed a
                     # dispatch of its own on the way out (the assert channels
-                    # recompile inside their transaction) — nothing is stale.
+                    # recompile inside their transaction; a clause table
+                    # takes an assertz'd fact in place) — nothing is stale.
+                    # Whoever installed it also answers for a ``-table``
+                    # table (``compiler._install`` and ``assertz`` abolish
+                    # it), since this skips the abolition below.
                     continue
                 # Unconditional for a clause-writing kind, rather than
                 # conditional on a clause-COUNT change: one transaction that
@@ -1241,6 +1254,8 @@ class Database:
                     # ``test_retract_builtin_does_not_create_a_dispatch_entry_
                     # it_did_not_find``).
                     row.invalidate()
+                    if kind in _RUNTIME_KINDS:
+                        row.written_since_compile = True
                 if key in db._tabled:
                     db.abolish_table(*key)
 
@@ -1266,6 +1281,22 @@ class Database:
         with self.mutate(functor, arity, author=author or self.runtime_author(),
                          kind=WRITE_ASSERT, detail="assertz") as row:
             row.ensure_clauses().append(clause)
+            # A clause table takes a fact in place: it installs a dispatch
+            # over the grown table, so this transaction leaves nothing stale
+            # (``mutate``'s exit) and the next call recompiles nothing.  A
+            # call already running reads the clauses it began with.
+            append = getattr(row.dispatch_fn, "table_append", None)
+            if append is not None:
+                grown = append(clause)
+                if grown is not None:
+                    row.dispatch_fn = grown
+                    # Installing a dispatch makes ``mutate``'s exit skip
+                    # its invalidation AND its abolition of a ``-table``
+                    # table, so abolish here.  (Unreachable today: a tabled
+                    # predicate's dispatch is the SLG wrapper, which has no
+                    # ``table_append``.)
+                    if (functor, arity) in self._tabled:
+                        self.abolish_table(functor, arity)
 
     def asserta(self, clause: Clause, author: str | None = None) -> None:
         """Add clause at front of its predicate's clause list.
@@ -1561,6 +1592,12 @@ class Database:
             # Invalidated — try lazy recompile.
             lazy = self._lazy_recompile.get(key)
             if lazy is not None:
+                row = self._rows.get(key)
+                if row is not None and row.written_since_compile:
+                    # Counted for the clause table's choice
+                    # (``clause_table.RECOMPILES_BEFORE_TABLE``).
+                    row.recompiles_after_write += 1
+                    row.written_since_compile = False
                 fn = lazy()
                 # The recompile installs through ``compiler._install``, which is
                 # where a ``-table``d predicate is re-wrapped in its SLG

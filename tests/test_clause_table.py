@@ -194,7 +194,12 @@ SMALL_GOALS = ["findall(X, s(X), L), length(L, R)",
                "retract(s(x)), findall(X, s(X), L), length(L, R)"]
 
 
-def test_below_the_threshold_nothing_changes(tmp_path):
+def test_below_the_threshold_nothing_changes(tmp_path, monkeypatch):
+    # (the tables of fact predicates, from FACT_TABLE_THRESHOLD facts or
+    # once written between calls, are out of reach here: see the tests of
+    # both below)
+    monkeypatch.setattr(clause_table, "FACT_TABLE_THRESHOLD", 10 ** 9)
+    monkeypatch.setattr(clause_table, "RECOMPILES_BEFORE_TABLE", 10 ** 9)
     src = ":- dynamic(s/1).\n" + "".join(
         f"s({i}).\n" for i in range(clause_table.CLAUSE_TABLE_THRESHOLD - 1))
     mod = _load(tmp_path, "ctab_small", src, SMALL_GOALS)
@@ -283,3 +288,206 @@ def test_loading_10000_facts_compiles_no_fact(tmp_path, builds):
     assert _answers(mod, "findall(X, p(X, _), L), length(L, R)") == ["10000"]
     assert _answers(mod, "catch(assertz(p(a, b)), error(E, _), R = E)") == [
         "permission_error(modify,static_procedure,p/2)"]
+
+
+# ── constant columns, and facts asserted between calls (2026-11-04) ────────
+
+
+@pytest.fixture
+def arms(monkeypatch):
+    """How many clause arms the compiler builds: the clauses of every
+    function it builds, summed (each arm costs about 3 ms at arity 8)."""
+    count = [0]
+    orig = predicate_compiler._build_predicate_trampoline_funcdef
+
+    def counting(functor, arity, clauses, *a, **k):
+        count[0] += len(clauses)
+        return orig(functor, arity, clauses, *a, **k)
+
+    monkeypatch.setattr(predicate_compiler,
+                        "_build_predicate_trampoline_funcdef", counting)
+    return count
+
+
+COLUMN_GOALS = ["q(42, A, B, C, D, E, F, G), R = [A, B, C, D, E, F, G]",
+                "findall(I, q(I, 1, 2, 3, 4, 5, 6, 7), L), length(L, R)",
+                "findall(I, q(I, 1, 2, 3, 4, 5, 6, 9), R)"]
+
+
+def test_constant_columns_compile_each_fact_twice_whatever_the_arity(
+        tmp_path, arms, monkeypatch):
+    """100 facts of arity 8 whose arguments 2..8 are the same in every fact,
+    compiled (not a table).  Each of those positions is an index of one
+    key, whose one bucket is the whole predicate: it was compiled again per
+    position, 9 arms per fact.  Now the fallback serves it: 2 arms per fact
+    (the fallback and the fact's first-argument bucket), whatever the
+    arity."""
+    monkeypatch.setattr(clause_table, "FACT_TABLE_THRESHOLD", 10 ** 9)
+    src = "".join(f"q({i}, 1, 2, 3, 4, 5, 6, 7).\n" for i in range(100))
+    mod = _load(tmp_path, "ctab_columns", src, COLUMN_GOALS)
+    assert not _is_table(mod, "q", 8)
+    assert arms[0] <= 2 * 100 + 10, arms[0]     # was 900
+    assert _answers(mod, COLUMN_GOALS[0]) == ["[1,2,3,4,5,6,7]"]
+    assert _answers(mod, COLUMN_GOALS[1]) == ["100"]
+    assert _answers(mod, COLUMN_GOALS[2]) == ["[]"]
+
+
+def test_a_fact_predicate_loads_as_a_table_from_the_fact_threshold(
+        tmp_path, arms):
+    """From FACT_TABLE_THRESHOLD facts no fact is compiled (200 facts of
+    arity 8 compiled 1,800 clause arms, 7 s; then 400, 2 s)."""
+    n = 200
+    src = "".join(f"q({i}, 1, 2, 3, 4, 5, 6, 7).\n" for i in range(n))
+    mod = _load(tmp_path, "ctab_facts_small", src, COLUMN_GOALS)
+    assert _is_table(mod, "q", 8)
+    assert arms[0] <= 10, arms[0]               # the goal predicates
+    assert _answers(mod, COLUMN_GOALS[0]) == ["[1,2,3,4,5,6,7]"]
+    assert _answers(mod, COLUMN_GOALS[1]) == [str(n)]
+    assert _answers(mod, COLUMN_GOALS[2]) == ["[]"]
+    below = clause_table.FACT_TABLE_THRESHOLD - 1
+    src = "".join(f"r({i}, 1).\n" for i in range(below))
+    mod = _load(tmp_path, "ctab_facts_below", src, ["findall(I, r(I, 1), R)"])
+    assert not _is_table(mod, "r", 2)
+
+
+def _row(mod, functor, arity):
+    from clausal.logic.solve import resolve_module  # noqa: PLC0415
+    return resolve_module(mod, None, "test").db.row(functor, arity)
+
+
+INTERLEAVE_GOALS = [
+    "fill(200), R = ok",
+    "findall(I, q(I, _, _, _, _, _, _, _), L), length(L, R)",
+    "q(150, A, _, _, _, _, _, H), R = A-H",
+]
+
+
+def test_facts_asserted_between_calls_are_not_recompiled_each_time(
+        tmp_path, arms):
+    """Each assertz of a fact followed by a call recompiled the whole
+    predicate at the call: O(n^2) compiled clauses for n asserts (50 facts
+    of arity 8 took 30 s).  From its second recompile after a write a fact
+    predicate is a clause table, and an assertz adds to the table in
+    place."""
+    mod = _load(tmp_path, "ctab_interleave", (
+        ":- dynamic(q/8).\n"
+        "q(0, 1, 2, 3, 4, 5, 6, 7).\n"
+        "fill(N) :- between(1, N, I), assertz(q(I, 1, 2, 3, 4, 5, 6, 7)),"
+        " q(I, _, _, _, _, _, _, _), fail.\n"
+        "fill(_).\n"), INTERLEAVE_GOALS)
+    before = arms[0]
+    assert _answers(mod, INTERLEAVE_GOALS[0]) == ["ok"]
+    # Two recompiles through the code generator (of 1 and 2 clauses), and
+    # the goal itself; was 200 recompiles, about 180,000 arms.
+    assert arms[0] - before <= 20, arms[0] - before
+    row = _row(mod, "q", 8)
+    assert row.recompiles_after_write == clause_table.RECOMPILES_BEFORE_TABLE
+    assert _is_table(mod, "q", 8)
+    assert _answers(mod, INTERLEAVE_GOALS[1]) == ["201"]
+    assert _answers(mod, INTERLEAVE_GOALS[2]) == ["1-7"]
+
+
+UPDATE_GOALS = [
+    "assertz(p(4)), findall(X, p(X), R)",
+    "assertz(p(5)), findall(X, p(X), R)",
+    "findall(X, (p(X), assertz(p(9))), R)",
+    "findall(X, p(X), R)",
+    "findall(x, (p(9), assertz(p(9))), L), length(L, R)",
+    "p(X), R = X",
+    "asserta(p(0)), findall(X, p(X), L), length(L, R)",
+    "once(retract(p(9))), findall(X, p(X), L), length(L, R)",
+]
+
+
+def test_a_fact_appended_in_place_keeps_the_logical_update_view(
+        tmp_path, builds):
+    mod = _load(tmp_path, "ctab_update", (
+        ":- dynamic(p/1).\np(1).\np(2).\np(3).\n"), UPDATE_GOALS)
+    assert _answers(mod, UPDATE_GOALS[0]) == ["[1,2,3,4]"]
+    assert not _is_table(mod, "p", 1)        # the first recompile: compiled
+    assert _answers(mod, UPDATE_GOALS[1]) == ["[1,2,3,4,5]"]
+    assert _is_table(mod, "p", 1)
+    recompiles = _row(mod, "p", 1).recompiles_after_write
+    before = builds[0]
+    # A call running while facts are appended sees the clauses it began
+    # with, through the full scan and through an index bucket that grows.
+    assert _answers(mod, UPDATE_GOALS[2]) == ["[1,2,3,4,5]"]
+    assert _answers(mod, UPDATE_GOALS[3]) == ["[1,2,3,4,5,9,9,9,9,9]"]
+    assert _answers(mod, UPDATE_GOALS[4]) == ["5"]
+    # The last answer is known as the last one, over the grown table.
+    got = _answers(mod, UPDATE_GOALS[5], with_last=True)
+    assert [x for x, _ in got] == ["1", "2", "3", "4", "5"] + ["9"] * 10
+    assert [last for _, last in got] == [False] * 14 + [True]
+    # Nothing was recompiled for those 10 asserts (the goals are compiled).
+    assert _row(mod, "p", 1).recompiles_after_write == recompiles
+    assert builds[0] - before <= len(UPDATE_GOALS)
+    # asserta and retract still invalidate, and the recompile reads them.
+    assert _answers(mod, UPDATE_GOALS[6]) == ["16"]
+    assert _answers(mod, UPDATE_GOALS[7]) == ["15"]
+    assert _row(mod, "p", 1).recompiles_after_write == recompiles + 2
+
+
+LAST_RULE_GOALS = ["findall(X, r(X), R)",
+                   "assertz(r(new)), findall(X, r(X), R)",
+                   "r(X), R = X"]
+
+
+def test_a_fact_after_a_compiled_last_clause_is_appended_in_place(
+        tmp_path, monkeypatch):
+    """A table whose last clause is compiled (a rule) gives that clause's
+    answers as FINAL only when no candidate follows it, chosen per call, so
+    a fact assertz'd after it is appended in place and the rule's answers
+    are no longer FINAL."""
+    monkeypatch.setattr(clause_table, "CLAUSE_TABLE_THRESHOLD", 4)
+    mod = _load(tmp_path, "ctab_last_rule", (
+        ":- dynamic(r/1).\nr(a).\nr(b).\nr(c).\nr(X) :- X = rule.\n"),
+        LAST_RULE_GOALS)
+    assert _answers(mod, LAST_RULE_GOALS[2], with_last=True) == [
+        ("a", False), ("b", False), ("c", False), ("rule", True)]
+    assert _is_table(mod, "r", 1)
+    recompiles = _row(mod, "r", 1).recompiles_after_write
+    assert _answers(mod, LAST_RULE_GOALS[1]) == ["[a,b,c,rule,new]"]
+    assert _row(mod, "r", 1).recompiles_after_write == recompiles
+    got = _answers(mod, LAST_RULE_GOALS[2], with_last=True)
+    assert got == [("a", False), ("b", False), ("c", False),
+                   ("rule", False), ("new", True)]
+
+
+PARTIAL_GOALS = ["p(3, L), R = L", "p(15, L), R = L"]
+
+
+def test_a_compiled_fact_in_a_table_knows_its_last_answer(tmp_path):
+    """16 facts ``p(I, [I|_])``: a partial list is not held as data, so
+    each fact is compiled.  Its answer is the last when no candidate clause
+    follows it -- as in the one-function compile; it was never marked last
+    in a table unless it was the table's last clause."""
+    src = "".join(f"p({i}, [{i}|_]).\n" for i in range(16))
+    mod = _load(tmp_path, "ctab_partial", src, PARTIAL_GOALS)
+    assert _is_table(mod, "p", 2)
+    assert [last for _, last in _answers(mod, PARTIAL_GOALS[0], True)] == [True]
+    assert [last for _, last in _answers(mod, PARTIAL_GOALS[1], True)] == [True]
+
+
+BOOL_GOALS = ["findall(K-V, b(K, V), R)", "findall(V, b(true, V), R)",
+              "findall(V, b(1, V), R)", "findall(V, b(1.0, V), R)",
+              "findall(K, b(K, tt), R)", "findall(K, b(K, ff), R)"]
+
+
+def test_true_and_false_are_held_as_data_and_kept_apart_from_1_and_0(
+        tmp_path, builds):
+    """``true``/``false`` are Python bools, equal and hash-equal to 1 and 0:
+    the table holds them as data (no clause compiled), but keys and
+    unification keep the atom, the integer and the float apart."""
+    rows = [("true", "tt"), ("1", "one"), ("1.0", "onef"), ("false", "ff"),
+            ("0", "zero")] * 4
+    src = "".join(f"b({k}, {v}).\n" for k, v in rows)
+    mod = _load(tmp_path, "ctab_bool", src, BOOL_GOALS)
+    assert _is_table(mod, "b", 2)
+    assert builds[0] <= len(BOOL_GOALS)          # the goal predicates only
+    assert _answers(mod, BOOL_GOALS[0]) == [
+        "[" + ",".join(f"{k}-{v}" for k, v in rows) + "]"]
+    assert _answers(mod, BOOL_GOALS[1]) == ["[tt,tt,tt,tt]"]
+    assert _answers(mod, BOOL_GOALS[2]) == ["[one,one,one,one]"]
+    assert _answers(mod, BOOL_GOALS[3]) == ["[onef,onef,onef,onef]"]
+    assert _answers(mod, BOOL_GOALS[4]) == ["[true,true,true,true]"]
+    assert _answers(mod, BOOL_GOALS[5]) == ["[false,false,false,false]"]

@@ -105,3 +105,12 @@ The reproduction above (or an equivalent driven through a real
 `.seam` fixture using a `py.`-shim int constant nested in a data-functor
 head arg) returns 1 solution for the "other position forced unbound"
 query shape, not 0.
+
+## Note (2026-11-04)
+
+Since 2026-11-04 an index position at which every clause has the same key
+is dispatched to the predicate's fallback function, which is not lifted,
+so the reproduction above (one cell functor at position 1) no longer shows
+the gap. It still shows with two keys or more at that position: the pin in
+`tests/test_first_arg_index.py::TestNonAtomNestedInCellHeadArgUnreachable`
+uses two functors for that reason.

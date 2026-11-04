@@ -1364,8 +1364,11 @@ class TestNonAtomNestedInCellHeadArgUnreachable:
         clauses = []
         for i, val in zip((1, 2, 3, 4), (100, 200, 300, 400)):
             n_var, l_var = Var(), Var()
+            # Two functors at position 1, so that it has two buckets: a
+            # position with one key is dispatched to the fallback (since
+            # 2026-11-04), which does not lift, and the gap needs the lift.
             wrap_call = Call(
-                func=LoadName(name="wrap"),
+                func=LoadName(name="wrap" if i < 4 else "wrap2"),
                 args=(LoadName(name=f"c.CONST{i}"),),
                 kwargs=(),
             )
@@ -1379,13 +1382,13 @@ class TestNonAtomNestedInCellHeadArgUnreachable:
 
         globals_ = {f"c.CONST{i}": v for i, v in zip((1, 2, 3, 4), (100, 200, 300, 400))}
         globals_["wrap"] = "wrap"
-        globals_[FUNCTOR_SIGNATURES_KEY] = {"wrap": ("x",)}
+        globals_["wrap2"] = "wrap2"
+        globals_[FUNCTOR_SIGNATURES_KEY] = {"wrap": ("x",), "wrap2": ("x",)}
 
         fn = compile_predicate_trampoline("level", 2, clauses, None, globals_=globals_)
 
         # Both args ground: dispatch picks the MORE selective position-0
-        # index (4 distinct int keys) over position-1's single-key cell
-        # bucket, so the broken nested pattern is never exercised here --
+        # index (4 distinct int keys) over position-1's two cell buckets, so the broken nested pattern is never exercised here --
         # this direction is (and must stay) correct.
         results = _trampoline_solutions(fn, [3, ("wrap", 300)])
         assert len(results) == 1
