@@ -44,15 +44,21 @@ A ground result is a Clausal quantity:
   magnitude; a float magnitude is a ``Quantity`` with a float;
 * any other exact real magnitude (``sqrt(2)``, ``20/log(3)``) stays EXACT, as
   the Clausal arithmetic term ``Magnitude * Quantity(1, dims)``, e.g.
-  ``2**(1/2) * 1 (metre)``.  Comparison evaluates it; ``V is R`` (the seam's
-  ``eval_(R, V)``) gives the decimal ``Quantity`` when one is wanted, and a
-  further sympy call reads it back exactly;
+  ``2**(1/2) * 1 (metre)``, when the engine can evaluate every function in
+  it (otherwise a float; EXACT_IRRATIONAL_RESULTS is the one switch).
+  ``V is R`` (the seam's ``eval_(R, V)``) gives the decimal ``Quantity``;
+  compare and check units on ``V``.  A further sympy call reads ``R`` back
+  exactly;
 * a zero keeps the dimension the operation implies: the input's for
-  ``simplify``/``expand``/``factor`` (``3(kelvin) - 3(kelvin)`` is ``0(kelvin)``), the
-  variable's (from the constraints above) for a root of ``solve``;
-* a complex, infinite or NaN magnitude is refused with
+  ``simplify``/``expand``/``factor`` (``3(kelvin) - 3(kelvin)`` is
+  ``0(kelvin)``), the variable's (from the constraints above) for a root of
+  ``solve``; a zero SymPy makes later (``subs``, ``limit``) does not;
+* a complex, infinite or NaN value is refused with
   ``evaluation_error(undefined)``; ``solve``, ``solve_all`` and ``roots``
-  of an equation holding a quantity return the REAL roots only.
+  of an equation holding a quantity return its REAL roots (``real_roots``),
+  and SymPy giving up is ``system_error(no_symbolic_solution)``;
+* functions are classified by name (``_function_dimension``): a quantity
+  inside one the wrapper does not know is refused, never stripped.
 
 A result that still holds free variables stays symbolic (a ``SymExpr``)
 with its dimension symbols, which print as ``(kelvin)`` so they cannot be
@@ -254,6 +260,8 @@ class Analysis:
             else:
                 first.known + d.known      # Quantity's own check: UnitsMismatch
         representatives = list(groups.values())
+        # A known representative first: the sum's dimension is then known.
+        representatives.sort(key=lambda d: bool(d.unknown))
         head = representatives[0]
         for other in representatives[1:]:
             # head.known * head.unknown == other.known * other.unknown
@@ -305,15 +313,38 @@ def require_dimensionless(name: str, dimension: Dimension | None,
             f"{_dims_str(dimension.known.dims)}")
 
 
-#: Clausal function names whose value has their argument's dimension.
-_PRESERVING_NAMES = ("abs",)
-#: The same, as SymPy class names.
-_PRESERVING_CLASSES = ("Abs",)
+# -- Functions ---------------------------------------------------------------
+#
+# Every function the wrapper can build is in exactly one class, by name (the
+# Clausal functor, or the SymPy class name of what it becomes):
+#
+# * DIMENSION-PRESERVING: abs, max, min.  All arguments must share one
+#   dimension, and the value has it.
+# * POWERS: sqrt (1/2) and cbrt (1/3), judged as ``**``.
+# * Everything else NEEDS DIMENSIONLESS ARGUMENTS and gives a dimensionless
+#   value: the wrapper's own functions (log, exp, sin, ..., floor, ceiling,
+#   gamma, factorial), SymPy's other functions, and any name the wrapper
+#   does not know (log10, log2, sinh, cosh, tanh, f, ...), which SymPy keeps
+#   as an undefined function.  A quantity inside an unknown function is
+#   therefore REFUSED with units_mismatch: its dimension cannot be judged,
+#   and putting the magnitude back without its unit would be wrong.
+
+_PRESERVING_NAMES = frozenset({"abs", "Abs", "max", "Max", "min", "Min"})
+_POWER_NAMES = {"sqrt": _sp.Rational(1, 2), "cbrt": _sp.Rational(1, 3)}
+
+
+def _function_dimension(name: str, args: list, analysis: "Analysis") -> Dimension | None:
+    if name in _POWER_NAMES and len(args) == 1:
+        return _power(args[0], dimensionless(), _POWER_NAMES[name], analysis)
+    if name in _PRESERVING_NAMES:
+        return analysis.sum(args)
+    for a in args:
+        require_dimensionless(f"{name}/{len(args)}", a, analysis)
+    return dimensionless()
 
 
 def term_dimension(term: Any, analysis: Analysis, *,
-                   symbol_for_var: Callable, to_sympy: Callable,
-                   known_functions) -> Dimension | None:
+                   symbol_for_var: Callable, to_sympy: Callable) -> Dimension | None:
     """The dimension of a CLAUSAL term, carried node by node (before SymPy
     can fold anything).  Raises ``UnitsMismatch``."""
     def walk(t):
@@ -343,16 +374,7 @@ def term_dimension(term: Any, analysis: Analysis, *,
             base, exponent = walk(t.left), walk(t.right)
             return _power(base, exponent, to_sympy(t.right), analysis)
         if type(t) is tuple and len(t) >= 2 and type(t[0]) is str:
-            name, args = t[0], [walk(a) for a in t[1:]]
-            if name == "sqrt" and len(args) == 1:
-                return _power(args[0], dimensionless(), _sp.Rational(1, 2), analysis)
-            if name in _PRESERVING_NAMES and len(args) == 1:
-                return args[0]
-            if name in known_functions:
-                for a in args:
-                    require_dimensionless(name, a, analysis)
-                return dimensionless()
-            return None                    # an unknown function
+            return _function_dimension(t[0], [walk(a) for a in t[1:]], analysis)
         return sympy_dimension(to_sympy(t), analysis)
     return walk(term)
 
@@ -381,18 +403,14 @@ def sympy_dimension(expr: Any, analysis: Analysis) -> Dimension | None:
         return _power(sympy_dimension(base, analysis),
                       sympy_dimension(exponent, analysis),
                       exponent if exponent.is_Number else None, analysis)
-    if isinstance(expr, _sp.Function) and type(expr).__name__ in _PRESERVING_CLASSES:
-        return sympy_dimension(expr.args[0], analysis)
     if isinstance(expr, (_sp.Mod, _sp.core.relational.Relational)):
         return analysis.sum([sympy_dimension(a, analysis) for a in expr.args])
-    if isinstance(expr, _sp.Function) and not isinstance(
-            expr, _sp.core.function.AppliedUndef):
-        for argument in expr.args:
-            require_dimensionless(type(expr).__name__,
-                                  sympy_dimension(argument, analysis), analysis)
-        return dimensionless()
-    # Anything else (an undefined function, a Derivative, ...): check what
-    # is inside, claim nothing about the whole.
+    if isinstance(expr, (_sp.Function, _sp.Max, _sp.Min)):
+        return _function_dimension(
+            type(expr).__name__,
+            [sympy_dimension(a, analysis) for a in expr.args], analysis)
+    # Anything else (a Derivative, an Integral, ...): check what is inside,
+    # claim nothing about the whole.
     for argument in expr.args:
         if isinstance(argument, _sp.Expr):
             sympy_dimension(argument, analysis)
@@ -412,9 +430,139 @@ def real_magnitude(expr: Any) -> Any:
     return expr.subs({u: 1 for u in expr.atoms(_UnitSymbol)})
 
 
-def is_possibly_real(root: Any) -> bool:
-    """False only for a root SymPy knows is not real (``2*I*metre``)."""
-    return real_magnitude(root).is_extended_real is not False
+def _unit_product(dims) -> Any:
+    product = _sp.Integer(1)
+    for atom, exponent in dims.items():
+        product = product * unit_symbol(atom) ** exponent
+    return product
+
+
+# -- Real values -------------------------------------------------------------
+#
+# A quantity is real.  Where SymPy cannot say whether a magnitude is real
+# (a cubic's three real roots written with complex radicals, a LambertW
+# branch), it is evaluated to NUMERIC_DIGITS significant digits and kept iff
+# its imaginary part is at most TOLERANCE * (1 + |real part|); the value is
+# then the real part, a float.
+
+NUMERIC_DIGITS = 50
+TOLERANCE = _sp.Float("1e-25", NUMERIC_DIGITS)
+
+
+def real_value(magnitude: Any) -> Any:
+    """*magnitude* (no dimension symbols, no variables) as a real SymPy
+    number: itself when SymPy knows it is real, else its numeric real part
+    when the imaginary part is negligible.  None when it is not real, or
+    not finite."""
+    if magnitude is _sp.nan or magnitude.is_finite is False:
+        return None
+    real = magnitude.is_extended_real
+    if real is False:
+        return None
+    if real is True and not magnitude.has(_sp.I):
+        return magnitude
+    if magnitude.has(_sp.core.function.AppliedUndef):
+        return magnitude                   # f(3): nothing to evaluate
+    numeric = _sp.N(magnitude, NUMERIC_DIGITS)
+    if not numeric.is_number:
+        return magnitude if real is True else None
+    re_part, im_part = numeric.as_real_imag()
+    if not (re_part.is_finite and im_part.is_finite):
+        return None
+    if abs(im_part) > TOLERANCE * (1 + abs(re_part)):
+        return None
+    return _sp.Float(re_part, NUMERIC_DIGITS)
+
+
+class NoSymbolicSolution(Exception):
+    """SymPy could not solve an equation holding a quantity; the wrapper
+    reports ``error(system_error(no_symbolic_solution), _)`` rather than a
+    partial or empty answer."""
+
+
+def real_roots(equation: Any, symbol: Any, roots: list) -> list:
+    """The REAL roots of an equation holding a quantity, in increasing
+    order, each once, as ``(root, multiplicity)``: *roots* is a list of
+    ``(root, multiplicity)`` from SymPy.
+
+    A root with other variables in it is kept as it is (it cannot be
+    classified) and comes after the ground ones.  A ground root is kept iff
+    ``real_value`` gives a real number AND it satisfies the equation when
+    substituted back, numerically to TOLERANCE (SymPy's candidates for a
+    transcendental equation include spurious ones).  Two roots within
+    TOLERANCE of each other are one root.
+    """
+    ground, symbolic = [], []
+    equation_magnitude = real_magnitude(equation)
+    for root, multiplicity in roots:
+        if free_variables(root):
+            symbolic.append((root, multiplicity))
+            continue
+        dimension = sympy_dimension(root, Analysis())
+        value = real_value(real_magnitude(root))
+        if value is None:
+            continue
+        numeric = _sp.N(value, NUMERIC_DIGITS)
+        if not free_variables(equation_magnitude) - {symbol}:
+            residual = _sp.N(equation_magnitude.subs(symbol, numeric), NUMERIC_DIGITS)
+            if not residual.is_number or abs(residual) > TOLERANCE * (1 + abs(numeric)):
+                continue
+        units = _unit_product(dimension.known.dims) if dimension is not None else 1
+        ground.append((numeric, value * units, multiplicity))
+    ground.sort(key=lambda entry: entry[0])
+    distinct: list[list] = []
+    for numeric, root, multiplicity in ground:
+        if distinct and abs(numeric - distinct[-1][0]) <= TOLERANCE * (1 + abs(numeric)):
+            distinct[-1][2] += multiplicity
+            continue
+        distinct.append([numeric, root, multiplicity])
+    return [(root, multiplicity) for _, root, multiplicity in distinct] + symbolic
+
+
+# -- Back to Clausal ---------------------------------------------------------
+
+#: How a ground result whose magnitude is real but not rational (sqrt(2),
+#: 20/log(3)) comes back.  True: exact, as ``Magnitude * Quantity(1, dims)``
+#: (an arithmetic term; evaluate it for a decimal).  False: a float
+#: ``Quantity``.  The one switch for that choice.
+EXACT_IRRATIONAL_RESULTS = True
+
+
+#: SymPy functions whose Clausal spelling the engine's ``is`` evaluates
+#: (checked against clausal.logic.exact_arith.evaluate).  An exact
+#: magnitude using anything else (LambertW, gamma, ...) comes back as a
+#: float: an exact term the engine cannot evaluate would be a trap.
+_ENGINE_EVALUABLE_FUNCTIONS = frozenset({
+    "sin", "cos", "tan", "asin", "acos", "atan", "exp", "log", "Abs",
+    "ceiling", "floor"})
+
+
+def _engine_evaluable(magnitude: Any) -> bool:
+    if magnitude.has(_sp.I):
+        return False
+    for node in _sp.preorder_traversal(magnitude):
+        if isinstance(node, _sp.Function) and \
+                type(node).__name__ not in _ENGINE_EVALUABLE_FUNCTIONS:
+            return False
+        if node.is_NumberSymbol and node not in (_sp.pi, _sp.E):
+            return False
+    return True
+
+
+def _irrational_result(magnitude: Any, dims: dict, exact_term: Callable) -> Any:
+    if EXACT_IRRATIONAL_RESULTS and _engine_evaluable(magnitude):
+        return Mult(left=exact_term(magnitude), right=Quantity(1, dims))
+    return Quantity(float(_sp.N(magnitude, NUMERIC_DIGITS)), dims)
+
+
+def _lattice(expr: Any) -> Any:
+    """The wrapper's max/min (SymPy undefined functions) as SymPy's Max and
+    Min, so a ground max(3 kelvin, 5 kelvin) is 5 kelvin."""
+    lattice = {"max": _sp.Max, "min": _sp.Min}
+    return expr.replace(
+        lambda e: isinstance(e, _sp.core.function.AppliedUndef)
+        and type(e).__name__ in lattice,
+        lambda e: lattice[type(e).__name__](*e.args))
 
 
 def result_to_clausal(expr: Any, symbolic: Callable, exact_term: Callable,
@@ -425,20 +573,19 @@ def result_to_clausal(expr: Any, symbolic: Callable, exact_term: Callable,
     dims)``), used for a zero and checked against a non-zero.  A ground
     result is a quantity (see the module docstring); one with free variables
     is ``symbolic(expr)``.  *exact_term* turns an exact SymPy number into a
-    Clausal arithmetic term.
+    Clausal arithmetic term.  A magnitude that is not real and finite is
+    ``evaluation_error(undefined)``.
     """
     analysis = Analysis()
     dimension = sympy_dimension(expr, analysis)
     if free_variables(expr):
         return symbolic(expr)
-    if dimension is None and not expr.is_zero:
-        # An unknown function of a quantity, f(3(kelvin)): keep it symbolic.
-        if expr.is_number is False or expr.atoms(_sp.core.function.AppliedUndef):
-            return symbolic(expr)
-    magnitude = real_magnitude(expr)
-    if magnitude.is_finite is False or magnitude.is_extended_real is False \
-            or magnitude is _sp.nan:
+    expr = _lattice(expr)
+    value = real_value(real_magnitude(expr))
+    if value is None:
         raise _undefined()
+    if value.has(_sp.core.function.AppliedUndef):
+        return symbolic(expr)              # f(3) * 1 kelvin: stays symbolic
     if dimension is not None:
         dims = dict(dimension.known.dims)
         if expected is not None:
@@ -448,17 +595,16 @@ def result_to_clausal(expr: Any, symbolic: Callable, exact_term: Callable,
     else:
         dims = {}
     if not dims:
-        if magnitude.is_Integer:
-            return int(magnitude)
-        return symbolic(magnitude) if not magnitude.is_Float else float(magnitude)
-    if magnitude.is_Integer:
-        return Quantity(int(magnitude), dims)
-    if magnitude.is_Rational:
-        return Quantity(Fraction(int(magnitude.p), int(magnitude.q)), dims)
-    if magnitude.is_Float:
-        return Quantity(float(magnitude), dims)
-    # Exact but not rational (sqrt(2), 20/log(3)): keep it exact.
-    return Mult(left=exact_term(magnitude), right=Quantity(1, dims))
+        if value.is_Integer:
+            return int(value)
+        return float(value) if value.is_Float else symbolic(value)
+    if value.is_Integer:
+        return Quantity(int(value), dims)
+    if value.is_Rational:
+        return Quantity(Fraction(int(value.p), int(value.q)), dims)
+    if value.is_Float:
+        return Quantity(float(value), dims)
+    return _irrational_result(value, dims, exact_term)
 
 
 def unit_symbol_to_clausal(symbol: _UnitSymbol) -> Quantity:

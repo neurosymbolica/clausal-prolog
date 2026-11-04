@@ -389,8 +389,13 @@ class TestOtherPredicates:
         assert "(kelvin)" in str(text) and "kelvin + " in str(text)
         assert "mathrm{kelvin}" in str(answers(latex, kelvin(3), Var())[0][1])
 
-    def test_unknown_function_of_a_quantity_stays_symbolic(self):
-        (answer,) = answers(simplify, ("f", kelvin(3)), Var())
+    def test_unknown_function_of_a_quantity_is_refused(self):
+        # Its dimension cannot be judged; dropping the unit would be wrong.
+        with refused_as_units_mismatch():
+            answers(simplify, ("f", kelvin(3)), Var())
+
+    def test_unknown_function_of_a_number_stays_symbolic(self):
+        (answer,) = answers(simplify, Mult(left=("f", 3), right=kelvin(1)), Var())
         assert isinstance(answer[1], SymExpr)
 
     @pytest.mark.parametrize("function", ["ceiling", "cos", "tan"])
@@ -402,3 +407,127 @@ class TestOtherPredicates:
     def test_factor_keeps_the_dimension(self):
         (answer,) = answers(factor, Add(left=metre(6), right=metre(4)), Var())
         assert answer[1] == metre(10)
+
+
+# ── Second review (7ec542f3) ────────────────────────────────────────────────
+
+
+def no_symbolic_solution():
+    return pytest.raises(LogicException, match="no_symbolic_solution")
+
+
+class TestEveryFunctionIsClassified:
+    """Blocker 1: a unit inside a function the wrapper does not know is
+    refused, never stripped."""
+
+    @pytest.mark.parametrize("function", [
+        "log10", "log2", "sinh", "cosh", "tanh", "f", "gamma", "factorial",
+        "exp", "atan"])
+    def test_dimensioned_argument_is_refused(self, function):
+        with refused_as_units_mismatch():
+            answers(simplify, Add(left=(function, kelvin(100)), right=1), Var())
+
+    @pytest.mark.parametrize("function", ["log10", "sinh", "f"])
+    def test_dimensionless_argument_is_accepted(self, function):
+        ratio = Div(left=kelvin(100), right=kelvin(1))
+        assert answers(simplify, Add(left=(function, ratio), right=1), Var())
+
+    def test_unknown_function_beside_its_own_argument(self):
+        with refused_as_units_mismatch():
+            answers(simplify, Add(left=("f", kelvin(3)), right=kelvin(3)), Var())
+        with refused_as_units_mismatch():
+            answers(simplify, ("sin", ("f", kelvin(3))), Var())
+
+    @pytest.mark.parametrize("function", ["max", "min"])
+    def test_max_and_min_keep_one_dimension(self, function):
+        (answer,) = answers(simplify, Mult(left=(function, kelvin(3), kelvin(5)), right=2), Var())
+        assert answer[1] == (kelvin(10) if function == "max" else kelvin(6))
+        with refused_as_units_mismatch():
+            answers(simplify, (function, kelvin(3), pascal(5)), Var())
+
+    def test_cube_root_is_a_power(self):
+        volume = metre(8) * metre(1) * metre(1)
+        assert answers(simplify, ("cbrt", volume), Var())[0][1] == metre(2)
+        with refused_as_units_mismatch():
+            answers(simplify, ("cbrt", kelvin(8)), Var())
+
+
+class TestRealRoots:
+    """Blocker 2: an equation holding a quantity has real roots only,
+    numerically checked, sorted, each once; SymPy giving up is an error."""
+
+    def test_three_real_roots_written_with_complex_radicals(self):
+        x = Var()
+        equation = Add(left=Sub(left=Pow(left=x, right=3),
+                                right=Mult(left=Mult(left=3, right=x),
+                                           right=metre(1) * metre(1))),
+                       right=metre(1) * metre(1) * metre(1))
+        found = answers(solve_all, equation, x, Var())[0][2]
+        assert len(found) == 3
+        assert all(isinstance(r, Quantity) and dict(r.dims) == {"metre": 1} for r in found)
+        values = [r.value for r in found]
+        assert values == sorted(values)
+        for v in values:
+            assert abs(v ** 3 - 3 * v + 1) < 1e-12
+        solved = sorted(a[2].value for a in answers(solve, equation, x, Var()))
+        assert solved == values
+        rooted = [a[2] for a in answers(roots, equation, x, Var())]
+        assert [r[0].value for r in rooted] == values and all(r[1] == 1 for r in rooted)
+
+    def test_no_real_root_is_the_same_in_every_predicate(self):
+        x = Var()
+        equation = Add(left=Pow(left=x, right=2), right=metre(4) * metre(1))
+        assert answers(solve, equation, x, Var()) == []
+        assert answers(solve_all, equation, x, Var())[0][2] == []
+        assert answers(roots, equation, x, Var()) == []
+
+    def test_a_double_root_is_one_root_of_multiplicity_two(self):
+        x = Var()
+        equation = Pow(left=Sub(left=x, right=metre(3)), right=2)
+        assert answers(solve_all, equation, x, Var())[0][2] == [metre(3)]
+        assert [a[2] for a in answers(roots, equation, x, Var())] == [(metre(3), 2)]
+
+    def test_sympy_giving_up_is_a_named_error(self):
+        # x - cos(x / 1 kelvin) * 1 kelvin: no closed form.
+        x = Var()
+        equation = Sub(left=x, right=Mult(left=("cos", Div(left=x, right=kelvin(1))),
+                                          right=kelvin(1)))
+        with no_symbolic_solution():
+            answers(solve, equation, x, Var())
+        with no_symbolic_solution():
+            answers(solve_all, equation, x, Var())
+
+    def test_roots_that_finds_only_some_is_a_named_error(self):
+        # x**5 - x - 1 (in metres): roots/1 finds none of the five.
+        x = Var()
+        equation = Sub(left=Sub(left=Pow(left=x, right=5),
+                                right=Mult(left=x, right=Pow(left=metre(1), right=4))),
+                       right=Pow(left=metre(1), right=5))
+        with no_symbolic_solution():
+            answers(roots, equation, x, Var())
+
+    def test_plain_equations_are_unchanged(self):
+        x = Var()
+        assert len(answers(solve_all, Add(left=Pow(left=x, right=2), right=1), x, Var())[0][2]) == 2
+
+    def test_exact_forms_are_engine_evaluable(self):
+        from clausal.logic.exact_arith import evaluate
+        (answer,) = answers(simplify, ("sqrt", metre(2) * metre(1)), Var())
+        value = evaluate(answer[1])
+        assert isinstance(value, Quantity) and abs(value.value - 2 ** 0.5) < 1e-15
+
+
+class TestZeroDerivative:
+    def test_zero_derivative_keeps_a_known_dimension(self):
+        # X * 1 metre - X * 1 metre + 3 kelvin * 1 metre: X is a temperature,
+        # and d/dX of the whole is 0 metre.
+        x = Var()
+        term = Add(left=Sub(left=Mult(left=x, right=metre(1)), right=Mult(left=x, right=metre(1))),
+                   right=kelvin(3) * metre(1))
+        (answer,) = answers(diff, term, x, Var())
+        assert answer[2] == metre(0) and isinstance(answer[2], Quantity)
+
+    def test_zero_derivative_of_an_unconstrained_variable_is_a_plain_zero(self):
+        # Nothing says what X is, so 3 kelvin per X has no known dimension.
+        x = Var()
+        assert answers(diff, kelvin(3), x, Var())[0][2] == 0

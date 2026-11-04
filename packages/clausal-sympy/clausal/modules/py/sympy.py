@@ -45,7 +45,9 @@ from clausal.logic.variables import Var, Trail, is_var, unify
 
 from clausal.terms import plain_deref as deref  # noqa: PLC0415 -- a view leaves the engine as a list or a str
 from clausal.logic.trampoline import DONE
-from clausal.logic.exceptions import LogicException, instantiation_error, type_error
+from clausal.logic.exceptions import (
+    LogicException, instantiation_error, type_error, system_error,
+)
 from clausal.logic.cells import chars_text, is_chars
 from clausal.modules.py import (
     _import_stdlib, ModulePredicate, simple_to_trampoline, text_result, to_text,
@@ -303,8 +305,7 @@ def _check_units(ctx: _ConversionContext, terms: list) -> None:
     dimensions = [
         _sympy_units.term_dimension(
             t, analysis, symbol_for_var=ctx.var_to_symbol,
-            to_sympy=lambda u: _to_sympy_ctx(u, ctx),
-            known_functions=_SYMPY_FUNCTIONS)
+            to_sympy=lambda u: _to_sympy_ctx(u, ctx))
         for t in terms]
     ctx._dimensions = (analysis, dimensions)
 
@@ -455,6 +456,7 @@ _SYMPY_FUNCTIONS: dict[str, Any] = {
     "log": _sp.log,
     "ln": _sp.log,
     "sqrt": _sp.sqrt,
+    "cbrt": _sp.cbrt,
     "abs": _sp.Abs,
     "factorial": _sp.factorial,
     "gamma": _sp.gamma,
@@ -721,14 +723,42 @@ def _to_pyval(expr: _sp.Basic, expected: Any = None) -> Any:
     return SymExpr(expr)
 
 
-def _real_roots(ctx: _ConversionContext, var_expr, roots):
-    """The roots to answer with, each with the dimension the equation gives
-    the unknown.  An equation holding a quantity has REAL roots only (a
-    complex quantity is not a quantity), so ``X**2 + 4(metre**2)`` has none."""
+def _real_roots(ctx: _ConversionContext, eq_expr, var_expr, roots):
+    """The roots to answer with, as ``(root, multiplicity, dimension)``.
+
+    An equation holding a quantity has REAL roots only, numerically checked,
+    sorted and each once (_sympy_units.real_roots): none at all is no answer
+    (``[]`` for solve_all/3), and each root carries the dimension the
+    equation gives the unknown.  A plain equation is answered as SymPy
+    gives it, complex roots included."""
     if not ctx._has_units:
-        return [(r, None) for r in roots]
+        return [(r, m, None) for r, m in roots]
     expected = _variable_dimension(ctx, var_expr)
-    return [(r, expected) for r in roots if _sympy_units.is_possibly_real(r)]
+    return [(r, m, expected)
+            for r, m in _sympy_units.real_roots(eq_expr, var_expr, roots)]
+
+
+def _derivative_dimension(ctx: _ConversionContext, var_expr):
+    """The dimension of d term / d var, when both are known, so a zero
+    derivative keeps it.  A variable nothing constrains has no known
+    dimension, and then a zero derivative is a plain 0."""
+    term_dimension = _expected_dimension(ctx, 0)
+    variable_dimension = _variable_dimension(ctx, var_expr)
+    if term_dimension is None or variable_dimension is None:
+        return None
+    quotient = term_dimension / variable_dimension
+    return quotient if isinstance(quotient, _Quantity) else None
+
+
+def _solving(ctx: _ConversionContext, call, *args):
+    """``call(*args)``; for an equation holding a quantity, SymPy giving up
+    is ``system_error(no_symbolic_solution)``, never a partial answer."""
+    try:
+        return call(*args)
+    except NotImplementedError:
+        if ctx._has_units:
+            raise LogicException(system_error("no_symbolic_solution"))
+        raise
 
 
 def _convert_multi(*terms):
@@ -889,11 +919,12 @@ def _solve_3(this_generator, _proceed, _fail, _catcher, equation, var, solution,
     var = deref(var)
     try:
         ctx, eq_expr, var_expr = _convert_multi(equation, var)
-        solutions = _sp.solve(eq_expr, var_expr)
+        solutions = _solving(ctx, _sp.solve, eq_expr, var_expr)
     except (TypeError, ValueError):
         yield (_fail, DONE)
         return
-    for sol, expected in _real_roots(ctx, var_expr, solutions):
+    for sol, _, expected in _real_roots(
+            ctx, eq_expr, var_expr, [(r, 1) for r in solutions]):
         mark = trail.mark()
         out = _to_pyval(sol, expected)
         if unify(solution, out, trail):
@@ -911,9 +942,9 @@ def _solve_all_3(equation, var, solutions, trail, k):
     var = deref(var)
     try:
         ctx, eq_expr, var_expr = _convert_multi(equation, var)
-        sols = _sp.solve(eq_expr, var_expr)
-        out = [_to_pyval(s, expected)
-               for s, expected in _real_roots(ctx, var_expr, sols)]
+        sols = _solving(ctx, _sp.solve, eq_expr, var_expr)
+        out = [_to_pyval(s, expected) for s, _, expected
+               in _real_roots(ctx, eq_expr, var_expr, [(r, 1) for r in sols])]
     except (TypeError, ValueError):
         return
     if unify(solutions, out, trail):
@@ -944,7 +975,7 @@ def _diff_3(term, var, result, trail, k):
     var = deref(var)
     try:
         ctx, expr, var_expr = _convert_multi(term, var)
-        out = _to_pyval(_sp.diff(expr, var_expr))
+        out = _to_pyval(_sp.diff(expr, var_expr), _derivative_dimension(ctx, var_expr))
     except (TypeError, ValueError):
         return
     if unify(result, out, trail):
@@ -1266,13 +1297,14 @@ def _roots_3(this_generator, _proceed, _fail, _catcher, equation, var, root, tra
     var = deref(var)
     try:
         ctx, eq_expr, var_expr = _convert_multi(equation, var)
-        root_dict = _sp.roots(eq_expr, var_expr)
+        root_dict = _solving(ctx, _sp.roots, eq_expr, var_expr)
+        if ctx._has_units and sum(root_dict.values()) < _sp.degree(eq_expr, var_expr):
+            # roots/1 found only some: SymPy could not solve the rest.
+            raise LogicException(system_error("no_symbolic_solution"))
     except (TypeError, ValueError):
         yield (_fail, DONE)
         return
-    multiplicities = dict(root_dict)
-    for r, expected in _real_roots(ctx, var_expr, list(root_dict)):
-        mult = multiplicities[r]
+    for r, mult, expected in _real_roots(ctx, eq_expr, var_expr, list(root_dict.items())):
         mark = trail.mark()
         pair = (_to_pyval(r, expected), int(mult))
         if unify(root, pair, trail):

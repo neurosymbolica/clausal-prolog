@@ -192,3 +192,18 @@ test('complex roots: x squared + 4 square metres has no real root') <- (
     solve_all(X**2 + AREA, X, ROOTS),
     ROOTS == []
 )  # nv
+
+# --8<-- [start:log_mean_temperature_difference_inverse]
+# Which hot-end difference gives a log mean temperature difference of
+# 18 kelvin against a 10 kelvin cold-end difference?  SymPy offers 17
+# candidates (LambertW branches); exactly one is real and satisfies the
+# equation.
+test('the log mean temperature difference solved backwards has one real root') <- (
+    solve_all((X - 10(kelvin)) / log(X / 10(kelvin)) - 18(kelvin), X, [ROOT]),
+    has_units(ROOT, kelvin),
+    strip_units(ROOT, MAGNITUDE),
+    eval_((MAGNITUDE - 10) / log(MAGNITUDE / 10), BACK),
+    BACK > 17.9999999,
+    BACK < 18.0000001
+)  # nv
+# --8<-- [end:log_mean_temperature_difference_inverse]

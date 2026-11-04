@@ -107,14 +107,33 @@ What comes back:
   dimension of the input (`simplify(3(kelvin) - 3(kelvin))` is `0(kelvin)`);
 - a ground result with an irrational magnitude stays EXACT, as the Clausal
   arithmetic term `Magnitude * 1 (unit)`, e.g. `2**(1/2) * 1 (metre)` or
-  `20/log(3) * 1 (kelvin)`. Evaluate it to get a decimal quantity,
-  `eval_(R, V)` (`V is R` in Clausal Prolog), and compare `V`; a further
-  sympy call reads `R` back exactly (its square is exactly `2(metre**2)`);
+  `20/log(3) * 1 (kelvin)`, when the engine can evaluate every function in
+  it (`sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `exp`, `log`, `abs`,
+  `ceiling`, `floor`, `pi`, `e`); otherwise (a `LambertW`, a `gamma`) it is a
+  float quantity. Evaluate an exact term to get a decimal quantity,
+  `eval_(R, V)` (`V is R` in Clausal Prolog), and compare, `has_units/2` or
+  `strip_units/2` `V`, not `R`; a further sympy call reads `R` back exactly
+  (its square is exactly `2(metre**2)`);
 - a result that still holds a variable stays symbolic, dimension symbols
   included;
 - `solve/3`, `solve_all/3` and `roots/3` of an equation that holds a
-  quantity give its REAL roots only (`X**2 + 4(metre**2)` has none: `[]`); a
-  complex, infinite or NaN magnitude anywhere else is
+  quantity follow one rule. The answers are its REAL roots, in increasing
+  order, each once (`roots/3` adds up the multiplicities of roots that
+  coincide). A root SymPy knows is real stays exact. A root it cannot
+  classify (a cubic's real roots written with complex radicals, a
+  `LambertW` branch) is evaluated to 50 significant digits and kept, as a
+  float quantity of its real part, only if its imaginary part is at most
+  1e-25 times (1 + its real part's size). Every ground root is substituted
+  back into the equation and kept only if the residual is within the same
+  tolerance (SymPy's candidates for a transcendental equation include
+  spurious ones). No real root means no answer: `solve/3` fails, `solve_all/3`
+  gives `[]`, `roots/3` fails (`X**2 + 4(metre**2)`). SymPy unable to solve
+  the equation (`solve` gives up, or `roots` finds fewer roots than the
+  degree) is `error(system_error(no_symbolic_solution), _)`, never a partial
+  list. A root with another variable in it is kept symbolic, after the
+  ground ones. An equation without quantities is answered as SymPy gives
+  it, complex roots included;
+- a VALUE that is complex, infinite or NaN (`sqrt(-4(metre**2))`) is
   `evaluation_error(undefined)`, as is a quantity whose magnitude is
   infinite or NaN on the way in;
 - `gcd/3`, `lcm/3` and `sym_equal/2` refuse two quantities of different
@@ -137,9 +156,16 @@ A mismatch is the units system's own error, `error(system_error(units_mismatch),
 --8<-- "tests/fixtures/sympy_units.seam:dimension_mismatch"
 ```
 
-`log`, `exp`, the trigonometric functions, `floor` and `ceiling` need a
-dimensionless argument; a ratio of two temperature differences is one, and
-the log mean temperature difference comes back exact:
+Every function is in one of three classes. `abs`, `max` and `min` keep
+their arguments' one dimension (`max(3(kelvin), 5(pascal))` is refused).
+`sqrt` and `cbrt` are powers (`cbrt` of a volume is a length). Every other
+function needs dimensionless arguments and gives a dimensionless value:
+`log`, `exp`, the trigonometric functions, `floor`, `ceiling`, `gamma`,
+`factorial`, and any function the wrapper does not know (`log10`, `sinh`,
+`f`), whose dimension it cannot judge, so `log10(100(kelvin))` and
+`f(3(kelvin))` are refused with `units_mismatch`. A ratio of two
+temperature differences is dimensionless, and the log mean temperature
+difference comes back exact:
 
 ```seam
 --8<-- "tests/fixtures/sympy_units.seam:log_mean_temperature_difference"
@@ -151,6 +177,23 @@ an integer). A temperature is in kelvin and only differences are
 meaningful to the units system (there is no Celsius offset scale): enter a
 difference in millidegrees Celsius as kelvin over 1000, `12345(kelvin) / 1000`,
 which stays exact: 2469/200 times 1(kelvin).
+
+Solving the log mean temperature difference backwards, SymPy offers 17
+candidate roots; exactly one is real and satisfies the equation:
+
+```seam
+--8<-- "tests/fixtures/sympy_units.seam:log_mean_temperature_difference_inverse"
+```
+
+**Limitations.** A zero that SymPy produces AFTER the input has been
+checked carries no dimension, so it comes back as a plain `0`: `subs/3`
+putting `0` (or `0(kilogram/second)`) into `M * 4186(joule/kilogram/kelvin)
+* 1(kelvin)`, `limit(X * 1(kelvin) - 2(kelvin), X, 2)`, a root that is zero
+when the equation has a second unknown, and a zero polynomial coefficient.
+For the same reason a zero derivative `diff(3(kelvin), X, R)` is a plain
+`0`: nothing says what X is, so "kelvin per X" has no known dimension
+(when the expression does say, as in `X * 1(metre) - X * 1(metre) +
+3(kelvin) * 1(metre)`, the zero derivative is `0(metre)`).
 
 ---
 

@@ -32,8 +32,17 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `integrate/2`, `degree/2`, `free_vars/2` and `sym_equal/2` never treat
   them as variables; they print as `(kelvin)`. An irrational magnitude
   stays exact, as the arithmetic term `Magnitude * 1 (unit)` (evaluate it
-  for a decimal). An equation holding a quantity gives its real roots only;
-  a complex, infinite or NaN magnitude is `evaluation_error(undefined)`.
+  for a decimal) when the engine can evaluate every function in it, else a
+  float. An equation holding a quantity gives its real roots only, in
+  increasing order, each once, each checked by substitution; a root SymPy
+  cannot classify is evaluated to 50 digits and kept if its imaginary part
+  is negligible; SymPy unable to solve it is
+  `error(system_error(no_symbolic_solution), _)`. A complex, infinite or
+  NaN value is `evaluation_error(undefined)`. Every function is classified:
+  `abs`, `max`, `min` keep one dimension; `sqrt`, `cbrt` are powers; every
+  other function, including one the wrapper does not know (`log10`,
+  `sinh`, `f`), needs dimensionless arguments, so a quantity inside it is
+  refused rather than stripped. `cbrt/1` is now SymPy's cube root.
   `gcd/3`, `lcm/3` and `sym_equal/2` refuse mixed dimensions, `subs/3` a
   quantity as its key (`type_error(variable, _)`). Tests:
   `packages/clausal-sympy/tests/fixtures/sympy_units.seam`,
