@@ -181,3 +181,83 @@ def test_the_oracle_agrees(tmp_path):
         if got != expected:
             mismatches.append((goal, got, expected))
     assert not mismatches, mismatches
+
+
+# ---- FD constraints posted before promotion ---------------------------
+#
+# Operator ruling 2026-11-03 (an optimum is never a silent failure),
+# option B of
+# todo/clpq-fd-constraints-posted-before-promotion-are-not-in-the-relaxation-2026-11-04.md.
+# X #= Y + 3 posted while X and Y had no CLP(Q) state is clpfd's alone;
+# {D = X - Y} promotes their bounds only.  maximize(D) bound the
+# relaxation's optimum D = 4 (X = 5, Y = 1), clpfd refused it, and it
+# failed, though D = 3 is the answer; bb_inf over X and Y answered -4 on
+# the holzbaur solver.  They raise
+# representation_error(fd_constraint_not_in_relaxation) now, only where
+# clpfd refuses the optimum and the store alone takes it: an optimum that
+# satisfies the FD constraints answers as before, and so does the
+# Q-first order, whose constraint is in both stores.
+
+BEFORE_PL = """\
+:- use_module(library(clpq)).
+:- use_module(library(clpz)).
+mx(D) :- X in 1..5, Y in 1..5, X #= Y + 3, {D = X - Y}, maximize(D).
+mn(D) :- X in 1..5, Y in 1..5, X #= Y + 3, {D = Y - X}, minimize(D).
+global(D) :- X in 1..3, Y in 1..3, all_different([X, Y]), {D = X + Y},
+    maximize(D).
+narrowed_later(Y) :- X in 0..10, {Y = X, Y =< 8}, X in 0..5, maximize(Y).
+bb3(I) :- X in 1..5, Y in 1..5, X #= Y + 3, {D = X - Y}, bb_inf([X, Y], -D, I).
+bb5(I) :- X in 1..5, Y in 1..5, X #= Y + 3, {D = X - Y},
+    bb_inf([X, Y], -D, I, _, 1/1000).
+caught(F) :- X in 1..5, Y in 1..5, X #= Y + 3, {D = X - Y},
+    catch(maximize(D), error(F, _), true).
+satisfied(D) :- X in 0..10, Y in 0..10, X #=< Y, {D = X + Y}, maximize(D).
+narrowed_first(D) :- X in 0..10, Y in 0..10, X #< Y, {D = X + Y}, maximize(D).
+q_first(D) :- X in 1..5, Y in 1..5, {D = X - Y}, X #= Y + 3, maximize(D).
+q_first_bb(I) :- X in 1..5, Y in 1..5, {D = X - Y}, X #= Y + 3,
+    bb_inf([X, Y], -D, I).
+bounds_only(D) :- X in 1..5, Y in 1..5, {D = X - Y}, maximize(D).
+bb_satisfied(I) :- X in 0..10, Y in 0..10, X #=< Y, {D = X + Y},
+    bb_inf([X, Y], -D, I).
+not_fd(Y) :- X in 0..10, {Y = X}, dif(X, 10), maximize(Y).
+"""
+
+
+def _before_module(tmp_path, suffix):
+    path = tmp_path / f"fd_before{suffix}"
+    path.write_text(BEFORE_PL, encoding="utf-8")
+    return _load_module(path.stem, path)
+
+
+@pytest.mark.parametrize("suffix", [".pl", ".clausal"])
+@pytest.mark.parametrize("name", ["mx", "mn", "global", "narrowed_later",
+                                  "bb3", "bb5"])
+def test_an_fd_constraint_the_relaxation_lacks_is_refused(
+        tmp_path, suffix, name):
+    from clausal.logic.exceptions import LogicException
+    module = _before_module(tmp_path, suffix)
+    with pytest.raises(LogicException) as raised:
+        _answers(module, name, 1)
+    assert raised.value.term[1] == ("representation_error",
+                                    "fd_constraint_not_in_relaxation")
+
+
+@pytest.mark.parametrize("suffix", [".pl", ".clausal"])
+def test_the_refusal_can_be_caught(tmp_path, suffix):
+    assert _answers(_before_module(tmp_path, suffix), "caught", 1) == [
+        (("representation_error", "fd_constraint_not_in_relaxation"),)]
+
+
+@pytest.mark.parametrize("suffix", [".pl", ".clausal"])
+@pytest.mark.parametrize("name, expected", [
+    ("satisfied", [(20,)]),          # X = Y = 10 satisfies X #=< Y
+    ("narrowed_first", [(19,)]),     # X in 0..9 came along with its bounds
+    ("q_first", [(3,)]),
+    ("q_first_bb", [(-3,)]),
+    ("bounds_only", [(4,)]),
+    ("bb_satisfied", [(-20,)]),
+    ("not_fd", []),                  # dif/2 is no FD constraint: it fails
+])
+def test_an_optimum_the_fd_constraints_allow_is_kept(
+        tmp_path, suffix, name, expected):
+    assert _answers(_before_module(tmp_path, suffix), name, 1) == expected

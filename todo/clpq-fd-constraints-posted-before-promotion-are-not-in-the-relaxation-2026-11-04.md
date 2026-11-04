@@ -1,6 +1,13 @@
 # CLP(FD) constraints posted before promotion are not in the CLP(Q) relaxation (2026-11-04)
 
-**Status: OPEN, needs an operator ruling.**
+**Status: PARTLY FIXED 2026-11-04 (option B, see below; operator ruling
+2026-11-03, never a silent failure).** maximize, minimize and bb_inf raise
+`representation_error(fd_constraint_not_in_relaxation)` where clpfd
+refuses the relaxation's optimum through a constraint the store does not
+hold, both solvers. Pinned in tests/test_clpq_fd_dual_post.py::
+test_an_fd_constraint_the_relaxation_lacks_is_refused (and
+test_an_optimum_the_fd_constraints_allow_is_kept). Open: option A, so
+that such programs get their answer (`D = 3`) instead of the error.
 
 Found 2026-11-04 by the CLP(Q) coverage work, both solvers (`legacy`,
 `holzbaur`). Severity: a silent failure where an answer exists.

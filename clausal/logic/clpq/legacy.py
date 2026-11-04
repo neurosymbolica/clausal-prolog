@@ -29,6 +29,7 @@ from clausal.logic.variables import (
     Var,
     Trail,
     deref,
+    del_attr,
     is_var,
     unify,
     put_attr,
@@ -2288,13 +2289,53 @@ def _bind_optimal(tableau: Tableau, trail: Trail,
             var = deref(var)
             if is_var(var) and vid in values:
                 _refuse_fd_relaxation(var, values[vid], context)
-    for vid, var in list(tableau._var_map.items()):
-        var = deref(var)
-        if not is_var(var) or vid not in values:
-            continue
-        if not unify(var, present_number(values[vid]), trail):
-            return False
-    return True
+    items = list(tableau._var_map.items())
+
+    def bind_all():
+        for vid, var in items:
+            var = deref(var)
+            if not is_var(var) or vid not in values:
+                continue
+            if not unify(var, present_number(values[vid]), trail):
+                return False
+        return True
+
+    if context is None:
+        return bind_all()
+    mark = trail.mark()
+    if bind_all():
+        return True
+    _refuse_fd_constraint_outside(items, values, bind_all, mark, trail,
+                                  context)
+    return False
+
+
+def _refuse_fd_constraint_outside(items, values, bind_all, mark, trail,
+                                  context: str) -> None:
+    """The optimum's values are integral and in their FD domains (checked
+    before binding), yet binding them failed.  Bind them again with the
+    FD attributes set aside: when that succeeds, clpfd refused them
+    through a constraint of its own that the tableau does not hold
+    (posted before promotion, or not linear), so the relaxation's optimum
+    is no answer: representation_error(fd_constraint_not_in_relaxation)
+    (operator ruling 2026-11-03, never a silent failure).  Otherwise the
+    failure stands.  The trail is undone to *mark* either way."""
+    from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+    trail.undo(mark)
+    relaxed = False
+    try:
+        held = False
+        for vid, var in items:
+            var = deref(var)
+            if is_var(var) and vid in values and get_attr(var, FD_KEY) is not None:
+                del_attr(var, FD_KEY, trail)
+                held = True
+        relaxed = held and bind_all()
+    finally:
+        trail.undo(mark)
+    if relaxed:
+        raise LogicException(
+            representation_error("fd_constraint_not_in_relaxation", context))
 
 
 def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:

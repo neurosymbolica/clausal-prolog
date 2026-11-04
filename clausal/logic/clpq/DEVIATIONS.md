@@ -2027,14 +2027,34 @@ gives an answer or a silent failure:
   store too, so `X in 1..5, {2*X >= 3}, bb_inf([], X, I)` raises the
   integrality error there; the port's bb_inf binds nothing, as in 1.3.3,
   and gives the relaxed 3/2 (X is not in its integer list).
-- Not covered: a CLP(FD) constraint posted between FD variables before
-  either had CLPQ_KEY state (`X #= Y + 3`, then `{D = X - Y}`) is not in
-  the CLP(Q) store; an optimum clpfd's propagation then refuses still
-  fails (`maximize(D)` above: the relaxation's D = 4 binds X = 5, Y = 1).
-  Posted once the variables have CLPQ_KEY state, it reaches both stores
-  (D20's dual post) and maximize(D) gives D = 3.  Options for the first
-  order are in
-  todo/clpq-fd-constraints-posted-before-promotion-are-not-in-the-relaxation-2026-11-04.md.
+- A CLP(FD) constraint posted between FD variables before either had
+  CLPQ_KEY state (`X #= Y + 3`, then `{D = X - Y}`) is not in the CLP(Q)
+  store, nor is a non-linear or global one (all_different/1), nor a
+  domain narrowed after promotion (the C twin does not sync it, D20).
+  maximize(D) bound the relaxation's D = 4 (X = 5, Y = 1), clpfd refused
+  it, and it failed, though D = 3 is the answer; the port's bb_inf([X,
+  Y], -D, I) answered I = -4.  They now raise
+  `representation_error(fd_constraint_not_in_relaxation)` (operator
+  ruling 2026-11-03, option B of
+  todo/clpq-fd-constraints-posted-before-promotion-are-not-in-the-relaxation-2026-11-04.md).
+  On the port, maximize/minimize read it in `_post_optimum`'s second post
+  (above): when the relaxation alone succeeds with integral values the
+  first post's failure was clpfd's, and the error is raised.  bb_inf
+  binds nothing, so after bb.pl's answer the FD variables of its integer
+  list are bound to the integral point (the Vertex, which bb_inf/3 now
+  creates in `holzbaur.bb_inf` and hands to bb.pl as the fresh variable
+  1.3.3 makes, `vertex_out`) on trial, undone either way: refused by
+  clpfd and taken with their FD attributes set aside, it raises.  bb.pl's
+  algorithm and answer are unchanged; only a refusal is added.  Legacy
+  binds the store in `_bind_optimal`: a failed binding is undone and
+  tried again without the FD attributes, with the same outcome.  An
+  optimum the FD constraints allow answers as before, and a constraint
+  posted once the variables have CLPQ_KEY state reaches both stores
+  (D20), so maximize(D) gives D = 3 there.  The check does not search:
+  where no integer solution exists at all, it raises where the store
+  failed before, as the integrality refusal does.  dif/2 and other
+  constraints that are not clpfd's are not set aside, so an optimum they
+  refuse still fails (`tests/test_clpq_fd_dual_post.py`, both solvers).
 
 Tests: `tests/test_clpq_fd_promotion_optima.py`
 (`test_an_optimum_the_relaxation_cannot_answer_is_refused`,

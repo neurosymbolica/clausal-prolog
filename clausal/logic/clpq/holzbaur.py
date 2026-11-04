@@ -279,12 +279,13 @@ def _post_optimum(post, expr, fd_variables, context, trail):
         return False
     trail.undo(mark)
     from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
-    fractional = False
+    relaxed = fractional = False
     try:
         for variable in fd_variables:
             if is_var(deref(variable)):
                 del_attr(deref(variable), FD_KEY, trail)
         if _without_a_queue(trail, lambda: post(expr, trail)):
+            relaxed = True
             fractional = not all(_is_integral(deref(variable))
                                  for variable in fd_variables)
     finally:
@@ -292,6 +293,12 @@ def _post_optimum(post, expr, fd_variables, context, trail):
     if fractional:
         raise LogicException(
             representation_error("fd_relaxation_not_integral", context))
+    if relaxed:
+        # Integral, and in the domains (holes were refused before the
+        # post): what clpfd refused is a constraint of its own that the
+        # store does not hold (posted before promotion, or not linear).
+        raise LogicException(
+            representation_error("fd_constraint_not_in_relaxation", context))
     return False
 
 
@@ -730,10 +737,62 @@ def bb_inf(int_vars, expr, result_var, trail, vertex=None, epsilon=None):
         return False
     refuse_fd_holes_reached([v for v in integers if is_var(deref(v))],
                             context)
-    return _optimum(
-        lambda objective, value, trail: _branch_and_bound.bb_inf(
-            integers, objective, value, trail, vertex, epsilon),
-        expr, deref(result_var), dims, trail)
+    # bb_inf/3 is bb_inf/5 with a fresh Vertex (bb.pl); the fresh Vertex
+    # is made here, so the integral point can be read back.
+    point = Var() if vertex is None else vertex
+    if not _optimum(
+            lambda objective, value, trail: _branch_and_bound.bb_inf(
+                integers, objective, value, trail, vertex, epsilon,
+                vertex_out=point),
+            expr, deref(result_var), dims, trail):
+        return False
+    _refuse_fd_vertex(integers, point, context, trail)
+    return True
+
+
+def _refuse_fd_vertex(integers, vertex, context, trail):
+    """bb_inf's integral point (*vertex*) gives the FD variables among
+    *integers* values in their domains (holes were refused).  If clpfd
+    refuses those values through a constraint of its own that the store
+    does not hold (posted before promotion, or not linear), while the
+    store alone takes them, the infimum is the relaxation's, not an
+    answer: representation_error(fd_constraint_not_in_relaxation)
+    (operator ruling 2026-11-03, DEVIATIONS.md D29).  A trial binding,
+    undone either way; bb.pl's answer is not changed."""
+    from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+    values = deref(vertex)
+    if not isinstance(values, list):
+        return
+    pairs = []
+    for variable, value in zip(integers, values):
+        variable, value = deref(variable), deref(value)
+        if (is_var(variable) and type(variable) is not PlainVar
+                and not is_var(value)
+                and get_attr(variable, FD_KEY) is not None):
+            pairs.append((variable, value))
+    if not pairs:
+        return
+
+    def bind_all():
+        return _without_a_queue(trail, lambda: all(
+            unify(variable, value, trail) for variable, value in pairs))
+
+    mark = trail.mark()
+    relaxed = False
+    try:
+        if bind_all():
+            return
+        trail.undo(mark)
+        for variable, _ in pairs:
+            variable = deref(variable)
+            if is_var(variable):
+                del_attr(variable, FD_KEY, trail)
+        relaxed = bind_all()
+    finally:
+        trail.undo(mark)
+    if relaxed:
+        raise LogicException(representation_error(
+            "fd_constraint_not_in_relaxation", context))
 
 
 # ---------------------------------------------------------------- entailed

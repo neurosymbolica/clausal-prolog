@@ -16,10 +16,21 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `X = 5, Y = 2`, as Clausal now does. Applies to a comparison that is
   linear with integer coefficients over variables that all have FD state;
   one with a rational or fresh variable stays CLP(Q)'s alone, and `{}/1`
-  still does not narrow an FD domain (as in Scryer). An FD constraint
-  posted before its variables had CLP(Q) state is still not in the
-  relaxation (open: `todo/clpq-fd-constraints-posted-before-promotion-are-not-in-the-relaxation-2026-11-04.md`;
-  DEVIATIONS.md D20, D29, docs/clpq.md).
+  still does not narrow an FD domain (as in Scryer) (DEVIATIONS.md D20,
+  docs/clpq.md).
+
+- **CLP(Q) optima refuse what clpfd's own constraints rule out**
+  (operator ruling 2026-11-03), both solvers. An FD constraint posted
+  before its variables had CLP(Q) state, a non-linear or global one, or a
+  domain narrowed after promotion is not in the relaxation:
+  `X in 1..5, Y in 1..5, X #= Y + 3, {D = X - Y}, maximize(D)` failed
+  (the relaxation's `D = 4` binds `X = 5, Y = 1`), and `bb_inf([X, Y], -D,
+  I)` answered `I = -4` under `holzbaur`. When clpfd refuses the
+  relaxation's optimum that way, `maximize`, `minimize` and `bb_inf` raise
+  `representation_error(fd_constraint_not_in_relaxation)`. Optima the FD
+  constraints allow keep their answers (DEVIATIONS.md D29, docs/clpq.md;
+  replaying such constraints into CLP(Q) is open in
+  `todo/clpq-fd-constraints-posted-before-promotion-are-not-in-the-relaxation-2026-11-04.md`).
 
 - **CLP(Q) optima over CLP(FD) variables never answer from the
   relaxation** (operator ruling 2026-11-03), both solvers. `maximize`,

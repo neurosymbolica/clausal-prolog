@@ -879,13 +879,26 @@ the FD side refuses it (operator ruling 2026-11-03):
   bb_inf([], X, I)` gives `I = 3/2`, the relaxation, as asked; list `X` for
   `I = 2`. The default solver binds the store at the optimum and raises
   `fd_relaxation_not_integral` there.
-
-An FD constraint posted between FD variables before they had CLP(Q)
-state (`X #= Y + 3` ahead of `{D = X - Y}`) is not in the CLP(Q) store:
-`X in 1..5, Y in 1..5, X #= Y + 3, {D = X - Y}, maximize(D)` fails, since
-the relaxation's optimum `D = 4` binds `X = 5, Y = 1`, which clpfd
-refuses. Posted after (`{D = X - Y}, X #= Y + 3`), it reaches both stores,
-and `D = 3`. (Scryer fails both: its clpq does not see clpz's bounds.)
+- An FD constraint posted between FD variables before they had CLP(Q)
+  state (`X #= Y + 3` ahead of `{D = X - Y}`) is not in the CLP(Q) store.
+  When clpfd refuses the relaxation's optimum through such a constraint
+  (one posted before promotion, a non-linear or global one such as
+  `all_different/1`, or a domain narrowed after promotion), while the
+  store alone takes it, `maximize`, `minimize` and `bb_inf` raise
+  `representation_error(fd_constraint_not_in_relaxation)` (operator
+  ruling 2026-11-03): `X in 1..5, Y in 1..5, X #= Y + 3, {D = X - Y},
+  maximize(D)` failed, since the relaxation's `D = 4` binds `X = 5, Y = 1`,
+  and `bb_inf([X, Y], -D, I)` gave `I = -4` under `holzbaur`. For
+  `bb_inf` the check is a trial binding of the FD variables of its
+  integer list to the integral point; the store is left as it was. An
+  optimum the FD constraints allow answers as before (`X #=< Y,
+  {D = X + Y}, maximize(D)` gives `D = 20`). The check does not search:
+  where the program has no integer solution at all, it raises too, as the
+  integrality refusal does. Posted after promotion (`{D = X - Y},
+  X #= Y + 3`), the constraint reaches both stores, and `D = 3`. (Scryer
+  fails both orders: its clpq does not see clpz's bounds.) Constraints
+  that are not CLP(FD)'s, such as `dif/2`, are not checked: an optimum
+  they refuse fails.
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:fd_q_coexistence"
