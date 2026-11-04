@@ -191,15 +191,18 @@ def _detag_vars(expr: Any, ctx: "_ConversionContext") -> Any:
     ordinary caught conversion failure (-> ``type_error(sympy_expression,
     ...)`` from ``sympy_term/2`` itself, a plain failed goal from
     everything else) instead of a process-level crash.
+
+    The cycle is detected exactly by :func:`_to_sympy_ctx`'s walk of
+    the Vars it is inside (it raises :class:`_CyclicTerm`, a
+    ``ValueError``), not by catching ``RecursionError``: that cost ~1000
+    frames, fired on long acyclic chains too, and would have hidden a
+    SymPy-internal ``RecursionError``.
     """
     tagged = {s for s in expr.free_symbols if isinstance(s, _VarSymbol)}
     if not tagged:
         return expr
-    try:
-        replace_map = {s: _to_sympy_ctx(s._clausal_var, ctx) for s in tagged
-                       if s._clausal_var is not None}
-    except RecursionError:
-        raise ValueError("sympy_term/2: cyclic variable binding")
+    replace_map = {s: _to_sympy_ctx(s._clausal_var, ctx) for s in tagged
+                   if s._clausal_var is not None}
     return expr.xreplace(replace_map) if replace_map else expr
 
 
@@ -228,12 +231,15 @@ def _untag_vars(term: Any) -> Any:
 class _ConversionContext:
     """Bidirectional mapping between Clausal Vars and SymPy Symbols."""
 
-    __slots__ = ("_var_to_sym", "_sym_to_var", "_counter")
+    __slots__ = ("_var_to_sym", "_sym_to_var", "_counter", "_inside")
 
     def __init__(self) -> None:
         self._var_to_sym: dict[int, _sp.Symbol] = {}   # Var._id -> Symbol
         self._sym_to_var: dict[str, Var] = {}           # Symbol.name -> Var
         self._counter: int = 0
+        # id() of each Var _to_sympy_ctx is currently converting through:
+        # meeting one again means the term is cyclic.
+        self._inside: set[int] = set()
 
     def var_to_symbol(self, v: Var) -> _sp.Symbol:
         """Get or create a SymPy Symbol for a Clausal Var."""
@@ -274,8 +280,30 @@ def _to_sympy(term: Any, ctx: _ConversionContext | None = None) -> _sp.Expr:
     return _to_sympy_ctx(term, ctx)
 
 
+class _CyclicTerm(ValueError):
+    """A term that contains itself: ``X = f(X)`` (no occurs check), or
+    the ``sympy_term/2`` tag cycle described in :func:`_detag_vars`.
+    A ``ValueError``, so every predicate's existing conversion-failure
+    handling applies to it."""
+
+
 def _to_sympy_ctx(term: Any, ctx: _ConversionContext) -> _sp.Expr:
-    term = deref(term)
+    # Every cycle in a term passes through a bound Var (a binding is the
+    # only way a term can contain itself), so tracking the Vars on the
+    # current path finds it exactly, at the first repeat.
+    if isinstance(term, Var):
+        key = id(term)
+        if key in ctx._inside:
+            raise _CyclicTerm("cyclic term: a variable is bound to a term containing it")
+        ctx._inside.add(key)
+        try:
+            return _to_sympy_value(deref(term), ctx)
+        finally:
+            ctx._inside.discard(key)
+    return _to_sympy_value(deref(term), ctx)
+
+
+def _to_sympy_value(term: Any, ctx: _ConversionContext) -> _sp.Expr:
 
     # Free variable -> Symbol
     if is_var(term):
@@ -351,8 +379,11 @@ def _to_sympy_ctx(term: Any, ctx: _ConversionContext) -> _sp.Expr:
     if isinstance(term, str):
         return _sp.Symbol(term)
 
-    # Fallback: try to use as-is (e.g. sympy.pi passed through)
-    return _sp.sympify(term)
+    # Nothing else converts. Never fall back to ``sympify``: it parses
+    # strings inside lists, tuples and dicts with ``eval``, so a term
+    # like ["__import__('os').system(...)"] would run Python. A SymPy
+    # value such as ``pi`` arrives as a ``Basic`` and is handled above.
+    raise TypeError(f"no SymPy form for a {type(term).__name__} term")
 
 
 # Known function name -> SymPy function mapping
