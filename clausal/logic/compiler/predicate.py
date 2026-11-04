@@ -1092,7 +1092,9 @@ def _build_predicate_trampoline_funcdef_impl(
     # Long conjunctions in these arms may be cut into segment functions
     # (``body_segments``), hoisted below; never in a TRO function, whose
     # body restarts in place.
-    _segment_list: "list | None" = [] if (_segments and not use_tro) else None
+    from .body_segments import SegmentList
+    _segment_list: "list | None" = (
+        SegmentList() if (_segments and not use_tro) else None)
     ctx_template.body_segments = _segment_list
     # The clause arms in order (the plain, non-list-dispatch shape), for the
     # FINAL pass: an arm's answer is final when every later arm's first-

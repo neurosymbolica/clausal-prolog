@@ -316,17 +316,20 @@ def test_nested_long_conjunctions_are_lowered_a_bounded_number_of_times(
     # long conjunction inside a long conjunction inside ... was lowered
     # 2**depth times: depth 10 took 7 s to load
     # (todo/done/load-time-doubles-per-nested-negation-mark-undo-invariant-2026-10-16.md).
-    # Each sequence is now folded at most twice.
+    # Each sequence is now folded at most twice: a nested one its own fold
+    # cut is not lowered again by the refold (it calls the same chain).
     monkeypatch.delenv(body_segments.ENV_VAR, raising=False)
     depth = 14
     calls = 0
     real = body_segments.fold_sequence
+    # Two predicates, each with depth + 1 sequences (the clause body too).
+    bound = 2 * 2 * (depth + 1)
 
     def counting(*args, **kwargs):
         nonlocal calls
         calls += 1
-        if calls > 4 * depth:
-            raise AssertionError(f"fold_sequence called over {4 * depth} times")
+        if calls > bound:
+            raise AssertionError(f"fold_sequence called over {bound} times")
         return real(*args, **kwargs)
 
     monkeypatch.setattr(body_segments, "fold_sequence", counting)
@@ -339,40 +342,144 @@ def test_nested_long_conjunctions_are_lowered_a_bounded_number_of_times(
     assert _run(m, ("q", 1)) == []
 
 
-def test_a_long_conjunction_in_a_refolded_one_compiles_as_before(
+def test_a_long_conjunction_in_a_refolded_one_is_cut_too(
         tmp_path, monkeypatch):
     # A long conjunction nested in one that is refolded in segments left
-    # the inner fold's segments unreached, so hoisting always refused and
-    # the predicate was rebuilt without segments.  The refusal now comes
-    # before the refold; the code is the same as with segmentation off.
-    dumps = []
-    real = codegen.functiondef_to_function
-
-    def spy(node, globals_=None, filename="<template>", **kw):
-        if node.name.startswith("p__"):
-            dumps.append((_canonical(ast.dump(node, include_attributes=True)),
-                          getattr(node, "_clausal_segments", None)))
-        return real(node, globals_, filename, **kw)
-
-    monkeypatch.setattr("clausal.logic.compiler.predicate.functiondef_to_function", spy)
+    # the inner fold's segments unreached, so the predicate was refused and
+    # rebuilt without segments (by the outliner, which dies on a long
+    # enough body).  The refold now calls the inner fold's chain.
     monkeypatch.delenv(body_segments.ENV_VAR, raising=False)
+    refused = _record_refusals(monkeypatch)
     src = f"""
         r(1).
         p(yes) :- {_nested_long_negations(3)}.
+        q(yes) :- {_nested_long_negations(3)}, r(2).
         """
-    _load(tmp_path, src)
+    hoisted = _record_hoisted(monkeypatch)
+    m = _load(tmp_path, src)
+    assert not refused, refused
+    assert len(hoisted) >= 4
+    assert _run(m, ("p", 1)) == ["yes"]
+    assert _run(m, ("q", 1)) == []
+
+
+def _record_refusals(monkeypatch):
+    """Every ``SegmentRefused`` raised, wherever it is caught."""
+    refused: list = []
+    real = body_segments.SegmentRefused.__init__
+
+    def init(self, *args):
+        refused.append(args)
+        real(self, *args)
+
+    monkeypatch.setattr(body_segments.SegmentRefused, "__init__", init)
+    return refused
+
+
+def _record_hoisted(monkeypatch):
+    hoisted: list = []
+    real = body_segments.hoist_segments
+
+    def spy(func_def, segments):
+        funcs = real(func_def, segments)
+        hoisted.extend(funcs)
+        return funcs
+
+    monkeypatch.setattr(body_segments, "hoist_segments", spy)
+    return hoisted
+
+
+# ── the production path: plain fold first, refold when too deep ────────────
+#
+# ``CLAUSAL_BODY_SEGMENT_HEIGHT`` cuts every sequence without folding it
+# plain first.  The default thresholds fold plain, then refold a sequence
+# that turns out too deep; these tests lower the thresholds so that path
+# runs over short programs, with long conjunctions nested in catch/3,
+# if-then-else, \\+, disjunction and findall/3 inside long ones.
+
+_CHAIN = ", ".join(f"q(W{i}, W{i + 1})" for i in range(8))
+
+NESTED = f"""
+q(X, Y) :- Y is X + 1.
+r(1).
+r(2).
+
+n_catch(L) :- r(A), q(A, B), q(B, C),
+              catch((W0 = C, {_CHAIN}), _, true), r(Z), L = [A, C, W8, Z].
+n_catch_throw(L) :- r(A), q(A, B),
+              catch((W0 = B, {_CHAIN}, W8 > 9, throw(big(W8))), big(E), W8 = E),
+              r(Z), L = [A, W8, Z].
+n_ite(L) :- r(A), q(A, B), q(B, C),
+            ( r(Z) -> W0 = C, {_CHAIN} ; W8 = none, Z = none ), r(D), L = [A, W8, Z, D].
+n_ite_else(L) :- r(A), q(A, B), q(B, C),
+            ( A > 5 -> W8 = none ; W0 = C, {_CHAIN} ), r(D), L = [A, W8, D].
+n_naf(L) :- r(A), q(A, B), q(B, C),
+            \\+ (W0 = C, {_CHAIN}, W8 < A), r(Z), L = [A, C, Z].
+n_or(L) :- r(A), q(A, B), q(B, C),
+           ( W0 = C, {_CHAIN}, r(W9) ; W8 = A, W9 = 0 ), r(Z), L = [A, W8, W9, Z].
+n_findall(L) :- r(A), q(A, B), q(B, C),
+           findall(W8, (r(W0), {_CHAIN}), S), r(Z), L = [A, S, Z].
+n_deep(L) :- r(A), q(A, B), q(B, C),
+             catch(( r(Z) -> W0 = C, {_CHAIN},
+                     \\+ (q(W8, X0), {_CHAIN.replace("W", "X")}, X8 < 0) ; Z = 0 ),
+                   _, true),
+             r(D), L = [A, W8, Z, D].
+n_cut_cond(L) :- r(A), r(B), ( r(C), C > A, !, r(D), D > B -> r(E), E > C ; E = 0, C = 0, D = 0 ),
+                 r(F), L = [A, B, C, D, E, F].
+"""
+
+NESTED_QUERIES = [(n, 1) for n in (
+    "n_catch", "n_catch_throw", "n_ite", "n_ite_else", "n_naf", "n_or",
+    "n_findall", "n_deep", "n_cut_cond")]
+
+
+def _production(monkeypatch, split_above):
+    monkeypatch.delenv(body_segments.ENV_VAR, raising=False)
+    monkeypatch.setattr(body_segments, "SPLIT_ABOVE", split_above)
+    monkeypatch.setattr(body_segments, "MIN_OPS", 2)
+    monkeypatch.setattr(body_segments, "SEGMENT_HEIGHT", 2)
+
+
+@pytest.mark.parametrize("split_above", [1, 3, 6])
+def test_nested_long_goals_on_the_production_path(tmp_path, monkeypatch, split_above):
+    refused = _record_refusals(monkeypatch)
+    hoisted = _record_hoisted(monkeypatch)
+    _production(monkeypatch, split_above)
+    m = _load(tmp_path, NESTED)
+    split = {q: _run(m, q) for q in NESTED_QUERIES}
+    assert hoisted, "nothing was cut into segments"
+    assert not refused, refused
     monkeypatch.setattr(body_segments, "SPLIT_ABOVE", 10 ** 9)
-    _load(tmp_path, src)
-    assert len(dumps) == 2
-    assert dumps[0][1] is None and dumps[1][1] is None
-    # The rebuild's fresh names continue the refused build's numbering.
-    assert _fresh_numbered(dumps[0][0]) == _fresh_numbered(dumps[1][0])
+    count = len(hoisted)
+    m = _load(tmp_path, NESTED)
+    plain = {q: _run(m, q) for q in NESTED_QUERIES}
+    assert len(hoisted) == count, "the plain run cut segments"
+    bad = [q for q in NESTED_QUERIES if split[q] != plain[q]]
+    assert not bad, {q: (split[q], plain[q]) for q in bad}
+    assert plain[("n_catch", 1)] == [[a, a + 2, a + 10, z]
+                                     for a in (1, 2) for z in (1, 2)]
 
 
-def _fresh_numbered(text):
-    """Fresh names (``_gen12``, ``_naf_gen_fn7``) numbered by first use."""
-    import re
-    seen: dict = {}
-    return re.sub(r"\b(_[A-Za-z_]+?)(\d+)\b",
-                  lambda mo: seen.setdefault(mo.group(), f"{mo.group(1)}#{len(seen)}"),
-                  text)
+def test_a_nested_catch_in_a_body_too_long_for_the_outliner(tmp_path, monkeypatch):
+    # 12000 goals with a 30-goal catch/3 near the end: the catch is cut
+    # while folding the body plain, the body is refolded.  It was refused
+    # and rebuilt by the outliner, which died (``GeneratedCodeError``:
+    # maximum recursion depth exceeded).  A 12000-goal body takes about
+    # 15 s to load with or without the catch.
+    def no_outliner(node, force=False):
+        raise AssertionError("the outliner ran")
+
+    monkeypatch.delenv(body_segments.ENV_VAR, raising=False)
+    monkeypatch.setattr(codegen, "split_deep_nesting", no_outliner)
+    refused = _record_refusals(monkeypatch)
+    n = 12000
+    chain = ", ".join(f"q(V{i}, V{i + 1})" for i in range(n))
+    inner = ", ".join(f"q(W{i}, W{i + 1})" for i in range(30))
+    m = _load(tmp_path, f"""
+        q(X, Y) :- Y is X + 1.
+        r(1).
+        r(2).
+        p(L) :- V0 = 0, {chain}, catch((W0 = V{n}, {inner}), _, true), r(Z), L = [W30, Z].
+        """)
+    assert not refused, refused
+    assert _run(m, ("p", 1)) == [[n + 30, 1], [n + 30, 2]]

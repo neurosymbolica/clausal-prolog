@@ -41,9 +41,15 @@ or return it does not recognise, ``self`` used other than as a callee's
 continuation slot, and so on.
 
 Only a sequence that nests deeper than ``SPLIT_ABOVE`` is cut, so every
-clause that compiled before keeps its exact code; set the environment
-variable ``CLAUSAL_BODY_SEGMENT_HEIGHT=<n>`` to cut every sequence of two
-goals or more at height ``n`` (the differential test mode).
+clause that compiled before keeps its exact code.  The fold finds that out
+by folding the sequence plain first, and folds it again in segments if it
+is too deep.  A long conjunction nested in it (in a catch/3 goal, a branch,
+a ``\\+``) that was cut during the plain fold is not lowered again: the
+refold calls the chain the plain fold made (``SegmentList``), so every
+conjunction is folded at most twice however deep it is nested, where
+lowering it again from each enclosing level was 2**depth folds.  Set the environment variable
+``CLAUSAL_BODY_SEGMENT_HEIGHT=<n>`` to cut every sequence of two goals or
+more at height ``n`` (the differential test mode).
 """
 
 from __future__ import annotations
@@ -141,6 +147,73 @@ def _list_height(stmts, memo: dict) -> int:
 # ── the fold ─────────────────────────────────────────────────────────────────
 
 
+class SegmentList(list):
+    """``ctx.body_segments``: the segments made so far, and the chains the
+    fold may reuse instead of lowering a nested sequence again.
+
+    A sequence too deep for its plain fold is folded again in segments
+    (``fold_sequence``), and the refold lowers each of its goals again --
+    with every long conjunction nested in them.  A nested conjunction that
+    its own fold already cut is not lowered again: its chain of segments
+    does not depend on its continuation (that runs in the frame that calls
+    the chain), so the refold calls the same chain with its new
+    continuation.  Each chain cut while a plain fold is running is kept in
+    ``records``; when that plain fold is thrown away, its records become a
+    ``pool`` the refold takes chains from, each one once.
+    """
+    __slots__ = ("records", "pools", "plain_active")
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.records: list = []
+        self.pools: list = []
+        self.plain_active = 0
+
+
+class _Chain:
+    """A conjunction's chain of segments, as its fold left it: what it was
+    lowered from, the segments it made, and how to call it."""
+    __slots__ = ("ops", "cuts", "ctx", "before", "delta", "segs", "call",
+                 "gen", "status")
+
+
+#: Context fields a chain does not depend on: the sequence's own
+#: continuation slot (the chain has its own proceed) and the variable
+#: table (compared by content).  Only a cut that reaches the sequence's
+#: scope reads the scope's cut exit and guard (the ``Cut`` arm), and every
+#: barrier makes new ones each time it is lowered.
+_CTX_FREE = frozenset({"proceed_name", "var_context"})
+_CTX_CUT = frozenset({"cut_exit", "cut_guard"})
+
+
+def _ctx_key(ctx, cuts: bool) -> tuple:
+    import dataclasses
+    free = _CTX_FREE if cuts else _CTX_FREE | _CTX_CUT
+    return tuple(getattr(ctx, f.name) for f in dataclasses.fields(ctx)
+                 if f.name not in free)
+
+
+def _same_ctx(a: tuple, b: tuple) -> bool:
+    return all(x is y or (type(x) is str and x == y) for x, y in zip(a, b))
+
+
+def _take_chain(ops, ctx, segments):
+    """The pooled chain lowered from *ops* in this context, removed from
+    its pool, or None."""
+    if not segments.pools:
+        return None
+    var_context = ctx.var_context
+    for pool in reversed(segments.pools):
+        for i, ch in enumerate(pool):
+            if len(ch.ops) != len(ops):
+                continue
+            if (_same_ctx(ch.ctx, _ctx_key(ctx, ch.cuts)) and ch.ops == ops
+                    and ch.before == var_context):
+                del pool[i]
+                return ch
+    return None
+
+
 def fold_sequence(ops, ctx, k_stmts, recurse):
     """Lower the conjunction *ops* with continuation *k_stmts*; the
     ``Sequence`` arm of ``_lower_goalop_shared`` delegates here."""
@@ -151,32 +224,70 @@ def fold_sequence(ops, ctx, k_stmts, recurse):
     if (segments is None or len(ops) < min_ops
             or not isinstance(ctx.strategy, TrampolineStrategy)):
         return _fold_plain(ops, ctx, k_stmts, recurse)
-    if split_above >= 0:
-        # Fold as always; only a sequence that turns out deeper than the
-        # limit is folded again, in segments.  Lowering records first-seen
-        # body variables in ``var_context``: restore it for the refold.
-        saved = dict(ctx.var_context)
-        n_segments = len(segments)
-        memo: dict = {}
-        k = list(k_stmts)
+    if split_above < 0:
+        out, _ = _fold_segmented(ops, ctx, k_stmts, recurse, height, segments)
+        return out
+    ch = _take_chain(ops, ctx, segments)
+    if ch is not None:
+        # Cut by its own fold in a plain fold thrown away: call that chain.
+        segments.extend(ch.segs)
+        ctx.var_context.update(ch.delta)
+        if segments.plain_active:
+            segments.records.append(ch)
+        return _run_chain(ch.call, ch.gen, ch.status, list(k_stmts) or [ast.Pass()])
+    # Fold as always; only a sequence that turns out deeper than the limit
+    # is folded again, in segments.  Lowering records first-seen body
+    # variables in ``var_context``: restore it for the refold.
+    saved = dict(ctx.var_context)
+    n_segments = len(segments)
+    records = segments.records
+    n_records = len(records)
+    memo: dict = {}
+    k = list(k_stmts)
+    segments.plain_active += 1
+    try:
         for op in reversed(ops):
             k = recurse(op, ctx, k)
             if _list_height(k, memo) > split_above:
                 break
         else:
             return k
-        if len(segments) > n_segments:
-            # A long conjunction nested in this one was cut while folding
-            # it plain.  The plain fold is about to be thrown away, so those
-            # segments would never be reached and ``hoist_segments`` would
-            # refuse the predicate anyway; refuse now.  Refolding first
-            # lowered every nested goal again: with a long conjunction in a
-            # long conjunction in ... that was 2**depth lowerings
-            # (todo/done/load-time-doubles-per-nested-negation-mark-undo-invariant-2026-10-16.md).
-            raise SegmentRefused("a segment not reached")
-        ctx.var_context.clear()
-        ctx.var_context.update(saved)
-    return _fold_segmented(ops, ctx, k_stmts, recurse, height, segments)
+    finally:
+        segments.plain_active -= 1
+    ctx.var_context.clear()
+    ctx.var_context.update(saved)
+    if len(segments) > n_segments:
+        # A long conjunction nested in this one was cut while folding it
+        # plain.  Those segments are not reached from the refold's code;
+        # the refold calls the same chains instead of lowering the nested
+        # conjunctions again.  Lowering them again, at every level, was
+        # 2**depth lowerings for a long conjunction in a long conjunction
+        # in ... (todo/done/load-time-doubles-per-nested-negation-mark-undo-invariant-2026-10-16.md).
+        pool = records[n_records:]
+        del records[n_records:]
+        del segments[n_segments:]
+        segments.pools.append(pool)
+        try:
+            out, chain = _fold_segmented(ops, ctx, k_stmts, recurse, height, segments)
+        finally:
+            segments.pools.pop()
+    else:
+        out, chain = _fold_segmented(ops, ctx, k_stmts, recurse, height, segments)
+    # Only the outermost chain is recorded: the ones inside it are reached
+    # through it.
+    del records[n_records:]
+    if segments.plain_active:
+        from .cut_scope import cut_reaches_scope
+        chain.ops = ops
+        chain.cuts = any(cut_reaches_scope(op) for op in ops)
+        chain.ctx = _ctx_key(ctx, chain.cuts)
+        chain.before = saved
+        after = ctx.var_context
+        chain.delta = {v: n for v, n in after.items()
+                       if v not in saved or saved[v] is not n}
+        chain.segs = segments[n_segments:]
+        records.append(chain)
+    return out
 
 
 def _fold_plain(ops, ctx, k_stmts, recurse):
@@ -187,6 +298,8 @@ def _fold_plain(ops, ctx, k_stmts, recurse):
 
 
 def _fold_segmented(ops, ctx, k_stmts, recurse, height, segments):
+    """The chain of segments for *ops*, called from the enclosing frame:
+    ``(statements, _Chain)``."""
     from ._ast_helpers import _name, _locate
     from .goal_trampoline import _yield_step_stmt
 
@@ -201,8 +314,13 @@ def _fold_segmented(ops, ctx, k_stmts, recurse, height, segments):
             k = _segment_call(sctx, k, proceed, segments, tail=True)
     # The whole chain, run by the enclosing frame; its answers come back
     # here and the sequence's own continuation runs on each.
-    return _segment_call(ctx, k, proceed, segments, tail=False,
-                         k_stmts=list(k_stmts))
+    out = _segment_call(ctx, k, proceed, segments, tail=False,
+                        k_stmts=list(k_stmts))
+    chain = _Chain()
+    chain.call = out[0].value
+    chain.gen = out[0].targets[0].id
+    chain.status = out[1].targets[0].id
+    return out, chain
 
 
 def _segment_call(ctx, body, proceed, segments, *, tail, k_stmts=None):
@@ -224,6 +342,15 @@ def _segment_call(ctx, body, proceed, segments, *, tail, k_stmts=None):
     gen = ctx.fresh("_segg")
     status = ctx.fresh("_segs")
     resume = [] if tail else (k_stmts or [ast.Pass()])
+    return _run_chain(call, gen, status, resume)
+
+
+def _run_chain(call, gen, status, resume):
+    """``[gen = <call>, status = yield (gen, None), while status is not
+    $DONE: <resume>; status = yield (gen, None)]``."""
+    from ._ast_helpers import _assign, _name, _locate
+    from .goal_trampoline import _assign_yield_step
+
     loop = ast.While(
         test=ast.Compare(left=_name(status), ops=[ast.IsNot()],
                          comparators=[_name("$DONE")]),
@@ -463,6 +590,49 @@ def _comp_targets(node) -> set:
     return out
 
 
+def _run_order(events: list) -> list:
+    """*events* with the free-name reads of each nested ``def`` moved from
+    the ``def`` to the first read of its name: a function's body reads its
+    free names when it runs, and nothing can run it before its name is
+    read.  An if-then-else's condition ``def`` comes before the store of the
+    mark its cut check reads, so taken at the ``def`` that read looked
+    unbound.  A ``def`` whose name is bound again before that read, or is a
+    free name of another child (which could run it), stays where it is."""
+    defs = [i for i, (kind, val) in enumerate(events)
+            if kind == "c" and val.seg is None
+            and type(val.node) in (ast.FunctionDef, ast.AsyncFunctionDef)]
+    if not defs:
+        return events
+    moved: dict = {}            # event index -> the def events to run there
+    skip: set = set()
+    for i in defs:
+        child = events[i][1]
+        name = child.node.name
+        if any(kind == "c" and val is not child and name in val.free
+               for kind, val in events):
+            continue
+        j = i + 1
+        if not (j < len(events) and events[j] == ("s", name)):
+            continue
+        for k in range(j + 1, len(events)):
+            kind, val = events[k]
+            if val == name and kind == "s":
+                break
+            if val == name and kind == "l":
+                moved.setdefault(k, []).append(events[i])
+                skip.add(i)
+                break
+    if not skip:
+        return events
+    out = []
+    for i, ev in enumerate(events):
+        if i in moved:
+            out.extend(moved[i])
+        if i not in skip:
+            out.append(ev)
+    return out
+
+
 def hoist_segments(func_def: ast.FunctionDef, segments: list) -> list:
     """Give every segment reached from *func_def* its parameters and its
     module-level ``FunctionDef``; returns them (innermost first).  Raises
@@ -556,7 +726,7 @@ def hoist_segments(func_def: ast.FunctionDef, segments: list) -> list:
         written: set = set()
         have: set = set()
         exposed: list = []
-        for kind, val in sc.events:
+        for kind, val in _run_order(sc.events):
             if kind == "s":
                 written.add(val)
                 continue
@@ -652,5 +822,5 @@ def hoist_segments(func_def: ast.FunctionDef, segments: list) -> list:
     return funcs
 
 
-__all__ = ["ENV_VAR", "Segment", "SegmentRefused", "fold_sequence",
+__all__ = ["ENV_VAR", "Segment", "SegmentList", "SegmentRefused", "fold_sequence",
            "hoist_segments", "settings"]

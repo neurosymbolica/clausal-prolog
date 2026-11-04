@@ -47,12 +47,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   checks each function's marks against its own undos only (an undo in an
   enclosing function no longer counts). A long conjunction inside another
   long conjunction was lowered twice per level when the outer one was cut
-  into segments, 2^depth times in all; the fold now refuses segments at
-  once, as hoisting always did afterwards. The outliner for deep blocks no
+  into segments, 2^depth times in all; the refold now calls the segments
+  the nested conjunction's own fold made instead of lowering it again, so
+  each conjunction is folded at most twice (such a body used to be refused
+  segments and built by the outliner; it is now cut into segments too). The outliner for deep blocks no
   longer re-walks nested function bodies for each enclosing function, or
   looks for owners of names that no outlined scope binds. The generated
-  code is unchanged (checked on every `.pl`, `.clausal` and `.seam` file in
-  the repository). Now `\+` nested 64 deep loads in 0.05 s and `findall/3`
+  code of every other body is unchanged (checked on every `.pl`, `.clausal`
+  and `.seam` file in the repository). Now `\+` nested 64 deep loads in 0.05 s and `findall/3`
   in 0.1 s. Tests: `tests/test_invariant_errors.py`,
   `tests/test_body_segments.py`
   (todo/done/load-time-doubles-per-nested-negation-mark-undo-invariant-2026-10-16.md;
@@ -116,7 +118,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   in its integer list. Optima that answered keep their answers
   (DEVIATIONS.md D29, docs/clpq.md).
 - **A clause body of 10 000 goals or more loads, and long bodies load in
-  near-linear time** (operator ruling 2026-11-03). A trampoline clause body
+  near-linear time** (operator ruling 2026-11-03), also when the body holds
+  long goals of its own (a long conjunction in a catch/3 goal, an
+  if-then-else branch, a `\+`, a disjunction branch). A trampoline clause body
   nests one block per goal, and the old fix outlined the deep tail into
   helpers nested inside each other: quadratic, and past ~10 000 goals
   CPython's compiler refused it (`GeneratedCodeError`). A conjunction that
@@ -127,7 +131,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   last-answer report, exceptions, and cut, if-then-else, catch/3, `\+` and
   findall/3 across segment boundaries are unchanged; a body under the limit
   compiles exactly as before. A segment that could not be hoisted without
-  changing what the code does is refused and the body built as before.
+  changing what the code does is refused and the body built as before, by
+  the outliner, which still fails past about 10 000 goals. Two shapes were
+  refused that way and no longer are: a long conjunction nested in a long
+  one cut while folding it plain (a 12 000-goal body with a 30-goal
+  catch/3 died with `GeneratedCodeError`), and a cut in an if-then-else
+  condition, whose mark the condition's function reads before it is set.
   `CLAUSAL_BODY_SEGMENT_HEIGHT=<n>` cuts every conjunction (for differential
   testing). Measured (`q(X,V1), ..., q(Vn-1,Vn)` in a `.pl` file, load):
   1 000 goals 2.7 s -> 1.5 s, 5 000 74 s -> 6.3 s, 10 000 refused -> 12.6 s, 50 000 78 s, 100 000 157 s (about 33 s of that is the front end). The FINAL pass over a long block (a long disjunction's
