@@ -299,8 +299,11 @@ def _can_outline(stmt: ast.stmt) -> bool:
 class _Outliner:
     """Outlines one function (``function``); see the comment block above."""
 
-    def __init__(self, globals_declared: set[str]):
+    def __init__(self, globals_declared: set[str], def_counts: dict | None = None):
         self.globs = globals_declared
+        #: ``_def_name_counts``'s memo, shared by the outliners of one
+        #: ``split_deep_nesting`` call.
+        self.def_counts = {} if def_counts is None else def_counts
         self.counter = 0
         #: The helpers made, in creation order: a helper is made after every
         #: helper it contains.
@@ -443,7 +446,11 @@ class _Outliner:
                 into[k] = into.get(k, 0) + v
 
         def direct(stmt):
-            """Name counts in *stmt* outside its nested statement lists."""
+            """Name counts in *stmt* outside its nested statement lists.
+            The result for a ``def`` or ``class`` (its whole body) is
+            memoised, and not to be mutated."""
+            if isinstance(stmt, _DEF_NODES):
+                return _def_name_counts(stmt, self.def_counts)
             c: dict[str, int] = {}
             nested = {id(x) for _, o, f in _child_lists(stmt) for x in getattr(o, f)}
             stack = list(ast.iter_child_nodes(stmt))
@@ -525,6 +532,12 @@ class _Outliner:
             binders = [sc for sc in users if name in binds[id(sc)]]
             if name in self.globs:
                 continue                          # ``global`` already declared
+            if not binders:
+                # Bound by none of these scopes (a name local to a function
+                # nested in them, a global, a builtin): nothing to declare,
+                # whatever its owner.  Finding the owner of every name of
+                # every nested function was quadratic in the nesting.
+                continue
             if name in fixed:
                 owner = fn
             else:
@@ -558,6 +571,47 @@ class _Outliner:
             for c in ast.walk(keep):
                 ast.copy_location(c, fn.body[0])
             fn.body.insert(0, keep)
+
+
+_DEF_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+
+
+def _def_name_counts(node, memo: dict) -> dict[str, int]:
+    """``{name: number of ast.Name nodes}`` under the ``def``/``class``
+    statement *node* (its whole subtree), memoised in *memo* by node, each
+    nested ``def``/``class`` counted once.  Iterative, children first."""
+    got = memo.get(id(node))
+    if got is not None and got[0] is node:
+        return got[1]
+    # The defs under *node* not yet counted, outermost first.
+    order = []
+    stack = [node]
+    while stack:
+        d = stack.pop()
+        order.append(d)
+        work = list(ast.iter_child_nodes(d))
+        while work:
+            n = work.pop()
+            if isinstance(n, _DEF_NODES):
+                hit = memo.get(id(n))
+                if hit is None or hit[0] is not n:
+                    stack.append(n)
+                continue
+            work.extend(ast.iter_child_nodes(n))
+    for d in reversed(order):
+        c: dict[str, int] = {}
+        work = list(ast.iter_child_nodes(d))
+        while work:
+            n = work.pop()
+            if isinstance(n, _DEF_NODES):
+                for k, v in memo[id(n)][1].items():
+                    c[k] = c.get(k, 0) + v
+                continue
+            if isinstance(n, ast.Name):
+                c[n.id] = c.get(n.id, 0) + 1
+            work.extend(ast.iter_child_nodes(n))
+        memo[id(d)] = (d, c)
+    return memo[id(node)][1]
 
 
 def _bound_names_direct(stmt: ast.stmt) -> set[str]:
@@ -596,12 +650,19 @@ def split_deep_nesting(node: ast.FunctionDef | ast.AsyncFunctionDef,
     # deep enough to hold an outlinable statement, even one this count puts
     # under the limit -- the count is a model of CPython's, not CPython.
     bound = _OUTLINE_HEIGHT if force else _MAX_BLOCK_DEPTH
+    # The functions are outlined outermost first, and outlining one changes
+    # only its own scope, so a function's name counts, taken while
+    # outlining an enclosing one, still hold while outlining the next
+    # enclosing one in: ``def_counts`` is shared.  Walking every nested
+    # body afresh for each enclosing function was quadratic in the nesting
+    # (todo/done/load-time-doubles-per-nested-negation-mark-undo-invariant-2026-10-16.md).
+    def_counts: dict = {}
     for fn, depth in _function_depths(node):
         if depth <= bound:
             continue
         globs = {x for n in _walk_same_scope(fn) if isinstance(n, ast.Global)
                  for x in n.names}
-        o = _Outliner(globs)
+        o = _Outliner(globs, def_counts)
         o.function(fn)
         moved = moved or o.counter > 0
     return moved

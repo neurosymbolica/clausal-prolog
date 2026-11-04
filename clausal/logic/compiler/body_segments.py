@@ -156,6 +156,7 @@ def fold_sequence(ops, ctx, k_stmts, recurse):
         # limit is folded again, in segments.  Lowering records first-seen
         # body variables in ``var_context``: restore it for the refold.
         saved = dict(ctx.var_context)
+        n_segments = len(segments)
         memo: dict = {}
         k = list(k_stmts)
         for op in reversed(ops):
@@ -164,6 +165,15 @@ def fold_sequence(ops, ctx, k_stmts, recurse):
                 break
         else:
             return k
+        if len(segments) > n_segments:
+            # A long conjunction nested in this one was cut while folding
+            # it plain.  The plain fold is about to be thrown away, so those
+            # segments would never be reached and ``hoist_segments`` would
+            # refuse the predicate anyway; refuse now.  Refolding first
+            # lowered every nested goal again: with a long conjunction in a
+            # long conjunction in ... that was 2**depth lowerings
+            # (todo/done/load-time-doubles-per-nested-negation-mark-undo-invariant-2026-10-16.md).
+            raise SegmentRefused("a segment not reached")
         ctx.var_context.clear()
         ctx.var_context.update(saved)
     return _fold_segmented(ops, ctx, k_stmts, recurse, height, segments)
