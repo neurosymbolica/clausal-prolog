@@ -1988,7 +1988,40 @@ variable whose domain is more than one interval, whether or not it has
 CLP(Q) state (`refuse_fd_holes`; the same check in legacy).  This adds an
 error 1.3.3 cannot raise (it has no FD variables); no algorithm of the
 port changes (`test_an_optimum_over_a_domain_with_holes_is_refused`).
-Not covered: an FD variable with holes that is linked to the objective
-only through the store (`{Y = X}`, maximize(Y)), and the integrality of an
-FD variable without holes (`X in 1..5, {2*X >= 3}, minimize(X)` still
-fails, the relaxation's optimum 3/2 is refused by clpfd).
+Operator ruling 2026-11-03 widens both refusals, so the relaxation never
+gives an answer or a silent failure:
+
+- The holes refusal covers every FD variable in the objective's component
+  (and the components of bb_inf's integers), not only those written in
+  the objective (`refuse_fd_holes_reached`, which reads class.pl's member
+  lists; legacy reads the same set off its tableau's rows, parametric
+  definitions and disequations, `_refuse_fd_holes_linked`).  `X in 0..2
+  \/ 8..10, {Y = X, Y =< 7}, maximize(Y)` failed (Y = 7 bound X = 7, in
+  the hole) and `{Y = 2*X + Z, Z >= 0, Z =< 1, Y =< 7}, maximize(Y)` gave
+  Y = 7 on the port, which needs X in 3..7/2, the hole.  A variable with
+  holes in another component is not reached, so it answers as before.
+- maximize/minimize whose relaxed optimum gives an FD variable a value
+  that is not an integer raise
+  `representation_error(fd_relaxation_not_integral)`.  On the port this is
+  read only when bv.pl's maximize/1 or minimize/1 fails with FD variables
+  in the objective's component (`_post_optimum`): the same post is run
+  again with their FD attributes set aside (trailed `del_attr`), the
+  relaxation alone, and if it succeeds with one of them bound to a
+  non-integer, the error is raised; otherwise the failure stands; the
+  store is undone to before the post either way.  The success path, and so
+  every answer that was given, is 1.3.3's unchanged, and the second post
+  is the same algorithm on the same store.  Legacy binds every tableau
+  variable at the optimum and checks each FD value before it binds:
+  non-integral is `fd_relaxation_not_integral`, an integer in a hole
+  `fd_domain_with_holes` (both used to fail).  Legacy's bb_inf binds the
+  store too, so `X in 1..5, {2*X >= 3}, bb_inf([], X, I)` raises the
+  integrality error there; the port's bb_inf binds nothing, as in 1.3.3,
+  and gives the relaxed 3/2 (X is not in its integer list).
+- Not covered: CLP(FD) constraints between FD variables (`X #= Y + 3`)
+  are not in the CLP(Q) store either; an optimum clpfd's propagation then
+  refuses still fails.
+
+Tests: `tests/test_clpq_fd_promotion_optima.py`
+(`test_an_optimum_the_relaxation_cannot_answer_is_refused`,
+`test_an_optimum_the_relaxation_answers_is_kept`,
+`test_bb_inf_over_an_fd_variable_not_among_its_integers`), both solvers.

@@ -842,11 +842,33 @@ A CLP(Z) variable enters a CLP(Q) context through a comparison (`{X =< 7}`),
 along: `X #\= 3` has none, so `sup(X, S)` fails, as it does for a variable
 the store does not know.
 
-Only the domain's hull comes along, a rational relaxation: with
+Only the domain's hull comes along, a rational relaxation: no holes and no
+integrality. `sup/2` and `inf/2` answer on the relaxation: with
 `X in 1..3 \/ 7..9` and `{X >= 4}`, `inf(X, I)` gives 4, not 7. An optimum
-that binds cannot be read off the hull, so `maximize`, `minimize` and
-`bb_inf` raise `representation_error(fd_domain_with_holes)` when a variable
-of the objective (or of `bb_inf`'s integer list) has a domain with a hole.
+that binds, or must be integral, cannot be read off the relaxation, so
+`maximize`, `minimize` and `bb_inf` never give its answer, nor fail where
+the FD side refuses it (operator ruling 2026-11-03):
+
+- They raise `representation_error(fd_domain_with_holes)` when an FD
+  variable whose domain has a hole is in the objective's component of the
+  store: in the objective (or `bb_inf`'s integer list), or linked to it by
+  constraints. `X in 0..2 \/ 8..10, {Y = X, Y =< 7}, maximize(Y)` raises
+  it. An FD variable with holes that no constraint links to the objective
+  does not count.
+- `maximize` and `minimize` raise
+  `representation_error(fd_relaxation_not_integral)` when the relaxed
+  optimum gives an FD variable a value that is not an integer:
+  `X in 1..5, {2*X >= 3}, minimize(X)` raises it (the relaxation's
+  optimum is 3/2). Where the optimum is integral they answer as before.
+- `bb_inf` makes integral only the variables of its integer list. Under
+  the `holzbaur` solver it binds nothing, so `X in 1..5, {2*X >= 3},
+  bb_inf([], X, I)` gives `I = 3/2`, the relaxation, as asked; list `X` for
+  `I = 2`. The default solver binds the store at the optimum and raises
+  `fd_relaxation_not_integral` there.
+
+The FD constraints between FD variables (`X #= Y + 3`) are not in the
+CLP(Q) store either: an optimum that clpfd's propagation then refuses
+fails.
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:fd_q_coexistence"

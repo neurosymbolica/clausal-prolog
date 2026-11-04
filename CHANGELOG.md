@@ -9,6 +9,21 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **CLP(Q) optima over CLP(FD) variables never answer from the
+  relaxation** (operator ruling 2026-11-03), both solvers. `maximize`,
+  `minimize` and `bb_inf` raise `representation_error(fd_domain_with_holes)`
+  when an FD variable with a hole is anywhere in the objective's component
+  of the store, not only in the objective: `X in 0..2 \/ 8..10,
+  {Y = X, Y =< 7}, maximize(Y)` failed, and with `{Y = 2*X + Z, ...}` the
+  `holzbaur` solver answered `Y = 7`, a value only the hole allows.
+  `maximize` and `minimize` whose relaxed optimum gives an FD variable a
+  value that is not an integer raise
+  `representation_error(fd_relaxation_not_integral)`: `X in 1..5,
+  {2*X >= 3}, minimize(X)` failed though `X = 2` exists. So does the
+  default solver's `bb_inf`, which binds the store, for an FD variable not
+  in its integer list. Optima that answered keep their answers
+  (DEVIATIONS.md D29, docs/clpq.md).
+
 - **A clause head qualified with the file's own module defines the
   predicate** (`.pl` and `.clausal`): in a file whose `module/2` names `m`,
   `m:foo(1).` and `m:bar(X) :- ...` are clauses of `foo/1` and `bar/1`, as

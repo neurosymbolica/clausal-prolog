@@ -213,3 +213,110 @@ def test_sup_and_inf_over_a_domain_with_holes_answer_on_the_hull(
     """The relaxation's bound (documented): 7 and 4, where the domain's
     own are 2 and 7."""
     assert _first(_holes_module(tmp_path, suffix), name) == [expected]
+
+
+# ---- holes reached through the store; a relaxed optimum not integral ----
+#
+# Operator ruling 2026-11-03 (option A of
+# todo/done/clpq-optimum-over-fd-variables-is-a-relaxation-2026-11-03.md):
+# maximize, minimize and bb_inf never give a wrong answer or a silent
+# failure from the relaxation.
+#
+# 1. An FD variable with holes anywhere in the objective's component of
+#    the store (linked to it by constraints, not only written in it)
+#    raises representation_error(fd_domain_with_holes): {Y = X, Y =< 7},
+#    maximize(Y) bound X = 7, in the hole, so it failed, though Y = 2
+#    exists; {Y = 2*X + Z, ...} gave Y = 7 on the port, a wrong answer
+#    (X = 3..7/2 is in the hole).
+# 2. maximize and minimize whose relaxed optimum gives an FD variable a
+#    value that is not an integer raise
+#    representation_error(fd_relaxation_not_integral): X in 1..5,
+#    {2*X >= 3}, minimize(X) bound X = 3/2, clpfd refused it, so it
+#    failed, though X = 2 exists.
+# An FD variable with holes in another component, and an optimum that is
+# integral, answer as before.
+
+LINKED_PL = """\
+:- use_module(library(clpq)).
+:- use_module(library(clpz)).
+mx_linked(Y) :- X in 0..2 \\/ 8..10, {Y = X, Y =< 7}, maximize(Y).
+mn_linked(Y) :- X in 0..2 \\/ 8..10, {Y = X, Y >= 3}, minimize(Y).
+mx_through(Y) :- X in 0..2 \\/ 8..10,
+    {Y = 2*X + Z, Z >= 0, Z =< 1, Y =< 7}, maximize(Y).
+bb_linked(I) :- X in 0..2 \\/ 8..10, {Y = X, Y =< 7}, bb_inf([], -Y, I).
+bb_linked_ints(I) :- X in 0..2 \\/ 8..10, {Y = X, Y =< 7},
+    bb_inf([Y], -Y, I).
+mn_fraction(X) :- X in 1..5, {2*X >= 3}, minimize(X).
+mx_fraction(X) :- X in 1..5, {3*X =< 10}, maximize(X).
+mx_fraction_linked(Y) :- X in 1..5, {Y = 2*X, Y =< 7}, maximize(Y).
+mx_elsewhere(Y) :- X in 0..2 \\/ 8..10, {X =< 9}, {Y =< 7}, maximize(Y).
+mn_integral(X) :- X in 1..5, {2*X >= 4}, minimize(X).
+mx_integral_linked(Y) :- X in 1..5, {Y = X / 2}, maximize(Y).
+bb_relaxed(I) :- X in 1..5, {2*X >= 3}, bb_inf([], X, I).
+bb_integral(I) :- X in 1..5, {2*X >= 3}, bb_inf([X], X, I).
+caught_fraction(F) :- X in 1..5, {2*X >= 3},
+    catch(minimize(X), error(F, _), true).
+"""
+
+
+def _linked_module(tmp_path, suffix):
+    path = tmp_path / f"fd_linked{suffix}"
+    path.write_text(LINKED_PL, encoding="utf-8")
+    return _load_module(path.stem, path)
+
+
+@pytest.mark.parametrize("suffix", [".pl", ".clausal"])
+@pytest.mark.parametrize("name, flag", [
+    ("mx_linked", "fd_domain_with_holes"),
+    ("mn_linked", "fd_domain_with_holes"),
+    ("mx_through", "fd_domain_with_holes"),
+    ("bb_linked", "fd_domain_with_holes"),
+    ("bb_linked_ints", "fd_domain_with_holes"),
+    ("mn_fraction", "fd_relaxation_not_integral"),
+    ("mx_fraction", "fd_relaxation_not_integral"),
+    ("mx_fraction_linked", "fd_relaxation_not_integral"),
+])
+def test_an_optimum_the_relaxation_cannot_answer_is_refused(
+        tmp_path, suffix, name, flag):
+    from clausal.logic.exceptions import LogicException
+    module = _linked_module(tmp_path, suffix)
+    with pytest.raises(LogicException) as raised:
+        _first(module, name)
+    assert raised.value.term[1] == ("representation_error", flag)
+
+
+@pytest.mark.parametrize("suffix", [".pl", ".clausal"])
+def test_the_integrality_error_can_be_caught(tmp_path, suffix):
+    assert _first(_linked_module(tmp_path, suffix), "caught_fraction") == [
+        ("representation_error", "fd_relaxation_not_integral")]
+
+
+@pytest.mark.parametrize("suffix", [".pl", ".clausal"])
+@pytest.mark.parametrize("name, expected", [
+    ("mx_elsewhere", 7),            # the holed X is in another component
+    ("mn_integral", 2),
+    ("mx_integral_linked", Fraction(5, 2)),     # X = 5
+    ("bb_integral", 2),
+])
+def test_an_optimum_the_relaxation_answers_is_kept(
+        tmp_path, suffix, name, expected):
+    assert _first(_linked_module(tmp_path, suffix), name) == [expected]
+
+
+@pytest.mark.parametrize("suffix", [".pl", ".clausal"])
+def test_bb_inf_over_an_fd_variable_not_among_its_integers(tmp_path, suffix):
+    """bb_inf([], X, I) asks for the relaxation over X.  The port leaves
+    the store as it was (1.3.3's bb_inf binds nothing), so it answers
+    3/2.  The default solver binds the store at the optimum, X = 3/2,
+    which clpfd refused, so it failed; it now raises the integrality
+    error."""
+    from clausal.logic.clpq import SOLVER
+    from clausal.logic.exceptions import LogicException
+    module = _linked_module(tmp_path, suffix)
+    if SOLVER == "holzbaur":
+        assert _first(module, "bb_relaxed") == [Fraction(3, 2)]
+        return
+    with pytest.raises(LogicException) as raised:
+        _first(module, "bb_relaxed")
+    assert raised.value.term[1] == ("representation_error",
+                                    "fd_relaxation_not_integral")
