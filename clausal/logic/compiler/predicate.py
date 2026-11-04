@@ -892,7 +892,21 @@ def _exclusion_test(later_keys, name, env):
                     args=[_name("_d0"), _name("arg0"), _name(name)], keywords=[])
 
 
-def _build_predicate_trampoline_funcdef(
+def _build_predicate_trampoline_funcdef(*args, **kwargs) -> ast.FunctionDef:
+    """Build the trampoline ``FunctionDef`` (see
+    :func:`_build_predicate_trampoline_funcdef_impl`), cutting long
+    conjunctions into segment functions (``body_segments``); if a segment
+    cannot be hoisted without changing what the code does, build it again
+    without segments (the old outliner then handles a deep body)."""
+    from .body_segments import SegmentRefused
+    try:
+        return _build_predicate_trampoline_funcdef_impl(*args, **kwargs)
+    except SegmentRefused:
+        return _build_predicate_trampoline_funcdef_impl(
+            *args, _segments=False, **kwargs)
+
+
+def _build_predicate_trampoline_funcdef_impl(
     functor: str,
     arity: int,
     clauses: list[Clause],
@@ -902,6 +916,7 @@ def _build_predicate_trampoline_funcdef(
     tro_indices: frozenset[int] | None = None,
     skip_trail: bool = False,
     ctx_template: CompilationContext | None = None,
+    _segments: bool = True,
 ) -> ast.FunctionDef:
     """Build the ``ast.FunctionDef`` for a trampoline-protocol compiled predicate.
 
@@ -1072,7 +1087,13 @@ def _build_predicate_trampoline_funcdef(
     # restart mode -- off the shared template.  Set them for this call's
     # clause loop only and restore them after, so no other build or body
     # compile through the same template ever reads a stale value.
-    _saved_cut_fields = (ctx_template.clause_mark_name, ctx_template.cut_tro_restart)
+    _saved_cut_fields = (ctx_template.clause_mark_name, ctx_template.cut_tro_restart,
+                         ctx_template.body_segments)
+    # Long conjunctions in these arms may be cut into segment functions
+    # (``body_segments``), hoisted below; never in a TRO function, whose
+    # body restarts in place.
+    _segment_list: "list | None" = [] if (_segments and not use_tro) else None
+    ctx_template.body_segments = _segment_list
     # The clause arms in order (the plain, non-list-dispatch shape), for the
     # FINAL pass: an arm's answer is final when every later arm's first-
     # argument key excludes the call (see _later_clauses_excluded).
@@ -1123,7 +1144,8 @@ def _build_predicate_trampoline_funcdef(
                 _clause_matches[-1] = ast.Match(subject=subject, cases=[case_arm])
                 loop_stmts.append(_clause_matches[-1])
     finally:
-        ctx_template.clause_mark_name, ctx_template.cut_tro_restart = _saved_cut_fields
+        (ctx_template.clause_mark_name, ctx_template.cut_tro_restart,
+         ctx_template.body_segments) = _saved_cut_fields
 
     if clauses and arity > 0:
         _finalize_subject_depths(_subject_assigns, loop_stmts, subject)
@@ -1243,6 +1265,11 @@ def _build_predicate_trampoline_funcdef(
     # trampoline funcdef built with emit_done=True but missing the
     # terminal ``yield (parent, DONE)`` — without it the driver
     # loop never sees the termination signal and hangs.
+    _segment_funcs: list = []
+    if _segment_list:
+        # Raises SegmentRefused (the wrapper rebuilds without segments).
+        from .body_segments import hoist_segments
+        _segment_funcs = hoist_segments(func_def, _segment_list)
     if not use_tro and "final_yield" in ctx_template.enabled_optimisations:
         # Answers known to be the last go out as FINAL (CONTINUATION_TCO_PLAN
         # Phase 4).  Never in a TRO function: its body restarts in place.
@@ -1253,6 +1280,13 @@ def _build_predicate_trampoline_funcdef(
             fail_name=ctx_template.fail_name,
             later_excluded=_later_clauses_excluded(
                 clauses, _clause_matches, arity, ctx_template.base_globals))
+        # A segment is a frame of its own: its answers go to its proceed,
+        # and it is exhausted by its own fail or the scope's cut exit.
+        from .body_segments import SEGMENT_FAIL
+        for _seg in _segment_list or ():
+            mark_final_yields(
+                _seg.func, self_name=_seg.self_name, proceed_name=_seg.proceed,
+                fail_name=(SEGMENT_FAIL, _seg.fail_name))
     from .invariants import (
         assert_mark_undo_paired,
         assert_trampoline_done_yield_present,
@@ -1262,6 +1296,13 @@ def _build_predicate_trampoline_funcdef(
         assert_trampoline_done_yield_present(func_def)
     stamp_predicate_funcdef(func_def, clauses)
     maybe_assert_located(func_def)
+    for _fd in _segment_funcs:
+        if getattr(_fd, "lineno", None) is None:
+            ast.copy_location(_fd, func_def)
+        maybe_assert_located(_fd)
+    if _segment_funcs:
+        # Compiled into the same module as func_def (codegen).
+        func_def._clausal_segments = _segment_funcs
     return func_def
 
 

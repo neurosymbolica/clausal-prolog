@@ -839,7 +839,11 @@ def functiondef_to_function(
     (todo/done/dynamic-predicate-first-call-after-many-asserts-is-super-linear-2026-11-04.md).
     A function whose code names itself is still given a copy.
     """
-    module = ast.Module(body=[node], type_ignores=[])
+    # The segment functions a long clause body was cut into
+    # (``clausal.logic.compiler.body_segments``) are compiled beside it, at
+    # module level, so *node* reaches them as globals.
+    segments = list(getattr(node, "_clausal_segments", ()))
+    module = ast.Module(body=segments + [node], type_ignores=[])
     _fix_missing_locations(module)
     try:
         try:
@@ -851,7 +855,10 @@ def functiondef_to_function(
             # out of compiler recursion before it reaches the block check.)
             if isinstance(exc, SyntaxError) and "nested blocks" not in str(exc.msg):
                 raise
-            if not split_deep_nesting(node, force=True):
+            moved = False
+            for fn in module.body:
+                moved = split_deep_nesting(fn, force=True) or moved
+            if not moved:
                 raise
             _fix_missing_locations(module)
             code = compile(module, filename, "exec")

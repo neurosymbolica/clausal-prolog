@@ -322,6 +322,10 @@ def test_a_codegen_failure_names_the_predicate_file_and_line(
         tmp_path, monkeypatch, front_end):
     monkeypatch.setattr(codegen, "split_deep_nesting",       # outliner off
                         lambda node, force=False: False)
+    # ... and no body segments, so CPython sees the 25-deep body.
+    from clausal.logic.compiler import body_segments
+    monkeypatch.delenv(body_segments.ENV_VAR, raising=False)
+    monkeypatch.setattr(body_segments, "SPLIT_ABOVE", 10 ** 9)
     n = 25
     with pytest.raises(GeneratedCodeError) as ei:
         _load(tmp_path, monkeypatch, front_end,

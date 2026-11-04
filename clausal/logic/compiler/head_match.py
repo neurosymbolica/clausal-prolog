@@ -1544,6 +1544,11 @@ def _has_arm_level_return(stmts: list[ast.stmt]) -> bool:
             return True
         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
             continue
+        # A segment of a long body (``body_segments``) runs the arm's cut
+        # exit too: its body is not in the tree yet, so look into it.
+        seg = getattr(n, "_clausal_segment", None)
+        if seg is not None:
+            stack.extend(seg.body)
         stack.extend(ast.iter_child_nodes(n))
     return False
 

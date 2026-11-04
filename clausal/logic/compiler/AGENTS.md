@@ -30,6 +30,7 @@ data structures, the two strategies, invariants §10, gotchas §11, public API
 | Bodies (5): goals | `goal_shallow.py`, `goal_trampoline.py`, `control_constructs.py` (once, catch, findall, freeze, setup_call_cleanup, ...), `ite_reified.py`, `tabled_naf.py`, `star_segments.py` |
 | Terms -> AST | `terms_to_ast.py` (`term_to_ast_expr`, `arith_to_ast_expr`) |
 | Optimisations | `optimisations/` (`analyse -> apply` passes: `tro.py`, `continuation_tco.py`, `destructive_reuse.py`, `call_site.py`) wrapping the analyses in `tro.py` and `destructive_reuse.py` here |
+| Long bodies | `body_segments.py`: a conjunction nesting past CPython's block limit is cut into module-level segment generators run as trampoline frames (`CLAUSAL_BODY_SEGMENT_HEIGHT=<n>` cuts every conjunction, for differential testing); `../../codegen.py`'s `split_deep_nesting` outliner is the fallback |
 | Plumbing | `strategy.py`, `compile_ctx.py` (`CompilationContext`), `invariants.py` (phase-boundary assertions), `_ast_helpers.py`, `_vars.py` |
 
 Runtime helpers that generated code calls (list unification, star lists,
