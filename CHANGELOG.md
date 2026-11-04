@@ -9,6 +9,22 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Added
 
+- **`#(Name)` is `constant(Name)`** (operator ruling 2026-11-04, "Declared
+  wins"): in a `.clausal` file (and a `.pl` file the native front end
+  reads), `#` over an atom folds at compile time to the declared or
+  imported constant's value, units and all, wherever `constant(Name)` is
+  folded: expressions, data terms, heads, list tails, CLP(Q) `{}/1`
+  constraints and another constant's declared value (`#max_fine` too, under
+  `library(clpz)`'s prefix `#`). An undeclared name is a load error in
+  constant/1's words, spelled `#(foo)`. A declared `pi` shadows clp(q,r)'s;
+  undeclared, `#(p)`, `#(pi)`, `#(e)` and `#(zero)` inside a clpq/clpr
+  `{}/1` are lowered exactly as before, under both solvers (written at the
+  top of a comparison that is still the load refusal "not an arithmetic
+  expression"; under a function or built at run time,
+  `type_error(evaluable, (#)/1)`). CLP(Z)'s `#X` / `#3` markers are
+  untouched, and a `#(Name)` term built at run time stays a term (spliced
+  verbatim into an asserted rule), as a run-time `constant(Name)` term does.
+  Docs: directives.md, clpq.md. Tests: `tests/iso_l3/test_l3_hash_constant.py`.
 - **A `.pl` module asserts rules** (ISO 13211-1 8.9, operator ruling
   2026-11-03): `assertz/1`, `asserta/1`, `retract/1` and `clause/2` take
   `(Head :- Body)` with any body, cut and if-then-else included. The rule is

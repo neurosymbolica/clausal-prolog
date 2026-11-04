@@ -990,7 +990,9 @@ class _AnswerLowering:
       A run-time term is the reader's term but for its variables, so each
       Var becomes a ``VarRef`` indexing the run-time Var itself, and a value
       the reader never produces (a string carrier, a cons cell, a
-      ``constant/1`` cell, a Python object) is passed through as it is.
+      ``constant/1`` cell or a ``#/1`` cell over an atom -- folded where
+      written, data at run time --, a Python object) is passed through as
+      it is.
       Whatever the front end refuses in a written clause is refused here,
       with its words.
     - the seam: the body's data shapes are turned into the goal nodes its
@@ -1122,8 +1124,10 @@ class _AsReaderTerm:
     them; the truth values as the atoms they are read from; a string as
     ``"..."`` when ``double_quotes`` is chars.  Every value the reader
     would read DIFFERENTLY from the run-time term -- a string under another
-    ``double_quotes`` mode, a cons cell or a
-    ``constant/1`` cell (both rewritten there), tuple data, a Python object
+    ``double_quotes`` mode, a cons cell, a ``constant/1`` cell or a
+    ``#/1`` cell over an atom (all rewritten there: ``#(Name)`` is
+    ``constant(Name)``, operator ruling 2026-11-04), tuple data, a Python
+    object
     -- goes in *values* too, and is spliced back verbatim
     (``iso_l3_directives.Embedded``)."""
 
@@ -1170,8 +1174,8 @@ class _AsReaderTerm:
         reader spelling, so splicing it in verbatim changes nothing: it holds
         no partial list or string (``SegList``/``SegString``, lowered to the
         compiler's source form with the hole a clause variable), no cons
-        cell, no ``undefined`` and no ``constant/1`` cell.  Its variables
-        are the clause's own (the rule is a fresh copy), shared by identity
+        cell, no ``undefined`` and no ``constant/1`` or ``#(Atom)`` cell.
+        Its variables are the clause's own (the rule is a fresh copy), shared by identity
         with the ones the lowering reads from *values*."""
         from clausal.logic.variables import is_var  # noqa: PLC0415
         from clausal.terms import SegList, SegString, Undefined  # noqa: PLC0415
@@ -1183,7 +1187,9 @@ class _AsReaderTerm:
                 if not x or type(x[0]) is not str:
                     return False
                 if (len(x) == 3 and x[0] == ".") or (
-                        len(x) == 2 and x[0] == "constant"):
+                        len(x) == 2 and x[0] == "constant") or (
+                        len(x) == 2 and x[0] == "#"
+                        and type(deref(x[1])) is str):
                     return False
                 stack.extend(x[1:])
             elif tx is list:
@@ -1259,7 +1265,9 @@ class _AsReaderTerm:
             # the improper list it is.
             self._push(work, lambda a: (".", *a), t[1:], depth + 1)
             return _PENDING
-        if is_cell and not (functor == "constant" and len(t) == 2):
+        if is_cell and not (len(t) == 2 and (
+                functor == "constant"
+                or (functor == "#" and type(deref(t[1])) is str))):
             same = (functor, len(t) - 1) in self._SPINE
             self._push(work, lambda a, f=functor: (f, *a), t[1:],
                        depth if same else depth + 1)
