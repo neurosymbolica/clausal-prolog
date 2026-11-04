@@ -653,6 +653,21 @@ class Database:
         # time and compiled against this db (call/1, phrase/2,3, a query)
         # may hold ``!`` and ``->`` (``call_body.cut_allowed``).
         self.surface: "str | None" = None
+        # The native front end's directive state at the end of the file
+        # (``iso_l3_directives.DirectiveContext``: imports, library(reif)'s
+        # ``if_/3``, library(clpq)'s ``{}/1``, the surface), kept for the
+        # RULES a running program asserts (ISO 8.9.1, operator ruling
+        # 2026-11-03): a rule asserted here is lowered under it, as a
+        # clause written at the end of the file would be
+        # (``database_ops._rule_clause``).  None for a module the native
+        # front end did not compile.
+        self.lowering_context: Any = None
+        # May a running goal of this module assert a RULE (ISO 8.9.1)?
+        # None: decided by the surface -- a ``.pl`` module may, a Clausal
+        # Prolog or seam module may not (operator ruling 2026-11-03).  The
+        # ``?-`` top level sets it for its empty user module: refused on
+        # the default surface, allowed under ``--prolog``.
+        self.asserts_rules: "bool | None" = None
         # The (name, arity) of every procedure the source file's own text
         # defines, before term expansion (``compiler_v2``); None for a
         # module no file compiled.  ``terms_to_goalop`` reads it for a
@@ -1748,33 +1763,10 @@ class Module:
         For facts (body is just [True]), ground values in dataclass head fields
         are normalized to Var+Is form so output-mode queries work correctly.
         """
-        head = predicate_node.head
-        body_goals = _flatten_body(predicate_node.body)
-        # Normalize dataclass facts: ground field values → Var + Is body goals.
-        if body_goals == [True] and _is_normalizable_fact(head):
-            head, body_goals = _normalize_dataclass_fact(head)
-            # Every goal of a normalized fact is a hoisted head argument; an
-            # unchanged one comes back as ``[True]``, which hoisted nothing.
-            hoisted = 0 if body_goals == [True] else len(body_goals)
-        else:
-            # Ruled clause: hoist structural head args (cell / Call(LoadName)
-            # / functor-instance) into prepended Unify goals so an unbound caller
-            # binds in output mode — the same Var+Unify shape facts use. Atomic
-            # head literals keep the match-guard path.
-            written = len(body_goals)
-            head, body_goals = _normalize_structural_head_args(head, body_goals)
-            hoisted = len(body_goals) - written    # the PREPENDED goals
-        self.db.assertz(Clause(
-            head=head,
-            body=body_goals,
-            position=getattr(predicate_node, "position", None),
-            hoisted=hoisted,
-            source_body=getattr(predicate_node, "source_body", None),
-            source_rewritten=getattr(predicate_node, "source_rewritten",
-                                     False),
-        ))
-        functor, arity = head_key(head)
-        param_names = _extract_param_names(head)
+        clause = clause_from_predicate_node(predicate_node)
+        self.db.assertz(clause)
+        functor, arity = head_key(clause.head)
+        param_names = _extract_param_names(clause.head)
         if param_names is not None:
             self.db.register_signature(functor, arity, param_names)
 
@@ -2136,6 +2128,39 @@ def _stored_head_key(head: Any, channel: str) -> tuple[str, int]:
     return head_key(head)
 
 
+def clause_from_predicate_node(predicate_node: Any) -> Clause:
+    """The Clause one ``Predicate`` node (a source clause, or a rule
+    asserted at run time and lowered by the native front end) stores:
+    the body flattened to a goal list, the head arguments normalized
+    (hoisted) as for every loaded clause, and the clause/2 data
+    (``source_body``) carried over."""
+    head = predicate_node.head
+    body_goals = _flatten_body(predicate_node.body)
+    # Normalize dataclass facts: ground field values → Var + Is body goals.
+    if body_goals == [True] and _is_normalizable_fact(head):
+        head, body_goals = _normalize_dataclass_fact(head)
+        # Every goal of a normalized fact is a hoisted head argument; an
+        # unchanged one comes back as ``[True]``, which hoisted nothing.
+        hoisted = 0 if body_goals == [True] else len(body_goals)
+    else:
+        # Ruled clause: hoist structural head args (cell / Call(LoadName)
+        # / functor-instance) into prepended Unify goals so an unbound caller
+        # binds in output mode — the same Var+Unify shape facts use. Atomic
+        # head literals keep the match-guard path.
+        written = len(body_goals)
+        head, body_goals = _normalize_structural_head_args(head, body_goals)
+        hoisted = len(body_goals) - written    # the PREPENDED goals
+    return Clause(
+        head=head,
+        body=body_goals,
+        position=getattr(predicate_node, "position", None),
+        hoisted=hoisted,
+        source_body=getattr(predicate_node, "source_body", None),
+        source_rewritten=getattr(predicate_node, "source_rewritten",
+                                 False),
+    )
+
+
 def _extract_param_names(head: Any) -> tuple[str, ...] | None:
     """Extract keyword parameter names from a head term.
 
@@ -2187,6 +2212,7 @@ def _flatten_body(body: Any) -> list:
 __all__ = [
     "Clause",
     "Database",
+    "clause_from_predicate_node",
     "Module",
     "PredRow",
     "WriteStamp",

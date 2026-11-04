@@ -7,6 +7,30 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Added
+
+- **A `.pl` module asserts rules** (ISO 13211-1 8.9, operator ruling
+  2026-11-03): `assertz/1`, `asserta/1`, `retract/1` and `clause/2` take
+  `(Head :- Body)` with any body, cut and if-then-else included. The rule is
+  a copy of the term, lowered by the native front end as the same clause
+  written in that file would be (its directives, `library(reif)`,
+  `library(clpq)`), so its cut is local to the asserted clause whoever calls
+  it; the predicate is recompiled lazily as for facts. The logical update
+  view holds (a running call does not see clauses asserted meanwhile and
+  still answers ones retracted meanwhile; Scryer agrees). A Clausal Prolog
+  or seam module still refuses a rule with `permission_error(assert, rule,
+  Head)`, as does a `.pl` assert into a Clausal Prolog module's procedure
+  and the `?-` top level on its default surface (allowed under `--prolog` or
+  with a `.pl` file loaded). A non-callable body anywhere in its
+  `,`/`;`/`->`/`\+` structure is `type_error(callable, Body)`, Scryer's
+  culprit. Two deliberate differences from Scryer, both following ISO and
+  the same clause consulted: a variable body goal is stored as `call(G)`,
+  and a cut in an if-then-else condition is local to it (Trealla agrees).
+  `*->` is refused at assert time (`existence_error(procedure, '*->'/2)`).
+  Tests: `tests/iso/test_assert_rules_iso.py` (its xfail rows now pass),
+  `tests/iso/test_assert_rules_more_iso.py` (Scryer oracle),
+  `tests/iso_l3/test_l3_assert_rules.py`.
+
 ### Fixed
 
 - **A clause head qualified with the file's own module defines the

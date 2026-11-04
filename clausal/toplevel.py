@@ -292,6 +292,15 @@ class TopLevel:
         self.module = module
         self.path = path
         self.prolog = prolog
+        if path is None:
+            # The empty user module is a ``.pl`` file, but the default
+            # surface is Clausal Prolog: a query may assert a RULE only
+            # under ``--prolog`` (operator ruling 2026-11-03), as it may
+            # cut only there (2026-10-24).  A consulted file decides by its
+            # own surface.
+            lm = getattr(module, "__clausal_module__", None)
+            if lm is not None:
+                lm.db.asserts_rules = bool(prolog)
         self.stdin = stdin or sys.stdin
         self.out = stdout or sys.stdout
         self.interactive = self._isatty(self.stdin)

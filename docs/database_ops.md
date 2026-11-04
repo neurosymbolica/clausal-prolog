@@ -96,6 +96,56 @@ Prolog's `asserta`). The new clause will be tried first on subsequent queries.
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:asserta_example"
 ```
 
+### Rules: only in a `.pl` module
+
+A `.pl` file is ISO Prolog, so a goal running in a `.pl` module can assert
+a **rule** as well as a fact, as ISO 13211-1 8.9 says (operator ruling
+2026-11-03):
+
+```text
+:- dynamic(p/1).
+add :- assertz((p(X) :- member(X, [1, 2, 3]), X > 1, !)), assertz(p(9)).
+?- add, findall(X, p(X), L).          % L = [2]
+?- clause(p(A), B).                   % B = (member(A,[1,2,3]),A>1,!)
+?- retract((p(_) :- B)).              % binds B, removes the rule
+```
+
+- The asserted clause is a **copy** of the term (ISO 8.9.1.1): binding the
+  caller's variables afterwards does not change it, and a variable goal in
+  the body is stored as `call(G)`.
+- It is compiled as the same clause **written in that file** would be: the
+  native front end's own clause lowering, under the file's directives (its
+  imports, `library(reif)`'s `if_/3`, `library(clpq)`'s `{}/1`). So `!` and
+  `->` have their ISO meaning there, fixed when the rule is asserted: a cut
+  is local to the asserted clause whoever calls the predicate, and opaque
+  inside `\+`, `call/1` and `findall/3`. `*->` is refused, as everywhere
+  (`existence_error(procedure, '*->'/2)`).
+- `clause/2` gives the body as written, and `retract((Head :- Body))`
+  unifies `Body` too; `retract(Head)` removes a fact only.
+- **The logical update view** (ISO 7.5.4): a call sees the clauses as they
+  were when it started. A clause asserted while it runs is not seen by it,
+  and a clause retracted meanwhile is still answered. `retract/1` itself
+  iterates the clauses as they were at its call.
+- A non-callable body is `type_error(callable, Body)`, the whole body as
+  culprit, as in Scryer (`assertz((p :- (a, 4)))`).
+
+Where a rule may **not** be asserted, the assert raises
+`permission_error(assert, rule, Head)` and leaves the predicate untouched:
+
+- in a Clausal Prolog (`.clausal`) or seam module, which assert facts only;
+- into a procedure of a Clausal Prolog module, even from a `.pl` module (the
+  clause would be compiled in that cut-free module);
+- at the `?-` top level on its default surface; it is allowed with
+  `--prolog`, or when the top level has loaded a `.pl` file.
+
+A Clausal Prolog module cannot call an asserted rule any more than a
+consulted one: it never calls into a `.pl` module
+(`permission_error(access, prolog_module, M)`).
+
+Asserting a rule costs more than asserting a fact (it is lowered and
+compiled to Python, roughly 0.35 ms against 0.05 ms), and the predicate is
+recompiled once, at its next call, as for facts.
+
 ---
 
 ## Removing Clauses
@@ -191,10 +241,11 @@ does not require dynamic predicates.)
   assert is refused; to match the culprit in a seam catch pattern, quote it,
   `'/'('assertz', 1)`, because a bare builtin name in a seam term is the
   builtin's object, not the atom.)
-- **assertz adds facts, not rules** — `assertz((foo(X) :- bar(X)))` is not
-  supported and raises `permission_error(assert, rule, Head)` at
-  assert time (the predicate's existing clauses are left untouched). Only
-  ground or partially-ground facts can be asserted.
+- **A Clausal Prolog module asserts facts, not rules** —
+  `assertz((foo(X) :- bar(X)))` raises `permission_error(assert, rule, Head)`
+  at assert time (the predicate's existing clauses are left untouched). A
+  `.pl` module asserts rules too: see
+  [Rules: only in a `.pl` module](#rules-only-in-a-pl-module).
 - **Arity is part of the name** — `foo/1` and `foo/2` are different
   predicates: declaring `foo/2` dynamic says nothing about `foo/1`. In a
   `.clausal` module, `assertz(foo(a))` then creates a new dynamic `foo/1`; in

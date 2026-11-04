@@ -3,10 +3,12 @@ Prolog (operator ruling 2026-11-03: "assertz should work as ISO in .pl,
 and in Clausal Prolog, not"; it replaces engine decision A09-F005 (b) for
 ``.pl``).
 
-These pin the behaviour before it is built: the rows that fail today are
-``xfail(strict=True)``, so the change that makes them pass has to remove
-the marker.  The expected answers are Scryer's (``test_oracle``, which
-passes today) and, for ``term_instance``, the Cor.2 example DTC2 8.2.4.4.
+They were pinned (as ``xfail(strict=True)``) before the runtime rule
+compiler was built (``database_ops._rule_clause``); every row passes now.
+The expected answers are Scryer's (``test_oracle``) and, for
+``term_instance``, the Cor.2 example DTC2 8.2.4.4.  More rows -- the
+logical update view, retract during iteration, cut opacity, a call from
+Clausal Prolog -- are in ``test_assert_rules_more_iso.py``.
 
 * ``.pl``: assertz/1, asserta/1, retract/1 and clause/2 with rules,
   bodies with if-then-else and cut included (cut is ``.pl`` only, D59).
@@ -31,45 +33,46 @@ from .test_iso_answers_scryer import _engine_answers, _scryer_answers
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
-#: (row name, body binding R, what both print, fails today)
+#: (row name, body binding R, what both print)
 ROWS = [
     ("assertz a rule, then call it",
-     "assertz((p1(A) :- a1(A))), p1(X), R = X", ["dog"], True),
+     "assertz((p1(A) :- a1(A))), p1(X), R = X", ["dog"]),
     ("asserta puts the rule first",
-     "assertz(p2(z)), asserta((p2(X) :- X = a)), findall(Y, p2(Y), R)",
-     ["[a,z]"], True),
+     # (not one-letter atoms: the engine's writer prints a list of them as
+     # a double-quoted string, which says nothing about the order)
+     "assertz(p2(zz)), asserta((p2(X) :- X = aa)), findall(Y, p2(Y), R)",
+     ["[aa,zz]"]),
     ("clause/2 gives the body",
-     "assertz((p3(A) :- a1(A))), clause(p3(Q), B), R = Q-B", ["_1-a1(_1)"], True),
+     "assertz((p3(A) :- a1(A))), clause(p3(Q), B), R = Q-B", ["_1-a1(_1)"]),
     ("retract a rule",
      "assertz((p4(A) :- a1(A))), retract((p4(W) :- a1(W))), findall(X, p4(X), R)",
-     ["[]"], True),
+     ["[]"]),
     ("retract binds the body",
-     "assertz((p5(A) :- a1(A))), retract((p5(_) :- B)), R = B", ["a1(_)"], True),
+     "assertz((p5(A) :- a1(A))), retract((p5(_) :- B)), R = B", ["a1(_)"]),
     ("retract an instance of a rule",
-     "assertz((p6(A) :- a1(A))), retract((p6(dog) :- a1(dog))), R = y", ["y"], True),
+     "assertz((p6(A) :- a1(A))), retract((p6(dog) :- a1(dog))), R = y", ["y"]),
     ("an if-then-else body",
      "assertz((p7(Z) :- (Z > 1 -> true ; fail))), ( p7(2), \\+ p7(0) -> R = y ; R = n )",
-     ["y"], True),
+     ["y"]),
     ("a cut in the body",
      "assertz((p8(C) :- member(C, [1, 2, 3]), !)), findall(D, p8(D), R)",
-     ["[1]"], True),
+     ["[1]"]),
     ("Cor.2 DTC2 8.2.4.4 term_instance",
      "assertz((term_instance(T, I) :- copy_term(T, Cp), subsumes_term(Cp, I))),"
-     " ( term_instance(g(X), g(f(X))) -> R = y ; R = n )", ["y"], True),
-    # the errors already conform; pinned so the change keeps them
+     " ( term_instance(g(X), g(f(X))) -> R = y ; R = n )", ["y"]),
+    # the errors conformed before rules could be asserted; kept
     ("a non-callable body",
-     "catch(assertz((p9 :- 4)), error(F, _), R = F)", ["type_error(callable,4)"],
-     False),
+     "catch(assertz((p9 :- 4)), error(F, _), R = F)", ["type_error(callable,4)"]),
     ("asserta, a non-callable body",
      "catch(asserta((p10(_) :- 1)), error(F, _), R = F)",
-     ["type_error(callable,1)"], False),
+     ["type_error(callable,1)"]),
     ("a static predicate",
      "catch(assertz((atom(_) :- true)), error(F, _), R = F)",
-     ["permission_error(modify,static_procedure,atom/1)"], False),
+     ["permission_error(modify,static_procedure,atom/1)"]),
 ]
 
 PROGRAM = "a1(dog).\n" + "".join(
-    f"r{i}(R) :- {body}.\n" for i, (_, body, _, _) in enumerate(ROWS))
+    f"r{i}(R) :- {body}.\n" for i, (_, body, _) in enumerate(ROWS))
 
 
 @pytest.fixture(scope="module")
@@ -90,11 +93,8 @@ def pl_mod(tmp_path_factory):
 
 
 def _params():
-    for i, (name, _, _, fails_today) in enumerate(ROWS):
-        marks = [pytest.mark.xfail(strict=True, reason="rules cannot be "
-                                   "asserted yet (A09-F005 b; ruled 2026-11-03)")] \
-            if fails_today else []
-        yield pytest.param(i, id=name, marks=marks)
+    for i, (name, _, _) in enumerate(ROWS):
+        yield pytest.param(i, id=name)
 
 
 @pytest.mark.parametrize("i", list(_params()))
@@ -145,15 +145,11 @@ def test_the_default_toplevel_refuses_a_rule(tmp_path):
     assert "permission_error(assert,rule,q(" in r.stdout, (r.stdout, r.stderr)
 
 
-@pytest.mark.xfail(strict=True, reason="rules cannot be asserted yet "
-                   "(A09-F005 b; ruled 2026-11-03)")
 def test_the_prolog_toplevel_asserts_a_rule(tmp_path):
     r = _clausal(tmp_path, "--prolog", stdin=_QUERY)
     assert "Y = 1" in r.stdout, (r.stdout, r.stderr)
 
 
-@pytest.mark.xfail(strict=True, reason="rules cannot be asserted yet "
-                   "(A09-F005 b; ruled 2026-11-03)")
 def test_a_toplevel_with_a_pl_file_asserts_a_rule(tmp_path):
     (tmp_path / "p.pl").write_text("a1(dog).\n")
     r = _clausal(tmp_path, "p.pl", "--toplevel", stdin=_QUERY)

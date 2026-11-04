@@ -132,7 +132,8 @@ def _seglists_as_source(term: Any) -> Any:
     return rebuild(term) if has_seglist(term, set()) else term
 
 
-def _build_clause(term_val: Any, context: str, db, module_dict) -> "Any":
+def _build_clause(term_val: Any, context: str, db, module_dict,
+                  caller=None) -> "Any":
     """Build a Clause from a runtime term passed to assertz/asserta.
 
     *context* is the calling builtin's indicator ("assertz/1" or
@@ -141,12 +142,14 @@ def _build_clause(term_val: Any, context: str, db, module_dict) -> "Any":
     Only plain terms (facts) are accepted; a cell fact is normalized by
     ``_normalize_fact_clause``.
 
-    A09-F005 (decision b): a Predicate node (a rule, ``h(X) <- b(X)``) is
-    rejected with a typed ``permission_error`` — its body cannot be lowered
-    by ``compile_predicate_trampoline``, and previously the clause was stored
-    *before* that failure surfaced, poisoning every later query of the
-    predicate. Rejecting here, before ``db.assertz``, keeps the existing
-    clauses queryable. See docs/database_ops.md (A09-F026).
+    A RULE ``(Head :- Body)`` is ISO 8.9.1's where the asserting module may
+    assert one (``.pl``, operator ruling 2026-11-03): :func:`_rule_clause`.
+    Anywhere else -- Clausal Prolog, the seam, a seam Predicate node (``h(X)
+    <- b(X)``) -- it is refused with ``permission_error(assert, rule,
+    Head)`` (A09-F005, decision b), before ``db.assertz``, so the existing
+    clauses stay queryable. See docs/database_ops.md (A09-F026).
+    *caller* is the database of the module running the assert (*db* is the
+    one a ``M:`` qualification named); None means *db*.
 
     A CELL argument is FROZEN here (P3-3 Task 5 fix round 1, F1) -- see
     ``_freeze_asserted_head_args``.  Only on this path: ``retract`` calls the
@@ -156,11 +159,16 @@ def _build_clause(term_val: Any, context: str, db, module_dict) -> "Any":
     from clausal.terms import Predicate as _Predicate
     from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
 
+    raw = term_val
     term_val = _seglists_as_source(term_val)
     if isinstance(term_val, _Predicate):
         raise LogicException(
             permission_error("assert", "rule", term_val.head, context))
     term_val = _unneck_clause(term_val, context, "assert")
+    if type(term_val) is _RuleTerm:
+        head, body = neck_parts(raw)
+        return _rule_clause(deref(head), deref(body), context, db,
+                            module_dict, caller if caller is not None else db)
     was_cell, _cell_functor = compound_cell_shape(term_val)
     term_val, hoist_all = _resolve_cell_head(term_val, context, db,
                                              module_dict)
@@ -225,12 +233,131 @@ def _unneck_clause(term_val: Any, context: str, action: str) -> Any:
                 return _NEVER_MATCHES
         return _OpenBody(head, body)
     if not is_var(body):
-        _refuse_non_callable_clause(body, context)
+        _refuse_non_callable_body(body, context)
     # An UNBOUND body is a rule body too: ISO 8.9.1.1 converts it to
-    # ``call(X)`` and Scryer asserts ``foo :- call(X)``.  It used to be
-    # instantiation_error here, as if the clause were malformed; it is the
-    # same refusal as any other rule body (only ``true`` makes a fact).
-    raise LogicException(permission_error("assert", "rule", head, context))
+    # ``call(X)``.  It used to be instantiation_error here, as if the clause
+    # were malformed; it is a rule like any other (only ``true`` makes a
+    # fact), which :func:`_build_clause` asserts or refuses.
+    return _RuleTerm(head, body)
+
+
+class _RuleTerm:
+    """``assertz((Head :- Body))`` with a Body other than ``true``: a rule,
+    its head and body already checked (:func:`_unneck_clause`)."""
+    __slots__ = ("head", "body")
+
+    def __init__(self, head, body):
+        self.head = head
+        self.body = body
+
+
+def _refuse_non_callable_body(body, context):
+    """ISO 8.9.1.3 c: a Body that cannot be converted to a goal (7.6.2) is
+    ``type_error(callable, Body)``, the WHOLE body as culprit -- Scryer's
+    ``assertz((p :- (a, 4)))`` is type_error(callable, (a,4)).  The goal
+    positions walked are Scryer's: ``','``/2, ``;``/2, ``->``/2 and
+    ``\\+``/1 (Scryer refuses ``assertz((p :- \\+ 4))`` too); a meta-call's
+    argument (``call(4)``, ``findall(X, 4, L)``) is checked when it runs."""
+    from clausal.logic.builtins.call_body import is_non_callable_term  # noqa: PLC0415
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+    stack = [body]
+    while stack:
+        t = deref(stack.pop())
+        if is_var(t):
+            continue
+        if is_non_callable_term(t, lists=False):
+            from clausal.logic.exceptions import type_error  # noqa: PLC0415
+            raise LogicException(type_error("callable", body, context))
+        ok, functor = compound_cell_shape(t)
+        if ok and ((len(t) == 3 and functor in (",", ";", "->"))
+                   or (len(t) == 2 and functor == "\\+")):
+            stack.extend(t[1:])
+
+
+def asserts_rules(db) -> bool:
+    """May a goal running in *db*'s module assert a RULE (ISO 8.9.1)?  A
+    ``.pl`` module may; a Clausal Prolog or seam module, or one no file
+    owns, may not (operator ruling 2026-11-03).  ``Database.asserts_rules``
+    overrides the surface (the ``?-`` top level's user module)."""
+    flag = getattr(db, "asserts_rules", None)
+    if flag is not None:
+        return bool(flag)
+    from clausal.logic.builtins.call_body import cut_allowed  # noqa: PLC0415
+    return cut_allowed(db)
+
+
+def _rule_clause(head, body, context, db, module_dict, caller):
+    """The Clause of the asserted rule ``head :- body`` (ISO 8.9.1), for
+    the procedure *head* names in *db*, or the refusal.
+
+    NO NEW COMPILER.  The rule is a copy of the term (ISO 8.9.1.1: later
+    bindings of the caller's variables do not reach it), handed to the
+    native front end's own clause lowering (``iso_l3.lower_clause``, through
+    ``term_expansion.lower_iso_clause``) under the home module's directive
+    state at the end of its file (``Database.lowering_context``) -- so the
+    stored Clause is the one the same clause WRITTEN in that ``.pl`` file
+    gives, ``source_body`` (clause/2, retract/1) included, and its cut and
+    if-then-else are that file's ISO ones (D59): fixed at assert time, the
+    cut local to this clause whoever calls the predicate.  The predicate is
+    then recompiled as every dynamic predicate is (``_assert_clause``).
+
+    Allowed only when the ASSERTING module may assert rules
+    (:func:`asserts_rules`) and the procedure's HOME is a ``.pl`` module the
+    native front end compiled (the clause is compiled there, under its
+    surface).  Anything else keeps the refusal, ``permission_error(assert,
+    rule, Head)``."""
+    from clausal.logic.builtins.call_body import cut_allowed  # noqa: PLC0415
+    from clausal.logic.builtins.inspection import _copy_term  # noqa: PLC0415
+    from clausal.logic.cells import compound_cell_shape, make_cell  # noqa: PLC0415
+    from clausal.logic.database import (  # noqa: PLC0415
+        clause_from_predicate_node, head_key)
+    from clausal.logic.term_expansion import lower_iso_clause  # noqa: PLC0415
+    from clausal.tools.iso_l3 import LoweringRefused  # noqa: PLC0415
+
+    def refuse(why):
+        return LogicException(permission_error(
+            "assert", "rule", head, f"{context}: {why}"))
+
+    if not asserts_rules(caller):
+        raise refuse("a rule can be asserted only by a .pl module (ISO "
+                     "8.9.1); Clausal Prolog asserts facts only")
+    ok, functor = compound_cell_shape(head)
+    if ok:
+        arity = len(head) - 1
+    elif type(head) is str:
+        functor, arity = head, 0
+    else:
+        functor, arity = head_key(_seglists_as_source(head))
+    pred_cls = _find_pred_cls(functor, arity, module_dict)
+    home = _home_db(db, pred_cls, functor, arity)
+    home_dict = getattr(home, "module_dict", None)
+    if (not cut_allowed(home) or not isinstance(home_dict, dict)
+            or getattr(home, "lowering_context", None) is None):
+        raise refuse(f"{functor}/{arity} belongs to a module that is not a "
+                     f".pl file the native front end compiled, and a rule "
+                     f"is compiled under its home module's surface")
+    # The write's permission (dynamic, static, unknown -- created dynamic
+    # when the module's flag says so), exactly as for a fact.
+    resolved, _hoist_all = _resolve_cell_head(
+        _seglists_as_source(head), context, db, module_dict)
+    if ok and resolved[0] != functor:
+        head = make_cell(resolved[0], *head[1:])   # the canonical name
+    head, body = _copy_term((head, body), {})
+    try:
+        node = lower_iso_clause(head, body, home_dict, home.lowering_context,
+                                f"<{context}>")
+    except LoweringRefused as e:
+        from clausal.logic.builtins.call_body import (  # noqa: PLC0415
+            if_then_refusal_error)
+        if "*->" in str(e):
+            raise LogicException(if_then_refusal_error("*->", context)) \
+                from None
+        raise refuse(f"the clause is refused, as the same clause written in "
+                     f"the file would be: {e}") from None
+    # A run-time clause has no source variable names (regex groups bind
+    # nothing) and no position.
+    node.var_names = None
+    return clause_from_predicate_node(node)
 
 
 def _freeze_asserted_head_args(head: Any) -> Any:
@@ -842,13 +969,14 @@ def _qualified_target(db, term_val, who):
     return db, term_val
 
 
-def _assert_clause(db, author, term_val, context, front):
+def _assert_clause(db, author, term_val, context, front, caller=None):
     """assertz/asserta's write of the clause *term_val* into *db* (the
-    module a ``M:`` qualification named, else the caller's), as *author*."""
+    module a ``M:`` qualification named, else the caller's), as *author*;
+    *caller* is the asserting module's database (None: *db*)."""
     from clausal.logic.database import head_key  # noqa: PLC0415
     from clausal.logic.compiler import compile_predicate_trampoline  # noqa: PLC0415
     module_dict = getattr(db, "module_dict", None)
-    clause = _build_clause(term_val, context, db, module_dict)
+    clause = _build_clause(term_val, context, db, module_dict, caller)
     functor, arity = head_key(clause.head)
     pred_cls = _find_pred_cls(functor, arity, module_dict)
     # THROUGH THE GATE (P3-3 Task 3).  The lock check that used to stand
@@ -903,7 +1031,7 @@ def _assert_factory(context, front):
             _refuse_truth_atom_head(term_val, context)
             _refuse_control_construct(term_val, context)
             _assert_clause(target, db.runtime_author(), term_val, context,
-                           front)
+                           front, caller=db)
             yield None
         assert__1.__name__ = context.replace("/", "__")
         return assert__1
