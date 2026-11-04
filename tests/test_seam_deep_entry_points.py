@@ -18,17 +18,9 @@ from clausal.import_hook import (
 from clausal.reflection import ReifyError, reify_ast, reify_source
 
 
-@pytest.fixture(autouse=True)
-def _default_recursion_limit():
-    # The depths here are chosen against CPython's default limit; importing
-    # IPython raises it to 3000 for the rest of the process, so each test
-    # runs at the default and puts back what it found.
-    before = sys.getrecursionlimit()
-    sys.setrecursionlimit(1000)
-    try:
-        yield
-    finally:
-        sys.setrecursionlimit(before)
+# The depths here are sized against CPython's default recursion limit, which
+# importing IPython raises (tests/conftest.py).
+pytestmark = pytest.mark.usefixtures("default_recursion_limit")
 
 
 def _chain(n, op, leaf="1"):

@@ -1047,6 +1047,8 @@ def test_a_dump_of_a_long_sum_needs_no_recursion():
     assert text.count(" + ") == 49_999 and text.endswith(" =< -3")
 
 
+# Sized against the default recursion limit, which importing IPython raises.
+@pytest.mark.usefixtures("default_recursion_limit")
 def test_a_dump_of_a_sum_deeper_than_the_recursion_limit():
     trail = Trail()
     xs = [Var() for _ in range(1_500)]

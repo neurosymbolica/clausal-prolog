@@ -21,6 +21,10 @@ from clausal.import_hook import _load_module
 from clausal.logic.solve import call as pcall
 from clausal.templating.ast_walks import copy_tree
 
+# The refused depths are sized against CPython's default recursion limit,
+# which importing IPython raises (tests/conftest.py).
+pytestmark = pytest.mark.usefixtures("default_recursion_limit")
+
 _names = itertools.count()
 _REPO = pathlib.Path(__file__).resolve().parent.parent
 

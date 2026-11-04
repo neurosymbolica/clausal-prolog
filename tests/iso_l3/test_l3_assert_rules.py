@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+import pytest
 
 from clausal.logic.solve import call
 
@@ -253,6 +254,8 @@ def test_the_reader_term_conversion_is_iterative(native):
     assert got is want
 
 
+# Sized against the default recursion limit, which importing IPython raises.
+@pytest.mark.usefixtures("default_recursion_limit")
 def test_a_body_too_deep_to_compile_is_resource_error_and_stores_nothing(
         native, ans):
     """Never a raw RecursionError out of solve(): what assertz of a fact too
