@@ -45,3 +45,14 @@ order-sensitive failure actually surfaces.
 No longer reproduces on f01790d2: `prc("k", 2, X)` answers in clause order
 (N - 1 - 1, N - 1, N) with signal-mode TRO active. Pinned by
 `tests/test_tro_nonlast_arm_clobber.py::test_nonlast_tro_arm_answers_in_clause_order`.
+
+## Note 2026-11-04
+
+It stopped reproducing because no bucket, default or fallback function
+restarted in place at all: from 57f9a3ad (2026-09-05) their compile asked
+whether the tail call is a self call under the bucket function's own name.
+With that fixed, a bucket restarts only from a clause with no later clause
+in it, or one that cuts before its tail (`_signal_safe_tro_indices` in
+`clausal/logic/compiler/predicate.py`), so the order stays as the pin
+above has it.  The unindexed ("loop" mode) function still has this order
+bug: todo/tro-restart-from-a-non-last-clause-reverses-answer-order-2026-11-04.md.
