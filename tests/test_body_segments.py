@@ -537,3 +537,112 @@ def test_segments_in_a_tail_recursive_predicate(tmp_path, monkeypatch):
     hoisted.clear()
     assert answers(_load(tmp_path, TRO_PROGRAM)) == split
     assert not hoisted
+
+
+# ── fold counts: a nested chain is reused across barriers ───────────────────
+
+def _q_chain(v, n=8):
+    return ", ".join(f"q({v}{i}, {v}{i + 1})" for i in range(n))
+
+
+def _nest_cut(d):
+    """``\\+ (..., (X > 0, ! ; true), <d-1>, X < 0)``: each level's chain has
+    a cut that reaches its own ``\\+``."""
+    if d == 0:
+        return "true"
+    v = f"V{d}_"
+    return (f"\\+ ( {v}0 = {d}, {_q_chain(v)}, ( {v}8 > 0, ! ; true ), "
+            f"{_nest_cut(d - 1)}, {v}8 < 0 )")
+
+
+def _nest_bag(d):
+    """Each level ends in ``bagof/3`` over a variable goal."""
+    if d == 0:
+        return "true"
+    v = f"V{d}_"
+    return (f"\\+ ( {v}0 = {d}, {_q_chain(v)}, {_nest_bag(d - 1)}, "
+            f"G{d} = r(B{d}), bagof(B{d}, G{d}, Bs{d}), Bs{d} = [], {v}8 < 0 )")
+
+
+def _folds(tmp_path, monkeypatch, body, split_above):
+    _production(monkeypatch, split_above)
+    refused = _record_refusals(monkeypatch)
+    calls = 0
+    real = body_segments.fold_sequence
+
+    def counting(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(body_segments, "fold_sequence", counting)
+    m = _load(tmp_path, f"""
+        q(X, Y) :- Y is X + 1.
+        r(1).
+        r(2).
+        p(yes) :- r(A), q(A, B), {body}, B > A.
+        """)
+    assert not refused, refused
+    assert _run(m, ("p", 1)) == ["yes", "yes"]
+    return calls
+
+
+@pytest.mark.parametrize("nest, split_above", [(_nest_cut, 1), (_nest_bag, 6)])
+def test_nested_chains_behind_barriers_fold_linearly(tmp_path, monkeypatch,
+                                                     nest, split_above):
+    # A chain whose cut reaches its \\+ was reused only under the same cut
+    # exit and guard objects, and every \\+ makes new ones each time it is
+    # lowered; a bagof/3 over a variable goal added a fresh variable to the
+    # table each time, so the table never matched.  Either way each level
+    # was lowered again: 14, 24, 44, 84, 164, 324 folds at depths 1-6.
+    counts = [_folds(tmp_path, monkeypatch, nest(d), split_above)
+              for d in (2, 4, 6)]
+    steps = [b - a for a, b in zip(counts, counts[1:])]
+    assert steps[0] == steps[1], counts
+    assert counts[-1] <= 8 * 6 + 16, counts
+
+
+def _straight(src):
+    tree = ast.parse(textwrap.dedent(src))
+    got = body_segments._straight_line_reads(tree.body)
+    defs = {n.name: id(n) for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+    return {name: got[i] for name, i in defs.items() if i in got}
+
+
+def test_a_defs_reads_move_only_over_straight_line_code():
+    # The if-then-else shape: def, simple stores, then the loop that calls it.
+    assert _straight("""
+        def c():
+            return m
+        k = 0
+        m = 1
+        for _ in c():
+            pass
+        """) == {"c": {"k", "m"}}
+    # The call comes first in an enclosing loop: m may be unbound when c runs.
+    assert _straight("""
+        while t:
+            for _ in c():
+                pass
+            def c():
+                return m
+            m = 1
+        """) == {}
+    # m is stored on one branch only.
+    assert _straight("""
+        def c():
+            return m
+        if t:
+            m = 1
+        for _ in c():
+            pass
+        """) == {}
+    # c is read somewhere else too (another function could run it first).
+    assert _straight("""
+        def c():
+            return m
+        g = lambda: c()
+        m = 1
+        for _ in c():
+            pass
+        """) == {}

@@ -992,6 +992,12 @@ def _compile_bag_of(
                                                   eval_arith=False))
 
     inner_stmts = _lower_inner(ctx, inner_goal, [_yield_none_stmt()])
+    if runtime_goal is not None:
+        # The peeled variable is this lowering's own, read only by the call
+        # just lowered: drop it, so the variable table after a bagof/setof
+        # does not depend on how many times it was lowered (body_segments
+        # reuses a chain only over an equal table).
+        del var_context[peeled._id]
     gen_fn = ast.FunctionDef(
         name=gen_name,
         args=ast.arguments(
