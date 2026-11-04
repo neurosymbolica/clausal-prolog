@@ -927,42 +927,154 @@ def evaluate(x, context: str = "eval_/2"):
     * any other TERM -- an atom, a non-evaluable compound -- raises
       ``type_error(evaluable, Name/Arity)``, where it used to be handed back
       unevaluated (ruling R9 A2);
+    * a CYCLIC term (``X = X+1``: there is no occurs check) raises
+      ``type_error(evaluable, Name/Arity)`` for the term the evaluation
+      re-enters, as Scryer does (operator ruling 2026-11-04) -- it used to
+      recurse to Python's limit and answer ``resource_error(stack)``;
     * a Python value that is not a term (a ``Quantity``, a ``date``, a
       ``bool``, a list) passes through, to meet Python's operators as before.
     """
     if _deref is None:
         _bind_variables()
-    x = _deref(x)
-    t = type(x)
+    try:
+        return _evaluate(x, context, None)
+    except _CyclicTerm:
+        raise not_evaluable(_reentered_term(x), context) from None
+
+
+class _CyclicTerm(Exception):
+    """Internal to :func:`evaluate`: the evaluation re-entered a term it is
+    already inside.  :func:`evaluate` turns it into the type error, naming
+    the term :func:`_reentered_term` finds."""
+
+
+def _evaluate(x, context, path):
+    """:func:`evaluate`'s descent.  *path* holds the ``id`` of each bound
+    variable whose value is being evaluated on the way down from the root
+    (None until the first one): a cycle always passes through a bound
+    variable (a tuple cannot contain itself), so meeting one again on its
+    own path is a cycle -- detected exactly, a lap after it closes, where
+    catching RecursionError would cost a thousand frames and misfire on a
+    deep acyclic term.  It is PER PATH: the variable leaves the set when its
+    value is done, so a shared subterm (``Y = 1+1, X = Y*Y``) is no cycle.
+    The cost is paid only where a variable is bound to a compound: a
+    variable bound to a number returns before the check, and a compound
+    reached directly is ``d is x``."""
+    d = _deref(x)
+    t = type(d)
     if t is int or t is float or t is Fraction or t is Decimal:
-        return x
-    if _is_truth_atom(x):
+        return d
+    if _is_truth_atom(d):
         # true/false/undefined are ATOMS (D35): ``type_error(evaluable,
         # true/0)``, as for any atom -- never Python's ``True + 1``.
-        raise not_evaluable(x, context)
-    if _is_var(x):
+        raise not_evaluable(d, context)
+    if _is_var(d):
         from clausal.logic.exceptions import LogicException, instantiation_error  # noqa: PLC0415
         raise LogicException(instantiation_error(context))
-    ka = node_key_args(x)
+    ka = node_key_args(d)
     if ka is None:
         if t is tuple:
-            num = _exact_cell_number(x)
+            num = _exact_cell_number(d)
             if num is not None:
                 return num
-        ka = cell_key_args(x)
+        ka = cell_key_args(d)
         if ka is None:
             if t is str:
-                fn = EVALUABLE.get((x, 0))
+                fn = EVALUABLE.get((d, 0))
                 if fn is not None:
                     return fn()             # pi/0, e/0
-            if _is_term(x):
-                raise not_evaluable(x, context)
-            return x
+            if _is_term(d):
+                raise not_evaluable(d, context)
+            return d
     key, args = ka
     fn = EVALUABLE.get(key) if t is tuple else NODE_EVALUABLE.get(key)
     if fn is None:
-        raise not_evaluable(x, context)
-    return fn(*[evaluate(a, context) for a in args])
+        # A non-evaluable compound that HOLDS a cycle (``X = 1+f(X)``,
+        # ``Y = Y+1, X = f(Y)``) reports the cycle, as Scryer does -- it
+        # descends before it refuses; an acyclic one is named, as before.
+        if _reentered_term(d) is not None:
+            raise _CyclicTerm
+        raise not_evaluable(d, context)
+    if d is x:
+        return fn(*[_evaluate(a, context, path) for a in args])
+    vid = id(x)
+    if path is None:
+        path = {vid}
+    elif vid in path:
+        raise _CyclicTerm
+    else:
+        path.add(vid)
+    values = [_evaluate(a, context, path) for a in args]
+    path.discard(vid)
+    return fn(*values)
+
+
+def _term_children(x):
+    """The subterms a cycle could pass through, or None for a leaf: a cell's
+    arguments, a list's elements, an operator node's operands."""
+    t = type(x)
+    if t is tuple:
+        if len(x) >= 2 and type(x[0]) is str:
+            return x[1:]
+        return x
+    if t is list:
+        return x
+    ka = node_key_args(x)
+    if ka is not None:
+        return ka[1]
+    operand = getattr(x, "operand", _NO_OPERAND)
+    if operand is not _NO_OPERAND:
+        return (operand,)
+    left = getattr(x, "left", _NO_OPERAND)
+    if left is not _NO_OPERAND:
+        return (left, getattr(x, "right", None))
+    return None
+
+
+_NO_OPERAND = object()
+
+
+def _reentered_term(x):
+    """The term a left-to-right descent from *x* first RE-ENTERS while it is
+    inside it -- where the cycle closes -- or None when *x* is acyclic.
+
+    Scryer's culprit for a cyclic expression (operator ruling 2026-11-04):
+    ``X = X+1, Y is X`` names ``(+)/2``, the root; ``X = 1+X, Y is X*2``
+    names ``(+)/2`` too, X's value, re-entered below the root ``*``.
+    Iterative, and linear in the term: a subterm already explored without a
+    re-entry cannot reach the current path (it would have re-entered
+    itself), so it is not explored again."""
+    if _deref is None:
+        _bind_variables()
+    deref = _deref
+    root = deref(x)
+    kids = _term_children(root)
+    if kids is None:
+        return None
+    on_path = {id(root)}
+    done = set()
+    stack = [(root, iter(kids))]
+    while stack:
+        node, it = stack[-1]
+        for c in it:
+            c = deref(c)
+            kids = _term_children(c)
+            if kids is None:
+                continue
+            i = id(c)
+            if i in on_path:
+                return c
+            if i in done:
+                continue
+            on_path.add(i)
+            stack.append((c, iter(kids)))
+            break
+        else:
+            stack.pop()
+            i = id(node)
+            on_path.discard(i)
+            done.add(i)
+    return None
 
 
 from math import isinf as _math_isinf  # noqa: E402

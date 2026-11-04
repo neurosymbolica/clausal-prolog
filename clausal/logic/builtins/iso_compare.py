@@ -174,7 +174,9 @@ def _iso_eval(term, context: str):
         raise LogicException(resource_error("memory", context)) from None
     except RecursionError:
         # An expression nested deeper than the evaluator's stack: also
-        # 7.12.2 h, the term python_error_term gives a RecursionError.
+        # 7.12.2 h, the term python_error_term gives a RecursionError.  A
+        # CYCLIC one never gets here: ``evaluate`` sees the cycle and raises
+        # type_error(evaluable, F/N) (operator ruling 2026-11-04).
         raise LogicException(resource_error("stack", context)) from None
     except (TypeError, ValueError, AttributeError, ArithmeticError):
         # A Python value meeting an operator it does not support (a leaf

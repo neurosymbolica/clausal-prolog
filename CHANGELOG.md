@@ -639,6 +639,26 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **Evaluating a cyclic arithmetic term is a type error, as in Scryer**
+  (operator ruling 2026-11-04: "type_error if Scryer gives one"). There is
+  no occurs check, so `X = X+1` builds a cyclic term, and `Y is X` used to
+  recurse to Python's limit and raise `error(resource_error(stack), (is)/2)`.
+  It now raises `error(type_error(evaluable, (+)/2), (is)/2)`. This covers
+  `is/2` and the comparisons in `.pl` and `.clausal` (their context stays
+  `(is)/2`, as in Scryer) and the seam's `eval_/2`; the seam's `is`, which
+  unifies, is unchanged. The culprit is the term at which the evaluation
+  re-enters a term it is already inside: `X = 1+X, Y is X*2` names `(+)/2`,
+  and `X = 1+f(X)` names `(+)/2`, not `f/1`. An error to the left of the
+  cycle comes first, as for any term (`X = Z+X` is an
+  `instantiation_error`). Scryer gives these answers in a consulted clause;
+  its toplevel answers `instantiation_error` when the cycle closes below
+  the root of the expression. The check is exact, a set of the bound
+  variables on the current path, so a deep acyclic term still evaluates
+  (or overflows with `resource_error(stack)`) as before. A list is refused
+  as a list, cyclic or not (`'.'/2`); Scryer evaluates `[X]` as `X`.
+  The seam's `==` and `<` are CLP(Z) posts and are not covered yet:
+  `todo/clp-posting-a-cyclic-expression-loops-or-overflows-2026-11-04.md`.
+
 - **findall/3, bagof/3 and setof/3 keep dropping attribute constraints**
   (operator ruling 2026-11-04, follow Scryer). A collected answer carries no
   `dif/2`, `freeze/2` or CLP(Z) constraint, as in Scryer and Trealla. To keep
