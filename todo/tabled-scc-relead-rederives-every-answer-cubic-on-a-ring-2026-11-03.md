@@ -1,6 +1,6 @@
 # A tabled SCC re-leads each dormant member from scratch: right recursion round an n-cycle is O(n^3)
 
-**Status: PARTLY FIXED 2026-11-03 (see "Idle re-leads" below; commit on branch t3-scc-relead).** Idle re-leads skip their fixpoint loop (option 3 below), with every table's answers, their order and WFS truth unchanged; that is a 4-6x constant factor on the ring, not the asymptotic fix: the ring is still ~n^3.  What is left needs a ruling: option 1 (semi-naive feeding, a compiler analysis of tabled call sites) or option 2 (XSB-style SCC scheduling, which changes answer order).  Pinned in tests/test_tabling_idle_relead.py.
+**Status: PARTLY FIXED 2026-11-03 (commit 844fc5fd).** Idle re-leads skip their fixpoint loop (option 3 below), with every table's answers, their order and WFS truth unchanged; that is a 4-6x constant factor on the ring, not the asymptotic fix: the ring is still ~n^3.  What is left needs a ruling: option 1 (semi-naive feeding, a compiler analysis of tabled call sites) or option 2 (XSB-style SCC scheduling, which changes answer order).  Pinned in tests/test_tabling_idle_relead.py.
 
 Found 2026-11-03 while measuring the leader-stack and SCC-completion fixes
 (todo/done/complete-scc-scans-whole-table-store-per-completion-2026-11-03.md).
