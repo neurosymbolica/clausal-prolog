@@ -9,6 +9,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A `#` comparison on a variable that has both CLP(FD) and CLP(Q) state
+  posts to both stores**, both solvers. It went to CLP(Q) alone, so clpfd
+  never narrowed or bound the variable: `X #>= 0, X #=< 5, {X + Y = 7},
+  X #> 4` left X unbound, where Scryer (clpz and clpq together) gives
+  `X = 5, Y = 2`, as Clausal now does. Applies to a comparison that is
+  linear with integer coefficients over variables that all have FD state;
+  one with a rational or fresh variable stays CLP(Q)'s alone, and `{}/1`
+  still does not narrow an FD domain (as in Scryer). An FD constraint
+  posted before its variables had CLP(Q) state is still not in the
+  relaxation (open: `todo/clpq-fd-constraints-posted-before-promotion-are-not-in-the-relaxation-2026-11-04.md`;
+  DEVIATIONS.md D20, D29, docs/clpq.md).
+
 - **CLP(Q) optima over CLP(FD) variables never answer from the
   relaxation** (operator ruling 2026-11-03), both solvers. `maximize`,
   `minimize` and `bb_inf` raise `representation_error(fd_domain_with_holes)`

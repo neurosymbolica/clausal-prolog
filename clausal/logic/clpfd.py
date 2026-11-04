@@ -2239,6 +2239,89 @@ def _any_rational(l, r) -> bool:
     return _is_rational_arg(l) or _is_rational_arg(r)
 
 
+def _shared_fd_q(l, r) -> bool:
+    """True when ``l`` and ``r`` are integer-linear (integers, variables,
+    ``+ - *`` and negation) over variables that ALL have FD state, and at
+    least one also has CLP(Q) state: the comparison goes to both stores
+    (:func:`_post_shared_fd_q`).  Linearity in ``*`` is checked by the
+    caller (``_linearise``).  Cheap for a pure-FD post: one walk, two
+    attribute reads per variable, and out at the first variable without
+    FD state."""
+    global _Q_KEY, _REAL_KEY
+    if _Q_KEY is None:
+        from clausal.logic.clpq import Q_KEY  # noqa: PLC0415
+        from clausal.logic.clpr import REAL_KEY  # noqa: PLC0415
+        _Q_KEY, _REAL_KEY = Q_KEY, REAL_KEY
+    if _Add is None:
+        _ensure_term_imports()
+    any_q = False
+    stack = [l, r]
+    while stack:
+        x = deref(stack.pop())
+        t = type(x)
+        if t is int:
+            continue
+        if is_var(x):
+            if get_attr(x, FD_KEY) is None or get_attr(x, _REAL_KEY) is not None:
+                return False
+            if not any_q and get_attr(x, _Q_KEY) is not None:
+                any_q = True
+            continue
+        if t is _Add or t is _Sub or t is _Mult:
+            stack.append(x.left)
+            stack.append(x.right)
+            continue
+        if t is _Negate:
+            stack.append(x.operand)
+            continue
+        return False
+    return any_q
+
+
+def _post_shared_fd_q(op: str, l, r, trail: Trail):
+    """Post ``l op r`` (*op* one of ``== != < =<``) to CLP(Q) AND CLP(FD)
+    when :func:`_shared_fd_q` holds; None otherwise (the caller dispatches
+    as before).
+
+    A variable with both states keeps both attributes (docs/clpq.md,
+    "FD<->Q coexistence").  Sending such a post to CLP(Q) alone left its
+    FD domain wide, so clpfd never fixed it: ``X in 0..5, {X + Y = 7},
+    X #> 4`` left X unbound where Scryer, whose clpz and clpq run side by
+    side, answers X = 5, Y = 2.  CLP(Q) gets the relaxation, CLP(FD) the
+    same comparison over the domains; a domain that becomes a singleton
+    binds the variable, and CLP(Q)'s hook sees the binding.  CLP(Q) is
+    posted first, through the same entry the dispatch used (so its
+    queueing inside a hook is unchanged), then the FD half, as clpfd
+    posts it for variables without CLP(Q) state."""
+    if not _shared_fd_q(l, r):
+        return None
+    if _linearise(l) is None or _linearise(r) is None:
+        return None            # var * var: CLP(Q) alone, as before
+    from clausal.logic import clpq  # noqa: PLC0415
+    q_post = {"==": clpq.q_eq, "!=": clpq.q_ne,
+              "<": clpq.q_lt, "=<": clpq.q_le}[op]
+    if not q_post(l, r, trail):
+        return False
+    l, r = deref(l), deref(r)
+    lc, rc = _linearise(l), _linearise(r)
+    if not lc[0] and not rc[0]:          # CLP(Q) bound every variable
+        a, b = lc[1], rc[1]
+        return {"==": a == b, "!=": a != b, "<": a < b, "=<": a <= b}[op]
+    tree = (_Add, _Sub, _Mult, _Negate)
+    if op == "==":
+        if isinstance(l, tree) or isinstance(r, tree):
+            return _post_linear_eq(lc, rc, trail)
+        constraint = EqConstraint(l, r)
+    elif op == "!=":
+        constraint = NeConstraint(l, r)
+    else:
+        linear = _post_linear_ineq(l, r, op == "<", trail, shared=True)
+        if linear is not None:
+            return linear
+        constraint = (LtConstraint if op == "<" else LeConstraint)(l, r)
+    return _post_constraint(constraint, trail)    # every variable has FD state
+
+
 def _is_real_arg(x) -> bool:
     """True if x is a float literal or a Var with a real-domain attribute."""
     x = deref(x)
@@ -2691,6 +2774,9 @@ def fd_eq(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
     # catchable type error (A09-D002) — BEFORE the CLP(Q)/CLP(R) dispatch,
     # so an attr-carrying var cannot route it into q_eq/real_eq unchecked.
     _reject_nonnumeric_eq(l, r)
+    shared = _post_shared_fd_q("==", l, r, trail)
+    if shared is not None:
+        return shared
     if _any_rational(l, r):
         from clausal.logic.clpq import q_eq  # noqa: PLC0415
         return q_eq(l, r, trail)
@@ -2766,6 +2852,9 @@ def fd_ne(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
     # binding, so X != "banana" excluded "apple" too. Guard before the
     # CLP(Q)/CLP(R) dispatch, like ==/</=<.
     _reject_nonnumeric_eq(l, r, "(!=)/2")
+    shared = _post_shared_fd_q("!=", l, r, trail)
+    if shared is not None:
+        return shared
     if _any_rational(l, r):
         from clausal.logic.clpq import q_ne  # noqa: PLC0415
         return q_ne(l, r, trail)
@@ -2943,19 +3032,23 @@ def _linearise_lifting(expr, aux: list):
     return None
 
 
-def _post_linear_ineq(l, r, strict: bool, trail: Trail):
+def _post_linear_ineq(l, r, strict: bool, trail: Trail, *, shared: bool = False):
     """Post ``l =< r`` (``l < r`` when *strict*) where a side is an
     arithmetic tree, as clpz does (see the section comment).  None when the
     comparison is not of that shape -- no side is an ``+ - *`` / negation
     tree, a leaf is not an integer or a plain FD variable, or a node other
-    than ``+ - *`` / negation occurs -- and the caller posts it as before."""
+    than ``+ - *`` / negation occurs -- and the caller posts it as before.
+
+    *shared*: the FD half of a post over variables that also have CLP(Q)
+    state (``_post_shared_fd_q``), which has checked the shape; a leaf's
+    CLP(Q) attribute does not send it back to the caller."""
     if _Add is None:
         _ensure_term_imports()
     l, r = deref(l), deref(r)
     lin = (_Add, _Sub, _Mult, _Negate)
     if not (isinstance(l, lin) or isinstance(r, lin)):
         return None
-    if not _fd_int_term(l)[0] or not _fd_int_term(r)[0]:
+    if not shared and (not _fd_int_term(l)[0] or not _fd_int_term(r)[0]):
         return None
     aux: list = []
     lc = _linearise_lifting(l, aux)
@@ -3040,6 +3133,9 @@ def fd_lt(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
     # real_lt would post against the ground non-numeric operand unchecked —
     # diverging from the C-accelerated wrapper, which guards first.
     _reject_nonnumeric_order(l, r, "(<)/2")
+    shared = _post_shared_fd_q("<", l, r, trail)
+    if shared is not None:
+        return shared
     try:
         if _any_rational(l, r):
             from clausal.logic.clpq import q_lt  # noqa: PLC0415
@@ -3089,6 +3185,9 @@ def fd_le(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
     _check_no_mixed_rational_real(l, r)
     # Guard before the dispatch, matching fd_lt and the C wrapper.
     _reject_nonnumeric_order(l, r, "(=<)/2")
+    shared = _post_shared_fd_q("=<", l, r, trail)
+    if shared is not None:
+        return shared
     try:
         if _any_rational(l, r):
             from clausal.logic.clpq import q_le  # noqa: PLC0415
@@ -4680,6 +4779,9 @@ if _USE_C_PROPAGATE:
         # A12-F002: the C fd_eq does not type-check operands, so guard here
         # (cheap: only touches the two derefs) before delegating.
         _reject_nonnumeric_eq(l, r)
+        shared = _post_shared_fd_q("==", l, r, trail)
+        if shared is not None:
+            return shared
         # The C impl's ground fallback is Python equality, same as the Python
         # twin's — so the chars-model arm has to sit in front of it here too,
         # or `==` answers differently depending on which impl is loaded.
@@ -4715,6 +4817,9 @@ if _USE_C_PROPAGATE:
         l, r = _cells_as_nodes(_dl, _dr)
         # Same broken-var guard as fd_eq above; the C impl posts unchecked.
         _reject_nonnumeric_eq(l, r, "(!=)/2")
+        shared = _post_shared_fd_q("!=", l, r, trail)
+        if shared is not None:
+            return shared
         l, r = deref(l), deref(r)
         if _both_ground(l, r):
             l, r = _walk_compound(l), _walk_compound(r)
@@ -4750,6 +4855,9 @@ if _USE_C_PROPAGATE:
         # A var vs a ground non-numeric would post a broken constraint, so
         # guard before delegating (like fd_eq above).
         _reject_nonnumeric_order(l, r, "(<)/2")
+        shared = _post_shared_fd_q("<", l, r, trail)
+        if shared is not None:
+            return shared
         # an expression side posts as clpz does (see _post_linear_ineq);
         # it answers None for every other shape, before any dispatch
         linear = _post_linear_ineq(l, r, True, trail)
@@ -4786,6 +4894,9 @@ if _USE_C_PROPAGATE:
         # exactly as the Python twin does
         l, r = _cells_as_nodes(_dl, _dr)
         _reject_nonnumeric_order(l, r, "(=<)/2")
+        shared = _post_shared_fd_q("=<", l, r, trail)
+        if shared is not None:
+            return shared
         # an expression side posts as clpz does (see _post_linear_ineq);
         # it answers None for every other shape, before any dispatch
         linear = _post_linear_ineq(l, r, False, trail)

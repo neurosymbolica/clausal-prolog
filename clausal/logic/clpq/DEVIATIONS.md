@@ -1103,6 +1103,16 @@ differently from 1.3.3 itself:
   (its `c_narrow` syncs CLP(R) only), so with the C extension loaded, as
   it is in every build, a narrowing reaches neither solver's store; the
   Python twin's does (`test_fd_to_q_bare_and_under_a_driver_against_legacy_and_the_oracle`).
+  A clpfd comparison that is linear with integer coefficients over
+  variables that all have FD state, one of them CLPQ_KEY state too, is
+  posted to the port (as before) and then to clpfd as well
+  (`clpfd._post_shared_fd_q`, 2026-11-04); it went to the port alone, so
+  clpfd never narrowed or bound such a variable (`X in 0..5, {X + Y = 7},
+  X #> 4` left X unbound; now X = 5, Y = 2, as Scryer answers with clpz
+  and clpq side by side).  The binding reaches the port through its
+  attribute hook, as any binding does.  Dispatch code only: the post the
+  port receives is the one it received before
+  (`tests/test_clpq_fd_dual_post.py`, both solvers).
 
 - `dump_q(targets, trail, name_of, toplevel=...)`: `toplevel` is accepted
   for legacy's signature and ignored.  `dump_q/2` and `clpq.dump/2` (and
@@ -2017,9 +2027,14 @@ gives an answer or a silent failure:
   store too, so `X in 1..5, {2*X >= 3}, bb_inf([], X, I)` raises the
   integrality error there; the port's bb_inf binds nothing, as in 1.3.3,
   and gives the relaxed 3/2 (X is not in its integer list).
-- Not covered: CLP(FD) constraints between FD variables (`X #= Y + 3`)
-  are not in the CLP(Q) store either; an optimum clpfd's propagation then
-  refuses still fails.
+- Not covered: a CLP(FD) constraint posted between FD variables before
+  either had CLPQ_KEY state (`X #= Y + 3`, then `{D = X - Y}`) is not in
+  the CLP(Q) store; an optimum clpfd's propagation then refuses still
+  fails (`maximize(D)` above: the relaxation's D = 4 binds X = 5, Y = 1).
+  Posted once the variables have CLPQ_KEY state, it reaches both stores
+  (D20's dual post) and maximize(D) gives D = 3.  Options for the first
+  order are in
+  todo/clpq-fd-constraints-posted-before-promotion-are-not-in-the-relaxation-2026-11-04.md.
 
 Tests: `tests/test_clpq_fd_promotion_optima.py`
 (`test_an_optimum_the_relaxation_cannot_answer_is_refused`,
