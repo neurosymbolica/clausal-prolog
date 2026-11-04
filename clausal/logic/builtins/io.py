@@ -1094,17 +1094,296 @@ def _format_goal(goal):
     return str(goal)
 
 
-def _format_clause(clause):
-    """Format a Clause for listing output."""
-    head, body = _fold_head_unifications(clause.head, clause.body)
-    head_str = _format_clause_head(head)
-    if not body:
+def _format_clause(clause, home_db=None):
+    """One listed clause, as text (a rule may span several lines).
+
+    The clause is read as a TERM through ``clause_ops.clause_terms`` -- the
+    one conversion clause/2 and retract/1 use: hoisted head arguments put
+    back, a partial list as the list it is, head and body one renaming --
+    and printed for the surface of the module that owns it (*home_db*):
+
+    - an ISO-surface module (``.pl`` or Clausal Prolog,
+      ``clause_ops.iso_bodies``) prints it as Scryer's ``listing/1`` does,
+      through ``portray_clause/1`` (:func:`_portray_clause_iso`; operator
+      ruling 2026-09-25, "do what Scryer does");
+    - a seam module prints it in the seam's own spelling
+      (:func:`_seam_clause_text`), its variables ``_0``, ``_1``, ... by first
+      occurrence, so sharing shows.
+
+    A clause ``clause_terms`` cannot build a term for (a body holding a
+    Python closure, say) is printed from its STORED head and goals in the
+    seam spelling."""
+    from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
+        FailClosedBody, clause_terms, iso_bodies,
+    )
+    head = body = None
+    if home_db is not None:
+        try:
+            head, body, why = clause_terms(clause, home_db)
+        except Exception:  # noqa: BLE001 - a listing line must not raise
+            head = None
+        if type(body) is FailClosedBody:
+            body = body.term
+    if head is not None:
+        if iso_bodies(home_db):
+            return _portray_clause_iso(head, body)
+        rest = [g for g in clause.body[clause.hoisted:] if g is not True]
+        goals = (list(body) if len(rest) > 1 and type(body) is tuple
+                 else ([] if body is True else [body]))
+        return _seam_clause_text(head, goals)
+    head, goals = _fold_head_unifications(clause.head, clause.body)
+    return _seam_clause_text(head, list(goals))
+
+
+# ── Clause text: the seam spelling ───────────────────────────────────────────
+
+
+def _clause_vars(t, out: list, seen: set) -> None:
+    """Append the unbound variables of *t* to *out* in first-occurrence
+    order (depth first, left to right -- ``term_variables/2``'s order), over
+    terms AND the stored clause's goal nodes."""
+    import dataclasses  # noqa: PLC0415
+    from clausal.pythonic_ast.nodes import Node  # noqa: PLC0415
+    from clausal.terms import ConcreteSeg  # noqa: PLC0415
+    t = deref(t)
+    if isinstance(t, Var):
+        if id(t) not in seen:
+            seen.add(id(t))
+            out.append(t)
+        return
+    if t is None or isinstance(t, (bool, int, float, complex, str, bytes)):
+        return
+    if isinstance(t, (list, tuple)):
+        for e in t:
+            _clause_vars(e, out, seen)
+    elif isinstance(t, (SegList, SegString, SegBytes)):
+        for seg in t.segments:
+            if isinstance(seg, VarSeg):
+                _clause_vars(seg.var, out, seen)
+            elif isinstance(seg, ConcreteSeg):
+                _clause_vars(seg.elements, out, seen)
+    elif isinstance(t, DictTerm):
+        for k, v in t._data.items():
+            _clause_vars(k, out, seen)
+            _clause_vars(v, out, seen)
+    elif isinstance(t, Node) and dataclasses.is_dataclass(t):
+        for f in dataclasses.fields(t):
+            if f.name != "position":
+                _clause_vars(getattr(t, f.name), out, seen)
+
+
+def _seam_text(t, names: dict) -> str:
+    """*t* -- a term, or a stored goal node -- in the seam's spelling, each
+    variable by its name in *names* (``id(var) -> name``): ``[H, *T]`` for
+    a partial list, ``f(a, b)`` for a compound, ``X is Y`` for an operator
+    node."""
+    import dataclasses  # noqa: PLC0415
+    from clausal.pythonic_ast import nodes  # noqa: PLC0415
+    from clausal.terms import ConcreteSeg  # noqa: PLC0415
+    t = deref(t)
+    if isinstance(t, Var):
+        return names.get(id(t), str(t))
+    if isinstance(t, list):
+        return "[" + ", ".join(_seam_text(e, names) for e in t) + "]"
+    if isinstance(t, SegList):
+        parts = []
+        for seg in t.segments:
+            if isinstance(seg, VarSeg):
+                parts.append("*" + _seam_text(seg.var, names))
+            elif isinstance(seg, ConcreteSeg):
+                parts.extend(_seam_text(e, names) for e in seg.elements)
+        return "[" + ", ".join(parts) + "]"
+    if type(t) is tuple and t and type(t[0]) is str and not is_chars(t):
+        if len(t) == 1:
+            return _format_clause_term(t[0])
+        from clausal.terms import term_writeq  # noqa: PLC0415
+        return (term_writeq(t[0]) + "("
+                + ", ".join(_seam_text(a, names) for a in t[1:]) + ")")
+    if type(t) is tuple and t and t[0] is TUPLE_TAG:
+        inner = [_seam_text(a, names) for a in t[1:]]
+        return "(" + ", ".join(inner) + ("," if len(inner) == 1 else "") + ")"
+    if isinstance(t, nodes.StarUnpack):
+        return "*" + _seam_text(t.value, names)
+    if isinstance(t, nodes.LoadName):
+        return t.name
+    if (isinstance(t, nodes.Call) and not t.kwargs
+            and dataclasses.is_dataclass(t)):
+        return (_seam_text(t.func, names) + "("
+                + ", ".join(_seam_text(a, names) for a in t.args) + ")")
+    if isinstance(t, nodes.Node) and getattr(t, "op", None) is not None:
+        if hasattr(t, "left") and hasattr(t, "right"):
+            return (f"{_seam_text(t.left, names)} {t.op} "
+                    f"{_seam_text(t.right, names)}")
+        if hasattr(t, "operand"):
+            sep = " " if t.op[-1:].isalpha() else ""
+            return f"{t.op}{sep}{_seam_text(t.operand, names)}"
+    if isinstance(t, nodes.Node):
+        return _format_goal(t)
+    return _format_clause_term(t)
+
+
+def _seam_clause_text(head, goals: list) -> str:
+    """``head.`` / ``head <- goal.`` / ``head <- (g1, g2).`` in the seam's
+    spelling, the clause's variables named ``_0``, ``_1``, ... in order of
+    first occurrence."""
+    order: list = []
+    _clause_vars((head, goals), order, set())
+    names = {id(v): f"_{i}" for i, v in enumerate(order)}
+    head_str = _seam_text(head, names)
+    if not goals:
         return f"{head_str}."
-    body_strs = [_format_goal(g) for g in body]
+    body_strs = [_seam_text(g, names) for g in goals]
     body = ", ".join(body_strs)
     if len(body_strs) > 1:
         return f"{head_str} <- ({body})."
     return f"{head_str} <- {body}."
+
+
+# ── Clause text: Scryer's portray_clause/1 (ISO surface) ─────────────────────
+#
+# A port of ``portray_clause_//1`` and ``listing/1`` from Scryer's
+# src/lib/format.pl: the variables named A, B, ..., Z, A1, ... in
+# ``term_variables/2`` order, every literal written with
+# ``write_term(L, [quoted(true), variable_names(VNs), double_quotes(true)])``,
+# a literal whose functor is an operator of priority >= 1000 (or an atom
+# that is an operator) in parentheses, a conjunction one goal per line at
+# three spaces, and an if-then-else / disjunction laid out with ``(  ``,
+# ``;  `` and ``->`` as Scryer's ``body_//4`` and ``else_branch//3`` lay
+# them out.
+
+#: Scryer's ``char_type(C, graphic_token)``: a literal ending in one of
+#: these is followed by a space, so the ``.`` or ``,`` after it is not read
+#: as part of the same token.
+_GRAPHIC_TOKEN_CHARS = frozenset("#$&*+-./:<=>?@^~\\")
+
+
+def _scryer_var_name(n: int) -> str:
+    """``fabricate_var_name(numbervars, Name, N)``: A..Z, then A1..Z1, ..."""
+    return chr(ord("A") + n % 26) + (str(n // 26) if n >= 26 else "")
+
+
+def _literal_needs_parens(t) -> bool:
+    """Scryer's ``literal//2`` test: *t* is nonvar, not a number, and its
+    functor ``F/A`` is an operator (any type) with ``A =:= 0`` or a
+    priority >= 1000."""
+    if isinstance(t, Var) or (isinstance(t, _numbers.Number)
+                              and not isinstance(t, bool)):
+        return False
+    if type(t) is str:
+        name, arity = t, 0
+    elif type(t) is tuple and len(t) > 1 and type(t[0]) is str \
+            and not is_chars(t):
+        name, arity = t[0], len(t) - 1
+    else:
+        return False
+    ops = _writer_op_table()
+    for entry in (ops.lookup_prefix(name), ops.lookup_infix(name),
+                  ops.lookup_postfix(name)):
+        if entry is not None and (arity == 0 or entry.precedence >= 1000):
+            return True
+    return False
+
+
+def _portray_clause_iso(head, body) -> str:
+    """The clause ``(Head :- Body)`` (a fact when *body* is ``true``) as
+    Scryer's ``listing/1`` prints it -- ``portray_clause(Head)`` for a fact,
+    ``portray_clause((Head :- Body))`` for a rule -- without the final
+    newline (the caller prints one line per call)."""
+    head, body = deref(head), deref(body)
+    fact = body is True or (type(body) is str and body == "true")
+    order: list = []
+    _clause_vars(head if fact else (head, body), order, set())
+    names = {id(v): _scryer_var_name(i) for i, v in enumerate(order)}
+    out: list = []
+
+    def literal(t):
+        t = deref(t)
+        text = _format_term_iso(t, quoted=True, double_quotes=True,
+                                numbervars=False, var_names=names)
+        return f"({text})" if _literal_needs_parens(t) else text
+
+    def literal_(t):
+        text = literal(t)
+        return text + " " if text[-1:] in _GRAPHIC_TOKEN_CHARS else text
+
+    def indent_to(column, indent):
+        out.append(" " * max(0, indent - column))
+
+    def cell(t, functor, arity):
+        return (type(t) is tuple and len(t) == arity + 1
+                and t[0] == functor)
+
+    def if_then_else(t):
+        """``(If, Then, Else)`` when *t* is ``( If -> Then ; Else )``."""
+        if cell(t, ";", 2):
+            a = deref(t[1])
+            if cell(a, "->", 2):
+                return a[1], a[2], t[2]
+        return None
+
+    def body_(t, column, indent):
+        t = deref(t)
+        if isinstance(t, Var):
+            indent_to(column, indent)
+            out.append(literal(t))
+            return
+        if cell(t, ",", 2):
+            body_(t[1], column, indent)
+            out.append(",\n")
+            body_(t[2], 0, indent)
+            return
+        ite = if_then_else(t)
+        if ite is not None:
+            indent_to(column, indent)
+            out.append("(  ")
+            c1 = indent + 3
+            body_(ite[0], c1, c1)
+            out.append(" ->\n")
+            body_(ite[1], 0, c1)
+            out.append("\n")
+            else_branch(ite[2], indent)
+            return
+        if cell(t, ";", 2):
+            indent_to(column, indent)
+            out.append("(  ")
+            c1 = indent + 3
+            body_(t[1], c1, c1)
+            out.append("\n")
+            else_branch(t[2], indent)
+            return
+        indent_to(column, indent)
+        out.append(literal_(t))
+
+    def else_branch(t, indent):
+        t = deref(t)
+        indent_to(0, indent)
+        out.append(";  ")
+        c = indent + 3
+        ite = if_then_else(t)
+        if ite is not None:
+            body_(ite[0], c, c)
+            out.append(" ->\n")
+            body_(ite[1], 0, c)
+            out.append("\n")
+            else_branch(ite[2], indent)
+        elif cell(t, ";", 2):
+            body_(t[1], c, c)
+            out.append("\n")
+            else_branch(t[2], indent)
+        else:
+            body_(t, c, c)
+            out.append("\n")
+            indent_to(0, indent)
+            out.append(")")
+
+    if fact:
+        out.append(literal_(head))
+    else:
+        out.append(literal(head))
+        out.append(" :-\n")
+        body_(body, 0, 3)
+    out.append(".")
+    return "".join(out)
 
 
 # ── listing/1 ────────────────────────────────────────────────────────────────
@@ -1336,13 +1615,8 @@ def _make_listing__1(db):
         # refusal with its own spelling.
         bare = _bare_handle_listing(val, db)
         if bare is not None:
-            for _name, _arity, _clauses in bare:
-                if not _clauses:
-                    _out_println("listing/1", f"% {_name}/{_arity} — no clauses")
-                else:
-                    _out_println("listing/1", f"% {_name}/{_arity} — {len(_clauses)} clause(s)")
-                    for clause in _clauses:
-                        _out_println("listing/1", _format_clause(clause))
+            for _name, _arity, _row in bare:
+                _print_listing(_name, _arity, _row)
             yield None
             return
 
@@ -1354,7 +1628,6 @@ def _make_listing__1(db):
             row = _indicator_row(db, name, arity, binding)
             if row is None or not row.clauses:
                 return                  # Scryer: \+ \+ clause(Head, _)
-            clauses = row.clauses
         else:
             # The Python-object arms.  A term INSTANCE resolves to its class
             # (a cell is a tuple, not an instance, and does not reach here).
@@ -1379,18 +1652,35 @@ def _make_listing__1(db):
             raise LogicException(type_error(
                 "predicate_indicator", culprit, "listing/1"))
 
-        if not clauses:
-            _out_println("listing/1", f"% {name}/{arity} — no clauses")
-        else:
-            _out_println("listing/1", f"% {name}/{arity} — {len(clauses)} clause(s)")
-            for clause in clauses:
-                _out_println("listing/1", _format_clause(clause))
+        _print_listing(name, arity, row)
         yield None
     return _listing__1
 
 
+def _print_listing(name, arity, row) -> None:
+    """Print *row*'s clauses as ``listing/1`` does (see :func:`_format_clause`).
+
+    An ISO-surface module's listing is Scryer's: the clauses and nothing
+    else.  A seam module's opens with a ``% name/arity — N clause(s)``
+    comment line (``— no clauses`` for an empty row, which only the Python
+    API's handle form reaches)."""
+    from clausal.logic.builtins.clause_ops import iso_bodies  # noqa: PLC0415
+    clauses = list(row.clauses) if row is not None else []
+    home = getattr(row, "db", None)
+    if home is not None and iso_bodies(home):
+        for clause in clauses:
+            _out_println("listing/1", _format_clause(clause, home))
+        return
+    if not clauses:
+        _out_println("listing/1", f"% {name}/{arity} — no clauses")
+        return
+    _out_println("listing/1", f"% {name}/{arity} — {len(clauses)} clause(s)")
+    for clause in clauses:
+        _out_println("listing/1", _format_clause(clause, home))
+
+
 def _bare_handle_listing(val, db):
-    """``[(name, arity, clauses), ...]`` for a declared predicate HANDLE
+    """``[(name, arity, row), ...]`` (*row* ``None`` when there is none) for a declared predicate HANDLE
     passed directly, one entry per arity its owner DEFINES
     (``predicate_arities_for``) in arity order, each read from the row the
     indicator form ``listing(name/N)`` reads (``_indicator_row``) so the two
@@ -1408,7 +1698,7 @@ def _bare_handle_listing(val, db):
     out = []
     for arity in arities:
         row = _indicator_row(db, name, arity, val)
-        out.append((name, arity, row.clauses if row is not None else []))
+        out.append((name, arity, row))
     return out
 
 

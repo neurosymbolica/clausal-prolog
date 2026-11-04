@@ -9,6 +9,25 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **listing/1 prints what Scryer prints for a `.pl` or Clausal Prolog
+  predicate** (operator ruling 2026-09-25, "do what Scryer does"): each
+  clause through Scryer's `portray_clause/1` layout -- variables `A`, `B`,
+  ... with their sharing, operator syntax, `writeq` quoting, `"..."`
+  strings, a rule's goals one per line at three spaces, if-then-else and
+  disjunction laid out as Scryer lays them out -- and no header line. It
+  printed the seam's `head <- (body).` after a `% p/2 — N clause(s)`
+  header, a partial list as the compiler's `StarUnpack(...)` head pattern,
+  and every variable inside a compound as `_`, so `p([H|T], H-T)` listed as
+  `p([_0, StarUnpack((2, 5, 2, 6), _1)], -(_, _))`; it now lists as
+  `p([A|B],A-B).`. A seam predicate keeps its header and seam spelling but
+  no longer leaks head-pattern nodes (`[H, *T]`, `f(X)` rather than
+  `StarUnpack(...)` / `Call(LoadName(...))`) and names its variables `_0`,
+  `_1`, ... by first occurrence, so sharing shows. Both read the clause
+  through `clause_ops.clause_terms`, the conversion clause/2 uses.
+  Byte-compared against Scryer in
+  `tests/iso/test_listing_portray_clause_scryer.py`; seam in
+  `tests/test_listing_seam_clause_terms.py`.
+
 - **clause/2 and retract/1 read a clause whose head holds a partial list**
   (`.pl`, `.clausal` and seam): on a dynamic `p([H|T], H-T)`,
   `clause(p([a,b], X), B)` found no clause, `clause(p(L, X), true)` bound
