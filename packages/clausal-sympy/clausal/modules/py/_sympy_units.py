@@ -360,6 +360,12 @@ def term_dimension(term: Any, analysis: Analysis, *,
         if isinstance(t, Quantity):
             return Dimension(_unit(t.dims))
         if isinstance(t, (bool, int, float, Decimal, Fraction)):
+            # An infinite or NaN number beside a quantity is refused, as an
+            # infinite or NaN magnitude is (quantity_to_sympy): X*1(metre) -
+            # inf*1(metre) would otherwise answer oo.
+            if (isinstance(t, float) and not math.isfinite(t)) or \
+                    (isinstance(t, Decimal) and not t.is_finite()):
+                raise _undefined()
             return dimensionless()
         if is_chars(t) or isinstance(t, str):
             return None
@@ -566,13 +572,24 @@ def float_polynomial(equation: Any, symbol: Any) -> Any:
         return None
     rational = magnitude.replace(
         lambda e: isinstance(e, _sp.Float),
-        lambda e: _sp.Rational(*_fraction_parts(Fraction(repr(float(e))))))
+        lambda e: _sp.Rational(*_fraction_parts(_shortest_fraction(e))))
     try:
         polynomial = _sp.Poly(rational, symbol, domain=_sp.QQ)
     except (_sp.PolynomialError, _sp.polys.polyerrors.GeneratorsNeeded,
             _sp.polys.polyerrors.CoercionFailed):
         return None
     return polynomial if polynomial.degree() >= 1 else None
+
+
+def _shortest_fraction(number: Any) -> Fraction:
+    """The rational a SymPy Float's double shows in its shortest repr.  A
+    coefficient beyond the double range (SymPy folds 1e308 * 10 to 1e309,
+    which float() makes inf) is evaluation_error(undefined), as an
+    infinite magnitude is."""
+    value = float(number)
+    if not math.isfinite(value):
+        raise _undefined()
+    return Fraction(repr(value))
 
 
 def _fraction_parts(value: Fraction) -> tuple:

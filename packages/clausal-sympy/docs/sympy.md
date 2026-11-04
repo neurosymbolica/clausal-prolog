@@ -232,7 +232,22 @@ candidate roots; exactly one is real and satisfies the equation:
 --8<-- "tests/fixtures/sympy_units.seam:log_mean_temperature_difference_inverse"
 ```
 
-**Limitations.** There is no time limit on a SymPy call (a todo; the
+**Limitations.** A double root built from COMPUTED floats can vanish. With
+`R` the float quantity `sqrt(2(metre**2))`, `solve_all(X**2 - 2 * R * X + R
+* R, X, L)` gives `[]`: each float coefficient is read through its own
+shortest repr, and the three rationals together have a discriminant of
+about -1e-15, so the double root is a complex pair. Unexpanded,
+`(X - R)**2` gives `[R]`. Write a tangency or critical-damping condition
+unexpanded, or from exact inputs.
+
+A root that has to be evaluated numerically counts as real when its
+imaginary part is below 1e-25 times its size at 50 digits: a numerically
+found root 1 +- 1e-26 i is reported as the real root 1. A coefficient near
+the top of the double range (1e308) overflows to infinity once SymPy
+multiplies it and is `evaluation_error(undefined)`, as an infinite or NaN
+number beside a quantity is (`X * 1(metre) - inf * 1(metre)`).
+
+There is no time limit on a SymPy call (a todo; the
 sandbox budget should allow for it meanwhile). Measured on review of
 45371c2d: the log mean temperature difference solved backwards (from
 10(kelvin) to 18(kelvin)) takes 8.7 s; duty = U * A * LMTD solved for the

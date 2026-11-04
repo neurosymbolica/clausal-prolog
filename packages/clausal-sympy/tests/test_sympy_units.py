@@ -777,3 +777,40 @@ class TestFloatRepeatedRoots:
         # effect): all twenty stay real here, and the small ones are close.
         assert len(found) == 20
         assert magnitudes(found)[:5] == pytest.approx([0.5, 1.0, 1.5, 2.0, 2.5], rel=1e-6)
+
+
+# ── Final review (0e35fd07) ─────────────────────────────────────────────────
+
+
+class TestNonFiniteAndLimits:
+    @pytest.mark.parametrize("number", [float("inf"), float("nan"), Decimal("Infinity")],
+                             ids=["float infinity", "float nan", "decimal infinity"])
+    def test_non_finite_coefficient_beside_a_quantity_is_refused(self, number):
+        # X * 1 metre - inf * 1 metre answered [oo].
+        x = Var()
+        equation = Sub(left=Mult(left=x, right=metre(1)), right=Mult(left=number, right=metre(1)))
+        with pytest.raises(LogicException) as caught:
+            answers(solve_all, equation, x, Var())
+        assert caught.value.term[1][0] == "evaluation_error"
+
+    def test_coefficient_beyond_the_double_range_is_refused(self):
+        x = Var()
+        equation = Sub(left=Mult(left=Mult(left=1e308, right=x), right=metre(1)),
+                       right=Mult(left=1e308, right=metre(10)))
+        with pytest.raises(LogicException) as caught:
+            answers(solve_all, equation, x, Var())
+        assert caught.value.term[1][0] == "evaluation_error"
+
+    def test_double_root_from_computed_floats(self):
+        # The documented limitation: expanded, each float is rationalised on
+        # its own and the double root's discriminant is about -1e-15, so it
+        # vanishes; unexpanded, (X - R)**2 keeps it.
+        (answer,) = answers(simplify, ("sqrt", metre(2) * metre(1)), Var())
+        r = answer[1]
+        x = Var()
+        expanded = Add(left=Sub(left=Pow(left=x, right=2),
+                                right=Mult(left=Mult(left=2, right=r), right=x)),
+                       right=Mult(left=r, right=r))
+        assert solutions(expanded, x) == []
+        x = Var()
+        assert solutions(Pow(left=Sub(left=x, right=r), right=2), x) == [r]

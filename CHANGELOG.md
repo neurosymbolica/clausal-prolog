@@ -67,7 +67,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   3.0 X + 1e-6, in metres) is kept, a repeated root keeps its multiplicity
   ((X - 1.1)**2 (X - 3) gives 1.1 and 3.0; (X - 1.1)**10 gives 1.1, ten
   times in `roots/3`), and degree 20 takes under a second; mpmath not
-  converging is `no_symbolic_solution`. `^/2` follows SymPy, not ISO:
+  converging is `no_symbolic_solution`. An infinite or NaN number beside
+  a quantity, or a float coefficient past the double range, is
+  `evaluation_error(undefined)`. A double root built from computed floats
+  and written expanded can vanish (documented: write it unexpanded). `^/2` follows SymPy, not ISO:
   `2^-1` is 1/2 (ISO: a type error), and unit-free `solve_all(X^2 - 4, X,
   R)` now works (it was a raw `NotImplementedError`). Unit-free, `0^-1`
   and `atan2(0, 0)` come back as SymPy's `zoo` and `nan`.
