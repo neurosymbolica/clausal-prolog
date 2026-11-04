@@ -1,7 +1,9 @@
 # `assertz/1` accepts a clause whose head is `(:-)/1` or `(:-)/2`
 
 **Filed:** 2026-11-03, found while investigating
-`todo/colon-dash-dot-reads-as-a-fact-2026-09-04.md`.
+`todo/done/colon-dash-dot-reads-as-a-fact-2026-09-04.md`.
+
+**Status: FIXED 2026-11-03 (commit 1adbe9c4).** assertz/1, asserta/1, retract/1 and retractall/1 raise `permission_error(modify, static_procedure, (:-)/N)` for a `(:-)/1` or `(:-)/2` head, with Scryer's contexts (`database_ops._refuse_neck_head`). Not done: clause/2 and abolish/1 of `(:-)/N` (Scryer: permission errors; Clausal: fail / succeed). Pinned in tests/iso/test_colon_dash_head_scryer.py::test_runtime.
 
 ## Repro
 

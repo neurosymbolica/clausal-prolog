@@ -2,7 +2,7 @@
 
 ``m:foo(1).`` in a file whose module/2 names ``m`` is a clause of ``foo/1``
 in ``m``, as in Scryer; the native front end used to load it as a clause of
-``(:)/2`` (todo/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md).
+``(:)/2`` (todo/done/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md).
 
 Scryer (the oracle build, 2026-11-03), file ``a.pl``::
 

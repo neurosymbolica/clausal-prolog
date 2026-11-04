@@ -67,8 +67,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `m:g --> ...` there defines `g//0`, and `dynamic/1`, `discontiguous/1`,
   `table/1` and the `constants_number_*` tables take `m:p/N` (or
   `m:(p/N)`) as `p/N`; both were refused. A head qualified with any
-  other module is unchanged (still `(:)/2`, an open question in
-  `todo/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md`).
+  other module: see the entry "A clause head qualified with another
+  module is refused" above.
 - **library(clpq)'s `{}/1` is callable** on the native front end (`.pl` and
   Clausal Prolog): `call({X > 1})`, `G = {C}, call(G)`, a variable goal,
   `findall/3` over a brace goal held in a variable, `call({}, C)` and a
