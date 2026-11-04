@@ -76,12 +76,29 @@ __all__ = [
     "allowed_adapters",
     "allowed_bridges",
     "QUERY_FRAME",
+    "PACKAGE_ADAPTERS",
+    "PackageAdapter",
+    "PackageAdapterError",
+    "allowed_package_adapters",
+    "package_adapter_time_limit",
+    "DEFAULT_ADAPTER_TIME_LIMIT",
+    "PACKAGE_ADAPTERS_ENV_VAR",
+    "ADAPTER_TIME_LIMIT_ENV_VAR",
 ]
 
 #: The environment variable read at engine import: ``1``/``true``/``yes``/
 #: ``on`` turns the sandbox on; ``0``/``false``/``no``/``off`` or unset
 #: leaves it off; anything else is an ImportError (never a silent default).
 ENV_VAR = "CLAUSAL_SANDBOX"
+
+#: Comma-separated :data:`PACKAGE_ADAPTERS` names a child turns on with the
+#: sandbox (``enable(allow_package_adapters=...)``); read only with
+#: :data:`ENV_VAR` on, and an error without it.
+PACKAGE_ADAPTERS_ENV_VAR = "CLAUSAL_SANDBOX_PACKAGE_ADAPTERS"
+
+#: Seconds, or ``none``: the per-call budget of a vetted package adapter
+#: (``enable(package_adapter_time_limit=...)``).
+ADAPTER_TIME_LIMIT_ENV_VAR = "CLAUSAL_SANDBOX_ADAPTER_TIME_LIMIT"
 
 _TRUE = frozenset({"1", "true", "yes", "on"})
 _FALSE = frozenset({"", "0", "false", "no", "off"})
@@ -199,6 +216,461 @@ def _canonical(module: str) -> str:
     if module.startswith("clausal.modules.countries."):
         return "clausal.modules.countries"
     return module
+
+
+# ── vetted package adapters (operator ruling 2026-11-04) ────────────────────
+
+
+@dataclass(frozen=True)
+class PackageAdapter:
+    """One optional package's adapter that the sandbox may admit, by name,
+    when ``enable(allow_package_adapters=[name])`` asks for it: a trust kind
+    of its own, narrower than a bridge (operator ruling 2026-11-04, "vetted
+    package: yes"; ``implementation_plans/sympy-package-adapter-sandbox-
+    2026-11-04.md``).
+
+    Only the engine's own table names one -- a project's ``pyproject.toml``
+    cannot -- and :func:`enable` verifies every pin before anything is
+    imported, failing closed (:class:`PackageAdapterError`):
+
+    *files*: ``(module, sha256)`` of every Python file of the package the
+    adapter runs, executed from exactly the bytes hashed;
+    *distribution*/*version*: the package's own distribution;
+    *third_party*: ``(distribution, version, top-level package)`` of each
+    library it imports, whose installed metadata must describe the package
+    on the path;
+    *predicates*: the registered predicate names a ``.seam`` may
+    ``-import_from`` it -- nothing else it binds (its term constructors, its
+    raw library objects) is importable, and the importing module must still
+    be Python-free;
+    *reset*: the name of a function here run after a call ran out of its
+    budget (state an interrupted call may have left half written)."""
+    name: str
+    module: str
+    distribution: str
+    version: str
+    files: tuple
+    third_party: tuple
+    predicates: frozenset
+    why: str
+    reset: "str | None" = None
+
+
+#: The vetted package adapters.  A row is added or re-pinned only by engine
+#: review, with a CHANGELOG entry (docs/sandbox.md, "Re-pinning a vetted
+#: package adapter"); ``tests/test_sandbox_package_adapters.py`` prints the
+#: pins of the files on disk when they no longer match.
+PACKAGE_ADAPTERS: "dict[str, PackageAdapter]" = {a.name: a for a in (
+    PackageAdapter(
+        "sympy", _PY + "sympy", "clausal-sympy", "0.1.0",
+        files=(
+            (_PY + "sympy",
+             "5b9a657d123386af35a51a86a1635093a8855df87f94704937e293a661e285ab"),
+            (_PY + "_sympy_units",
+             "3c69993c20326e5a9c05e4d118c9b45823591d51066dcd3931d63669a0d22a97"),
+        ),
+        third_party=(("sympy", "1.14.0", "sympy"),
+                     ("mpmath", "1.3.0", "mpmath")),
+        # Symbolic algebra over terms.  Not: sym/2 (names a symbol from
+        # text), the printers, number theory, sums/products, and every
+        # constructor and raw SymPy object the module binds (sin, log, pi,
+        # e, inf, ...): an ISO cell such as log(X) converts without them.
+        predicates=frozenset({
+            "simplify", "expand", "factor", "cancel", "apart", "together",
+            "collect", "trig_simp", "expand_trig",
+            "solve", "solve_all", "roots",
+            "diff", "integrate", "limit", "series", "subs", "free_vars",
+            "degree", "coeffs", "sym_equal", "sym_str", "sympy_term"}),
+        why=("symbolic algebra over the given terms; the converter refuses "
+             "anything it has no case for (no sympify, no eval), pinned by "
+             "TestNoEvalFallback"),
+        reset="_reset_sympy"),
+)}
+
+#: The default per-call budget, in seconds, of a vetted package adapter
+#: call under the sandbox: SymPy has no timeout of its own, and one solve
+#: can run for minutes.  Above what an ordinary producer equation takes --
+#: the log mean temperature difference solved backwards with integer data,
+#: the slowest case in the package's own suite, takes 8.5-9.5 s on the
+#: development machine -- with room for a loaded machine; and under the
+#: 20 s wall clock a sandboxed worker child is usually given, so a runaway
+#: call is reported as the ball ``time_limit_exceeded`` while the child
+#: still has time to say so, instead of the child being killed.
+DEFAULT_ADAPTER_TIME_LIMIT = 15.0
+
+
+class PackageAdapterError(RuntimeError):
+    """:func:`enable` refused a vetted package adapter: a pin does not hold.
+    ``.reason`` names which (``sha256_mismatch``, ``version_mismatch``,
+    ``distribution_mismatch``, ``impostor_module``, ``not_found``); the
+    message starts with it in brackets."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(f"[{reason}] clausal.sandbox.enable: {message}")
+        self.reason = reason
+
+
+def _reset_sympy() -> None:
+    """After a SymPy call ran out of its budget: the alarm may have landed
+    inside a function that was filling one of SymPy's caches or running
+    with mpmath's precision raised.  SymPy's ``cacheit`` caches store a
+    result only when the call returns (an interrupted call stores nothing),
+    and mpmath restores its precision in ``finally`` blocks, but not every
+    SymPy path is written that way, so the caches are emptied and mpmath's
+    working precision put back to its default -- a later call recomputes
+    instead of trusting state an interrupted one left."""
+    import sympy  # noqa: PLC0415
+    import mpmath  # noqa: PLC0415
+    sympy.core.cache.clear_cache()
+    mpmath.mp.prec = 53
+    mpmath.mp.pretty = False
+
+
+def _package_adapter_entries(spec) -> "tuple[tuple[str, tuple], ...]":
+    """``allow_package_adapters`` as ``((name, importers), ...)``: each entry
+    a :data:`PACKAGE_ADAPTERS` name, or ``{"name": ..., "importers": [...]}``
+    naming the only ``.seam`` files that may import it (paths, or
+    ``{"path": ..., "sha256": ...}``)."""
+    import re  # noqa: PLC0415
+    if spec is None:
+        return ()
+    if isinstance(spec, str):
+        raise TypeError("clausal.sandbox.enable: allow_package_adapters is "
+                        "a sequence of adapter names, not a string")
+    out = []
+    for raw in spec:
+        importers = None
+        name = raw
+        if isinstance(raw, dict):
+            if set(raw) - {"name", "importers"} or "name" not in raw:
+                raise ValueError(f"clausal.sandbox.enable: the package "
+                                 f"adapter {raw!r} takes name and, "
+                                 f"optionally, importers")
+            name = raw["name"]
+            imps = []
+            for imp in raw.get("importers") or ():
+                sha = None
+                path = imp
+                if isinstance(imp, dict):
+                    if set(imp) - {"path", "sha256"} or "path" not in imp:
+                        raise ValueError(f"clausal.sandbox.enable: the "
+                                         f"importer {imp!r} takes path and, "
+                                         f"optionally, sha256")
+                    path, sha = imp["path"], imp.get("sha256")
+                    if sha is not None and not (
+                            isinstance(sha, str)
+                            and re.fullmatch(r"[0-9a-fA-F]{64}", sha)):
+                        raise ValueError(f"clausal.sandbox.enable: {imp!r}: "
+                                         f"sha256 must be 64 hex digits")
+                if not isinstance(path, str) or not path:
+                    raise TypeError(f"clausal.sandbox.enable: an importer "
+                                    f"is a path, got {imp!r}")
+                imps.append((os.path.realpath(path), sha and sha.lower()))
+            importers = tuple(imps)
+        if not isinstance(name, str) or name not in PACKAGE_ADAPTERS:
+            raise ValueError(
+                f"clausal.sandbox.enable: {name!r} is not a vetted package "
+                f"adapter (vetted: {', '.join(sorted(PACKAGE_ADAPTERS))})")
+        out.append((name, importers))
+    return tuple(out)
+
+
+def _sha256_file(path: str) -> "tuple[bytes, str]":
+    import hashlib  # noqa: PLC0415
+    with open(path, "rb") as f:
+        data = f.read()
+    return data, hashlib.sha256(data).hexdigest()
+
+
+def _real(path) -> str:
+    return os.path.realpath(str(path))
+
+
+def _module_file(mod) -> "str | None":
+    try:
+        ns = object.__getattribute__(mod, "__dict__")
+    except AttributeError:
+        return None
+    f = ns.get("__file__")
+    return f if isinstance(f, str) else None
+
+
+def _locate(module: str) -> "str | None":
+    """The file the path finders would load *module* from, asked WITHOUT
+    ``sys.modules`` for *module* itself (an entry there is what
+    :func:`_check_not_impostor` judges) and without importing anything but
+    its engine parent package."""
+    import importlib  # noqa: PLC0415
+    from importlib.machinery import PathFinder  # noqa: PLC0415
+    parent, dot, _leaf = module.rpartition(".")
+    try:
+        if dot:
+            path = list(importlib.import_module(parent).__path__)
+            spec = PathFinder.find_spec(module, path)
+        else:
+            spec = PathFinder.find_spec(module)
+    except Exception:  # noqa: BLE001 -- fail closed
+        return None
+    return getattr(spec, "origin", None) if spec is not None else None
+
+
+def _check_not_impostor(module: str, origin: str) -> None:
+    """Refuse when ``sys.modules`` already holds *module* from another file
+    than *origin* (or no file)."""
+    mod = sys.modules.get(module)
+    if mod is None:
+        return
+    f = _module_file(mod)
+    if f is None or _real(f) != _real(origin):
+        raise PackageAdapterError(
+            "impostor_module",
+            f"sys.modules already holds {module} from {f!r}, not from the "
+            f"pinned file {origin}; enable the sandbox before anything "
+            f"imports it")
+
+
+def _dist_owns(dist, rel: str, origin: str) -> bool:
+    """Whether the installed distribution *dist* lists *rel* (a path inside
+    site-packages) and it is the file *origin*; or, installed editable,
+    whether *origin* lies in the source tree it points at."""
+    import json  # noqa: PLC0415
+    try:
+        files = dist.files or ()
+    except Exception:  # noqa: BLE001 -- unreadable metadata: not owned
+        files = ()
+    for f in files:
+        if str(f).replace(os.sep, "/") == rel:
+            try:
+                if _real(dist.locate_file(f)) == _real(origin):
+                    return True
+            except Exception:  # noqa: BLE001
+                pass
+    try:
+        raw = dist.read_text("direct_url.json")
+        info = json.loads(raw) if raw else {}
+    except Exception:  # noqa: BLE001
+        info = {}
+    url = info.get("url", "") if isinstance(info, dict) else ""
+    editable = (isinstance(info, dict)
+                and (info.get("dir_info") or {}).get("editable"))
+    if editable and url.startswith("file://"):
+        root = _real(url[len("file://"):])
+        return _real(origin).startswith(root + os.sep)
+    return False
+
+
+def _source_tree_version(origin: str, distribution: str, depth: int
+                         ) -> "str | None":
+    """In a source checkout (no distribution installed): the version the
+    ``pyproject.toml`` *depth* directories above *origin* declares, when
+    its project name is *distribution*."""
+    import tomllib  # noqa: PLC0415
+    root = os.path.dirname(_real(origin))
+    for _ in range(depth):
+        root = os.path.dirname(root)
+    try:
+        with open(os.path.join(root, "pyproject.toml"), "rb") as f:
+            project = tomllib.load(f).get("project", {})
+    except (OSError, ValueError):
+        return None
+    if project.get("name") != distribution:
+        return None
+    v = project.get("version")
+    return v if isinstance(v, str) else None
+
+
+def _verify_distribution(distribution: str, version: str, rel: str,
+                         origin: str, source_depth: "int | None") -> None:
+    """The distribution *distribution* is installed at *version* and owns
+    the file *origin* (``rel`` inside site-packages) -- or, with
+    *source_depth*, the source tree *origin* lies in declares them."""
+    import importlib.metadata as md  # noqa: PLC0415
+    try:
+        dist = md.distribution(distribution)
+    except md.PackageNotFoundError:
+        dist = None
+    if dist is not None:
+        got = dist.version
+        if got != version:
+            raise PackageAdapterError(
+                "version_mismatch",
+                f"{distribution} {got} is installed; the sandbox vets "
+                f"{distribution}=={version}")
+        if _dist_owns(dist, rel, origin):
+            return
+    if source_depth is not None:
+        got = _source_tree_version(origin, distribution, source_depth)
+        if got is not None:
+            if got != version:
+                raise PackageAdapterError(
+                    "version_mismatch",
+                    f"the source tree of {origin} is {distribution} {got}; "
+                    f"the sandbox vets {distribution}=={version}")
+            return
+    if dist is None:
+        raise PackageAdapterError(
+            "not_found", f"no {distribution} distribution is installed")
+    raise PackageAdapterError(
+        "distribution_mismatch",
+        f"the installed {distribution} {dist.version} metadata does not "
+        f"describe {origin}, the file on the path")
+
+
+def _verify_package_adapter(row: PackageAdapter) -> "tuple[dict, tuple]":
+    """Every pin of *row*, checked before anything of it is imported, then
+    its modules executed from the very bytes hashed.  Returns ``({id:
+    predicate}, modules)``.  Raises :class:`PackageAdapterError`."""
+    import importlib.util  # noqa: PLC0415
+    from clausal.modules.py import ModulePredicate  # noqa: PLC0415
+    sources = []
+    for module, pin in row.files:
+        origin = _locate(module)
+        if not (isinstance(origin, str) and origin.endswith(".py")
+                and os.path.isfile(origin)):
+            raise PackageAdapterError(
+                "not_found", f"{module} resolves to no Python file "
+                             f"({origin!r}); is {row.distribution} installed?")
+        _check_not_impostor(module, origin)
+        data, sha = _sha256_file(origin)
+        if sha != pin:
+            raise PackageAdapterError(
+                "sha256_mismatch",
+                f"{origin} has sha256 {sha}; the sandbox vets {module} at "
+                f"{pin}.  A changed adapter needs engine review and a new "
+                f"pin (docs/sandbox.md)")
+        sources.append((module, origin, data))
+    adapter_origin = sources[0][1]
+    _verify_distribution(row.distribution, row.version,
+                         row.module.replace(".", "/") + ".py",
+                         adapter_origin, source_depth=3)
+    for dist_name, version, top in row.third_party:
+        origin = _locate(top)
+        if not (isinstance(origin, str) and origin.endswith(".py")):
+            raise PackageAdapterError(
+                "not_found", f"the {top} package resolves to {origin!r}")
+        _check_not_impostor(top, origin)
+        _verify_distribution(dist_name, version, f"{top}/__init__.py",
+                             origin, source_depth=None)
+    # Execute the hashed bytes themselves (never a bytecode cache, never a
+    # second read): helpers first, so the adapter's own import finds them.
+    import clausal.modules.py as parent  # noqa: PLC0415
+    loaded = []
+    for module, origin, data in reversed(sources):
+        mod = sys.modules.get(module)
+        if mod is None:
+            spec = importlib.util.spec_from_file_location(module, origin)
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules[module] = mod
+            try:
+                exec(compile(data, origin, "exec"), vars(mod))  # noqa: S102
+            except BaseException:
+                sys.modules.pop(module, None)
+                raise
+            setattr(parent, module.rpartition(".")[2], mod)
+        loaded.append(mod)
+    adapter = sys.modules[row.module]
+    ns = vars(adapter)
+    preds = {}
+    for name in sorted(row.predicates):
+        obj = ns.get(name)
+        if type(obj) is not ModulePredicate or obj._name != name:
+            raise PackageAdapterError(
+                "not_found", f"{row.module}.{name} is not the predicate the "
+                             f"table vets ({type(obj).__name__})")
+        preds[id(obj)] = obj
+    return preds, tuple(loaded)
+
+
+def allowed_package_adapters() -> frozenset:
+    """The vetted package adapters (:data:`PACKAGE_ADAPTERS` names) turned
+    on; empty while the sandbox is off."""
+    return frozenset(_STATE.packages)
+
+
+def package_adapter_time_limit() -> "float | None":
+    """The per-call budget, in seconds, of a vetted package adapter call
+    (None: unbudgeted)."""
+    return _STATE.adapter_budget
+
+
+def vetted_import(dotted: str, name: "str | None") -> bool:
+    """In the sandbox: True when *name*, imported from *dotted*, is a
+    listed predicate of a vetted package adapter turned on now, still bound
+    to the very object :func:`enable` admitted.  The ONE question the load
+    audits ask (here and in :mod:`clausal.python_bridges`): only an
+    ``-import_from`` of such a name counts as clean -- ``-import_module``,
+    a dotted ``py.sympy.x`` and every other name stay routes."""
+    if not _st.ACTIVE or not name:
+        return False
+    for row_name in _STATE.packages:
+        row = PACKAGE_ADAPTERS[row_name]
+        if dotted != row.module or name not in row.predicates:
+            continue
+        mod = sys.modules.get(dotted)
+        if mod is None or mod not in _STATE.package_modules:
+            return False
+        obj = vars(mod).get(name)
+        return obj is not None and id(obj) in _STATE.allowed_ids
+    return False
+
+
+def vetted_reference(kind: str, a: str, b, node) -> bool:
+    """In the sandbox: whether the load audit's module question *(kind, a,
+    b)* about the generated *node* is exactly what an ``-import_from`` of
+    listed vetted predicates lowers to (:func:`vetted_import`):
+
+    * the ``from <module> import n, ...`` statement itself, every name
+      listed (``-import_module`` lowers to ``import <module>``: refused);
+    * a use of an imported name, which the import rewrite spells as ONE
+      dotted ``LoadName`` (``py.sympy.solve``) -- a dotted reference
+      written in the source is a ``LoadAttr`` chain: refused;
+    * the bridge gate's ``name`` question for one imported name."""
+    if not _st.ACTIVE or not _STATE.packages:
+        return False
+    from clausal import python_bridges as pb  # noqa: PLC0415
+    if kind == "name":
+        return vetted_import(pb._module_path(a), b)
+    if kind == "module":
+        if not (isinstance(node, ast.ImportFrom) and node.level == 0
+                and node.module == a and node.names):
+            return False
+        dotted = pb._module_path(a)
+        return all(al.name != "*" and vetted_import(dotted, al.name)
+                   for al in node.names)
+    if kind == "chain":
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "$LoadName"):
+            return False
+        head, dot, name = a.rpartition(".")
+        return bool(dot) and vetted_import(pb._module_path(head), name)
+    return False
+
+
+def _importer_admitted(path: str, data: bytes) -> "str | None":
+    """None when the module at *path* may import every vetted package
+    adapter it uses; else the adapter whose ``importers`` list leaves it
+    out."""
+    import hashlib  # noqa: PLC0415
+    real = os.path.realpath(path)
+    sha = hashlib.sha256(data).hexdigest()
+    for name, importers in _STATE.packages.items():
+        if importers is None:
+            continue
+        if not any(p == real and (h is None or h == sha)
+                   for p, h in importers):
+            return name
+    return None
+
+
+def adapter_budget(obj) -> "tuple[float, object] | None":
+    """In the sandbox: ``(seconds, reset)`` when the predicate object *obj*
+    is a vetted package adapter's and its calls are budgeted (*reset*: the
+    row's state repair after a timeout, or None), else None."""
+    budget = _STATE.adapter_budget
+    if budget is None:
+        return None
+    hit = _STATE.budgeted.get(id(obj))
+    return None if hit is None else (budget, hit)
 
 
 #: Engine modules that are no adapter but that a sandboxed module may
@@ -325,9 +797,19 @@ def engine_adapter_modules() -> "list[str]":
 
 class _State:
     __slots__ = ("adapters", "bridges", "allowed_ids",
-                 "keep", "admitted_bridges", "lock", "attr_keys")
+                 "keep", "admitted_bridges", "lock", "attr_keys",
+                 "packages", "package_modules", "adapter_budget", "budgeted",
+                 "package_preds")
 
     def __init__(self):
+        # Vetted package adapters (operator ruling 2026-11-04): name ->
+        # importers (None: any Python-free .seam); the modules enable()
+        # executed; the per-call budget; predicate id -> reset (or None).
+        self.packages: dict = {}
+        self.package_modules: tuple = ()
+        self.adapter_budget: "float | None" = None
+        self.budgeted: dict = {}
+        self.package_preds: dict = {}   # name -> {id: predicate object}
         self.adapters: frozenset = frozenset()
         self.bridges: tuple = ()
         self.allowed_ids: frozenset = frozenset()
@@ -498,7 +980,11 @@ def _bridge_entries(allow_bridges) -> tuple:
     return tuple(entries)
 
 
-def enable(allow_adapters=None, allow_bridges=()) -> None:
+_KEEP = object()
+
+
+def enable(allow_adapters=None, allow_bridges=(), allow_package_adapters=None,
+           package_adapter_time_limit=_KEEP) -> None:
     """Turn the sandbox on for the rest of the process.
 
     *allow_adapters*: None for the default allowlist (every
@@ -512,9 +998,22 @@ def enable(allow_adapters=None, allow_bridges=()) -> None:
     pyproject above the IMPORTING file, sha256 pins honoured).  Nothing is
     looked up from the working directory.
 
+    *allow_package_adapters*: the vetted package adapters
+    (:data:`PACKAGE_ADAPTERS` names, e.g. ``["sympy"]``) a Python-free
+    ``.seam`` may ``-import_from`` -- their listed predicates only -- each a
+    name or ``{"name": ..., "importers": [path | {"path", "sha256"}]}``
+    naming the only files that may import it (operator ruling 2026-11-04).
+    Every pin of the row is verified before anything of it is imported:
+    a pin that does not hold raises :class:`PackageAdapterError` and leaves
+    the sandbox off.  *package_adapter_time_limit*: the wall-clock budget,
+    in seconds, of each call of such a predicate (default
+    :data:`DEFAULT_ADAPTER_TIME_LIMIT`; None for none): running out throws
+    the ball ``time_limit_exceeded`` (:mod:`clausal.logic.time_limit`).
+
     Fails closed with ``RuntimeError`` when a Clausal module of the user's
     is already loaded (it was not checked).  Calling it again only narrows
-    (a name outside the current lists raises ``PermissionError``)."""
+    (a name outside the current lists, a package adapter not on now, or a
+    longer budget raises ``PermissionError``)."""
     from clausal import python_bridges as pb  # noqa: PLC0415
     with _STATE.lock:
         current = _STATE.adapters if _st.ACTIVE else _default_adapters()
@@ -551,21 +1050,106 @@ def enable(allow_adapters=None, allow_bridges=()) -> None:
                     "unchecked: " + ", ".join(users) + ".  Enable the "
                     "sandbox before loading anything (or set "
                     f"{ENV_VAR}=1).")
+        packages, budget = _narrow_packages(allow_package_adapters,
+                                            package_adapter_time_limit)
         # Everything that can fail is computed BEFORE any state changes, so
         # a failed enable() leaves no half-on sandbox behind (the adapter
         # set is read by sandbox_constructor and the bridge gate).
         ids, keep = _collect_allowed(wanted)
         attr_keys = _engine_attr_keys() if not _st.ACTIVE else None
+        preds = dict(_STATE.package_preds)
+        modules = list(_STATE.package_modules)
+        if not _st.ACTIVE:
+            for name in packages:
+                preds[name], mods = _verify_package_adapter(
+                    PACKAGE_ADAPTERS[name])
+                modules.extend(mods)
+        budgeted = {}
+        for name in packages:
+            row = PACKAGE_ADAPTERS[name]
+            reset = globals()[row.reset] if row.reset else _no_reset
+            for i in preds[name]:
+                budgeted[i] = reset
+        pkg_ids = frozenset(budgeted)
+        pkg_keep = tuple(o for name in packages
+                         for o in preds[name].values())
         _STATE.adapters = wanted
         _STATE.bridges = bridges
-        _STATE.allowed_ids = ids
-        _STATE.keep = keep
+        _STATE.allowed_ids = ids | pkg_ids
+        _STATE.keep = keep + pkg_keep
+        _STATE.packages = packages
+        _STATE.package_preds = {n: preds[n] for n in packages}
+        _STATE.package_modules = tuple(modules)
+        _STATE.adapter_budget = budget
+        _STATE.budgeted = budgeted
+        _clear_audits()
         if not _st.ACTIVE:
             _STATE.attr_keys = attr_keys
             _install_finders()
             _deny_builtins()
             _clear_query_caches()
             _st.ACTIVE = True
+
+
+def _no_reset() -> None:
+    pass
+
+
+def _narrow_packages(spec, budget) -> "tuple[dict, float | None]":
+    """The package adapters and budget an :func:`enable` call asks for, as
+    ``({name: importers}, seconds)``; on a second call only a narrowing
+    (``PermissionError`` otherwise)."""
+    from clausal.logic.time_limit import check_seconds  # noqa: PLC0415
+    from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+    entries = _package_adapter_entries(spec)
+    current = dict(_STATE.packages)
+    if spec is None:
+        packages = current if _st.ACTIVE else {}
+    else:
+        packages = {}
+        for name, importers in entries:
+            if _st.ACTIVE:
+                if name not in current:
+                    raise PermissionError(
+                        f"clausal.sandbox.enable: the sandbox is already on "
+                        f"and the package adapter {name} is not on; a "
+                        f"second enable() may only narrow")
+                old = current[name]
+                if importers is None:
+                    importers = old
+                elif old is not None and not all(
+                        e in old or (e[0], None) in old for e in importers):
+                    # Each importer must be one of the old list's, or the
+                    # pinned form of an unpinned one.
+                    raise PermissionError(
+                        f"clausal.sandbox.enable: the importers of {name} "
+                        f"may only narrow")
+            packages[name] = importers
+    if budget is _KEEP:
+        budget = (_STATE.adapter_budget if _st.ACTIVE
+                  else DEFAULT_ADAPTER_TIME_LIMIT)
+    elif budget is not None:
+        try:
+            budget = check_seconds(budget, "enable/1")
+        except LogicException as e:
+            raise ValueError(f"clausal.sandbox.enable: "
+                             f"package_adapter_time_limit {budget!r}: "
+                             f"{e}") from None
+    if _st.ACTIVE and _STATE.adapter_budget is not None and (
+            budget is None or budget > _STATE.adapter_budget):
+        raise PermissionError(
+            f"clausal.sandbox.enable: the package adapter time limit is "
+            f"{_STATE.adapter_budget} s; a second enable() may only shorten "
+            f"it")
+    return packages, budget
+
+
+def _clear_audits() -> None:
+    """The bridge gate's memoised audits ask the vetted-import question
+    again on a hit; emptied anyway whenever the lists change."""
+    from clausal import python_bridges as _pb  # noqa: PLC0415
+    with _pb._AUDITS_LOCK:
+        _pb._AUDITS.clear()
 
 
 def _engine_attr_keys() -> frozenset:
@@ -634,14 +1218,49 @@ def _install_finders() -> None:
 
 
 def _enable_from_env() -> None:
-    """Called at engine import: ``CLAUSAL_SANDBOX``."""
+    """Called at engine import: ``CLAUSAL_SANDBOX``, and with it
+    ``CLAUSAL_SANDBOX_PACKAGE_ADAPTERS`` (comma-separated vetted package
+    adapter names) and ``CLAUSAL_SANDBOX_ADAPTER_TIME_LIMIT`` (seconds, or
+    ``none``) -- so a parent opts a sandboxed child in through its
+    environment.  A setting that is not one is an ImportError, never a
+    silent default."""
     raw = os.environ.get(ENV_VAR, "").strip().lower()
+    packages = os.environ.get(PACKAGE_ADAPTERS_ENV_VAR, "").strip()
+    limit = os.environ.get(ADAPTER_TIME_LIMIT_ENV_VAR, "").strip()
     if raw in _FALSE:
+        if packages or limit:
+            raise ImportError(
+                f"{PACKAGE_ADAPTERS_ENV_VAR} / {ADAPTER_TIME_LIMIT_ENV_VAR} "
+                f"are set but {ENV_VAR} is not on: they configure the "
+                f"sandbox, so set {ENV_VAR}=1 too (or unset them)")
         return
     if raw not in _TRUE:
         raise ImportError(f"{ENV_VAR}={os.environ.get(ENV_VAR)!r} is not a "
                           f"sandbox setting; use 1 (on) or 0 (off)")
-    enable()
+    kwargs = {}
+    if packages:
+        names = [n.strip() for n in packages.split(",") if n.strip()]
+        bad = [n for n in names if n not in PACKAGE_ADAPTERS]
+        if bad:
+            raise ImportError(
+                f"{PACKAGE_ADAPTERS_ENV_VAR}={packages!r}: "
+                f"{', '.join(bad)} is not a vetted package adapter "
+                f"(vetted: {', '.join(sorted(PACKAGE_ADAPTERS))})")
+        kwargs["allow_package_adapters"] = names
+    if limit:
+        if limit.lower() == "none":
+            kwargs["package_adapter_time_limit"] = None
+        else:
+            try:
+                kwargs["package_adapter_time_limit"] = float(limit)
+            except ValueError:
+                raise ImportError(
+                    f"{ADAPTER_TIME_LIMIT_ENV_VAR}={limit!r} is not a "
+                    f"number of seconds (or none)") from None
+    try:
+        enable(**kwargs)
+    except (PackageAdapterError, ValueError) as e:
+        raise ImportError(f"{ENV_VAR}=1: {e}") from e
 
 
 # ── errors ──────────────────────────────────────────────────────────────────
@@ -904,7 +1523,8 @@ def _denied_hint(denied) -> str:
 
 
 def _sandbox_checker(routes: list, children: list,
-                     denied: "list | None" = None):
+                     denied: "list | None" = None,
+                     vetted: "list | None" = None):
     """:func:`clausal.python_bridges.audit_checker`, narrowed: an
     engine-shipped module a sandboxed module references must be an allowed
     adapter (or its facade, or the stdlib).  Two engine shapes the bridge
@@ -989,6 +1609,14 @@ def _sandbox_checker(routes: list, children: list,
     def check(kind, a, b, node) -> bool:
         from clausal.seam_audit import node_line  # noqa: PLC0415
         line = node_line(node)
+        if vetted is not None and vetted_reference(kind, a, b, node):
+            # A listed predicate of a vetted package adapter, by
+            # -import_from (operator ruling 2026-11-04).  Only the shapes
+            # that import lowers to are answered here: -import_module, a
+            # dotted chain into the module and every other name it binds
+            # stay routes.
+            vetted.append((kind, a, b, line))
+            return True
         if not _parents_ok(a, line):
             return False
         if kind in ("module", "name"):
@@ -1164,12 +1792,26 @@ def _sandboxed_code(loader, fullname: str):
     routes: list = []
     children: list = []
     denied: list = []
+    # Only a .seam importer may use a vetted package adapter (the design:
+    # "the importing .seam must itself still be Python-free"); a .clausal
+    # or .pl file reaches one through such a .seam, never directly.
+    vetted: "list | None" = (
+        [] if not isinstance(loader, (ih.NativePrologLoader, ih.PrologLoader))
+        else None)
     found, _ = seam_audit.audit_tree(
-        tree, _sandbox_checker(routes, children, denied),
+        tree, _sandbox_checker(routes, children, denied, vetted),
         translations=translations or (), module_items=items or (),
         prolog_surface=isinstance(loader, ih.PrologLoader),
         cut_surface=_cut_surface(loader, path))
     routes = routes + found + extra
+    if vetted and not routes:
+        refused_by = _importer_admitted(path, data)
+        if refused_by is not None:
+            raise load_error(path, (
+                f"the sandbox refuses {fullname} ({os.path.abspath(path)}): "
+                f"it imports the vetted package adapter {refused_by}, and "
+                f"it is not an importer enable(allow_package_adapters=...) "
+                f"lists for it"))
     if routes:
         if _bridge_admitted(fullname, path, data):
             _STATE.admitted_bridges.add(os.path.realpath(path))

@@ -119,7 +119,9 @@ __all__ = [
 
 # CLAUSAL_SANDBOX=1 -- the process-wide sandbox (clausal.sandbox), read once
 # here, at engine import, before any module of the user's can load.
-if _os.environ.get("CLAUSAL_SANDBOX", "").strip():
+if (_os.environ.get("CLAUSAL_SANDBOX", "").strip()
+        or _os.environ.get("CLAUSAL_SANDBOX_PACKAGE_ADAPTERS", "").strip()
+        or _os.environ.get("CLAUSAL_SANDBOX_ADAPTER_TIME_LIMIT", "").strip()):
     from clausal import sandbox as _sandbox
     _sandbox._enable_from_env()
     del _sandbox
