@@ -120,6 +120,7 @@ GOAL_BUILTINS: dict[tuple[str, int], str] = {
     ("aggregate_all", 3): "AGA",
     ("time_goal", 1): "G",
     ("time_goal", 2): "GA",
+    ("call_with_time_limit", 2): "AG",
     ("call_residue_vars", 2): "GA",
     ("phrase", 2): "DA",
     ("phrase", 3): "DAA",

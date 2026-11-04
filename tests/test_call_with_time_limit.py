@@ -1,0 +1,390 @@
+"""call_with_time_limit/2 (operator ruling 2026-11-04, "1+2 option"):
+SWI-Prolog's library(time) predicate.
+
+SWI documents it at
+https://www.swi-prolog.org/pldoc/doc_for?object=call_with_time_limit/2 :
+"Goal is called as in once/1.  If this limit is exceeded, the exception
+time_limit_exceeded is raised."  The type and domain errors for Time, the
+nesting rule and the main-thread rule are this engine's (the ruling), and
+are pinned here.
+"""
+from __future__ import annotations
+
+import signal
+import textwrap
+import threading
+import time
+
+import pytest
+
+from clausal import Var, deref, solve
+from clausal.logic import time_limit
+from clausal.logic.exceptions import LogicException
+from clausal.logic.variables import walk
+from clausal.testing import load_clausal_module
+
+BALL = "time_limit_exceeded"
+PI = ("/", "call_with_time_limit", 2)
+
+PROGRAM = """
+:- module(tl, [spin/0, answers/2, first/2, nested/1, inner_caught/1,
+               inner_own/1, catch_all/1, err/3, kept/2, attrs/2, db/1,
+               t/1, all_t/1, limited_t/1, fails/1, throws/1, retimed/1,
+               tiny/1]).
+:- dynamic(fact/1).
+:- table(t/1).
+spin :- spin(0).
+spin(N) :- N1 is N + 1, spin(N1).
+busy(0).
+busy(N) :- N > 0, N1 is N - 1, busy(N1).
+answers(G, L) :- findall(G, call_with_time_limit(5, G), L).
+first(X, L) :- findall(X, call_with_time_limit(5, member(X, [a, b, c])), L).
+nested(R) :- catch(call_with_time_limit(0.3, call_with_time_limit(30, spin)),
+                   E, R = E).
+inner_caught(R) :-
+    catch(call_with_time_limit(0.3,
+              (catch(call_with_time_limit(30, spin), time_limit_exceeded,
+                     R = inner),
+               true)),
+          time_limit_exceeded, R = outer).
+inner_own(R) :-
+    call_with_time_limit(30,
+        catch(call_with_time_limit(0.2, spin), time_limit_exceeded,
+              R = inner)).
+catch_all(R) :-
+    catch(call_with_time_limit(0.3, catch(spin, _, true)),
+          time_limit_exceeded, R = outer).
+err(T, G, E) :- catch(call_with_time_limit(T, G), error(E, _), true).
+kept(X, R) :- catch((X = 1, call_with_time_limit(0.2, spin)), B, R = B).
+attrs(X, R) :- catch((dif(X, a), freeze(X, true),
+                      call_with_time_limit(0.2, spin)), B, R = B).
+db(R) :- catch((assertz(fact(1)), call_with_time_limit(0.2,
+                    (assertz(fact(2)), spin))), B, R = B).
+t(X) :- member(X, [1, 2, 3]), busy(200000).
+all_t(L) :- findall(X, t(X), L).
+limited_t(R) :- catch(call_with_time_limit(0.15, all_t(_)), B, R = B).
+fails(L) :- findall(x, call_with_time_limit(1, fail), L).
+throws(R) :- catch(call_with_time_limit(1, throw(mine)), B, R = B).
+tiny(R) :- catch(call_with_time_limit(1.0e-9, spin), B, R = B).
+retimed(R) :- catch(call_with_time_limit(0.2, spin), B, true),
+              call_with_time_limit(1, R = B).
+:- end_module(tl).
+"""
+
+
+@pytest.fixture(scope="module")
+def tl(tmp_path_factory):
+    d = tmp_path_factory.mktemp("cwtl")
+    p = d / "tl.clausal"
+    p.write_text(textwrap.dedent(PROGRAM))
+    return load_clausal_module(str(p))
+
+
+def first_answer(goal, var, module):
+    for _ in solve(goal, module=module):
+        return walk(deref(var))
+    return "no"
+
+
+def clean_alarm():
+    assert time_limit.live() == ()
+    assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)
+    assert signal.getsignal(signal.SIGALRM) in (signal.SIG_DFL, None)
+
+
+# ── the argument errors (ISO style) ─────────────────────────────────────────
+
+
+@pytest.mark.parametrize("time_arg,error", [
+    (None, "instantiation_error"),
+    ("foo", ("type_error", "number", "foo")),
+    (("f", 1), ("type_error", "number", ("f", 1))),
+    (0, ("domain_error", "positive_number", 0)),
+    (-1, ("domain_error", "positive_number", -1)),
+    (0.0, ("domain_error", "positive_number", 0.0)),
+    (-0.5, ("domain_error", "positive_number", -0.5)),
+])
+def test_time_must_be_a_positive_number(tl, time_arg, error):
+    E = Var()
+    t = Var() if time_arg is None else time_arg
+    assert first_answer(("err", t, "true", E), E, tl) == error
+    clean_alarm()
+
+
+@pytest.mark.parametrize("seconds", [1, 0.5, 2.25])
+def test_an_int_or_float_time_runs_the_goal(tl, seconds):
+    E = Var()
+    assert first_answer(("err", seconds, "true", E), E, tl) != "no"
+    clean_alarm()
+
+
+def test_an_unbound_goal_is_an_instantiation_error(tl):
+    E = Var()
+    assert first_answer(("err", 1, Var(), E), E, tl) == "instantiation_error"
+
+
+def test_a_non_callable_goal_is_a_type_error(tl):
+    E = Var()
+    assert first_answer(("err", 1, 3, E), E, tl) == ("type_error", "callable",
+                                                     3)
+
+
+def test_the_error_context_is_the_predicate_indicator(tl):
+    try:
+        list(solve(("call_with_time_limit", "x", "true"), module=tl))
+    except LogicException as e:
+        assert e.term == ("error", ("type_error", "number", "x"), PI)
+    else:
+        pytest.fail("no error")
+
+
+# ── once/1 semantics (SWI: "Goal is called as in once/1") ──────────────────
+
+
+def test_only_the_first_answer(tl):
+    L = Var()
+    assert first_answer(("first", Var(), L), L, tl) == ["a"]
+
+
+def test_failure_is_failure(tl):
+    L = Var()
+    assert first_answer(("fails", L), L, tl) == []
+    clean_alarm()
+
+
+def test_a_ball_of_the_goal_passes_through(tl):
+    R = Var()
+    assert first_answer(("throws", R), R, tl) == "mine"
+    clean_alarm()
+
+
+# ── the timeout ─────────────────────────────────────────────────────────────
+
+
+def test_a_timeout_throws_the_bare_ball(tl):
+    t0 = time.monotonic()
+    with pytest.raises(LogicException) as info:
+        list(solve(("call_with_time_limit", 0.2, "spin"), module=tl))
+    assert info.value.term == BALL
+    assert time.monotonic() - t0 < 0.2 + 0.5
+    clean_alarm()
+
+
+def test_the_ball_is_caught_by_catch_3(tl):
+    R = Var()
+    assert first_answer(("retimed", R), R, tl) == BALL
+    clean_alarm()
+
+
+@pytest.mark.parametrize("repeat", range(20))
+def test_a_limit_due_at_once_is_still_its_own_ball(tl, repeat):
+    """An alarm that lands the moment the limit is armed is still owned by
+    the call (and so catchable), never an alarm in flight to nobody."""
+    R = Var()
+    assert first_answer(("tiny", R), R, tl) == BALL
+    clean_alarm()
+
+
+def test_an_outer_deadline_fires_inside_an_inner_call(tl):
+    R = Var()
+    t0 = time.monotonic()
+    assert first_answer(("nested", R), R, tl) == BALL
+    assert time.monotonic() - t0 < 0.3 + 0.5
+    clean_alarm()
+
+
+def test_a_catch_around_the_inner_call_does_not_swallow_the_outer(tl):
+    R = Var()
+    assert first_answer(("inner_caught", R), R, tl) == "outer"
+    clean_alarm()
+
+
+def test_a_catch_all_inside_does_not_swallow_its_own_limit(tl):
+    """The alarm is in flight to its owner: no catch/3 between takes it."""
+    R = Var()
+    assert first_answer(("catch_all", R), R, tl) == "outer"
+    clean_alarm()
+
+
+def test_an_inner_limit_is_its_own_to_catch(tl):
+    R = Var()
+    t0 = time.monotonic()
+    assert first_answer(("inner_own", R), R, tl) == "inner"
+    assert time.monotonic() - t0 < 0.2 + 0.5
+    clean_alarm()
+
+
+# ── what a timeout undoes: exactly what any ball undoes ────────────────────
+
+
+def test_bindings_before_the_timeout_are_undone(tl):
+    X, R = Var(), Var()
+    for _ in solve(("kept", X, R), module=tl):
+        assert walk(deref(R)) == BALL
+        assert isinstance(deref(X), Var)
+        break
+
+
+def test_attributes_before_the_timeout_are_undone(tl):
+    X, R = Var(), Var()
+    for _ in solve(("attrs", X, R), module=tl):
+        assert walk(deref(R)) == BALL
+        # dif(X, a) is gone: X = a succeeds.
+        assert list(solve(("=", X, "a"), module=tl))
+        break
+
+
+def test_the_database_is_kept_as_for_any_ball(tl):
+    """ISO: assert/retract are not undone by a ball (or backtracking)."""
+    R, F = Var(), Var()
+    assert first_answer(("db", R), R, tl) == BALL
+    got = [walk(deref(F)) for _ in solve(("fact", F), module=tl)]
+    assert got == [1, 2]
+
+
+# ── tabling ─────────────────────────────────────────────────────────────────
+
+
+def test_a_timeout_mid_tabled_evaluation_leaves_no_complete_partial_table(tl):
+    R, L = Var(), Var()
+    assert first_answer(("limited_t", R), R, tl) == BALL
+    assert first_answer(("all_t", L), L, tl) == [1, 2, 3]
+    clean_alarm()
+
+
+# ── where a limit cannot be enforced ────────────────────────────────────────
+
+
+def test_off_the_main_thread_it_is_refused(tl):
+    out = {}
+
+    def run():
+        try:
+            out["v"] = list(solve(("call_with_time_limit", 1, "true"),
+                                  module=tl))
+        except LogicException as e:
+            out["e"] = e.term
+    th = threading.Thread(target=run)
+    th.start()
+    th.join()
+    assert out["e"] == ("error", ("system_error",
+                                  "time_limit_not_main_thread"), PI)
+
+
+# ── the alarm it found is kept: outer timers and handlers ──────────────────
+
+
+class _Outer(BaseException):
+    pass
+
+
+def test_an_outer_python_alarm_still_fires_and_is_restored(tl):
+    """A SIGALRM timer armed before (the quad runner's, pytest-timeout's):
+    its handler runs at its own time, through a longer inner limit."""
+    def fire(signum, frame):
+        raise _Outer()
+    old = signal.signal(signal.SIGALRM, fire)
+    try:
+        signal.setitimer(signal.ITIMER_REAL, 0.3)
+        t0 = time.monotonic()
+        with pytest.raises(_Outer):
+            list(solve(("call_with_time_limit", 30, "spin"), module=tl))
+        assert time.monotonic() - t0 < 0.3 + 0.5
+        assert time_limit.live() == ()
+        assert signal.getsignal(signal.SIGALRM) is fire
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
+
+
+def test_an_outer_timer_keeps_its_remaining_time(tl):
+    fired = []
+
+    def fire(signum, frame):
+        fired.append(time.monotonic())
+    old = signal.signal(signal.SIGALRM, fire)
+    try:
+        signal.setitimer(signal.ITIMER_REAL, 0.6)
+        t0 = time.monotonic()
+        assert list(solve(("call_with_time_limit", 5, "true"), module=tl))
+        assert signal.getsignal(signal.SIGALRM) is fire
+        remaining, _ = signal.getitimer(signal.ITIMER_REAL)
+        assert 0.3 < remaining <= 0.6
+        while not fired and time.monotonic() - t0 < 2:
+            time.sleep(0.01)
+        assert fired and 0.5 < fired[0] - t0 < 1.0
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
+
+
+def test_the_quad_runner_keeps_working(tmp_path):
+    from clausal import cli
+    from clausal.quad_runner import run_quads
+    src = textwrap.dedent("""
+        spin(N) :- N1 is N + 1, spin(N1).
+        ?- call_with_time_limit(1, member(X, [a, b])).
+           X = a.
+        ?- catch(call_with_time_limit(0.2, spin(0)), B, true).
+           B = time_limit_exceeded.
+        ?- call_with_time_limit(30, spin(0)).
+           false.
+    """)
+    (tmp_path / "q.pl").write_text(src)
+    module = load_clausal_module(str(tmp_path / "q.pl"))
+    import io
+    out = io.StringIO()
+    summary = run_quads(module, src, cli._goal_reader_ops(src), "q.pl",
+                        out=out, timeout=0.6)
+    text = out.getvalue()
+    assert summary.count("passed") == 2, text
+    assert summary.count("failed") == 1 and "no answer within 0.6" in text
+    clean_alarm()
+
+
+def test_the_test_runner_keeps_working(tmp_path):
+    """A .clausal file's test/1 clauses that use the limit, run by
+    ``clausal --test`` (the test runner's own SIGALRM watchdog included)."""
+    import os
+    import subprocess
+    import sys
+    from tests.test_sandbox import ENGINE_ROOT
+    (tmp_path / "w.clausal").write_text(textwrap.dedent("""
+        :- module(w, []).
+        spin(N) :- N1 is N + 1, spin(N1).
+        test(first) :- call_with_time_limit(1, member(X, [a, b])), X == a.
+        test(timeout) :- catch(call_with_time_limit(0.2, spin(0)), B, true),
+                         B == time_limit_exceeded.
+        test(wrong) :- call_with_time_limit(1, member(X, [a, b])), X == b.
+        :- end_module(w).
+    """))
+    env = dict(os.environ, PYTHONPATH=ENGINE_ROOT)
+    r = subprocess.run([sys.executable, "-m", "clausal", "w.clausal",
+                        "--test"], cwd=tmp_path, env=env,
+                       capture_output=True, text=True, timeout=120)
+    out = r.stdout + r.stderr
+    assert "2 passed" in out and "1 failed" in out, out
+
+
+# ── the seam surface ────────────────────────────────────────────────────────
+
+
+def test_the_seam_surface(tmp_path):
+    import importlib
+    import sys
+    (tmp_path / "tls.seam").write_text(textwrap.dedent("""
+        -module(tls, [one/1, timed/1])
+        -private([a, b])
+        spin(N) <- (N1 is N + 1, spin(N1))
+        one(X) <- call_with_time_limit(1, member(X, [a, b]))
+        timed(B) <- catch(call_with_time_limit(0.2, spin(0)), B, True)
+    """))
+    sys.path.insert(0, str(tmp_path))
+    try:
+        m = importlib.import_module("tls")
+    finally:
+        sys.path.remove(str(tmp_path))
+    X = Var()
+    assert [walk(deref(X)) for _ in solve(("one", X), module=m)] == ["a"]
+    assert first_answer(("timed", X), X, m) == BALL
+    clean_alarm()

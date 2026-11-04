@@ -762,6 +762,7 @@ _GOAL_ARGS = {
     ("once", 1): (0,), ("ignore", 1): (0,), ("findall", 3): (1,),
     ("findall", 4): (1,), ("forall", 2): (0, 1), ("catch", 3): (0, 2),
     ("bagof", 3): (1,), ("setof", 3): (1,), ("aggregate_all", 3): (1,),
+    ("call_with_time_limit", 2): (1,),
 }
 
 

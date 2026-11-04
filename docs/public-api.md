@@ -95,6 +95,10 @@ They are removed in 2.0.
   They are covered as **predicates**, called from `.seam` or `.clausal` source
   or as a goal cell. The Python objects `clausal` exports under the same names are
   not (see 3).
+- **`call_with_time_limit/2`** and its ball, the bare atom
+  `time_limit_exceeded` (SWI-Prolog's), with the errors and rules in
+  [Control](control.md#call_with_time_limit2). **Added to the 1.x surface
+  (Unreleased).**
 - **Error terms are Scryer's.** An error is the plain cell
   `error(Formal, Culprit)`: `Formal` is the ISO formal term
   (`type_error(atom, 1)`, `existence_error(procedure, foo/1)`, …) and

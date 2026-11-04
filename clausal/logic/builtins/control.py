@@ -1,4 +1,5 @@
-"""Control builtins: time_goal/1, time_goal/2, call_nth/2, count_all/2,
+"""Control builtins: time_goal/1, time_goal/2, call_with_time_limit/2,
+call_nth/2, count_all/2,
 setup_call_cleanup/3, call_cleanup/2, current_time/1, statistics/2.
 
 The coroutining predicates (call_nth, count_all, setup_call_cleanup, call_cleanup,
@@ -270,6 +271,64 @@ def _call_residue_vars__2(db, this_generator, _proceed, _fail, _catcher,
     yield (_fail, DONE)
 
 
+def _call_with_time_limit__2(db, this_generator, _proceed, _fail, _catcher,
+                             time, goal, trail):
+    """call_with_time_limit(Time, Goal) -- run Goal as once/1 does (its first
+    answer, its choice points discarded), but throw the ball
+    ``time_limit_exceeded`` if Goal has not answered after Time seconds of
+    wall-clock time (SWI-Prolog's library(time); operator ruling
+    2026-11-04).  Time is a number > 0 (int or float): unbound is
+    instantiation_error, a non-number type_error(number, Time), one <= 0
+    domain_error(positive_number, Time).  Goal is run as call/1 runs it.
+
+    An inner limit never extends an outer one: when the OUTER deadline
+    passes inside an inner call, the outer call throws, and no catch/3 in
+    between -- the inner call's own handler included -- takes the alarm on
+    its way (``clausal.logic.time_limit``).  Bindings, attributes and the
+    database are undone exactly as for any other ball: by the catch/3 that
+    takes it.  Main thread only: elsewhere the call is refused with
+    ``error(system_error(time_limit_not_main_thread), _)``, never run
+    unlimited."""
+    from clausal.logic import time_limit as _tl  # noqa: PLC0415
+    from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+    context = "call_with_time_limit/2"
+    seconds = _tl.check_seconds(time, context)
+    call1 = _DB_BUILTINS[("call", 1)](db)
+    mark = trail.mark()
+    d = _tl.new(seconds, context)
+    try:
+        sg = StepGenerator(call1, this_generator, this_generator,
+                           this_generator, goal, trail)
+        try:
+            _tl.start(d)
+            _st = yield (sg, None)
+        except BaseException as e:
+            _tl.pop(d)
+            if _tl.owned(e, d):
+                raise _tl.ball(context) from None
+            raise
+        _tl.pop(d)
+        if d.fired:
+            # Its alarm struck and was swallowed on the way (an
+            # ``except Exception`` in a library): whatever Goal then
+            # answered is not to be trusted as its answer.
+            sg.close()
+            raise _tl.ball(context)
+    finally:
+        _tl.pop(d)
+    if _st is DONE:
+        yield (_fail, DONE)
+        return
+    # once/1: the first answer only; the goal's choice points are closed.
+    sg.close()
+    yield (_proceed, None)
+    trail.undo(mark)
+    yield (_fail, DONE)
+
+
+_DB_BUILTINS[("call_with_time_limit", 2)] = _make_time_goal_factory(
+    _call_with_time_limit__2)
+_BUILTIN_FIELDS[("call_with_time_limit", 2)] = ("time", "goal")
 _DB_BUILTINS[("call_residue_vars", 2)] = _make_time_goal_factory(_call_residue_vars__2)
 _BUILTIN_FIELDS[("call_residue_vars", 2)] = ("goal", "vars")
 _DB_BUILTINS[("time_goal", 1)] = _make_time_goal_factory(_time_goal__1)

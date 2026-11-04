@@ -9,6 +9,25 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Added
 
+- **`call_with_time_limit/2`** (SWI-Prolog's library(time); operator
+  ruling 2026-11-04, "1+2 option"), on every surface. Runs Goal as
+  `once/1` does and throws the bare atom `time_limit_exceeded` (SWI's
+  ball, the one Scryer's library(clpz) optimisation code catches) when it
+  has not answered after Time seconds of wall-clock time. Time unbound:
+  `instantiation_error`; not a number: `type_error(number, Time)`; not
+  > 0: `domain_error(positive_number, Time)`. An inner limit never extends
+  an outer one, and when the outer deadline passes inside an inner call the
+  OUTER call throws: the alarm is in flight to its owner, and no `catch/3`
+  on the way matches it (`catch_match`), not even a catch-all inside the
+  goal -- a deliberate difference from SWI, where a catch-all there takes
+  it. A swallowed alarm repeats every 50 ms and its call then throws the
+  ball whatever the goal answered. Built on `SIGALRM`/`setitimer`
+  (`clausal/logic/time_limit.py`): an alarm already armed (quad runner,
+  test runner, pytest-timeout) still fires at its own time and is restored
+  with its remaining time. Main thread only: elsewhere it is refused with
+  `error(system_error(time_limit_not_main_thread), call_with_time_limit/2)`.
+  A timeout undoes what any ball undoes; a tabled evaluation cut short is
+  not left as a complete table. Pinned by `tests/test_call_with_time_limit.py`.
 - **`copy_term/3` and `call_residue_vars/2`** (Scryer's and SWI's), on
   every surface. `copy_term(Term, Copy, Gs)`: Copy is Term with fresh
   variables that carry no attributes, and Gs the goals that put back the

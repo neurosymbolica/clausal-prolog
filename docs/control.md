@@ -1,7 +1,7 @@
 # Control
 
 Control predicates manage execution flow — forcing determinism, measuring
-performance, and controlling search. For delayed execution, see
+performance, limiting time, and controlling search. For delayed execution, see
 [Coroutining](coroutining.md).
 
 Examples on this page are [Clausal Prolog](clausal_prolog.md)
@@ -98,6 +98,64 @@ wall-clock time in seconds (as a float). Useful for programmatic benchmarking.
 ```clausal
 --8<-- "tests/fixtures/docs/control_sigs.txt:time_goal_2"
 ```
+
+### call_with_time_limit/2
+
+`call_with_time_limit(Time, Goal)` — run `Goal` as [`once/1`](#once1) does
+(its first answer; its choice points are discarded), but if it has not
+answered after `Time` seconds of wall-clock time, throw the ball
+`time_limit_exceeded`. This is SWI-Prolog's `call_with_time_limit/2`
+(library(time)), with SWI's ball: the one existing Prolog code catches.
+A timeout is never a failure.
+
+```clausal
+spin(N) :- N1 is N + 1, spin(N1).
+
+test("first answer only") :-
+    findall(X, call_with_time_limit(1, member(X, [a, b, c])), XS),
+    XS == [a].
+
+test("a goal that runs out throws the ball") :-
+    catch(call_with_time_limit(0.2, spin(0)), BALL, true),
+    BALL == time_limit_exceeded.
+```
+
+- **`Time`** is a number of seconds, an integer or a float, greater than 0.
+  Unbound: `instantiation_error`. Not a number:
+  `type_error(number, Time)`. Zero or less:
+  `domain_error(positive_number, Time)`.
+- **`Goal`** is run as `call/1` runs it, with call/1's errors.
+- **Nesting.** An inner limit never extends an outer one: the earlier
+  deadline wins. When the OUTER deadline passes while an inner call runs,
+  the outer call throws, and no `catch/3` on the way takes the alarm — not
+  one around the inner call, not a catch-all inside the goal. Only the
+  call whose deadline passed throws `time_limit_exceeded`; from there on it
+  is an ordinary ball. (SWI-Prolog throws the same ball from wherever the
+  alarm lands, so a catch-all inside the goal can take it there.)
+- **What a timeout undoes** is what any ball undoes, at the `catch/3` that
+  takes it: bindings and constraints made since are undone; `assertz` and
+  `retract` are not (ISO). A tabled evaluation cut short leaves no table
+  that a later call reads as complete.
+- **A swallowed alarm.** If code inside the goal catches the alarm in
+  Python (a library's `except Exception`), the alarm repeats every 50 ms
+  until it reaches its call, and that call throws the ball whatever the
+  goal then answered: a result produced after the alarm struck is not
+  trusted.
+- **Main thread only.** The limit is enforced with `SIGALRM`, which only
+  the main thread receives. In another thread, or on a platform without
+  `SIGALRM`, the call is refused with
+  `error(system_error(time_limit_not_main_thread), call_with_time_limit/2)`
+  (`time_limit_no_alarm` without `SIGALRM`); it never runs unlimited.
+- **Alarms already set** (the quad runner's, the test runner's,
+  pytest-timeout's) keep working: while a limit is active the earliest of
+  all deadlines is armed, an outer timer's handler runs at its own time,
+  and the handler and the time left are restored when the last limit ends.
+- **Granularity.** The alarm lands between Python bytecodes: a long call
+  into C (a huge integer multiplication, a regular expression) finishes
+  before the ball is thrown.
+
+The [sandbox](sandbox.md#vetted-package-adapters) uses the same mechanism,
+and the same ball, for the per-call budget of a vetted package adapter.
 
 ---
 

@@ -36,6 +36,7 @@ After SLG completion, a simplification pass resolves delayed negations:
 from __future__ import annotations
 import itertools
 import os
+import sys as _sys
 import threading
 from decimal import Decimal as _Decimal
 from fractions import Fraction as _Fraction
@@ -542,6 +543,12 @@ def end_drive_episode() -> None:
     episodes = _drive_ctx.episodes
     if not episodes:
         return
+    tl = _sys.modules.get("clausal.logic.time_limit")
+    if tl is not None and tl._CLOCK.stack:
+        # A time limit whose frame an unrouted exception skipped (a
+        # KeyboardInterrupt, the quad runner's timeout) ends with the drive
+        # it ran in, so its alarm is not left armed after the query.
+        tl.release_from_depth(len(episodes))
     created = episodes.pop()
     if not created:
         return

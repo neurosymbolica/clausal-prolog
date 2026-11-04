@@ -908,7 +908,7 @@ _META_GOAL_ARGS: dict[str, tuple[int, ...]] = {
     "forall": (0, 1), "catch": (0, 2), "call_cleanup": (0, 1),
     "setup_call_cleanup": (0, 1, 2), "freeze": (1,), "when": (1,),
     "call_nth": (0,), "count_all": (0,), "catch_recover": (0, 2),
-    "time": (0,), "phrase": (0,),
+    "time": (0,), "phrase": (0,), "call_with_time_limit": (1,),
     "maplist": (0,), "foldl": (0,), "include": (0,), "exclude": (0,),
     "partition": (0,),
     "assert": (0,), "asserta": (0,), "assertz": (0,), "retract": (0,),
@@ -935,7 +935,8 @@ def _is_goal_arity(name: str, arity: int) -> bool:
     )
     return (name == "call" and arity >= 1) or (name, arity) in GOAL_POSITIONS \
         or (name, arity) in GOAL_CONTROLS \
-        or (name, arity) in (("catch", 2), ("time", 1), ("aggregate_all", 3))
+        or (name, arity) in (("catch", 2), ("time", 1), ("aggregate_all", 3),
+                             ("call_with_time_limit", 2))
 
 
 #: library(reif)'s if_/3, which the translator has built in (without
