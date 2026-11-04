@@ -1885,7 +1885,9 @@ def reify_source(text, filename="<reflected>", double_quotes=None,
     terms back into the same file (:func:`render_source` takes it).  The
     terms themselves do not change.
     """
-    from clausal.templating.term_rewriting import EmbedTransformer
+    from clausal.templating.term_rewriting import (
+        EmbedTransformer, parse_seam, too_deep_to_rewrite,
+    )
 
     source_lines = text.splitlines(keepends=True)
     try:
@@ -1894,7 +1896,10 @@ def reify_source(text, filename="<reflected>", double_quotes=None,
                 "ignore", message="'str' object is not callable",
                 category=SyntaxWarning,
             )
-            tree = ast.parse(text, filename=filename)
+            # A chain too long for ``ast.parse`` and an item too deep for the
+            # rewriter are refused (``resource_error(stack)``) as module
+            # loading refuses them, never a raw RecursionError.
+            tree = parse_seam(text, filename, error=ReifyError)
             transformer = EmbedTransformer(
                 source_lines=source_lines, filename=filename, reify=True)
             if double_quotes is not None:
@@ -1930,10 +1935,17 @@ def reify_source(text, filename="<reflected>", double_quotes=None,
             and isinstance(call.func, ast.Name)
             and call.func.id == "$define_predicate"
         ):
-            clause = _ClauseReifier(
-                field_order=field_order, quote_map=transformer._quote_map,
-                spellings=spellings,
-            ).clause(call.args[0])
+            try:
+                clause = _ClauseReifier(
+                    field_order=field_order, quote_map=transformer._quote_map,
+                    spellings=spellings,
+                ).clause(call.args[0])
+            except RecursionError:
+                # The reifier recurses per level of the constructor code (an
+                # ``and`` chain a few hundred long nests as deep).
+                raise too_deep_to_rewrite(
+                    stmt, filename, source_lines, what="item",
+                    error=ReifyError) from None
             items.append(clause)
             pos = vfield(clause, "position")
             if pos is not None:
@@ -1941,7 +1953,7 @@ def reify_source(text, filename="<reflected>", double_quotes=None,
 
     # Original-AST pass: anything that is neither a directive nor covered by
     # a reified clause's line span is embedded Python.
-    original = ast.parse(text, filename=filename)
+    original = parse_seam(text, filename, error=ReifyError)
     for stmt in original.body:
         if _is_directive_stmt(stmt):
             continue
@@ -2084,7 +2096,19 @@ def reify_ast(node, source=None, double_quotes=None, spellings=None):
     if isinstance(node, ast.Expression):
         node = node.body
     if isinstance(node, ast.stmt):
-        text = source if source is not None else _unparse_clause(node)
+        if source is not None:
+            text = source
+        else:
+            try:
+                text = _unparse_clause(node)
+            except RecursionError:
+                # ``ast.unparse`` recurses per level too.
+                from clausal.templating.term_rewriting import (
+                    too_deep_to_rewrite,
+                )
+                raise too_deep_to_rewrite(
+                    node, "<reflected>", what="item",
+                    error=ReifyError) from None
         items = reify_source(text, double_quotes=double_quotes,
                              spellings=spellings)
         if not items:
@@ -2092,7 +2116,9 @@ def reify_ast(node, source=None, double_quotes=None, spellings=None):
         return items[0]
 
     from clausal.templating.quote_map import build_quote_map
-    from clausal.templating.term_rewriting import TermTransformer
+    from clausal.templating.term_rewriting import (
+        TermTransformer, too_deep_to_rewrite,
+    )
 
     source_lines = source.splitlines(keepends=True) if source is not None else None
     quote_map = build_quote_map(source_lines) if source_lines else None
@@ -2100,8 +2126,16 @@ def reify_ast(node, source=None, double_quotes=None, spellings=None):
         reify=True, source_lines=source_lines, quote_map=quote_map,
         double_quotes_mode=double_quotes if double_quotes is not None else "chars",
     )
-    ctor = transformer.visit(node)
-    return _ClauseReifier(quote_map=quote_map, spellings=spellings).term(ctor)
+    # The rewriter and the reifier both recurse per level of the term: one
+    # nested a few hundred deep (an operator or ``and`` chain) is refused as
+    # module loading refuses a clause body, never a raw RecursionError.
+    try:
+        ctor = transformer.visit(node)
+        return _ClauseReifier(quote_map=quote_map, spellings=spellings).term(ctor)
+    except RecursionError:
+        raise too_deep_to_rewrite(
+            node, "<reflected>", source_lines, what="term",
+            error=ReifyError) from None
 
 
 def render_ast(term, spellings=None):

@@ -30,6 +30,8 @@ import code
 import sys
 import warnings
 
+from clausal.codegen import fix_missing_locations
+
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -143,20 +145,20 @@ class ClausalConsole(code.InteractiveConsole):
             self.showsyntaxerror(filename)
             return False
 
-        from clausal.import_hook import _FreshEmbedTransformer
+        from clausal.import_hook import _FreshEmbedTransformer, compile_input
         try:
             # The source lines are what the quote map is built from (spec §7);
             # without them -double_quotes(chars) is silently ignored and the
             # REPL disagrees with a file that carries the same directive.
             transformed = _FreshEmbedTransformer(
                 source.splitlines(keepends=True)).visit(tree)
-            ast.fix_missing_locations(transformed)
+            fix_missing_locations(transformed)
         except Exception:
             self.showtraceback()
             return False
 
         try:
-            code_obj = compile(transformed, filename, symbol)
+            code_obj = compile_input(transformed, filename, symbol)
         except SyntaxError:
             self.showsyntaxerror(filename)
             return False
@@ -187,7 +189,7 @@ def _make_clausal_compile(repl):
     Multi-statement code stays in ``"exec"`` mode (``"single"`` only accepts
     one statement).
     """
-    from clausal.import_hook import _FreshEmbedTransformer
+    from clausal.import_hook import _FreshEmbedTransformer, compile_input
 
     def _compile_with_flags(code: str, mode: str):
         # Parse to AST.  Let SyntaxError propagate — in eval mode this
@@ -200,7 +202,7 @@ def _make_clausal_compile(repl):
         try:
             transformed = _FreshEmbedTransformer(
                 code.splitlines(keepends=True)).visit(tree)
-            ast.fix_missing_locations(transformed)
+            fix_missing_locations(transformed)
         except Exception:
             transformed = tree
 
@@ -210,14 +212,14 @@ def _make_clausal_compile(repl):
         if (mode == "exec"
                 and len(transformed.body) == 1
                 and isinstance(transformed.body[0], ast.Expr)):
-            transformed = ast.fix_missing_locations(
+            transformed = fix_missing_locations(
                 ast.Interactive(body=transformed.body)
             )
             effective_mode = "single"
         else:
             effective_mode = mode
 
-        return compile(
+        return compile_input(
             transformed,
             "<stdin>",
             effective_mode,

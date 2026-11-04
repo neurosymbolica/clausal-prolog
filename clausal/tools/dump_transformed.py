@@ -34,7 +34,8 @@ from clausal._suffixes import CLAUSAL_SUFFIXES, seam_suffixes_text
 
 def dump_source(path: str) -> str:
     """Return the transformed Python source for a seam file."""
-    from clausal.templating.term_rewriting import EmbedTransformer
+    from clausal.codegen import fix_missing_locations
+    from clausal.templating.term_rewriting import EmbedTransformer, parse_seam
 
     source = open(path).read()
     with warnings.catch_warnings():
@@ -43,15 +44,27 @@ def dump_source(path: str) -> str:
             message="'str' object is not callable",
             category=SyntaxWarning,
         )
-        tree = ast.parse(source, filename=path)
+        tree = parse_seam(source, path)
     # A10-F007: pass source_lines so arrow detection is byte-faithful to
     # import_hook._parse_clausal_source. Without it, a legal Lt guard like
     # ``X< -3`` uses the column-gap heuristic and dumps a Lambda/Predicate,
     # diverging from what the import hook actually compiles.
     tree = EmbedTransformer(source_lines=source.splitlines(keepends=True)).visit(tree)
-    ast.fix_missing_locations(tree)
+    fix_missing_locations(tree)
 
-    unparsed = ast.unparse(tree)
+    try:
+        unparsed = ast.unparse(tree)
+    except RecursionError:
+        # ``ast.unparse`` recurses per level of the generated code, which
+        # nests deeper than the source (a 180-deep term loads but does not
+        # print): refused by name, as the loader refuses what it cannot
+        # finish, not a raw RecursionError.
+        err = SyntaxError(
+            f"{path}: the generated code nests too deep to print: Python's "
+            f"recursion limit was reached unparsing it -- "
+            f"resource_error(stack)")
+        err.filename = path
+        raise err from None
 
     # Try to format with black if available.
     # The transformed source contains $-prefixed names which aren't valid Python,

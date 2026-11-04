@@ -47,7 +47,10 @@ from .pythonic_ast import nodes as simple_ast
 from .atom_diagnostics import truth_literal_hint_lines
 from .import_diagnostics import exec_with_import_diagnostics
 from .syntax_diagnostics import clausal_syntax_diagnostics
-from .templating.term_rewriting import EmbedTransformer, TermTransformer
+from .templating.term_rewriting import (
+    EmbedTransformer, TermTransformer, parse_seam as _parse_seam,
+    too_deep_to_rewrite,
+)
 from .codegen import fix_missing_locations
 from .logic.database import Module as LogicModule
 from .logic.predicate import (
@@ -959,25 +962,6 @@ class _ClausalSourceLoader(SourceLoader):
                 raise
 
 
-def _parse_seam(source, filename):
-    """``ast.parse`` of seam source, with CPython's own ``RecursionError``
-    (a flat operator chain some thousands long, which the parser reads as a
-    left-nested ``BinOp``: "maximum recursion depth exceeded during ast
-    construction") refused as a named ``SyntaxError``: ISO's
-    resource_error(stack).  CPython does not say where; deep BRACKETED
-    nesting it refuses itself, as ``MemoryError: Parser stack overflowed``."""
-    try:
-        return ast.parse(source, filename=filename)
-    except RecursionError:
-        err = SyntaxError(
-            f"{filename}: the source nests too deep for Python's parser: "
-            f"its recursion limit was reached building the syntax tree -- "
-            f"resource_error(stack). An operator chain some thousands "
-            f"long (`1 + 1 + ... + 1`) is a term nested as deep")
-        err.filename = filename
-        raise err from None
-
-
 def transform_seam_source(source, filename, prolog_singletons=False):
     """Parse + EmbedTransformer a seam source string, executing nothing.
 
@@ -1027,14 +1011,17 @@ def _parse_clausal_source(source, filename, prolog_singletons=False):
     return code, transformer
 
 
-def _too_deep_to_compile(tree, filename):
+def _too_deep_to_compile(tree, filename, interactive=False):
     """The named, located ``SyntaxError`` for a generated seam module CPython
     ran out of recursion compiling (an ``and``/``or`` chain thousands long
     lowers to constructor calls nested as deep).  CPython does not say
     where: the first top-level statement that fails alone is the one named.
-    Only on this failure path, so a module that compiles pays nothing."""
+    Only on this failure path, so a module that compiles pays nothing.
+    *interactive* words it for a REPL input (see :func:`compile_input`),
+    where a query's conjunction nests as deep as it is long."""
     lineno = None
-    for stmt in tree.body:
+    body = tree.body if isinstance(tree.body, list) else []
+    for stmt in body:
         try:
             compile(ast.Module(body=[stmt], type_ignores=[]), filename, "exec")
         except RecursionError:
@@ -1043,15 +1030,33 @@ def _too_deep_to_compile(tree, filename):
         except SyntaxError:
             continue
     where = f"{filename}:{lineno}" if lineno else f"{filename}"
+    if interactive:
+        what = "input"
+        fine = ("a term, an operator chain, an `and`/`or` chain or a "
+                "query's conjunction nested some thousands deep is not")
+    else:
+        what = "item"
+        fine = ("A conjunction of any length is fine; a term, an operator "
+                "chain or an `and`/`or` chain nested some thousands deep "
+                "is not")
     err = SyntaxError(
-        f"{where}: this item nests too deep to compile: Python's recursion "
+        f"{where}: this {what} nests too deep to compile: Python's recursion "
         f"limit was reached compiling the code it lowers to -- "
-        f"resource_error(stack). A conjunction of any length is fine; a "
-        f"term, an operator chain or an `and`/`or` chain nested some "
-        f"thousands deep is not")
+        f"resource_error(stack). {fine[0].upper()}{fine[1:]}")
+    err.resource_error = "stack"
     err.filename = filename
     err.lineno = lineno
     return err
+
+
+def compile_input(tree, filename, mode, **kwargs):
+    """``compile()`` of a transformed REPL input (``clausal.python_repl``),
+    with CPython's ``RecursionError`` refused as module loading refuses it:
+    a named ``SyntaxError``, ``resource_error(stack)``."""
+    try:
+        return compile(tree, filename, mode, **kwargs)
+    except RecursionError:
+        raise _too_deep_to_compile(tree, filename, interactive=True) from None
 
 
 def _extract_module_items(source, filename, prolog_singletons=False):
@@ -1906,6 +1911,10 @@ class _StarQueryTransformer(ast.NodeTransformer):
     ``Expr(Starred(...))`` form.
     """
 
+    def __init__(self, source_lines=None):
+        # The cell's text, only to quote the line a refusal names.
+        self._source_lines = source_lines
+
     def visit_Expr(self, node):
         # Legacy form: Expr(Starred(...)) — may still work on some Python/IPython combos.
         if isinstance(node.value, ast.Starred):
@@ -1926,6 +1935,16 @@ class _StarQueryTransformer(ast.NodeTransformer):
         return self.generic_visit(node)
 
     def _rewrite(self, node, inner):
+        # A query nested too deep for the term rewriter (it recurses per
+        # level: ``*(X == 1 + 1 + ... + 1)`` a few hundred long) is refused
+        # as module loading refuses a clause body, never a raw RecursionError.
+        try:
+            return self._rewrite_query(node, inner)
+        except RecursionError:
+            raise too_deep_to_rewrite(node, source_lines=self._source_lines,
+                                      what="query") from None
+
+    def _rewrite_query(self, node, inner):
         # IPython REPL path — not a .clausal module compile, so no shared
         # bare-atom-refs sink to thread through.  Phase 2 auto-mint applies
         # to module compilation in compiler_v2; bare references in REPL
@@ -1944,7 +1963,7 @@ class _StarQueryTransformer(ast.NodeTransformer):
             elts = [tt.visit(e) for e in inner.elts]
             goal_ast = elts[0]
             for elt in elts[1:]:
-                goal_ast = ast.fix_missing_locations(ast.copy_location(
+                goal_ast = ast.copy_location(
                     ast.Call(
                         func=ast.Name(id='$And', ctx=ast.Load()),
                         args=[],
@@ -1953,7 +1972,12 @@ class _StarQueryTransformer(ast.NodeTransformer):
                             ast.keyword(arg='right', value=elt),
                         ],
                     ), node,
-                ))
+                )
+            if len(elts) > 1:
+                # Once, not per conjunct (that was quadratic): every ``$And``
+                # carries the query's location, so what a node inherits is
+                # the same.
+                fix_missing_locations(goal_ast)
         else:
             goal_ast = tt.visit(inner)
 
@@ -1976,7 +2000,7 @@ class _StarQueryTransformer(ast.NodeTransformer):
             )],
             keywords=[],
         ))
-        ast.fix_missing_locations(solutions)
+        fix_missing_locations(solutions)
         return solutions
 
 
@@ -1985,6 +2009,12 @@ class _FreshEmbedTransformer(ast.NodeTransformer):
 
     Exceptions are caught and printed rather than propagated, so IPython
     does not unregister this transformer on a bad cell.
+
+    The one exception is a cell nested too deep (``resource_error(stack)``:
+    the rewriter ran out of recursion, or IPython's own recursive
+    ``ast.fix_missing_locations`` would): under IPython (*ipython*) it is
+    raised as IPython's ``InputRejected``, which shows the named refusal and
+    does not run the cell, rather than running the cell untransformed.
 
     *source_lines* is the cell's text, ``splitlines(keepends=True)``.  It is
     what ``EmbedTransformer`` tokenizes to recover each string literal's
@@ -1997,8 +2027,9 @@ class _FreshEmbedTransformer(ast.NodeTransformer):
     last input transformer to touch the text before it is parsed.
     """
 
-    def __init__(self, source_lines=None):
+    def __init__(self, source_lines=None, ipython=False):
         self._source_lines = source_lines
+        self._ipython = ipython
 
     def visit(self, tree):
         global _LAST_CELL_LINES
@@ -2012,13 +2043,33 @@ class _FreshEmbedTransformer(ast.NodeTransformer):
             tree = EmbedTransformer(source_lines=source_lines,
                                     implicit_atoms_default=True,
                                     interactive=True).visit(tree)
-            tree = _StarQueryTransformer().visit(tree)
-            ast.fix_missing_locations(tree)
+            tree = _StarQueryTransformer(source_lines).visit(tree)
+            fix_missing_locations(tree)
+            if self._ipython:
+                _ipython_can_walk(tree)
             return tree
-        except Exception:
+        except Exception as e:
+            if self._ipython and getattr(e, "resource_error", None):
+                from IPython.core.error import InputRejected  # noqa: PLC0415
+                raise InputRejected(str(e)) from None
             import traceback
             traceback.print_exc()
             return tree
+
+
+def _ipython_can_walk(tree):
+    """Refuse (``resource_error(stack)``) a transformed cell IPython could
+    not finish with: after the AST transformers, ``transform_ast`` runs
+    ``ast.fix_missing_locations``, which recurses per level, and a
+    ``RecursionError`` there is IPython's own raw traceback.  Run here, a
+    frame or two deeper than IPython runs it, the same walk overflows first.
+    It is also the cheapest way to know: the tree already has every
+    location, so the walk only reads."""
+    try:
+        ast.fix_missing_locations(tree)
+    except RecursionError:
+        stmt = tree.body[0] if getattr(tree, "body", None) else tree
+        raise too_deep_to_rewrite(stmt, what="cell") from None
 
 
 def _auto_enable_colors(shell) -> None:
@@ -2079,7 +2130,7 @@ def enable_ipython(ipython_globals, shell=None):
     # before our AST transformer runs, so the warning would otherwise appear.
     warnings.filterwarnings("ignore", message="'str' object is not callable",
                             category=SyntaxWarning)
-    shell.ast_transformers.append(_FreshEmbedTransformer())
+    shell.ast_transformers.append(_FreshEmbedTransformer(ipython=True))
     # Text-level input transformer: rewrite *(…) → _clausal_star_query_(…)
     # so the source survives Python ≥ 3.14 syntax checks before AST
     # transformers run.

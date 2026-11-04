@@ -55,6 +55,19 @@ surface described in [docs/public-api.md](docs/public-api.md).
   chain about 1000 long. A chain long enough that `ast.parse` itself runs
   out (about 10,000) is refused naming the file.
 
+- **The REPL star query, `clausal.reflection` and the transformed-code
+  dumper refuse a deep input by name too.** They rewrite seam syntax outside
+  module loading and still leaked a raw `RecursionError`: `*(X == 1 + ... + 1)`
+  a few hundred long, `reify_ast` of such an expression or of an `and` chain,
+  `reify_source` of a clause whose reified body nests that deep, and
+  `dump_transformed` of a 180-deep term. Each is now refused as module loading
+  refuses it, naming `resource_error(stack)` and the line (`ReifyError` from
+  reflection; under IPython the cell is rejected and does not run, where it
+  used to run untransformed). A star query conjunction or `and` chain about
+  2000 long is now transformed (the location pass runs on an explicit stack
+  and once per query, not once per conjunct); IPython's own walk of the cell
+  overflows near 1000 levels, so there it is refused by name instead.
+
 - **A call whose arguments are all ground and nested past the deep-literal
   bound loads.** `call((g1, ..., g20, call((...))))` nested 12 deep, a fact
   `h(T)` with `T` a 300-term `a+a+...+a`, or `X is 1+1+...+1` failed to load

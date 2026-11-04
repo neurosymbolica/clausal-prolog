@@ -6050,19 +6050,59 @@ _TOO_DEEP_TO_REWRITE = (
     "nested a few hundred deep is not")
 
 
+def too_deep_to_rewrite(node, filename=None, source_lines=None, what=None,
+                        error=SyntaxError):
+    """The located refusal (*error*, a ``SyntaxError`` class) of *node*, which
+    nests too deep for the rewriter: ``resource_error(stack)`` (also its
+    ``resource_error`` attribute, ``"stack"``), with the line when *node*
+    has one.  *what* defaults to ``item`` for an expression
+    statement and ``statement`` for any other.  Used by
+    ``EmbedTransformer.visit`` and by the entry points that rewrite outside
+    module loading (the REPL star query, ``clausal.reflection``)."""
+    lineno = getattr(node, "lineno", None)
+    if what is None:
+        what = "item" if isinstance(node, Expr) else "statement"
+    if lineno:
+        where = f"{filename}:{lineno}" if filename else f"line {lineno}"
+    else:
+        where = filename or "<seam>"
+    err = error(_TOO_DEEP_TO_REWRITE.format(where=where, what=what))
+    err.resource_error = "stack"
+    err.filename = filename
+    err.lineno = lineno
+    err.offset = (node.col_offset + 1) if lineno else None
+    text = ""
+    if source_lines and lineno and lineno <= len(source_lines):
+        text = source_lines[lineno - 1].strip()
+    err.text = text or None
+    return err
+
+
 def _too_deep_to_rewrite(transformer, node) -> SyntaxError:
     """The located ``SyntaxError`` for statement *node*, which nests too deep
     for the rewriter (see ``EmbedTransformer.visit``)."""
-    lineno = getattr(node, "lineno", None)
-    what = "item" if isinstance(node, Expr) else "statement"
-    where = transformer._site(lineno) if lineno else (
-        transformer._filename or "<seam>")
-    err = SyntaxError(_TOO_DEEP_TO_REWRITE.format(where=where, what=what))
-    err.filename = transformer._filename
-    err.lineno = lineno
-    err.offset = (node.col_offset + 1) if lineno else None
-    err.text = transformer._source_snippet(lineno) or None
-    return err
+    return too_deep_to_rewrite(node, transformer._filename,
+                               transformer._source_lines)
+
+
+def parse_seam(source, filename, error=SyntaxError):
+    """``ast.parse`` of seam source, with CPython's own ``RecursionError``
+    (a flat operator chain some thousands long, which the parser reads as a
+    left-nested ``BinOp``: "maximum recursion depth exceeded during ast
+    construction") refused as a named *error* (a ``SyntaxError`` class):
+    ISO's resource_error(stack), also its ``resource_error`` attribute.  CPython does not say where; deep BRACKETED
+    nesting it refuses itself, as ``MemoryError: Parser stack overflowed``."""
+    try:
+        return parse(source, filename=filename)
+    except RecursionError:
+        err = error(
+            f"{filename}: the source nests too deep for Python's parser: "
+            f"its recursion limit was reached building the syntax tree -- "
+            f"resource_error(stack). An operator chain some thousands "
+            f"long (`1 + 1 + ... + 1`) is a term nested as deep")
+        err.resource_error = "stack"
+        err.filename = filename
+        raise err from None
 
 
 class EmbedTransformer(NodeTransformer):
