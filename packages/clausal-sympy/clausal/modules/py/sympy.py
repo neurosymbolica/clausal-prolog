@@ -738,26 +738,50 @@ def _to_pyval(expr: _sp.Basic, expected: Any = None) -> Any:
 def _real_roots(ctx: _ConversionContext, eq_expr, var_expr, roots):
     """The roots to answer with, as ``(root, multiplicity, dimension)``.
 
-    An equation holding a quantity has REAL roots only, numerically checked,
-    sorted and each once (_sympy_units.real_roots): none at all is no answer
-    (``[]`` for solve_all/3), and each root carries the dimension the
-    equation gives the unknown.  A plain equation is answered as SymPy
-    gives it, complex roots included."""
+    An equation holding a quantity has REAL roots only, checked, sorted and
+    each once (_sympy_units.real_roots): none at all is no answer (``[]``
+    for solve_all/3), and each root carries the dimension the equation
+    gives the unknown.  A plain equation is answered as SymPy gives it,
+    complex roots included.
+
+    A polynomial with a float coefficient is not SymPy-solved at all (see
+    _candidates): its coefficients are read through their shortest repr and
+    its real roots isolated exactly, then evaluated to floats; only if that
+    fails are all its roots found at 50 digits.  SymPy answering [] for a
+    polynomial (a quintic) means it gave up: the same numeric fallback.  []
+    for an equation that is not a polynomial is a real "no root"."""
     if not ctx._has_units:
         return [(r, m, None) for r, m in roots]
     expected = _variable_dimension(ctx, var_expr)
-    if not roots or eq_expr.has(_sp.Float):
-        # SymPy answers [] when it gives up on a polynomial (a quintic): a
-        # polynomial has roots, so find them numerically.  And SymPy solves
-        # a FLOAT polynomial in double precision, where a small real root
-        # beside large ones can come back as a complex number and be lost;
-        # its roots are found numerically at 50 digits instead.  [] stands
-        # for an equation that is not a polynomial.
+    trusted = False
+    polynomial = _sympy_units.float_polynomial(eq_expr, var_expr)
+    if polynomial is not None:
+        found = _sympy_units.float_polynomial_real_roots(polynomial, _units_of(expected))
+        if found is not None:
+            roots, trusted = found, True
+        else:
+            roots = _numeric_roots(eq_expr, var_expr, expected) or []
+    elif not roots:
         found = _numeric_roots(eq_expr, var_expr, expected)
         if found is not None:
             roots = found
     return [(r, m, expected)
-            for r, m in _sympy_units.real_roots(eq_expr, var_expr, roots)]
+            for r, m in _sympy_units.real_roots(eq_expr, var_expr, roots, trusted)]
+
+
+def _units_of(expected):
+    if expected is None:
+        raise _sympy_units.no_symbolic_solution()   # no dimension to give roots
+    return _sympy_units._unit_product(expected.dims)
+
+
+def _candidates(ctx: _ConversionContext, eq_expr, var_expr) -> list:
+    """SymPy's solutions, or [] without asking SymPy for a float polynomial
+    holding a quantity (_real_roots solves it; SymPy would take seconds to
+    minutes at degree 10-30 and its answer would be thrown away)."""
+    if ctx._has_units and _sympy_units.float_polynomial(eq_expr, var_expr) is not None:
+        return []
+    return _solving(ctx, _sp.solve, eq_expr, var_expr)
 
 
 def _numeric_roots(eq_expr, var_expr, expected):
@@ -957,7 +981,7 @@ def _solve_3(this_generator, _proceed, _fail, _catcher, equation, var, solution,
     var = deref(var)
     try:
         ctx, eq_expr, var_expr = _convert_multi(equation, var)
-        solutions = _solving(ctx, _sp.solve, eq_expr, var_expr)
+        solutions = _candidates(ctx, eq_expr, var_expr)
     except (TypeError, ValueError):
         yield (_fail, DONE)
         return
@@ -980,7 +1004,7 @@ def _solve_all_3(equation, var, solutions, trail, k):
     var = deref(var)
     try:
         ctx, eq_expr, var_expr = _convert_multi(equation, var)
-        sols = _solving(ctx, _sp.solve, eq_expr, var_expr)
+        sols = _candidates(ctx, eq_expr, var_expr)
         out = [_to_pyval(s, expected) for s, _, expected
                in _real_roots(ctx, eq_expr, var_expr, [(r, 1) for r in sols])]
     except (TypeError, ValueError):

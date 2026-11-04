@@ -132,10 +132,7 @@ What comes back:
     complex radicals, a `LambertW` branch) is evaluated to 50 significant
     digits and polished by Newton's method at 50 digits on the equation in
     SI magnitudes (at most 20 steps, stopping when a step stops
-    shrinking). A polynomial with a float coefficient is not solved by
-    SymPy at all (it works in double precision, where a small root beside
-    large ones loses its digits): its roots are found numerically at 50
-    digits. A root is kept, as a float quantity of its real part, only if its
+    shrinking). A root is kept, as a float quantity of its real part, only if its
     imaginary part is negligible relative to its size, and if substituting
     it back leaves a residual negligible relative to the equation's own
     terms there (|sum of the terms| <= tolerance * sum of |each term|).
@@ -154,10 +151,23 @@ What comes back:
     is not a polynomial is `type_error(polynomial, Equation)`;
   - an equation without quantities is answered as SymPy gives it, complex
     roots included;
-  - two float roots that differ only in the last digits of a double (a
-    near-double root of a float polynomial) may come back as one, as SymPy
-    and mpmath see them; mpmath not converging at all (`(X - 1(metre))**10`
-    with float coefficients) is `no_symbolic_solution`.
+  - a POLYNOMIAL WITH A FLOAT COEFFICIENT is never given to SymPy's
+    `solve` (in double precision a small root beside large ones loses its
+    digits, a repeated root splits into a complex pair, and degree 20 takes
+    minutes). Each float is read as the decimal its shortest repr shows
+    (`1.1` is 11/10), the polynomial is split exactly into square-free
+    factors, and each factor's roots are found at 50 digits; the real ones
+    come back as floats, a repeated root once with its multiplicity
+    (`(X - 1.1(metre))**2 * (X - 3(metre))` gives 1.1 and 3.0 metres;
+    `roots/3` gives multiplicities 2 and 1; `(X - 1.1(metre))**10` and
+    `(X - 1(metre))**10` give 1.1 and 1.0 metres). Only if that fails are
+    all its roots found at 50 digits and Newton-polished. A degree-20
+    polynomial takes well under a second. An ill-conditioned one (roots
+    0.5, 1, ..., 15 metres, degree 30) has its larger roots moved off the
+    real axis by the rounding of its coefficients, so fewer real roots come
+    back: the float input itself says so. Two distinct roots closer than a double can
+    tell apart come back as two equal floats;
+  - mpmath not converging at all is `no_symbolic_solution`.
 
 `^` follows SymPy, not ISO: `2^-1` is `1/2` (ISO's `^` is a type error for
 a negative integer exponent) and `X^2` is `X**2`, so a unit-free

@@ -59,12 +59,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
   todo; measured: the LMTD inverse 8.7 s, U * A * LMTD 19.1 s, the
   float-input LMTD inverse 94.5 s, the inverse from 12.34/18.20 kelvin and
   Colebrook over 120 s). A numeric root is polished by Newton's method at
-  50 digits before its residual is tested, and a polynomial with a float
-  coefficient is solved numerically at 50 digits, not by SymPy in double
-  precision, so a small root beside large ones (X**2 - 3.0 X + 1e-6, in
-  metres) is no longer lost; mpmath not converging is
-  `no_symbolic_solution`. Near-double float roots may still come back as
-  one (as SymPy and mpmath see them). `^/2` follows SymPy, not ISO:
+  50 digits before its residual is tested. A polynomial with a float
+  coefficient is never given to SymPy's `solve`: each float is read as the
+  decimal its shortest repr shows (`Fraction(repr(f))`, 1.1 is 11/10), the
+  polynomial is split exactly into square-free factors, and each factor's
+  roots are found at 50 digits, so a small root beside large ones (X**2 -
+  3.0 X + 1e-6, in metres) is kept, a repeated root keeps its multiplicity
+  ((X - 1.1)**2 (X - 3) gives 1.1 and 3.0; (X - 1.1)**10 gives 1.1, ten
+  times in `roots/3`), and degree 20 takes under a second; mpmath not
+  converging is `no_symbolic_solution`. `^/2` follows SymPy, not ISO:
   `2^-1` is 1/2 (ISO: a type error), and unit-free `solve_all(X^2 - 4, X,
   R)` now works (it was a raw `NotImplementedError`). Unit-free, `0^-1`
   and `atan2(0, 0)` come back as SymPy's `zoo` and `nan`.

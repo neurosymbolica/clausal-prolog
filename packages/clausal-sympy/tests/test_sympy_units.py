@@ -725,10 +725,55 @@ class TestFloatRootsFarApart:
         rooted = [a[2] for a in answers(roots, polynomial_in_metres(x, coefficients), x, Var())]
         assert [r[0] for r in rooted] == found and all(r[1] == 1 for r in rooted)
 
-    def test_numeric_give_up_is_a_named_error(self):
-        # (X - 1 metre)**10 with float coefficients: mpmath does not converge.
+    def test_float_tenth_power_is_one_root_of_multiplicity_ten(self):
+        # (X - 1 metre)**10 with float coefficients; was no_symbolic_solution.
         from math import comb
         x = Var()
         equation = polynomial_in_metres(x, [float(comb(10, k) * (-1) ** k) for k in range(11)])
-        with no_symbolic_solution():
-            answers(roots, equation, x, Var())
+        assert solutions(equation, x) == [metre(1.0)]
+        x = Var()
+        equation = polynomial_in_metres(x, [float(comb(10, k) * (-1) ** k) for k in range(11)])
+        assert [a[2] for a in answers(roots, equation, x, Var())] == [(metre(1.0), 10)]
+
+
+# ── Fifth review (a9661d66) ─────────────────────────────────────────────────
+
+
+def float_coefficients(*roots_in_metres):
+    """The float coefficients of prod (x - r), each r written as a decimal."""
+    x = sp.Symbol("x")
+    product = sp.prod([x - sp.Rational(str(r)) for r in roots_in_metres])
+    return [float(c) for c in sp.Poly(product, x).all_coeffs()]
+
+
+class TestFloatRepeatedRoots:
+    """Blocker: a repeated root that is not a binary fraction (1.1, 1.2)
+    keeps its multiplicity: the coefficients are read through their
+    shortest repr and split into square-free factors exactly."""
+
+    @pytest.mark.parametrize("roots_in_metres, expected", [
+        ((1.1, 1.1, 3), [(1.1, 2), (3.0, 1)]),
+        ((1.2, 1.2, 1.2), [(1.2, 3)]),
+        ((1.1,) * 10, [(1.1, 10)]),
+        ((1,) * 10, [(1.0, 10)]),
+    ], ids=["(X - 1.1)**2 (X - 3)", "(X - 1.2)**3", "(X - 1.1)**10", "(X - 1)**10"])
+    def test_repeated_root(self, roots_in_metres, expected):
+        x = Var()
+        equation = polynomial_in_metres(x, float_coefficients(*roots_in_metres))
+        assert solutions(equation, x) == [metre(r) for r, _ in expected]
+        assert [a[2] for a in answers(solve, equation, x, Var())] == [metre(r) for r, _ in expected]
+        assert [a[2] for a in answers(roots, equation, x, Var())] == [
+            (metre(r), count) for r, count in expected]
+
+    def test_degree_twenty_float_polynomial_within_five_seconds(self):
+        import time
+        roots_in_metres = [k / 2 for k in range(1, 21)]
+        x = Var()
+        equation = polynomial_in_metres(x, float_coefficients(*roots_in_metres))
+        started = time.monotonic()
+        found = solutions(equation, x)
+        assert time.monotonic() - started < 5
+        # The rounded coefficients move the larger roots (the Wilkinson
+        # effect): all twenty stay real here, and the small ones are close.
+        assert len(found) == 20
+        assert magnitudes(found)[:5] == pytest.approx([0.5, 1.0, 1.5, 2.0, 2.5], rel=1e-6)

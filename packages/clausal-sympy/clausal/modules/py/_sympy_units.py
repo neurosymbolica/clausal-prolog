@@ -550,6 +550,65 @@ def _polish(equation_magnitude: Any, symbol: Any, value: Any) -> Any:
     return value
 
 
+def float_polynomial(equation: Any, symbol: Any) -> Any:
+    """*equation* as a polynomial over QQ in *symbol* alone (SI magnitudes),
+    when it is one and holds a float coefficient, else None.
+
+    Each float is read as the rational its SHORTEST REPR denotes,
+    ``Fraction(repr(f))``: 1.1 is 11/10, not the binary 2476979795053773 /
+    2**51.  That is the number the user wrote, and it keeps a repeated root
+    repeated ((X - 1.1)**2 rounded to binary has a complex pair instead).
+    A float polynomial is solved through it, never by SymPy's solve.
+    The text parsed is the float's own repr, produced here from a Python
+    float, never text taken from a term, so this reopens no parsing path."""
+    magnitude = real_magnitude(equation)
+    if not magnitude.has(_sp.Float) or free_variables(magnitude) - {symbol}:
+        return None
+    rational = magnitude.replace(
+        lambda e: isinstance(e, _sp.Float),
+        lambda e: _sp.Rational(*_fraction_parts(Fraction(repr(float(e))))))
+    try:
+        polynomial = _sp.Poly(rational, symbol, domain=_sp.QQ)
+    except (_sp.PolynomialError, _sp.polys.polyerrors.GeneratorsNeeded,
+            _sp.polys.polyerrors.CoercionFailed):
+        return None
+    return polynomial if polynomial.degree() >= 1 else None
+
+
+def _fraction_parts(value: Fraction) -> tuple:
+    return value.numerator, value.denominator
+
+
+def float_polynomial_real_roots(polynomial: Any, units: Any) -> list | None:
+    """The real roots of a rationalised float polynomial, as ``(root,
+    multiplicity)`` in increasing order, each a float times *units*.
+
+    The polynomial is split EXACTLY into square-free factors (``sqf_list``,
+    a gcd computation over QQ: fast), so a repeated root is one simple root
+    of a factor raised to its multiplicity, and never splits into a complex
+    pair.  Each factor's roots are then found at NUMERIC_DIGITS
+    (``nroots``); a root of a square-free factor is simple, so it converges
+    well, and it is real iff its imaginary part is negligible
+    (EXACT_TOLERANCE) relative to its size.  (Exact real-root isolation,
+    ``Poly.real_roots``, was the first choice but runs for minutes at
+    degree 20.)  None when the numerics fail; the caller then falls back to
+    ``numeric_polynomial_roots``."""
+    found = []
+    try:
+        _, factors = polynomial.sqf_list()
+        for factor, multiplicity in factors:
+            if factor.degree() < 1:
+                continue
+            for root in factor.nroots(n=NUMERIC_DIGITS, maxsteps=500):
+                re_part, im_part = _sp.re(root), _sp.im(root)
+                if _negligible(im_part, abs(root), EXACT_TOLERANCE):
+                    found.append((_sp.Float(re_part, NUMERIC_DIGITS), multiplicity))
+    except Exception:                       # mpmath NoConvergence and kin
+        return None
+    found.sort(key=lambda pair: pair[0])
+    return [(root * units, multiplicity) for root, multiplicity in found]
+
+
 def numeric_polynomial_roots(equation: Any, symbol: Any, units: Any) -> list | None:
     """All roots of *equation* as a polynomial in *symbol* alone,
     numerically (to NUMERIC_DIGITS), each times *units*, as ``(root, 1)``.
@@ -572,7 +631,7 @@ def numeric_polynomial_roots(equation: Any, symbol: Any, units: Any) -> list | N
     return [(r * units, 1) for r in found]
 
 
-def real_roots(equation: Any, symbol: Any, roots: list) -> list:
+def real_roots(equation: Any, symbol: Any, roots: list, trusted: bool = False) -> list:
     """The REAL roots of an equation holding a quantity, in increasing
     order, each once, as ``(root, multiplicity)``: *roots* is a list of
     ``(root, multiplicity)`` from SymPy.
@@ -587,6 +646,8 @@ def real_roots(equation: Any, symbol: Any, roots: list) -> list:
       (``_satisfies``), both relative to the tolerance the input's
       precision sets (``tolerance_for``).  SymPy's candidates for a
       transcendental equation include spurious ones.
+    * *trusted* roots (from ``float_polynomial_real_roots``: real and
+      isolated exactly) are kept as they are, with no numeric check.
     * Two exact roots are one root iff they are equal; otherwise roots whose
       difference is negligible relative to their size are one root.  Either
       way their multiplicities are added.
@@ -602,7 +663,7 @@ def real_roots(equation: Any, symbol: Any, roots: list) -> list:
         dimension = sympy_dimension(root, Analysis())
         magnitude = real_magnitude(root)
         root_tolerance = max(tolerance, tolerance_for(magnitude))
-        exact = _is_exact_real(magnitude)
+        exact = trusted or _is_exact_real(magnitude)
         if exact:
             value = magnitude
         else:
