@@ -2637,6 +2637,15 @@ class DictTerm:
 # ── SetTerm — unification-aware set ──────────────────────────────────────────
 
 
+def _set_elements_ordered(t: "SetTerm") -> list:
+    """A set's elements in the standard order of terms, the order every
+    printer writes them in (operator ruling 2026-11-03), as msort/2 would
+    sort them -- not their ``repr`` order, which put ``'B c'`` before
+    ``1``."""
+    from clausal.logic.builtins._helpers import _standard_order_sorted  # noqa: PLC0415
+    return _standard_order_sorted(list(t.elements))
+
+
 class SetTerm:
     """Unification-aware set term.
 
@@ -4094,7 +4103,7 @@ def _term_str_body(t: Any, style: TermStyle | None = None, _bd: int = 0,
     if isinstance(t, SetTerm):
         ob = _c('{', 'bracket', style, _bd)
         cb = _c('}', 'bracket', style, _bd)
-        inner = sep.join(term_str(e, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for e in sorted(t.elements, key=repr))
+        inner = sep.join(term_str(e, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for e in _set_elements_ordered(t))
         return ob + inner + cb
     cls = type(t)
     op = getattr(cls, "op", None)
@@ -5057,7 +5066,7 @@ def term_pformat(
     if isinstance(t, SetTerm):
         ob = _c('{', 'bracket', style, _bd)
         cb = _c('}', 'bracket', style, _bd)
-        items = [_r(e) for e in sorted(t.elements, key=repr)]
+        items = [_r(e) for e in _set_elements_ordered(t)]
         return ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
     cls = type(t)
@@ -5203,7 +5212,7 @@ def term_html(t: Any, _bd: int = 0) -> str:
     if isinstance(t, SetTerm):
         ob = _html_c('{', 'bracket', _bd)
         cb = _html_c('}', 'bracket', _bd)
-        inner = ", ".join(term_html(e, _bd + 1) for e in sorted(t.elements, key=repr))
+        inner = ", ".join(term_html(e, _bd + 1) for e in _set_elements_ordered(t))
         return ob + inner + cb
 
     cls = type(t)

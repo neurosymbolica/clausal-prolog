@@ -529,6 +529,15 @@ class DirectiveContext:
                 flag=self.dq_mode))
         return items
 
+    @property
+    def local_module(self) -> str:
+        """The qualifier that names THIS file in a head, a predicate
+        indicator or a goal: its module/2 name, or ``user`` in a file with
+        no module/2, whose predicates are what its ``-g`` goals and its
+        importers see -- the nearest thing to Scryer's ``user`` (operator
+        ruling 2026-11-03)."""
+        return self.own_module if self.own_module is not None else "user"
+
     def alias(self, name: str, dotted: str) -> None:
         """Record that ``name:G`` means the module *dotted*; a name two
         different imports claim is AMBIGUOUS (``None``), and a qualified goal
@@ -546,7 +555,7 @@ class DirectiveContext:
                 return None, (f"`{name}` names two imported modules, so "
                               f"{name}:G is ambiguous")
             return dotted, ""
-        if name == self.own_module:
+        if name == self.local_module:
             return "", ""
         if not all(p.isidentifier() for p in name.split(".")):
             return None, f"`{name}` is no module name"
@@ -1401,7 +1410,7 @@ def _predspec(directive: str):
         what = f"{directive}(...)"
         pis = []
         for e, s in _sequence(args[0], spans[0]):
-            e, s = _strip_own_qualifier_pi(e, s, ctx.own_module)
+            e, s = _strip_own_qualifier_pi(e, s, ctx.local_module)
             pi = _indicator(e)
             if pi is None:
                 raise _refused(f"{what}: {_show(e)} is not a predicate "
@@ -1732,7 +1741,7 @@ def _constant_table(directive: str):
             LoweringRefused, _thunk, lower_clause)
         indicator, rows, unit, at = args
         indicator, _sp = _strip_own_qualifier_pi(indicator, spans[0],
-                                                 ctx.own_module)
+                                                 ctx.local_module)
         what = f"{directive}({_show(indicator)}, ...)"
         example = (f"{directive}(snap_max/2, [[1, 29200], [2, 53600]], "
                    f"{'usd_cent' if is_money else 'metre'}, {column_kw}(2))")

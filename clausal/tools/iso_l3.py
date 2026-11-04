@@ -1410,6 +1410,40 @@ def _strip_own_qualifier(head, head_sp, own: "str | None"):
     return head, head_sp
 
 
+def _refuse_qualified_head(head, whole_span):
+    """Refuse the clause head ``M:H`` left once the file's own qualifier is
+    stripped (operator ruling 2026-11-03).  In Scryer's order:
+
+    - ``M`` a variable or not an atom (``M:foo(1).``, ``7:foo(1).``):
+      Scryer's ``permission_error(modify, static_procedure, (:)/2)``;
+    - ``H`` an ISO built-in (``b:atom(1).``): refused as ``H`` itself is
+      (7.5.1);
+    - any other module: Scryer adds the clause to that module; here one
+      file is one module, and nothing adds clauses to another at load.
+    """
+    inner, m = head, head[1]
+    while type(inner) is tuple and len(inner) == 3 and inner[0] == ":":
+        if type(inner[1]) is not str:
+            raise LoweringRefused(
+                "a clause head is module-qualified with a variable or a "
+                "non-atom (ISO permission_error(modify, static_procedure, "
+                "(:)/2))", whole_span)
+        inner = inner[2]
+    q_name = inner if type(inner) is str else (
+        inner[0] if type(inner) is tuple and inner
+        and type(inner[0]) is str else None)
+    q_arity = len(inner) - 1 if type(inner) is tuple else 0
+    if q_name is not None and is_iso_builtin(q_name, q_arity):
+        raise LoweringRefused(
+            static_procedure_refusal(q_name, q_arity), whole_span)
+    shown = f"{q_name}/{q_arity}" if q_name is not None else _show_cell(inner)
+    raise LoweringRefused(
+        f"{m}:{shown} -- a clause for another module is not supported: a "
+        f"file defines the predicates of its own module only (qualify a "
+        f"head with the module/2 name, or with user in a file without "
+        f"module/2, or leave it unqualified)", whole_span)
+
+
 def _own_head_item(it, own: "str | None"):
     """A reader ``Clause`` item with an ``own:`` qualifier stripped from its
     head (:func:`_strip_own_qualifier`), so the procedure bookkeeping keys
@@ -1458,25 +1492,13 @@ def lower_clause(term: Any, spans=None, var_names=None,
     if type(head) is VarRef:
         raise LoweringRefused(
             "a clause head is a variable (ISO instantiation_error)", whole_span)
-    # ``own:H`` (the file's own module/2 name): a clause of H here, as in
-    # Scryer.
+    # ``own:H`` (the file's own module/2 name, or ``user`` in a file with
+    # no module/2): a clause of H here, as in Scryer (operator ruling
+    # 2026-11-03).
     head, head_sp = _strip_own_qualifier(
-        head, head_sp, ctx.own_module if ctx is not None else None)
-    inner = head
-    while type(inner) is tuple and len(inner) == 3 and inner[0] == ":":
-        inner = inner[2]
-    if inner is not head:
-        # ``M:H`` with H an ISO built-in: Scryer refuses it as it refuses
-        # ``H`` (7.5.1).  A head qualified with another module is not
-        # checked here: it still lowers as a clause of (:)/2
-        # (todo/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md).
-        q_name = inner if type(inner) is str else (
-            inner[0] if type(inner) is tuple and inner
-            and type(inner[0]) is str else None)
-        q_arity = len(inner) - 1 if type(inner) is tuple else 0
-        if q_name is not None and is_iso_builtin(q_name, q_arity):
-            raise LoweringRefused(
-                static_procedure_refusal(q_name, q_arity), whole_span)
+        head, head_sp, ctx.local_module if ctx is not None else None)
+    if type(head) is tuple and len(head) == 3 and head[0] == ":":
+        _refuse_qualified_head(head, whole_span)
     if _is_nil(head):
         name, args = _NIL_NAME, ()
     elif type(head) is str:
@@ -1494,7 +1516,14 @@ def lower_clause(term: Any, spans=None, var_names=None,
         raise LoweringRefused(
             f"`{name}` is a reserved name: a `$`-prefixed predicate is the "
             f"engine's own", whole_span)
-    if name in (",", ";", "->", "*->", "!", "\\+", ":-", "call") \
+    if name == ":-" and len(args) in (1, 2):
+        # A clause or a directive as a head: Scryer's permission error.
+        # ``(:-)/0`` (``:- .``) is an ordinary atom head, as in Scryer and
+        # as ``assertz((:-))`` (operator ruling 2026-11-03).
+        raise LoweringRefused(
+            f"cannot define (:-)/{len(args)} (ISO permission_error(modify, "
+            f"static_procedure, (:-)/{len(args)}))", whole_span)
+    if name in (",", ";", "->", "*->", "!", "\\+", "call") \
             or (name in ("true", "fail", "false") and not args):
         raise LoweringRefused(
             f"cannot define the control construct {name}/{len(args)} (ISO "
@@ -1633,7 +1662,7 @@ class _DcgTranslation:
             lhs = "[]"
         # ``own:g --> ...``: a rule of g//N here, as a clause's ``own:H``.
         lhs, l_sp = _strip_own_qualifier(
-            lhs, l_sp, getattr(self._ctx, "own_module", None))
+            lhs, l_sp, getattr(self._ctx, "local_module", None))
         if (type(lhs) is tuple and len(lhs) == 3 and lhs[0] == ":") or not (
                 type(lhs) is str or (type(lhs) is tuple and lhs
                                      and type(lhs[0]) is str
@@ -2072,7 +2101,7 @@ def _lower_all(items, refuse, ctx, uses, body, stats, source, positions,
             # refused, not half-handled (assert would vanish under -O).
             refuse(f"{kind} is not lowered", span)
             continue
-        it = _own_head_item(it, ctx.own_module)
+        it = _own_head_item(it, ctx.local_module)
         defined.add(_head_indicator(it.term))
         uses.reif = ctx.reif
         try:

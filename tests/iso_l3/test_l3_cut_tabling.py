@@ -286,7 +286,9 @@ def test_a_call_qualified_with_its_own_module_or_user_is_seen(native, key):
     mod = f"l3_tab_selfq_{key}"
     src = (":- table(tf/1).\ntf(1). tf(2).\n"
            + SELF_QUALIFIED[key].format(mod=mod) + "\n")
-    with pytest.raises(SyntaxError, match=r"tabled call\(s\) \w+:tf/1"):
+    # ``user:tf(X)`` in a file without module/2 lowers to the plain call
+    # ``tf(X)`` (operator ruling 2026-11-03), so it is named unqualified.
+    with pytest.raises(SyntaxError, match=r"tabled call\(s\) (\w+:)?tf/1"):
         native.load(mod, src)
 
 

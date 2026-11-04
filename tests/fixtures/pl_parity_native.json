@@ -60,7 +60,7 @@
    "error": null,
    "load": "ok",
    "preds": {
-    ":/2": {
+    "term_expansion/2": {
      "after": [],
      "error": "PredicateNotFoundError: Predicate prolog_load_context/2 not found"
     }
@@ -2874,7 +2874,7 @@
   "README.md#L273": "c07d2fd5682cc0ce",
   "benchmarks/clpq_chain_binding_trace/scryer_trace.pl": "89d021f54cf15d4f",
   "clausal/tools/prolog_preludes/clausal_constants_scryer.pl": "a66b8f63b2c54eff",
-  "clausal/tools/prolog_preludes/clausal_constants_trealla.pl": "2c6654aacd571b8a",
+  "clausal/tools/prolog_preludes/clausal_constants_trealla.pl": "a66b8f63b2c54eff",
   "clausal/tools/toklex/specs/clausal.toklex.pl": "04d67a9b0c9775ee",
   "clausal/tools/toklex/specs/iso.toklex.pl": "a5472da790702be3",
   "docs/clausal_prolog.md#L109": "1f790b60d00164d9",

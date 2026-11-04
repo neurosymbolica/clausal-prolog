@@ -13,9 +13,36 @@ surface described in [docs/public-api.md](docs/public-api.md).
   predicate** (`.pl` and `.clausal`): in a file whose `module/2` names `m`,
   `m:foo(1).` and `m:bar(X) :- ...` are clauses of `foo/1` and `bar/1`, as
   in Scryer; they loaded as clauses of `(:)/2`. A grammar rule
-  `m:g --> ...` there defines `g//0`; it was refused. A head qualified with any
-  other module is unchanged (still `(:)/2`, an open question in
-  `todo/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md`).
+  `m:g --> ...` there defines `g//0`; it was refused.
+
+- **A clause head qualified with another module is refused; `user:` in a
+  file without `module/2` is the file** (`.pl` on both front ends, and
+  `.clausal`; operator ruling 2026-11-03). Such heads used to load as
+  clauses of `(:)/2`, and the translator refused every qualified head.
+  `M:foo(1).` or `7:foo(1).` (a variable or non-atom module) refuses the
+  file with Scryer's `permission_error(modify, static_procedure, (:)/2)`.
+  `user:foo(1).` in a file with no `module/2` defines `foo/1` there, and
+  `user:p(X)` reaches the file's `p/1`, written in a body or run by
+  `call/N` or `-g`. Scryer treats such a file as module `user`. Any other
+  module (`m:foo(1).`, or `user:` in a module file) is refused with "a
+  clause for another module is not supported"; Scryer adds the clause to
+  that module. `clausal_constants_trealla.pl` (`user:` heads) now loads on
+  both front ends.
+
+- **`:- .` defines `(:-)/0`, and a `(:-)/1` or `(:-)/2` head is refused at
+  run time too** (operator ruling 2026-11-03, following Scryer). The loader
+  refused every `:-` head as a "control construct". It now refuses only
+  arities 1 and 2, with `permission_error(modify, static_procedure,
+  (:-)/N)`, so `:- .` loads and `call((:-))` succeeds, as `assertz((:-))`
+  already allowed. `assertz/1` and `asserta/1` accepted
+  `((a:-b):-true)` and `((:-a):-true)`, and `retract/1` and `retractall/1`
+  failed or succeeded on them. All four now raise Scryer's
+  `permission_error(modify, static_procedure, (:-)/N)`.
+
+- **A set prints its elements in the standard order of terms** (operator
+  ruling 2026-11-03): `writeq/1`, `print/1`, `write/1`, the toplevel
+  answer, `term_str`, `term_pformat` and `term_html` all print
+  `{2.0,1,10,'B c',a,f(x)}`. They used to print in Python `repr` order.
 
 - **A file's own definition of a special form's name runs in its own
   bodies** (2026-11-03; follows operator ruling 2026-10-24). A `.pl` or
