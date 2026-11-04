@@ -1,0 +1,7 @@
+% A TRO restart from a clause whose head binds an unbound list argument
+% only at the answer (tests/test_tro_deferred_list.py).
+:- module(tro_deferred_list_pl, [pq/2, pc/2]).
+pq([], N) :- N > 0, M is N - 1, pq([], M).
+pq([], 0).
+pc([a|T], N) :- N > 0, M is N - 1, pc([a|T], M).
+pc([a|_], 0).

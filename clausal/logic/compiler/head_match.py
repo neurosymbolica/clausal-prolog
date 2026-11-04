@@ -224,6 +224,28 @@ def _matched_field_names(term: Any) -> tuple[str, ...]:
     return names
 
 
+def _require_before_restart(stmts: list, conds: list) -> None:
+    """Put *conds* in front of the test of every TRO restart (an ``if``
+    whose test calls ``<trail>.commit_fresh``) in *stmts*, in place.  The
+    commit test stays last: it changes the trail when it succeeds."""
+    def is_restart_test(test):
+        for node in ast.walk(test):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "commit_fresh"):
+                return True
+        return False
+    stack = list(stmts)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        if isinstance(node, ast.If) and is_restart_test(node.test):
+            node.test = ast.BoolOp(op=ast.And(), values=[*conds, node.test])
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.stmt) or isinstance(child, ast.match_case):
+                stack.append(child)
+
+
 def _wrap_yields_with_output_guards(
     stmts: list[ast.stmt], output_guard_cond: "ast.expr"
 ) -> list[ast.stmt]:
@@ -1889,6 +1911,15 @@ def compile_head_to_match_case(
                 output_cond = ast.BoolOp(op=ast.And(), values=output_conditions)
 
             inner = _wrap_yields_with_output_guards(inner, output_cond)
+            # A TRO restart skips the answer those guards wrap, so it must
+            # not be taken while a list's binding is still deferred to it:
+            # ``_lrN is None`` (an unbound argument the head's list pattern
+            # binds only at the answer).  Such a call makes the ordinary
+            # tail call instead.
+            _require_before_restart(inner, [
+                ast.Compare(left=_name(n), ops=[ast.IsNot()],
+                            comparators=[ast.Constant(value=None)])
+                for n in lr_names])
 
             gated_inner = [ast.If(test=gate_cond, body=inner, orelse=[])]
             inner = input_check_stmts + gated_inner

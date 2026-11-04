@@ -39,6 +39,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A tail-recursive clause whose head has a list pattern binds an unbound
+  argument before restarting.**  The head meets an unbound argument by
+  binding it to its list pattern only at the answer, which the in-place
+  restart skips: `pq([], N) :- N > 0, M is N - 1, pq([], M).  pq([], 0).`
+  answered `pq(L, 2)` with L left unbound (ISO and Scryer: `L = []`), in
+  `.pl`, `.clausal` and `.seam`, since before 1.4.0.  Such a call now makes
+  the ordinary tail call; a loop over a list it is given keeps restarting.
+  Tests: `tests/test_tro_deferred_list.py`.
+
 - **A predicate dispatched on a list argument answers in clause order.**
   Where a clause's head has `[]` or `[_|_]` at an argument and others a
   variable, the compiled dispatch ran the `[]` (`[_|_]`) clauses first and

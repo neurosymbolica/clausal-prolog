@@ -331,7 +331,7 @@ def my_nth_of__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, tr
                                         _tro_arg0 = $deref(_v37)
                                         _tro_arg1 = $deref(_v36)
                                         _tro_arg2 = $deref(_v34)
-                                        if not $is_var(_tro_arg1) and trail.commit_fresh(_tro_mark, _tro_floor):
+                                        if _lr0 is not None and (not $is_var(_tro_arg1) and trail.commit_fresh(_tro_mark, _tro_floor)):
                                             _tro = True
                                         else:
                                             _gen0 = $StepGenerator($dispatch_at(my_nth_of, 3), this_generator, this_generator, this_generator, _tro_arg0, _tro_arg1, _tro_arg2, trail)
