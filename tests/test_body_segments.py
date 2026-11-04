@@ -483,3 +483,57 @@ def test_a_nested_catch_in_a_body_too_long_for_the_outliner(tmp_path, monkeypatc
         """)
     assert not refused, refused
     assert _run(m, ("p", 1)) == [[n + 30, 1], [n + 30, 2]]
+
+
+TRO_PROGRAM = """
+q(X, Y) :- Y is X + 1.
+r(1).
+r(2).
+
+% a tail-recursive clause (is/2 and the comparisons are deterministic) beside
+% a long clause: the predicate is a TRO loop that also holds segments.
+walk(long, N, A0, A) :- r(B), q(A0, V1), LONG, A is V40 + B + N.
+walk(N, N, A, A).
+walk(I, N, A0, A) :- integer(I), I < N, A1 is A0 + I, I1 is I + 1,
+    walk(I1, N, A1, A).
+
+% a long deterministic prefix before the self call: its segments would hold
+% the TRO restart, so they are refused and the predicate is built inline.
+sum(N, N, A, A).
+sum(I, N, A0, A) :- I < N, PREFIX, I1 is I + 1, sum(I1, N, A9, A).
+""".replace("LONG", ", ".join(f"q(V{i}, V{i + 1})" for i in range(1, 40))
+            ).replace("PREFIX", ", ".join(f"A{i} is A{i - 1} + 1"
+                                          for i in range(1, 10)))
+
+
+def test_segments_in_a_tail_recursive_predicate(tmp_path, monkeypatch):
+    queries = [("walk", 0, 2000, 0), ("walk", "long", 5, 0), ("sum", 0, 300, 0)]
+    hoisted = []
+    real_hoist = body_segments.hoist_segments
+
+    def spy(func_def, segments):
+        funcs = real_hoist(func_def, segments)      # a refusal fails the test
+        hoisted.extend(func_def.name for _ in funcs)
+        return funcs
+
+    def answers(m):
+        out = []
+        for args in queries:
+            A = Var()
+            out.append([walk(deref(A)) for _ in pcall(*args, A, module=m)])
+        return out
+
+    monkeypatch.setattr(body_segments, "hoist_segments", spy)
+    for height in ("2", None):          # every conjunction cut; the defaults
+        if height:
+            monkeypatch.setenv(body_segments.ENV_VAR, height)
+        else:
+            monkeypatch.delenv(body_segments.ENV_VAR)
+        hoisted.clear()
+        split = answers(_load(tmp_path, TRO_PROGRAM))
+        assert any(n.startswith("walk__") for n in hoisted), (height, hoisted)
+        assert split == [[1999000], [46, 47], [2700]], (height, split)
+    monkeypatch.setattr(body_segments, "SPLIT_ABOVE", 10 ** 9)
+    hoisted.clear()
+    assert answers(_load(tmp_path, TRO_PROGRAM)) == split
+    assert not hoisted

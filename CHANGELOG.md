@@ -75,6 +75,27 @@ surface described in [docs/public-api.md](docs/public-api.md).
   the costs that remain are in
   todo/deep-nesting-load-costs-left-after-the-nested-negation-fix-2026-11-04.md).
 
+- **A tail-recursive loop in ISO text runs in constant memory.** The `.pl`
+  and `.clausal` front ends call `is/2`, `=/2`, `\=/2` and the arithmetic
+  and standard-order comparisons as built-in predicates, and the
+  tail-recursion rewrite did not count them as deterministic, so
+  `spin(N) :- N1 is N + 1, spin(N1).` kept one generator frame per step
+  (over 100 MB a second). They now count as deterministic, and `is/2` and
+  `=/2` bind as the seam's inline forms do. None of them may be redefined
+  (ISO `permission_error`). Answers are unchanged. A TRO predicate now
+  also cuts its long non-TRO clauses into segment functions (it kept them
+  inline before, under the old outliner); a TRO clause's own body is never
+  cut. Tests: `tests/test_iso_tail_recursion.py`,
+  `tests/test_body_segments.py::test_segments_in_a_tail_recursive_predicate`.
+- **A quad's timeout always ends the query.** `--quads` bounded a query
+  with ONE SIGALRM. When the alarm arrived during a garbage collection, its
+  handler ran in the first Python code after it, a weakref callback, where
+  CPython drops the exception as unraisable, and the query ran on with no
+  limit (in a long pytest session `tests/test_quads.py` then grew until the
+  process was killed). The alarm now repeats every 0.1 s after the limit
+  until the quad's code has seen it, and the handler and timer are always
+  restored. Tests: `tests/test_quads.py` (`test_a_lost_alarm_*`,
+  `test_a_timed_out_quad_leaves_no_alarm_behind`).
 - **A predicate with thousands of clauses compiles in linear time and
   memory.** The first call of a dynamic predicate after many asserts (and
   the load of a file with a large fact table) compiled one Python function

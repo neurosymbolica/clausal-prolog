@@ -553,3 +553,100 @@ def test_dots_as_the_context_of_error_2(tmp_path):
     r = _run(tmp_path, "5 ?- atom_length(a, b).\n"
                        "   error(type_error(integer, b), ...).\n")
     assert r.returncode == 0 and "1 passed" in r.stdout, r.stdout
+
+
+# ── a lost alarm (2026-11-04) ────────────────────────────────────────────
+#
+# A handler's exception raised while the interpreter runs a collector
+# callback, a ``__del__`` finaliser, a weakref callback or a generator close
+# is reported as unraisable and dropped, and ``except BaseException`` code
+# swallows it.  The quad timeout was ONE alarm, so losing it once left the
+# query running unbounded (in a long pytest session: until the process was
+# killed).  Each test runs in a child process with its own limit, so the old
+# behaviour fails the test instead of hanging the session.
+
+_LOST_ALARM_SCRIPT = textwrap.dedent("""\
+    import gc, sys, time
+    from clausal import quad_runner
+    from clausal.quad_runner import run_quads
+    from clausal.testing import load_clausal_module
+    from clausal import cli
+    import io
+    path, how = sys.argv[1], sys.argv[2]
+    module = load_clausal_module(path)
+    src = open(path).read()
+
+    real = quad_runner._run_alternative
+    lost = []
+
+    if how == "swallowed":
+        # the first alarm lands in code that swallows it
+        def run_alternative(actual, seq, expvars):
+            try:
+                time.sleep(5)
+            except quad_runner._Timeout:
+                lost.append("swallowed")
+            return real(actual, seq, expvars)
+    else:
+        # the first alarm lands in a finaliser the collector runs: CPython
+        # reports the exception as unraisable and drops it
+        class Slow:
+            def __del__(self):
+                lost.append("finaliser")
+                time.sleep(1)
+        def run_alternative(actual, seq, expvars):
+            s = Slow(); s.me = s; del s         # garbage in a cycle
+            gc.collect()                        # its __del__ takes the alarm
+            return real(actual, seq, expvars)
+        sys.unraisablehook = lambda u: lost.append(type(u.exc_value).__name__)
+
+    quad_runner._run_alternative = run_alternative
+    out = io.StringIO()
+    start = time.monotonic()
+    summary = run_quads(module, src, cli._goal_reader_ops(src), "t.pl",
+                        out=out, timeout=0.5)
+    print(summary.count("failed"), round(time.monotonic() - start, 1), lost,
+          out.getvalue().splitlines()[0])
+    """)
+
+
+@pytest.mark.parametrize("how", ["swallowed", "finaliser"])
+def test_a_lost_alarm_does_not_leave_the_query_unbounded(tmp_path, how):
+    (tmp_path / "t.pl").write_text(
+        "spin(N) :- N1 is N + 1, spin(N1).\n?- spin(0).\n   false.\n")
+    (tmp_path / "lost.py").write_text(_LOST_ALARM_SCRIPT)
+    env = dict(os.environ, PYTHONPATH=str(REPO_ROOT))
+    try:
+        r = subprocess.run(
+            [sys.executable, str(tmp_path / "lost.py"),
+             str(tmp_path / "t.pl"), how],
+            cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        pytest.fail(f"{how}: the timed-out query was still running after 60 s")
+    assert r.returncode == 0, r.stderr
+    failed, seconds, lost, line = r.stdout.split(" ", 3)
+    assert failed == "1" and "no answer within 0.5 s" in line, r.stdout
+    # the first alarm really was lost, and the next one ended the query
+    assert lost != "[]", r.stdout
+    assert float(seconds) < 10, r.stdout
+
+
+def test_a_timed_out_quad_leaves_no_alarm_behind(tmp_path):
+    import signal
+    if not hasattr(signal, "setitimer"):
+        pytest.skip("no SIGALRM on this platform")
+    from clausal.quad_runner import run_quads
+    from clausal.testing import load_clausal_module
+    from clausal import cli
+    import io
+    (tmp_path / "t.pl").write_text(
+        "spin(N) :- N1 is N + 1, spin(N1).\n?- spin(0).\n   false.\n"
+        "?- true.\n   true.\n")
+    module = load_clausal_module(str(tmp_path / "t.pl"))
+    src = (tmp_path / "t.pl").read_text()
+    before = signal.getsignal(signal.SIGALRM)
+    summary = run_quads(module, src, cli._goal_reader_ops(src), "t.pl",
+                        out=io.StringIO(), timeout=0.3)
+    assert summary.count("failed") == 1 and summary.count("passed") == 1
+    assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)
+    assert signal.getsignal(signal.SIGALRM) is before
