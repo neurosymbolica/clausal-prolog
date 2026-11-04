@@ -151,3 +151,61 @@ def test_a_dynamic_loop_that_writes_another_predicate_keeps_its_restart(
         cp.functiondef_to_function = real
     text = "\n".join(seen)
     assert "_tro = True" in text and "commit_fresh" in text, text
+
+
+def _combo_src():
+    facts300 = "\n".join(f"p(k({i}))." for i in range(300))
+    facts16 = "\n".join("q(_)." for _ in range(16))
+    facts20f = "\n".join(f"f({i})." for i in range(100, 120))
+    return f"""\
+:- module(tluv_combo, [ta/1, tb/1, tc/1]).
+:- dynamic(p/1).
+{facts300}
+p(N) :- integer(N), N > 0, N1 is N - 1, once(assertz(p(N1))), p(N1).
+ta(L) :- findall(x, p(2), L).
+:- dynamic(q/1).
+{facts16}
+tb(C0-C1) :-
+    assertz(q(_)), assertz(q(_)), findall(x, q(1), L0), length(L0, C0),
+    assertz((q(N) :- integer(N), N > 0, N1 is N - 1, once(assertz(q(N1))),
+                     q(N1))),
+    findall(x, q(2), L), length(L, C1).
+:- dynamic(f/1).
+:- dynamic(loop/1).
+{facts20f}
+loop(0).
+loop(N) :- N > 0, once(assertz(f(N))), N1 is N - 1, loop(N1).
+tc(C-L) :-
+    loop(500), findall(X, f(X), Xs), length(Xs, C),
+    findall(X, (f(X), X < 4), L).
+"""
+
+
+def test_tail_calls_and_fact_tables_that_grow_in_place(native, ans):
+    """A fact table takes an assertz in place, installing a dispatch over the
+    grown table instead of invalidating; the clause generation moves all the
+    same.  ``p/1``: 300 facts and a tail-recursive rule (a clause table);
+    ``q/1``: a 16-fact table that takes two facts in place, then a
+    tail-recursive rule at run time (it recompiles without the table, with
+    the restart; without the check it answers 54); ``loop/1``: a dynamic
+    loop whose prefix appends to the fact table ``f/1`` (its own restart is
+    kept).  Scryer: [x,x], 18-56, 520-[3,2,1]."""
+    mod = native.load("tluv_combo", _combo_src())
+    assert ans(mod, "ta") == [["x", "x"]]
+    assert ans(mod, "tb") == [("-", 18, 56)]
+    assert ans(mod, "tc") == [("-", 520, [3, 2, 1])]
+
+
+def test_an_in_place_fact_append_moves_the_clause_generation(native, ans):
+    from clausal.logic.solve import call
+    src = ":- module(tluv_gen, [go/0]).\n:- dynamic(f/1).\n" + "\n".join(
+        f"f({i})." for i in range(20)) + "\ngo :- assertz(f(99)).\n"
+    mod = native.load("tluv_gen", src)
+    db = vars(mod)["$module"].db
+    assert len(ans(mod, "f")) == 20          # compiles f/1 (a fact table)
+    dispatch = db.row("f", 1).dispatch_fn
+    gen = db.row("f", 1).clause_generation
+    assert len(list(call("go", module=mod))) == 1
+    row = db.row("f", 1)
+    assert row.clause_generation > gen
+    assert row.dispatch_fn is not None and row.dispatch_fn is not dispatch
