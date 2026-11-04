@@ -135,7 +135,7 @@ that round 3 introduced:
 Row sets at round 4: 645 rows, 0 wrong deletions. The only 31 misses are
 if_/3 rows.
 Filed: todo/native-pl-stored-bodies-are-unexpanded-no-user-expansion-hooks-2026-10-16.md,
-todo/load-time-doubles-per-nested-negation-mark-undo-invariant-2026-10-16.md.
+todo/done/load-time-doubles-per-nested-negation-mark-undo-invariant-2026-10-16.md.
 
 Remaining (not fixed here):
 - if_/3 rules fail closed by ruling (bound patterns miss them), although
