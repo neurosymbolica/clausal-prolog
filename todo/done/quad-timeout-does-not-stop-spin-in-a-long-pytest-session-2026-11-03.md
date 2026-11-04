@@ -1,6 +1,6 @@
 # A quad's timeout does not stop a spinning query in a long pytest session
 
-**Status: FIXED 2026-11-04 (commit COMMIT).** Two causes, both fixed.
+**Status: FIXED 2026-11-04 (commit ec0a83e6).** Two causes, both fixed.
 Pinned by `tests/test_quads.py::test_a_lost_alarm_does_not_leave_the_query_unbounded`
 (both ways of losing an alarm, deterministically, in a child process),
 `tests/test_quads.py::test_a_timed_out_quad_leaves_no_alarm_behind` and
