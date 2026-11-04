@@ -97,7 +97,8 @@ class(reserved,  ['\x1f\']).
 def(escape,   bslash then ( octdig then octdig* then bslash?
                           | 'x' then hexdig then hexdig* then bslash?
                           | (any - reserved - nl) )).
-% Kept in sync with iso.toklex.pl's `udigits`: one `_` between two digits.
+% Kept in sync with iso.toklex.pl's `udigits`: one `_` between two digits,
+% in the decimal integer part only (the fraction is plain digits).
 def(udigits,  digit then ('_'? then digit)*).
 % Kept in sync with iso.toklex.pl's `exp`: ISO 6.4.5's exponent char is
 % "e" | "E", so 'E' stays (2026-10-16; the 10-15 pass had wrongly removed
@@ -210,20 +211,20 @@ token(semicolon, ';').
 token(variable, (capital | '_') then alnum*).
 token(name_atom, small then alnum*).
 token(char_code, '0' then quote then (quote then quote | escape | (any - reserved - bslash))) value char_code.
-% hex_int/oct_int/bin_int: kept in sync with iso.toklex.pl -- require at
-% least one REAL digit (underscores alone don't count); see that file's
-% comment above the same three rules for the full rationale.
+% hex_int/oct_int/bin_int: kept in sync with iso.toklex.pl -- one or more
+% digits of the radix and no `_` (operator ruling 2026-11-03); see that
+% file's comment above the same three rules for the full rationale.
 %
 % Bug 2 (2026-10-15): uppercase 'X'/'O'/'B' radix letters removed, kept in
 % sync with iso.toklex.pl -- see that file's comment above these same
 % three rules.
-token(hex_int,  '0' then 'x' then '_'* then hexdig then (hexdig | '_')*) value int_16.
-token(oct_int,  '0' then 'o' then '_'* then octdig then (octdig | '_')*) value int_8.
-token(bin_int,  '0' then 'b' then '_'* then bindig then (bindig | '_')*) value int_2.
+token(hex_int,  '0' then 'x' then hexdig then hexdig*) value int_16.
+token(oct_int,  '0' then 'o' then octdig then octdig*) value int_8.
+token(bin_int,  '0' then 'b' then bindig then bindig*) value int_2.
 % Bug 3 (2026-10-15): exponent-without-mandatory-fraction alternative
 % removed, kept in sync with iso.toklex.pl -- see that file's comment
 % above its own `float_num` rule.
-token(float_num, (udigits then '.' then udigits then exp?)) value float_of.
+token(float_num, (udigits then '.' then digit then digit* then exp?)) value float_of.
 token(integer,  udigits) value int_10.
 % `(esc_open_hex | esc_open_oct)?` immediately before the closing
 % delimiter: an escape run with no closing backslash yet consumed is fine

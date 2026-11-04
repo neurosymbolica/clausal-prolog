@@ -53,7 +53,12 @@ def(escape,   bslash then ( (octdig then octdig* then bslash)
 % Python: `1_000` is 1000, while in `1_000_` and `1__000` the integer ends
 % before the `_` and the rest is a variable, which the parser refuses as
 % cannot_parse_big_int (todo/done/reader-digit-group-trailing-underscore-
-% 2026-10-24.md). The radix rules below keep their own looser grammar.
+% 2026-10-24.md). Digit groups are for the decimal integer part only, as
+% in Scryer (operator ruling 2026-11-03): a fraction and the 0x/0o/0b
+% integers take plain digits (see float_num and hex_int). Layout and
+% comments after a group `_` (`1_ 000`, `1_/*c*/000`) continue the number;
+% trivia cannot sit inside a token, so the readers join those pieces after
+% lexing (prolog_tokenizer.join_digit_groups).
 def(udigits,  digit then ('_'? then digit)*).
 % ISO 6.4.5's exponent char is "e" | "E", so `1.0E9` is a float; an exponent
 % needs the fraction before it (see float_num).
@@ -98,27 +103,26 @@ token(name_atom, small then alnum*).
 % So `0''` backs up to the integer `0` and the atom `''` (Ulrich #117, #120,
 % #197), and `0'<TAB>` is a syntax error (#177).
 token(char_code, '0' then quote then (quote then quote | escape | (any - bslash - quote - ctrl))) value char_code.
-% hex_int/oct_int/bin_int require at least one REAL digit somewhere in the
-% run (underscores alone don't count) -- `'_'* then hexdig then (hexdig |
-% '_')*` generates exactly the language "any string over {hexdig,'_'} that
-% contains >=1 hexdig", matching the old hand-written tokenizer's rule
-% (collect the whole digit-or-'_' run, then `int(run.replace('_',''), 16)`,
-% which raises on an all-underscore run). `0x_1`/`0x1_` still match (>=1
-% real digit present); `0x_` does not, so maximal munch backs up to `0`
-% (integer) + a fresh name_atom for `x_` -- the same ratified 0x./1.5e.
-% shape (Task 10 divergence set), extended here to the underscore-only
-% case; see tests/toklex/test_parity.py's EXPECTED_DIVERGENCES.
+% hex_int/oct_int/bin_int: `0x`/`0o`/`0b` then one or more digits of the
+% radix, no `_` anywhere (Scryer; operator ruling 2026-11-03 -- they used
+% to take `_` anywhere after the prefix). `0x1_2` is `0x1` glued to the
+% variable `_2`, `0x_1` is `0` and the name `x_1`, `0x1_` is `0x1` and `_`:
+% each a syntax error, incomplete_reduction. `0x` or `0x_` with no digit
+% backs up to the integer `0` and a name (`x`, `x_`), the ratified 0x./1.5e.
+% shape of tests/toklex/test_parity.py's EXPECTED_DIVERGENCES.
 %
 % ISO 6.4.4: the radix letters are lowercase only. `0X1` is not a number
 % token, so maximal munch backs up to `0` and a VARIABLE `X1`, the same
 % fallback shape as `0x.` and `1.5e.` (see EXPECTED_DIVERGENCES above).
-token(hex_int,  '0' then 'x' then '_'* then hexdig then (hexdig | '_')*) value int_16.
-token(oct_int,  '0' then 'o' then '_'* then octdig then (octdig | '_')*) value int_8.
-token(bin_int,  '0' then 'b' then '_'* then bindig then (bindig | '_')*) value int_2.
+token(hex_int,  '0' then 'x' then hexdig then hexdig*) value int_16.
+token(oct_int,  '0' then 'o' then octdig then octdig*) value int_8.
+token(bin_int,  '0' then 'b' then bindig then bindig*) value int_2.
 % ISO 6.4.5: a float is <integer> . <fraction> [<exponent>]; the fraction is
 % mandatory. `1e9` is the integer `1` and the atom `e9` (Ulrich #49/#50 rely
 % on `e9` as a postfix operator); `1E9` is `1` and the variable `E9` (#47).
-token(float_num, (udigits then '.' then udigits then exp?)) value float_of.
+% The fraction is plain digits (Scryer; operator ruling 2026-11-03): `1.0_0`
+% is the float 1.0 glued to the variable `_0`, incomplete_reduction.
+token(float_num, (udigits then '.' then digit then digit* then exp?)) value float_of.
 token(integer,  udigits) value int_10.
 token(quoted_atom, quote then qunit* then quote) value quoted_atom_val.
 token(string,   dquote then dunit* then dquote) value string_val.

@@ -407,12 +407,19 @@ These are from the [syntax](#syntax) measurement:
 - `[]` and `'[]'` are the same atom, as ISO says (ruling D70, 2026-10-17):
   `X = '[]', X == []` succeeds and `writeq('[]')` prints `[]`, which reads
   back as itself.
-- A digit group separator is one `_` between two digits, in the integer
-  part and the fraction alike: `1_000` is 1000, and `1_000_` and `1__000`
-  are `syntax_error(cannot_parse_big_int)`, as in Scryer. Scryer takes no
-  `_` in a fraction (`1.0_0`, read here as 1.0) nor in a `0x`/`0o`/`0b`
-  integer (`0x1_2`, read here as 18), and it lets layout follow the `_`
-  (`1_ 000` is 1000; here a syntax error). See
+- A digit group separator is one `_` between two digits of a decimal
+  integer, as in Scryer (operator ruling 2026-11-03): `1_000` is 1000,
+  `1_000_` and `1__000` are `syntax_error(cannot_parse_big_int)`, and a
+  fraction or a `0x`/`0o`/`0b` integer takes no `_` (`1.0_0` and `0x1_2`
+  are `incomplete_reduction`). Layout and comments may follow the `_`:
+  `1_ 000` and `1_/*c*/000` are 1000. One difference is left: after
+  `1_` and layout, a `0'c` char code is one token here, while Scryer
+  reads its `0` as a digit of the number and the rest from the quote as
+  a quoted atom; both refuse such a text, with different formals
+  (`tests/iso/test_digit_groups_scryer.py`, `READER_DIFFERENCES`).
+  `number_chars/2` reads the same digit groups, but refuses a `_` that
+  ends the text (`1_000_`), which Scryer's number_chars takes and its
+  reader refuses. See
   `todo/done/reader-digit-group-trailing-underscore-2026-10-24.md`.
 
 ---

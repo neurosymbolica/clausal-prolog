@@ -36,6 +36,20 @@ class TestWorkedExamples:
         assert kv("1_.5 ")[:2] == [("integer", 1), ("variable", "_")]
         assert kv("1.0_ ")[:2] == [("float_num", 1.0), ("variable", "_")]
 
+    def test_fraction_and_radix_take_no_digit_group(self):
+        # Scryer, operator ruling 2026-11-03: digit groups are for the
+        # decimal integer part only.
+        assert kv("1.0_0 ")[:2] == [("float_num", 1.0), ("variable", "_0")]
+        assert kv("0x1_2 ")[:2] == [("hex_int", 1), ("variable", "_2")]
+        assert kv("0x1_ ")[:2] == [("hex_int", 1), ("variable", "_")]
+        assert kv("0x_1 ")[:2] == [("integer", 0), ("name_atom", "x_1")]
+        assert kv("0o7_7 ")[:2] == [("oct_int", 7), ("variable", "_7")]
+        assert kv("0b1_0 ")[:2] == [("bin_int", 1), ("variable", "_0")]
+        # the joining of `1_ 000` happens after lexing, so the lexer itself
+        # still ends the integer at the `_`
+        assert kv("1_ 000 ")[:3] == [("integer", 1), ("variable", "_"),
+                                     ("integer", 0)]
+
     def test_char_codes(self):
         assert kv("0'a ")[0] == ("char_code", 97)
         assert kv("0''' ")[0] == ("char_code", 39)

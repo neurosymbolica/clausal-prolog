@@ -700,15 +700,29 @@ def _skip_layout(s: str, i: int) -> int:
     return i
 
 
-def _digits(s: str, i: int, ok) -> int:
-    """End of a digit run (``_`` digit groups included) starting at *i*."""
+def _decimal_digits(s: str, i: int) -> tuple[int, str]:
+    """``(end, digits)``: the decimal digit run starting at *i*, digit
+    groups included, and its digits alone.  A group ``_`` may be followed
+    by layout and comments before the next digit (``1_ 000``,
+    ``1_/*c*/000``), as Scryer reads it (operator ruling 2026-11-03).  A
+    ``_`` that ends the text, after layout or not, is left where it is
+    (the caller refuses the character after the number); one with anything
+    else after it (``1__000``, ``1_.5``, ``1_ a``) is Scryer's
+    ``cannot_parse_big_int``."""
     n = len(s)
     j = i
-    while j < n and ok(s[j]):
+    digits = []
+    while j < n and "0" <= s[j] <= "9":
+        digits.append(s[j])
         j += 1
-        if j + 1 < n and s[j] == "_" and ok(s[j + 1]):
-            j += 1
-    return j
+        if j < n and s[j] == "_":
+            k = _skip_layout(s, j + 1)
+            if k == n:
+                break
+            if not "0" <= s[k] <= "9":
+                raise _NumberSyntax("cannot_parse_big_int", k)
+            j = k
+    return j, "".join(digits)
 
 
 def _char_code_token(s: str, j: int):
@@ -775,7 +789,7 @@ def _number_token_at(s: str, i: int):
             if i + 2 >= n:
                 raise _eof(n)
             return 0, i + 1          # ``0`` then garbage
-    j = _digits(s, i, lambda c: "0" <= c <= "9")
+    j, digits = _decimal_digits(s, i)
     if j + 1 < n and s[j] == "." and "0" <= s[j + 1] <= "9":
         k = j + 1
         while k < n and "0" <= s[k] <= "9":
@@ -788,11 +802,11 @@ def _number_token_at(s: str, i: int):
                 while m < n and "0" <= s[m] <= "9":
                     m += 1
                 k = m
-        value = float(s[i:k].replace("_", ""))
+        value = float(digits + s[j:k])
         if value in (float("inf"), float("-inf")):
             raise _FloatOverflow(k)
         return value, k
-    text = s[i:j].replace("_", "")
+    text = digits
     # through Decimal: CPython caps int(str) at ~4300 digits
     return (int(_Decimal(text)) if len(text) > 4000 else int(text)), j
 

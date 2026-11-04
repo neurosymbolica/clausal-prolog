@@ -88,6 +88,59 @@ _KIND_MAP = {
 }
 
 
+def is_decimal_lexeme(lexeme: str) -> bool:
+    """True for a decimal integer as written (``7``, ``1_000``), not a
+    ``0x``/``0o``/``0b`` integer, a ``0'c`` char code or a float."""
+    return (lexeme[:1].isdigit()
+            and all(c.isdigit() or c == "_" for c in lexeme))
+
+
+def join_digit_groups(tokens: list[Token]) -> list[Token]:
+    """*tokens* with each decimal integer whose digit group ``_`` is
+    followed by layout or comments joined to the digits after them, as
+    Scryer reads it (operator ruling 2026-11-03): ``1_ 000``,
+    ``1_/*c*/000`` and ``1_%c<newline>000`` are the one integer 1000, and
+    ``1_ 0.5`` the float 10.5.
+
+    The lexer cannot do it (trivia sit between tokens, never inside one),
+    so it hands over a decimal INTEGER glued to the variable ``_``; when
+    the next token, after the layout, is a decimal integer or a float, the
+    three become one number token and the join repeats (``1_ 000_ 000``).
+    Anything else after the layout is left alone, and the parser refuses
+    the glued ``_`` (``cannot_parse_big_int``, see
+    ``PrologParser._unexpected_kind``).  Tokens without offsets (the
+    bootstrap path) are never joined."""
+    from clausal.tools.toklex.builders import float_of, int_10  # noqa: PLC0415
+
+    out: list[Token] = []
+    i, n = 0, len(tokens)
+    while i < n:
+        tok = tokens[i]
+        if out and tok.type == TokenType.VAR and tok.value == "_" and i + 1 < n:
+            prev, nxt = out[-1], tokens[i + 1]
+            if (prev.type == TokenType.INTEGER and prev.offset >= 0
+                    and prev.end_offset == tok.offset
+                    and is_decimal_lexeme(prev.lexeme)
+                    and nxt.type in (TokenType.INTEGER, TokenType.FLOAT)
+                    and nxt.offset > tok.end_offset
+                    and nxt.lexeme[:1].isdigit()
+                    and (nxt.type == TokenType.FLOAT
+                         or is_decimal_lexeme(nxt.lexeme))):
+                lexeme = f"{prev.lexeme}_{nxt.lexeme}"
+                value = (float_of(lexeme) if nxt.type == TokenType.FLOAT
+                         else int_10(lexeme))
+                out[-1] = Token(
+                    nxt.type, value, prev.line, prev.col,
+                    end_line=nxt.end_line, end_col=nxt.end_col,
+                    offset=prev.offset, end_offset=nxt.end_offset,
+                    lexeme=lexeme)
+                i += 2
+                continue
+        out.append(tok)
+        i += 1
+    return out
+
+
 def _end_of_source_pos(source: str) -> tuple[int, int]:
     """The (line, col) just past the last character of `source`, using the
     same 1-based line/col cursor convention `_Tokenizer._advance` used (a
@@ -208,6 +261,7 @@ def tokenize(source: str, *, nested_comments: bool = True) -> list[Token]:
             offset=t.start[0], end_offset=t.end[0], lexeme=t.lexeme,
         ))
 
+    result = join_digit_groups(result)
     end_line, end_col = _end_of_source_pos(source)
     result.append(Token(
         TokenType.END, "", end_line, end_col,

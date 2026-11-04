@@ -773,9 +773,10 @@ class PrologReader:
             return self._issue(span, pending_fault, resumable=True)
 
         from clausal.tools.prolog_parser import ParseError, PrologParser
-        from clausal.tools.prolog_tokenizer import Token, TokenType
+        from clausal.tools.prolog_tokenizer import (Token, TokenType,
+                                                    join_digit_groups)
 
-        tokens = [_to_compat_token(t) for t in tokens_buf]
+        tokens = join_digit_groups([_to_compat_token(t) for t in tokens_buf])
         end_off = span[1]
         tokens.append(Token(TokenType.END, "", end_tok.end[1], end_tok.end[2],
                              end_line=end_tok.end[1], end_col=end_tok.end[2],

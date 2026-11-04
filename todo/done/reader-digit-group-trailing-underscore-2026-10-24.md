@@ -10,15 +10,23 @@ tests/iso/test_syntax_error_terms_scryer.py::test_engine_kind (rows
 Scryer by `test_oracle`) and
 tests/toklex/test_iso_spec.py::TestWorkedExamples::test_digit_group_separator_sits_between_digits.
 
-Left, needing a ruling (each still differs from Scryer, which reads no `_`
-in a fraction or a radix integer, and lets layout follow a `_`):
-- `1.0_0` reads as 1.0 (Scryer: `incomplete_reduction`; row
-  `fraction_group`, the one remaining `KNOWN_DIFFERENCES` entry).
-- `0x1_2`, `0x_1`, `0x1_` read as integers (Scryer: `incomplete_reduction`
-  for all); the radix rules were not touched, since
-  `tests/toklex/test_parity.py::TestExpectedDivergences::test_no_divergence_for_digit_adjacent_underscore`
-  pins them.
-- `1_ 000` and `1_/*c*/000` are a syntax error here; Scryer reads 1000.
+The three edges left by that fix (each differed from Scryer) were settled
+by operator ruling 2026-11-03, follow Scryer, and are FIXED 2026-11-03
+(commit "reader: digit groups follow Scryer in fractions, radix integers
+and after layout"), pinned in tests/iso/test_digit_groups_scryer.py (every
+row also checked against Scryer):
+- `1.0_0` is `incomplete_reduction` (the fraction is plain digits; row
+  `fraction_group` left `KNOWN_DIFFERENCES`, now empty).
+- `0x1_2`, `0x_1`, `0x1_` (and the `0o`/`0b` forms) are
+  `incomplete_reduction`; the radix rules take no `_`. The parity test
+  that pinned the old reading,
+  `tests/toklex/test_parity.py::TestExpectedDivergences::test_no_divergence_for_digit_adjacent_underscore`,
+  became `test_radix_integers_take_no_underscore`.
+- `1_ 000`, `1_/*c*/000` and `1_%c\n000` read as 1000
+  (`prolog_tokenizer.join_digit_groups`, after lexing), and number_chars/2
+  reads them too. Scryer's number_chars takes a `_` that ends the text
+  (`1_000_` is 1000 there, while its reader refuses it); number_chars here
+  refuses it, as the reader does (`NUMBER_CHARS_DIFFERENCES`).
 
 Filed 2026-10-24, from the syntax-error vocabulary work (operator ruling
 2026-10-24; `tests/iso/test_syntax_error_terms_scryer.py`, rows
