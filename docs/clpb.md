@@ -12,10 +12,9 @@ The implementation lives in `clausal/logic/clpb.py`.
     CLP(B) formulas are written with Python's bitwise operators (`&`, `|`,
     `^`, `~`), which only the [seam](syntax.md) (`.seam`, Clausal's
     Python-syntax surface) has. So the examples below are seam. From
-    [Clausal Prolog](clausal_prolog.md) (`.clausal`) the four builtins are
-    callable, but a formula may use only variables, `0`, `1` and the
-    `'BoolEq'/2` and `'BoolImpl'/2` terms; see
-    [From Clausal Prolog](#from-clausal-prolog).
+    [Clausal Prolog](clausal_prolog.md) (`.clausal`) and `.pl` the four
+    builtins take library(clpb)'s connectives instead (`+`, `*`, `~`,
+    `#`, ...); see [From Clausal Prolog](#from-clausal-prolog).
 
 ---
 
@@ -36,12 +35,18 @@ Variables in CLP(B) are constrained to values 0 (false) and 1 (true).
 
 ### From Clausal Prolog
 
-In a `.clausal` file there is no AND, OR, XOR or NOT. `X & Y`, `X | Y`
-and `~X` are syntax errors there, and `sat/1` refuses the terms that do
-parse, such as `X ^ Y`, `X * Y`, `X + Y`, `\+ X` or `and(X, Y)`, by
-throwing the Python `TypeError` "CLP(B): unsupported expression type"
-(caught by `catch/3` as `'TypeError'(Message)`). Equivalence and implication do work, written as the
-quoted terms `'BoolEq'(X, Y)` and `'BoolImpl'(X, Y)`:
+In a `.clausal` or `.pl` file a formula is written with the connectives
+of Scryer's and SWI-Prolog's library(clpb), as terms: `X + Y` (or),
+`X * Y` (and), `'#'(X, Y)` (exclusive or; `#` is no operator here),
+`~(X)` (not), `X =:= Y` (equivalence), `X =\= Y` (exclusive or), `X =< Y`
+and `Y >= X` (implication), `X < Y` (`~X * Y`) and `X > Y` (`X * ~Y`).
+`X & Y`, `X | Y` and `~X` are syntax errors, and `sat/1` refuses any
+other term, such as `X ^ Y`, `\+ X` or `and(X, Y)`, by throwing the
+Python `TypeError` "CLP(B): unsupported expression type" (caught by
+`catch/3` as `'TypeError'(Message)`). The `copy_term/3` goals of a
+network, and what `-g` and `?-` print for it, are `sat/1` goals in this
+syntax (`sat(X+Y)`). Equivalence and implication can also be written as
+the quoted terms `'BoolEq'(X, Y)` and `'BoolImpl'(X, Y)`:
 
 ```clausal
 same(X, Y) :-

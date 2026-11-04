@@ -82,11 +82,11 @@ may define its own. A seam module is not ISO text and is not checked.
 | Category | Predicates |
 |---|---|
 | [Control Flow](#control-flow) | once/1, `\+` (seam `not`), if_/3, throw/1, catch_recover/3, catch/3, halt/0,1, repeat/0, setup_call_cleanup/3, call_cleanup/2 |
-| [Coroutining](#coroutining) | freeze/2, when/2, frozen/2 |
+| [Coroutining](#coroutining) | freeze/2, when/2, frozen/2, call_residue_vars/2 |
 | [Meta-Predicates](#meta-predicates) | findall/3,4, bagof/3, setof/3, forall/2, call_nth/2, count_all/2 |
 | [Higher-Order Call](#higher-order-call) | call/1..8, call_goal/1..8 |
 | [DCG (Definite Clause Grammars)](#dcg-definite-clause-grammars) | phrase/2, phrase/3 |
-| [Term Inspection](#term-inspection) | functor/3, arg/3, unpack/2, copy_term/2, term_variables/2, numbervars/3, gensym/2, module_constant/3 |
+| [Term Inspection](#term-inspection) | functor/3, arg/3, unpack/2, copy_term/2, copy_term/3, term_variables/2, numbervars/3, gensym/2, module_constant/3 |
 | [Runtime Database](#runtime-database) | assertz/1, asserta/1, retract/1, clause/2, abolish_table/2, abolish_all_tables/0 |
 | [Prolog Flags](#prolog-flags) | set_prolog_flag/2, current_prolog_flag/2, char_conversion/2, current_char_conversion/2 |
 | [Operators](#operators) | op/3, current_op/3 |
@@ -276,6 +276,18 @@ Generalized coroutining: delay `Goal` until `Condition` is satisfied. Supported 
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_freeze_when_residual_goals.py`, `tests/iso/test_freeze_when_residuals_scryer.py`
+---
+
+### `call_residue_vars/2`
+```text
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:call_residue_vars_2"
+```
+Call `Goal`; with each of its answers, `Vars` is the list of the variables that got an attribute during `Goal` (a `dif/2`, a CLP domain or constraint, a `freeze/2` or `when/2` goal) and still carry one, unbound, in the order they got their first one. A variable no argument of `Goal` reaches is listed too: `call_residue_vars((dif(Z, a), X = 1), Vs)` gives `Vs = [Z]`. Scryer's and SWI's `call_residue_vars/2`; see [Coroutining](coroutining.md#residual-goals-copy_term3-and-call_residue_vars2).
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/control.py`, `clausal/logic/residuals.py`
+    **Tests:** `tests/iso/test_copy_term_3_scryer.py`, `tests/fixtures/copy_term_3.clausal`, `tests/fixtures/copy_term_3.seam`
+
 ---
 
 ## Meta-Predicates
@@ -547,6 +559,18 @@ for `ground/1`, `term_variables/2` and the copies `findall/3` makes.
 ??? info "Implementation & tests"
     **Seam tests:** `tests/clausal_modules/term_inspection.seam`
     **Python tests:** `tests/test_term_inspection.py`
+
+---
+
+### `copy_term/3`
+```text
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:copy_term_3"
+```
+`Copy` is a copy of `Term` whose variables carry **no** attributes, and `Goals` the list of goals that, called, put back on them the constraints the variables of `Term` carry: `dif(X, a), copy_term(X, Y, Gs)` gives `Gs = [dif(Y,a)]`. The goals are those the answer printers show (`dif/2`, CLP(ℤ), `freeze/2`, `when/2`, CLP(B), CLP(ℝ), CLP(Q)); see [Coroutining](coroutining.md#residual-goals-copy_term3-and-call_residue_vars2). Scryer's and SWI's `copy_term/3`.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/inspection.py`, `clausal/logic/residuals.py`
+    **Tests:** `tests/iso/test_copy_term_3_scryer.py`, `tests/fixtures/copy_term_3.clausal`, `tests/fixtures/copy_term_3.seam`
 
 ---
 

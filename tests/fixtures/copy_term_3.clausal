@@ -1,0 +1,122 @@
+% copy_term/3 and call_residue_vars/2 (Clausal Prolog).
+% The goals copy_term/3 hands back put the constraints back when called:
+% each test copies a constrained term, calls the goals on the copy, and
+% checks the copy is constrained as the original is.
+
+:- use_module(library(clpz)).
+:- use_module(library(clpq)).
+
+restored(Term, Copy) :-
+    copy_term(Term, Copy, Gs),
+    maplist(call, Gs).
+
+test("dif: the copy is free, the goal restores it") :-
+    dif(X, a),
+    copy_term(X, Y, Gs),
+    Gs == [dif(Y, a)],
+    Y = a.
+
+test("dif: restored", fail) :-
+    dif(X, a),
+    restored(X, Y),
+    Y = a.
+
+test("dif: a variable only the goal mentions is fresh") :-
+    dif(X, Z),
+    copy_term(X, Y, [dif(Y2, W)]),
+    Y2 == Y,
+    W \== Z,
+    var(W).
+
+test("freeze: restored", fail) :-
+    freeze(X, fail),
+    restored(X, Y),
+    Y = 1.
+
+test("freeze: the goal runs on the copy") :-
+    freeze(X, Z = done),
+    restored(X-Z, Y-W),
+    Y = 1,
+    W == done.
+
+test("when: restored", fail) :-
+    when(ground(f(X, Z)), fail),
+    restored(X-Z, A-B),
+    A = 1,
+    B = 2.
+
+test("clpz domain: restored", fail) :-
+    X in 1..3,
+    restored(X, Y),
+    Y = 7.
+
+test("clpz domain: the copy keeps it") :-
+    X in 1..3,
+    restored(X, Y),
+    fd_dom(Y, D),
+    D == 1..3.
+
+test("clpz relation: restored", fail) :-
+    X #< Z,
+    restored(X-Z, A-B),
+    A = 3,
+    B = 2.
+
+test("clpz sum: restored") :-
+    X #= A + B,
+    restored(X-A-B, Y-1-2),
+    Y == 3.
+
+test("all_different: restored", fail) :-
+    all_different([X, Z]),
+    restored([X, Z], [A, B]),
+    A = 1,
+    B = 1.
+
+test("clpq: restored", fail) :-
+    {X >= 2},
+    restored(X, Y),
+    Y = 1.
+
+test("clpq equation: restored") :-
+    {X + Z = 3},
+    restored(X-Z, 1-W),
+    W =:= 2.
+
+test("clpb: restored", fail) :-
+    sat(X + Z),
+    restored(X-Z, A-B),
+    A = 0,
+    B = 0.
+
+test("clpr: restored", fail) :-
+    in_real(X, 0.0, 2.0),
+    restored(X, Y),
+    Y = 3.0.
+
+test("no constraints: no goals") :-
+    copy_term(f(X, a), Y, Gs),
+    Gs == [],
+    Y = f(Z, a),
+    Z \== X.
+
+test("cyclic term") :-
+    X = f(X, V),
+    dif(V, a),
+    copy_term(X, Y, Gs),
+    Y = f(Y1, W),
+    Y1 == Y,
+    Gs == [dif(W, a)].
+
+test("call_residue_vars: an unreachable variable") :-
+    call_residue_vars((dif(Z, a), X = 1), Vs),
+    X == 1,
+    Vs == [Z].
+
+test("call_residue_vars: a bound variable is gone") :-
+    call_residue_vars((X #> 3, X = 4), Vs),
+    Vs == [].
+
+test("call_residue_vars: every answer") :-
+    findall(N, (call_residue_vars(member(X, [1, 2]), Vs), length(Vs, N)), Ns),
+    Ns == [0, 0].

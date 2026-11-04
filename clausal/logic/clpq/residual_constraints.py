@@ -567,12 +567,20 @@ def residual_strings(target_variables, trail, name_of):
 def toplevel_strings(query_variables, trail, name_of, attributed=()):
     """The `-g` printer's residual constraints on *query_variables* (and
     the constraints of *attributed* the projection keeps, see
-    toplevel_goals): toplevel_goals's goals in residual_strings's text.
-    The targets are chosen as residual_strings chooses them, and without
-    any CLP(Q) state on them or on *attributed* the answer is [] at once.  Raises
-    system_error(clpq_projection_failed) where the projection fails, so an
-    answer's constraints are never dropped in silence
-    (test_a_failing_projection_raises_a_system_error)."""
+    toplevel_goals): toplevel_goal_terms's goals in residual_strings's
+    text."""
+    return goal_strings(
+        toplevel_goal_terms(query_variables, trail, attributed), name_of)
+
+
+def toplevel_goal_terms(query_variables, trail, attributed=()):
+    """The goals the toplevel shows for *query_variables* (and the
+    constraints of *attributed* the projection keeps), as terms: see
+    toplevel_goals.  The targets are chosen as residual_strings chooses
+    them, and without any CLP(Q) state on them or on *attributed* the
+    answer is [] at once.  Raises system_error(clpq_projection_failed)
+    where the projection fails, so an answer's constraints are never
+    dropped in silence (test_a_failing_projection_raises_a_system_error)."""
     targets = []
     seen = set()
     stateful = False
@@ -600,7 +608,7 @@ def toplevel_strings(query_variables, trail, name_of, attributed=()):
         raise LogicException(system_error(
             "clpq_projection_failed",
             "project_attributes/2: the projection failed on a store that holds"))
-    return goal_strings(goals, name_of)
+    return goals
 
 
 def goal_strings(goals, name_of):

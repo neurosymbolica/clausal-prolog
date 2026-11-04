@@ -61,6 +61,10 @@ when(+Condition, +Goal)
 frozen(@Term, -Goal)
 --8<-- [end:frozen_2]
 
+--8<-- [start:call_residue_vars_2]
+call_residue_vars(:Goal, -Vars)
+--8<-- [end:call_residue_vars_2]
+
 
 % === Meta-Predicates ===
 
@@ -156,6 +160,10 @@ unpack(-Term, +List)   % construct: Term from [functor | Args]
 --8<-- [start:copy_term_2]
 copy_term(+Original, -Copy)
 --8<-- [end:copy_term_2]
+
+--8<-- [start:copy_term_3]
+copy_term(+Term, -Copy, -Goals)
+--8<-- [end:copy_term_3]
 
 --8<-- [start:term_variables_2]
 term_variables(+Term, -Vars)

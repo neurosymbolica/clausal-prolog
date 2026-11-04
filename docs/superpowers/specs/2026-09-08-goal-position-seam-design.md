@@ -221,7 +221,7 @@ silent:
   (attribute goals as a term), `--(goal, copy_term(X, X2, GOALS))` exports
   `GOALS` as a plain list and `X2` as a plain term, and the sugar needs no
   special form. `copy_term/3` does not exist yet: todo filed
-  (`todo/copy-term-3-attribute-goals-2026-09-08.md`); until it lands the
+  (`todo/done/copy-term-3-attribute-goals-2026-09-08.md`); until it lands the
   strict rule above is the whole story.
 
 ## 5. Errors
