@@ -109,11 +109,10 @@ test('c: a mismatch beside the unknown is refused by solve') <- (
 test('d: log mean temperature difference from a dimensionless ratio of temperature differences') <- (
     eval_(30(kelvin), HOT_END_DIFFERENCE), eval_(10(kelvin), COLD_END_DIFFERENCE),
     simplify((HOT_END_DIFFERENCE - COLD_END_DIFFERENCE) / log(HOT_END_DIFFERENCE / COLD_END_DIFFERENCE), LOG_MEAN_TEMPERATURE_DIFFERENCE),
-    # exact: 20/log(3) * 1 (kelvin), an arithmetic term; eval_ gives the decimal
-    eval_(LOG_MEAN_TEMPERATURE_DIFFERENCE, DECIMAL_VALUE),
-    has_units(DECIMAL_VALUE, kelvin),
-    DECIMAL_VALUE > 18.2047(kelvin),
-    DECIMAL_VALUE < 18.2048(kelvin)
+    # 20/log(3) kelvin: irrational, so a float quantity (operator ruling 2026-11-04)
+    has_units(LOG_MEAN_TEMPERATURE_DIFFERENCE, kelvin),
+    LOG_MEAN_TEMPERATURE_DIFFERENCE > 18.2047(kelvin),
+    LOG_MEAN_TEMPERATURE_DIFFERENCE < 18.2048(kelvin)
 )  # nv
 # --8<-- [end:log_mean_temperature_difference]
 
@@ -174,17 +173,24 @@ test('currency: euro plus kelvin is refused') <- (
     OUTCOME is 'units_mismatch'
 )  # nv
 
-test('exact root: x squared = 2 square metres stays exact, eval_ gives decimals') <- (
+test('irrational root: x squared = 2 square metres gives float quantities') <- (
     eval_(2(metre) * 1(metre), AREA),
     solve_all(X**2 - AREA, X, [NEGATIVE_ROOT, POSITIVE_ROOT]),
-    eval_(POSITIVE_ROOT, DECIMAL_VALUE),
-    has_units(DECIMAL_VALUE, metre),
-    DECIMAL_VALUE > 1.41421(metre),
-    DECIMAL_VALUE < 1.41422(metre),
-    eval_(NEGATIVE_ROOT, NEGATIVE_DECIMAL),
-    NEGATIVE_DECIMAL < 0(metre),
-    simplify(POSITIVE_ROOT * POSITIVE_ROOT, SQUARE),
-    SQUARE == AREA
+    POSITIVE_ROOT > 1(metre),
+    POSITIVE_ROOT > 1.41421(metre),
+    POSITIVE_ROOT < 1.41422(metre),
+    NEGATIVE_ROOT < 0(metre),
+    has_units(POSITIVE_ROOT, metre),
+    strip_units(POSITIVE_ROOT, MAGNITUDE),
+    float(MAGNITUDE)
+)  # nv
+
+test('rational root: x squared = 9/4 square metres stays exact') <- (
+    eval_(9(metre) * 1(metre) / 4, AREA),
+    solve_all(X**2 - AREA, X, [_, POSITIVE_ROOT]),
+    strip_units(POSITIVE_ROOT, MAGNITUDE),
+    not float(MAGNITUDE),
+    MAGNITUDE == 3 / 2
 )  # nv
 
 test('complex roots: x squared + 4 square metres has no real root') <- (

@@ -105,15 +105,17 @@ What comes back:
 - a ground result with a rational magnitude is a quantity with an exact
   magnitude; units that cancel give a plain number; a zero keeps the
   dimension of the input (`simplify(3(kelvin) - 3(kelvin))` is `0(kelvin)`);
-- a ground result with an irrational magnitude stays EXACT, as the Clausal
-  arithmetic term `Magnitude * 1 (unit)`, e.g. `2**(1/2) * 1 (metre)` or
-  `20/log(3) * 1 (kelvin)`, when the engine can evaluate every function in
-  it (`sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `exp`, `log`, `abs`,
-  `ceiling`, `floor`, `pi`, `e`); otherwise (a `LambertW`, a `gamma`) it is a
-  float quantity. Evaluate an exact term to get a decimal quantity,
-  `eval_(R, V)` (`V is R` in Clausal Prolog), and compare, `has_units/2` or
-  `strip_units/2` `V`, not `R`; a further sympy call reads `R` back exactly
-  (its square is exactly `2(metre**2)`);
+- a ground result with an irrational magnitude (`sqrt(2)`, `20/log(3)`, a
+  `LambertW` root) is a FLOAT quantity, which compares, `has_units/2` and
+  `strip_units/2` like any other (operator ruling 2026-11-04). The exact
+  form is available behind the switch
+  `clausal.modules.py._sympy_units.EXACT_IRRATIONAL_RESULTS`: set to `True`,
+  such a result is the Clausal arithmetic term `Magnitude * 1 (unit)`, e.g.
+  `2**(1/2) * 1 (metre)`, when the engine can evaluate every function in it
+  (`sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `exp`, `log`, `abs`,
+  `ceiling`, `floor`, `pi`, `e`); evaluate it (`eval_(R, V)`, `V is R`)
+  before comparing or checking its units, and a further sympy call reads it
+  back exactly;
 - a result that still holds a variable stays symbolic, dimension symbols
   included;
 - `solve/3`, `solve_all/3` and `roots/3` of an equation that holds a
@@ -165,7 +167,7 @@ function needs dimensionless arguments and gives a dimensionless value:
 `f`), whose dimension it cannot judge, so `log10(100(kelvin))` and
 `f(3(kelvin))` are refused with `units_mismatch`. A ratio of two
 temperature differences is dimensionless, and the log mean temperature
-difference comes back exact:
+difference comes back as a float quantity in kelvin:
 
 ```seam
 --8<-- "tests/fixtures/sympy_units.seam:log_mean_temperature_difference"

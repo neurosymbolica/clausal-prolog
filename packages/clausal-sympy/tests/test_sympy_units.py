@@ -193,9 +193,11 @@ class TestRefusals:
         term = Div(left=Sub(left=hot, right=cold),
                    right=("log", Div(left=hot, right=cold)))
         _, mean = _first_solution(simplify, term, Var())
-        # Exact: the term 20/log(3) * 1 (kelvin), not a float.
-        assert isinstance(mean, Mult) and mean.right == kelvin(1)
-        assert _to_sympy(mean) == 20 * _sympy_units.unit_symbol("kelvin") / sp.log(3)
+        # 20/log(3) kelvin is irrational: a float quantity (operator ruling
+        # 2026-11-04).
+        assert isinstance(mean, Quantity) and isinstance(mean.value, float)
+        assert dict(mean.dims) == {"kelvin": 1}
+        assert mean.value == pytest.approx(float(20 / sp.log(3)), rel=1e-15)
 
     def test_square_root_of_a_temperature(self):
         with refused_as_units_mismatch():
@@ -341,23 +343,46 @@ class TestComplexAndNonFinite:
         assert caught.value.term[1][0] == "evaluation_error"
 
 
-class TestExactForms:
-    """Finding 6: an exact irrational result stays exact."""
+class TestIrrationalResults:
+    """Finding 6 and the operator ruling 2026-11-04: an irrational magnitude
+    is a float Quantity by default; a rational one stays exact; the switch
+    EXACT_IRRATIONAL_RESULTS brings back the exact term."""
 
-    def test_irrational_root_is_an_exact_term(self):
+    def square_root_equation(self, x):
+        return Sub(left=Pow(left=x, right=2), right=metre(2) * metre(1))
+
+    def test_irrational_root_is_a_float_quantity(self):
         x = Var()
-        equation = Sub(left=Pow(left=x, right=2), right=metre(2) * metre(1))
-        roots_found = answers(solve_all, equation, x, Var())[0][2]
-        assert all(isinstance(r, Mult) and r.right == metre(1) for r in roots_found)
-        assert sorted(_to_sympy(r) for r in roots_found) == sorted(
+        found = answers(solve_all, self.square_root_equation(x), x, Var())[0][2]
+        assert [type(r) for r in found] == [Quantity, Quantity]
+        assert [r.value for r in found] == pytest.approx([-2 ** 0.5, 2 ** 0.5], rel=1e-15)
+        assert all(isinstance(r.value, float) and dict(r.dims) == {"metre": 1} for r in found)
+
+    def test_float_result_compares_and_checks_units(self):
+        (answer,) = answers(simplify, ("sqrt", metre(2) * metre(1)), Var())
+        root = answer[1]
+        assert root > metre(1) and root < metre(2)
+        assert answers(units.has_units, root, units.metre)
+        assert answers(units.strip_units, root, Var())[0][1] == pytest.approx(2 ** 0.5)
+
+    def test_rational_result_stays_exact(self):
+        x = Var()
+        equation = Sub(left=Pow(left=x, right=2), right=Div(left=metre(9) * metre(1), right=4))
+        found = answers(solve_all, equation, x, Var())[0][2]
+        assert found == [metre(Fraction(-3, 2)), metre(Fraction(3, 2))]
+        assert all(isinstance(r.value, Fraction) for r in found)
+
+    def test_switch_brings_back_the_exact_term(self, monkeypatch):
+        monkeypatch.setattr(_sympy_units, "EXACT_IRRATIONAL_RESULTS", True)
+        x = Var()
+        found = answers(solve_all, self.square_root_equation(x), x, Var())[0][2]
+        assert all(isinstance(r, Mult) and r.right == metre(1) for r in found)
+        assert sorted(_to_sympy(r) for r in found) == sorted(
             [-sp.sqrt(2) * _sympy_units.unit_symbol("metre"),
              sp.sqrt(2) * _sympy_units.unit_symbol("metre")], key=str)
-
-    def test_squaring_the_exact_root_is_exact(self):
         (answer,) = answers(simplify, ("sqrt", metre(2) * metre(1)), Var())
         (square,) = answers(simplify, Mult(left=answer[1], right=answer[1]), Var())
-        assert square[1] == metre(2) * metre(1)
-        assert isinstance(square[1].value, int)
+        assert square[1] == metre(2) * metre(1) and isinstance(square[1].value, int)
 
 
 class TestOtherPredicates:
@@ -510,9 +535,11 @@ class TestRealRoots:
         x = Var()
         assert len(answers(solve_all, Add(left=Pow(left=x, right=2), right=1), x, Var())[0][2]) == 2
 
-    def test_exact_forms_are_engine_evaluable(self):
+    def test_exact_forms_are_engine_evaluable(self, monkeypatch):
         from clausal.logic.exact_arith import evaluate
+        monkeypatch.setattr(_sympy_units, "EXACT_IRRATIONAL_RESULTS", True)
         (answer,) = answers(simplify, ("sqrt", metre(2) * metre(1)), Var())
+        assert isinstance(answer[1], Mult)
         value = evaluate(answer[1])
         assert isinstance(value, Quantity) and abs(value.value - 2 ** 0.5) < 1e-15
 

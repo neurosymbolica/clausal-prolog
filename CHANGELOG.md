@@ -30,10 +30,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   - 5(pascal))`, `0(pascal) + 3(kelvin)` and `X * 1(kelvin) + X * 1(pascal)` are refused and `solve(X -
   0(kelvin))` answers `0(kelvin)`. The dimension symbols are constants: `diff/2`,
   `integrate/2`, `degree/2`, `free_vars/2` and `sym_equal/2` never treat
-  them as variables; they print as `(kelvin)`. An irrational magnitude
-  stays exact, as the arithmetic term `Magnitude * 1 (unit)` (evaluate it
-  for a decimal) when the engine can evaluate every function in it, else a
-  float. An equation holding a quantity gives its real roots only, in
+  them as variables; they print as `(kelvin)`. An irrational magnitude (`sqrt(2)`, a log mean temperature
+  difference) is a float quantity (operator ruling 2026-11-04); a rational
+  one stays exact (`int`/`Fraction`). The switch
+  `_sympy_units.EXACT_IRRATIONAL_RESULTS` brings back the exact arithmetic
+  term `Magnitude * 1 (unit)`, used only when the engine can evaluate it. An equation holding a quantity gives its real roots only, in
   increasing order, each once, each checked by substitution; a root SymPy
   cannot classify is evaluated to 50 digits and kept if its imaginary part
   is negligible; SymPy unable to solve it is

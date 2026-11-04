@@ -42,13 +42,10 @@ A ground result is a Clausal quantity:
 
 * an exact rational magnitude is a ``Quantity`` with an int or ``Fraction``
   magnitude; a float magnitude is a ``Quantity`` with a float;
-* any other exact real magnitude (``sqrt(2)``, ``20/log(3)``) stays EXACT, as
-  the Clausal arithmetic term ``Magnitude * Quantity(1, dims)``, e.g.
-  ``2**(1/2) * 1 (metre)``, when the engine can evaluate every function in
-  it (otherwise a float; EXACT_IRRATIONAL_RESULTS is the one switch).
-  ``V is R`` (the seam's ``eval_(R, V)``) gives the decimal ``Quantity``;
-  compare and check units on ``V``.  A further sympy call reads ``R`` back
-  exactly;
+* any other real magnitude (``sqrt(2)``, ``20/log(3)``, a ``LambertW``
+  root) is a float ``Quantity`` (operator ruling 2026-11-04; the switch
+  EXACT_IRRATIONAL_RESULTS brings back the exact arithmetic term
+  ``Magnitude * Quantity(1, dims)``);
 * a zero keeps the dimension the operation implies: the input's for
   ``simplify``/``expand``/``factor`` (``3(kelvin) - 3(kelvin)`` is
   ``0(kelvin)``), the variable's (from the constraints above) for a root of
@@ -522,10 +519,13 @@ def real_roots(equation: Any, symbol: Any, roots: list) -> list:
 # -- Back to Clausal ---------------------------------------------------------
 
 #: How a ground result whose magnitude is real but not rational (sqrt(2),
-#: 20/log(3)) comes back.  True: exact, as ``Magnitude * Quantity(1, dims)``
-#: (an arithmetic term; evaluate it for a decimal).  False: a float
-#: ``Quantity``.  The one switch for that choice.
-EXACT_IRRATIONAL_RESULTS = True
+#: 20/log(3)) comes back.  False (the default, operator ruling 2026-11-04:
+#: "ok floats for now and a todo for when we feel we haven't suffered
+#: enough"): a float ``Quantity``, which compares, ``has_units/2`` and
+#: ``strip_units/2`` like any other.  True: exact, as ``Magnitude *
+#: Quantity(1, dims)`` (an arithmetic term the caller must evaluate before
+#: comparing).  A RATIONAL magnitude is exact either way.  The one switch.
+EXACT_IRRATIONAL_RESULTS = False
 
 
 #: SymPy functions whose Clausal spelling the engine's ``is`` evaluates
