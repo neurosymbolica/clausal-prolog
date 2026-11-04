@@ -297,3 +297,82 @@ def test_a_cached_query_runs_its_segments_on_the_new_variables(tmp_path, monkeyp
         got.append([(walk(deref(A)), walk(deref(B)), walk(deref(C)))
                     for _ in clausal.solve(goal, m)])
     assert got == [[(1, b, 2) for b in (1, 2, 3)], [(11, b, 12) for b in (1, 2, 3)]]
+
+
+def _nested_long_negations(depth, width=20):
+    """``\\+ \\+ (g, ..., g, \\+ \\+ (g, ..., g, ...))``: *depth* levels, each
+    a conjunction of *width* + 1 goals, so every level is long enough to be
+    cut on its own."""
+    goal = "r(1)"
+    for _ in range(depth):
+        goal = "\\+ \\+ (" + ", ".join(["r(1)"] * width) + f", {goal})"
+    return goal
+
+
+def test_nested_long_conjunctions_are_lowered_a_bounded_number_of_times(
+        tmp_path, monkeypatch):
+    # A long conjunction is folded once plain, and folded again in segments
+    # only if it nests too deep.  The refold lowered its goals again, so a
+    # long conjunction inside a long conjunction inside ... was lowered
+    # 2**depth times: depth 10 took 7 s to load
+    # (todo/done/load-time-doubles-per-nested-negation-mark-undo-invariant-2026-10-16.md).
+    # Each sequence is now folded at most twice.
+    monkeypatch.delenv(body_segments.ENV_VAR, raising=False)
+    depth = 14
+    calls = 0
+    real = body_segments.fold_sequence
+
+    def counting(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls > 4 * depth:
+            raise AssertionError(f"fold_sequence called over {4 * depth} times")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(body_segments, "fold_sequence", counting)
+    m = _load(tmp_path, f"""
+        r(1).
+        p(yes) :- {_nested_long_negations(depth)}.
+        q(yes) :- {_nested_long_negations(depth)}, r(2).
+        """)
+    assert _run(m, ("p", 1)) == ["yes"]
+    assert _run(m, ("q", 1)) == []
+
+
+def test_a_long_conjunction_in_a_refolded_one_compiles_as_before(
+        tmp_path, monkeypatch):
+    # A long conjunction nested in one that is refolded in segments left
+    # the inner fold's segments unreached, so hoisting always refused and
+    # the predicate was rebuilt without segments.  The refusal now comes
+    # before the refold; the code is the same as with segmentation off.
+    dumps = []
+    real = codegen.functiondef_to_function
+
+    def spy(node, globals_=None, filename="<template>", **kw):
+        if node.name.startswith("p__"):
+            dumps.append((_canonical(ast.dump(node, include_attributes=True)),
+                          getattr(node, "_clausal_segments", None)))
+        return real(node, globals_, filename, **kw)
+
+    monkeypatch.setattr("clausal.logic.compiler.predicate.functiondef_to_function", spy)
+    monkeypatch.delenv(body_segments.ENV_VAR, raising=False)
+    src = f"""
+        r(1).
+        p(yes) :- {_nested_long_negations(3)}.
+        """
+    _load(tmp_path, src)
+    monkeypatch.setattr(body_segments, "SPLIT_ABOVE", 10 ** 9)
+    _load(tmp_path, src)
+    assert len(dumps) == 2
+    assert dumps[0][1] is None and dumps[1][1] is None
+    # The rebuild's fresh names continue the refused build's numbering.
+    assert _fresh_numbered(dumps[0][0]) == _fresh_numbered(dumps[1][0])
+
+
+def _fresh_numbered(text):
+    """Fresh names (``_gen12``, ``_naf_gen_fn7``) numbered by first use."""
+    import re
+    seen: dict = {}
+    return re.sub(r"\b(_[A-Za-z_]+?)(\d+)\b",
+                  lambda mo: seen.setdefault(mo.group(), f"{mo.group(1)}#{len(seen)}"),
+                  text)

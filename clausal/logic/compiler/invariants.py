@@ -24,6 +24,7 @@ assertions become the primary detection mechanism for IR-side bugs.
 
 from __future__ import annotations
 
+import ast
 from typing import Any
 
 from ._vars import _collect_vars
@@ -159,7 +160,6 @@ def assert_mark_undo_paired(funcdef: Any) -> None:
     funcdef are paired *within* that inner scope, so the walk
     accumulates per-scope.
     """
-    import ast as _ast
     issues = _check_mark_undo_pairing(funcdef.body)
     if issues:
         sample = issues[:5]
@@ -175,65 +175,81 @@ def assert_mark_undo_paired(funcdef: Any) -> None:
 
 
 def _check_mark_undo_pairing(stmts: list) -> list[str]:
-    """Recursively check mark/undo balance per lexical scope.
+    """Check mark/undo balance per lexical scope.
 
     Returns a list of human-readable issue descriptions; empty list
     means OK.  Each :class:`ast.FunctionDef` introduces a new scope
-    (NAF mini-generators emit funcdefs whose marks are local).
+    (NAF mini-generators emit funcdefs whose marks are local), checked
+    against its own marks and undos only.
+
+    Every node is visited once: a scope's walk stops at a nested
+    funcdef's body and queues that body as a scope of its own.  (The
+    walk this replaces let ``ast.walk`` descend into nested funcdefs
+    *and* recursed into them, so each ancestor re-walked every deeper
+    scope: 2**depth scope walks for nested ``\\+``, and an outer mark
+    could be "paired" by an inner undo.
+    todo/done/load-time-doubles-per-nested-negation-mark-undo-invariant-2026-10-16.md.)
     """
-    import ast as _ast
-    marks: set[str] = set()
-    undos: set[str] = set()
-    nested_issues: list[str] = []
-
-    for node in _ast.walk(_make_module(stmts)):
-        if isinstance(node, _ast.FunctionDef) and node.body is not stmts:
-            # Recurse into nested funcdef as a separate scope.
-            nested_issues.extend(_check_mark_undo_pairing(node.body))
-            continue
-        if isinstance(node, _ast.Assign):
-            if (
-                len(node.targets) == 1
-                and isinstance(node.targets[0], _ast.Name)
-                and isinstance(node.value, _ast.Call)
-                and isinstance(node.value.func, _ast.Attribute)
-                and node.value.func.attr == "mark"
-            ):
-                marks.add(node.targets[0].id)
-        elif isinstance(node, _ast.Call):
-            if (
-                isinstance(node.func, _ast.Attribute)
-                and node.func.attr == "undo"
-                and len(node.args) == 1
-                and isinstance(node.args[0], _ast.Name)
-            ):
-                undos.add(node.args[0].id)
-            elif (
-                # TRO's activation mark is consumed by
-                # ``trail.commit_fresh(mark, floor)``: it drops the entries
-                # since the mark only when all are on variables born after
-                # it, and otherwise leaves them to the clause arm's own
-                # mark/undo -- nothing is leaked either way.
-                isinstance(node.func, _ast.Attribute)
-                and node.func.attr == "commit_fresh"
-                and len(node.args) == 2
-                and isinstance(node.args[0], _ast.Name)
-                and node.args[0].id == "_tro_mark"   # tro._TRO_MARK_NAME
-            ):
-                undos.add(node.args[0].id)
-
-    issues = list(nested_issues)
-    for m in marks - undos:
-        issues.append(f"mark {m!r} assigned but never undone")
-    for u in undos - marks:
-        issues.append(f"undo({u!r}) called but name was never marked")
+    issues: list[str] = []
+    scopes = [stmts]
+    while scopes:
+        scope_stmts = scopes.pop()
+        marks: set[str] = set()
+        undos: set[str] = set()
+        todo = list(reversed(scope_stmts))
+        while todo:
+            node = todo.pop()
+            if isinstance(node, ast.FunctionDef):
+                # Its body is a scope of its own; decorators, defaults and
+                # annotations are evaluated in this one.
+                scopes.append(node.body)
+                children = [c for c in ast.iter_child_nodes(node)
+                            if not isinstance(c, ast.stmt)]
+            else:
+                children = list(ast.iter_child_nodes(node))
+                _note_mark_or_undo(node, marks, undos)
+            todo.extend(reversed(children))
+        for m in marks - undos:
+            issues.append(f"mark {m!r} assigned but never undone")
+        for u in undos - marks:
+            issues.append(f"undo({u!r}) called but name was never marked")
     return issues
 
 
-def _make_module(stmts: list):
-    """Wrap *stmts* in a synthetic Module so ``ast.walk`` has a root."""
-    import ast as _ast
-    return _ast.Module(body=stmts, type_ignores=[])
+def _note_mark_or_undo(node, marks: set, undos: set) -> None:
+    """Record *node* in *marks* / *undos* when it is ``<name> =
+    trail.mark()`` or a ``trail.undo(<name>)`` (or TRO's
+    ``trail.commit_fresh(_tro_mark, floor)``) call."""
+    if isinstance(node, ast.Assign):
+        if (
+            len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Attribute)
+            and node.value.func.attr == "mark"
+        ):
+            marks.add(node.targets[0].id)
+    elif isinstance(node, ast.Call):
+        if (
+            isinstance(node.func, ast.Attribute)
+            and node.func.attr == "undo"
+            and len(node.args) == 1
+            and isinstance(node.args[0], ast.Name)
+        ):
+            undos.add(node.args[0].id)
+        elif (
+            # TRO's activation mark is consumed by
+            # ``trail.commit_fresh(mark, floor)``: it drops the entries
+            # since the mark only when all are on variables born after
+            # it, and otherwise leaves them to the clause arm's own
+            # mark/undo -- nothing is leaked either way.
+            isinstance(node.func, ast.Attribute)
+            and node.func.attr == "commit_fresh"
+            and len(node.args) == 2
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id == "_tro_mark"   # tro._TRO_MARK_NAME
+        ):
+            undos.add(node.args[0].id)
 
 
 def assert_head_pattern_unify_safe(pattern: Any, head: Any = None) -> None:

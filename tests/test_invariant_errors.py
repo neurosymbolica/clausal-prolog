@@ -182,6 +182,76 @@ def test_mark_undo_paired_recurses_into_nested_funcdef():
     assert "_m0" in str(exc_info.value)
 
 
+def _nested_chain(depth: int, innermost: list) -> ast.FunctionDef:
+    """*depth* funcdefs nested one in another, each with its own balanced
+    mark/undo pair, *innermost* in the deepest one."""
+    fd = _funcdef(f"f{depth}", list(innermost))
+    for i in range(depth - 1, -1, -1):
+        fd = _funcdef(f"f{i}", [fd, _mark(f"_m{i}"), _undo(f"_m{i}")])
+    return fd
+
+
+def test_mark_undo_paired_is_linear_in_nesting_depth(monkeypatch):
+    """Each AST node is visited at most once.  The old walk re-entered every
+    deeper funcdef from every ancestor scope: 2**depth scope walks for
+    *depth* nested NAF mini-generators, so ``\\+`` nested 20 deep took
+    minutes to load
+    (todo/done/load-time-doubles-per-nested-negation-mark-undo-invariant-2026-10-16.md)."""
+    real_iter = ast.iter_child_nodes
+    visits = 0
+    budget = 0
+
+    def counting_iter(node):
+        nonlocal visits
+        visits += 1
+        if visits > budget:
+            raise AssertionError(f"visited more than {budget} nodes")
+        return real_iter(node)
+
+    for depth in (8, 16, 64, 300):
+        fd = _nested_chain(depth, [_mark("_z"), _undo("_z")])
+        n_nodes = sum(1 for _ in real_walk(fd))
+        visits, budget = 0, n_nodes
+        monkeypatch.setattr(ast, "iter_child_nodes", counting_iter)
+        try:
+            assert_mark_undo_paired(fd)
+        finally:
+            monkeypatch.setattr(ast, "iter_child_nodes", real_iter)
+        assert visits <= n_nodes, (depth, visits, n_nodes)
+
+
+_REAL_ITER_CHILD_NODES = ast.iter_child_nodes
+
+
+def real_walk(node):
+    todo = [node]
+    while todo:
+        n = todo.pop()
+        yield n
+        todo.extend(_REAL_ITER_CHILD_NODES(n))
+
+
+def test_mark_undo_paired_fires_on_orphan_deep_in_nesting():
+    fd = _nested_chain(300, [_mark("_deep")])
+    with pytest.raises(InvariantError) as exc_info:
+        assert_mark_undo_paired(fd)
+    assert "_deep" in str(exc_info.value)
+    # Reported once, not once per enclosing scope.
+    assert "1 mark/undo imbalance(s)" in str(exc_info.value)
+
+
+def test_mark_undo_paired_does_not_pair_across_scopes():
+    """A mark in a nested funcdef is not paired by an undo of the same name
+    in the enclosing scope (the old walk let the outer scope see both)."""
+    inner = _funcdef("inner", [_mark("_m0")])
+    fd = _funcdef("outer", [inner, _undo("_m0")])
+    with pytest.raises(InvariantError) as exc_info:
+        assert_mark_undo_paired(fd)
+    msg = str(exc_info.value)
+    assert "mark '_m0' assigned but never undone" in msg
+    assert "undo('_m0') called but name was never marked" in msg
+
+
 # ── F4: assert_trampoline_done_yield_present ────────────────────────────────
 
 

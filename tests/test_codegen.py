@@ -224,3 +224,53 @@ def test_explicit_args_not_overridden():
     )
     f = stmts_to_function(ast.parse("return z * 2").body, "f", args=explicit)
     assert f(6) == 12
+
+
+def _nested_deep_functions(depth, loops=24):
+    """``def f0`` holding 24 nested ``for`` loops, the innermost holding
+    ``def f1`` with the same, and so on *depth* deep: every function nests
+    past CPython's block limit, so the outliner splits each of them."""
+    inner = [ast.Pass()]
+    for k in reversed(range(depth)):
+        body = [ast.parse(f"a{k} += 1").body[0],
+                ast.parse(f"out.append(a{k})").body[0]] + inner
+        if k + 1 < depth:
+            body.append(ast.parse(f"f{k + 1}(xs, out)").body[0])
+        for j in reversed(range(loops)):
+            body = [ast.For(target=ast.Name(f"i{k}_{j}", ast.Store()),
+                            iter=ast.Name("xs", ast.Load()), body=body, orelse=[])]
+        fd = ast.parse(f"def f{k}(xs, out):\n    a{k} = 0").body[0]
+        fd.body += body
+        inner = [fd]
+    module = ast.Module(inner, [])
+    ast.fix_missing_locations(module)
+    return module
+
+
+def test_outlining_nested_functions_is_linear(monkeypatch):
+    # Each function's outliner walked the bodies of all the functions
+    # nested in it again, quadratic in the nesting
+    # (todo/done/load-time-doubles-per-nested-negation-mark-undo-invariant-2026-10-16.md).
+    from clausal.codegen import split_deep_nesting
+    real = ast.iter_child_nodes
+    for depth in (8, 32):
+        module = _nested_deep_functions(depth)
+        n_nodes = sum(1 for _ in ast.walk(module))
+        visits = 0
+
+        def counting(node):
+            nonlocal visits
+            visits += 1
+            return real(node)
+
+        monkeypatch.setattr(ast, "iter_child_nodes", counting)
+        try:
+            assert split_deep_nesting(module.body[0], force=True)
+        finally:
+            monkeypatch.setattr(ast, "iter_child_nodes", real)
+        assert visits <= 10 * n_nodes, (depth, visits, n_nodes)   # was 21x at 32
+        ns: dict = {}
+        exec(compile(ast.fix_missing_locations(module), "<test>", "exec"), ns)
+        out: list = []
+        ns["f0"]([1], out)
+        assert out == [1] * depth

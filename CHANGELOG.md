@@ -33,6 +33,26 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **Deeply nested `\+`, `findall/3` and long conjunctions load in linear
+  time.** Load time doubled with each nested `\+` (or other construct
+  compiled to a nested function): `\+` nested 16 deep took 5 s and 24 deep
+  did not load in 100 s. The mark/undo invariant check walked every nested
+  function again from each enclosing one; it now visits each node once and
+  checks each function's marks against its own undos only (an undo in an
+  enclosing function no longer counts). A long conjunction inside another
+  long conjunction was lowered twice per level when the outer one was cut
+  into segments, 2^depth times in all; the fold now refuses segments at
+  once, as hoisting always did afterwards. The outliner for deep blocks no
+  longer re-walks nested function bodies for each enclosing function, or
+  looks for owners of names that no outlined scope binds. The generated
+  code is unchanged (checked on every `.pl`, `.clausal` and `.seam` file in
+  the repository). Now `\+` nested 64 deep loads in 0.05 s and `findall/3`
+  in 0.1 s. Tests: `tests/test_invariant_errors.py`,
+  `tests/test_body_segments.py`
+  (todo/done/load-time-doubles-per-nested-negation-mark-undo-invariant-2026-10-16.md;
+  the costs that remain are in
+  todo/deep-nesting-load-costs-left-after-the-nested-negation-fix-2026-11-04.md).
+
 - **A predicate with thousands of clauses compiles in linear time and
   memory.** The first call of a dynamic predicate after many asserts (and
   the load of a file with a large fact table) compiled one Python function
