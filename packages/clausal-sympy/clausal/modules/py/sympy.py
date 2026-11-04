@@ -56,6 +56,11 @@ from clausal.terms import (
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate, term_str, DictTerm,
 )
+# Quantities (units): see _sympy_units for the design.
+from decimal import Decimal as _Decimal
+from fractions import Fraction as _Fraction
+from clausal.terms import Quantity as _Quantity
+from clausal.modules.py import _sympy_units
 
 
 
@@ -323,6 +328,13 @@ def _to_sympy_value(term: Any, ctx: _ConversionContext) -> _sp.Expr:
     if isinstance(term, float):
         return _sp.Float(term)
 
+    # Quantity -> exact magnitude * dimension symbols; Decimal and Fraction
+    # -> exact Rational (a Decimal through sympify became a Float).
+    if isinstance(term, _Quantity):
+        return _sympy_units.quantity_to_sympy(term)
+    if isinstance(term, (_Decimal, _Fraction)):
+        return _sympy_units.exact_number_to_sympy(term)
+
     # SymExpr wrapper -> unwrap
     if isinstance(term, SymExpr):
         term = term._expr
@@ -345,6 +357,8 @@ def _to_sympy_value(term: Any, ctx: _ConversionContext) -> _sp.Expr:
         if isinstance(term, cls):
             l = _to_sympy_ctx(term.left, ctx)
             r = _to_sympy_ctx(term.right, ctx)
+            if cls is Add or cls is Sub:
+                _sympy_units.check_sum(l, r)   # before SymPy folds it away
             return sp_fn(l, r)
 
     if isinstance(term, Div):
@@ -371,6 +385,7 @@ def _to_sympy_value(term: Any, ctx: _ConversionContext) -> _sp.Expr:
         sp_args = [_to_sympy_ctx(a, ctx) for a in term[1:]]
         sp_fn = _SYMPY_FUNCTIONS.get(fn_name)
         if sp_fn is not None:
+            _sympy_units.check_function_args(fn_name, sp_args)
             return sp_fn(*sp_args)
         # Unknown functor -> SymPy Function
         return _sp.Function(fn_name)(*sp_args)
@@ -420,6 +435,14 @@ def _from_sympy(expr: _sp.Expr, ctx: _ConversionContext | None = None) -> Any:
 
 
 def _from_sympy_ctx(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
+    # Dimension symbols -> quantities (checked; ground -> one Quantity)
+    if _sympy_units.has_units(expr):
+        if isinstance(expr, _sympy_units._UnitSymbol):
+            return _sympy_units.unit_symbol_to_clausal(expr)
+        whole = _sympy_units.result_to_clausal(expr, lambda e: None)
+        if whole is not None:
+            return whole
+
     # Symbol -> Var (if known) or pass through as SymPy Symbol (ground value)
     if isinstance(expr, _sp.Symbol):
         v = ctx._sym_to_var.get(expr.name)
@@ -636,6 +659,8 @@ class SymExpr:
 
 def _to_pyval(expr: _sp.Basic) -> Any:
     """Collapse trivial SymPy results to Python values, wrap the rest."""
+    if _sympy_units.has_units(expr):
+        return _sympy_units.result_to_clausal(expr, SymExpr)
     if isinstance(expr, _sp.Integer):
         return int(expr)
     if isinstance(expr, _sp.Float):

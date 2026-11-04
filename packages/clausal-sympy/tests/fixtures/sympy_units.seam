@@ -1,0 +1,155 @@
+-import_from(sympy, [simplify, expand, solve, solve_all, log, sym_str,
+                     sympy_term])
+-import_from(py.units, [gram, kilogram, second, kelvin, joule, watt, pascal, metre, kilowatt,
+                       has_units, strip_units])
+
+# SymPy over Clausal quantities (units/dimensional analysis).  A quantity
+# goes to SymPy as its exact magnitude times one symbol per base dimension;
+# the dimension of every sum and of every function argument is checked with
+# Clausal's own Quantity arithmetic, so a mismatch is the units system's
+# normal error, error(system_error(units_mismatch), _).  A ground result
+# comes back as a Clausal quantity.
+#
+# The numbers are a heat-exchanger duty: flow 500 g/s, specific heat
+# 4186 J/(kg K), temperature difference 12345 millidegrees C (a temperature
+# DIFFERENCE, so the same as 12345 millikelvin, entered exactly as a
+# rational: 12345 K / 1000).
+
+# --8<-- [start:heat_exchanger_quantities]
+flow(FLOW) <- (eval_(500(gram), MASS), eval_(MASS / 1(second), FLOW))
+specific_heat(SPECIFIC_HEAT) <- eval_(4186(joule/kilogram/kelvin), SPECIFIC_HEAT)
+temperature_difference(TEMPERATURE_DIFFERENCE) <- eval_(12345(kelvin) / 1000, TEMPERATURE_DIFFERENCE)
+target_duty(TARGET_DUTY) <- eval_(5000(watt), TARGET_DUTY)
+# --8<-- [end:heat_exchanger_quantities]
+
+# ── (a) forward: duty = flow * specific heat * temperature difference ────────
+
+test('a: simplify a product of quantities gives watts') <- (
+    flow(FLOW), specific_heat(SPECIFIC_HEAT), temperature_difference(TEMPERATURE_DIFFERENCE),
+    simplify(FLOW * SPECIFIC_HEAT * TEMPERATURE_DIFFERENCE, DUTY),
+    has_units(DUTY, watt),
+    eval_(FLOW * SPECIFIC_HEAT * TEMPERATURE_DIFFERENCE, EXPECTED),
+    DUTY == EXPECTED
+)  # nv
+
+test('a: the duty magnitude is exact') <- (
+    flow(FLOW), specific_heat(SPECIFIC_HEAT), temperature_difference(TEMPERATURE_DIFFERENCE),
+    simplify(FLOW * SPECIFIC_HEAT * TEMPERATURE_DIFFERENCE, DUTY),
+    strip_units(DUTY, MAGNITUDE),
+    MAGNITUDE == 25838085 / 1000,
+    not float(MAGNITUDE)
+)  # nv
+
+test('a: expand also returns a quantity') <- (
+    flow(FLOW), specific_heat(SPECIFIC_HEAT), temperature_difference(TEMPERATURE_DIFFERENCE),
+    expand(FLOW * SPECIFIC_HEAT * TEMPERATURE_DIFFERENCE, DUTY),
+    has_units(DUTY, watt)
+)  # nv
+
+# ── (b) backwards: which flow gives the target duty ──────────────────────────
+
+# --8<-- [start:solve_for_a_quantity]
+test('b: solve for the flow gives a mass flow') <- (
+    specific_heat(SPECIFIC_HEAT), temperature_difference(TEMPERATURE_DIFFERENCE), target_duty(TARGET_DUTY),
+    solve(FLOW * SPECIFIC_HEAT * TEMPERATURE_DIFFERENCE - TARGET_DUTY, FLOW, ROOT),
+    has_units(ROOT, kilogram/second),
+    eval_(TARGET_DUTY / (SPECIFIC_HEAT * TEMPERATURE_DIFFERENCE), EXPECTED),
+    ROOT == EXPECTED
+)  # nv
+# --8<-- [end:solve_for_a_quantity]
+
+test('b: the root is exact and converts to grams per second') <- (
+    specific_heat(SPECIFIC_HEAT), temperature_difference(TEMPERATURE_DIFFERENCE), target_duty(TARGET_DUTY),
+    solve(FLOW * SPECIFIC_HEAT * TEMPERATURE_DIFFERENCE - TARGET_DUTY, FLOW, ROOT),
+    strip_units(ROOT, MAGNITUDE),
+    not float(MAGNITUDE),
+    eval_(ROOT * 1(second) / 1(gram), GRAMS_PER_SECOND),
+    GRAMS_PER_SECOND == 5000000000 / 51676170
+)  # nv
+
+test('b: solve_all collects every root as a list of quantities') <- (
+    specific_heat(SPECIFIC_HEAT), temperature_difference(TEMPERATURE_DIFFERENCE), target_duty(TARGET_DUTY),
+    solve_all(FLOW * SPECIFIC_HEAT * TEMPERATURE_DIFFERENCE - TARGET_DUTY, FLOW, [ROOT]),
+    has_units(ROOT, kilogram/second)
+)  # nv
+
+test('b: solve_all of a quadratic in a length gives both roots') <- (
+    eval_(2(metre), LENGTH),
+    solve_all(X**2 - LENGTH * LENGTH, X, [ROOT_ONE, ROOT_TWO]),
+    has_units(ROOT_ONE, metre),
+    has_units(ROOT_TWO, metre),
+    eval_(ROOT_ONE * ROOT_TWO, PRODUCT),
+    eval_(-4(metre**2), MINUS_FOUR),
+    PRODUCT == MINUS_FOUR
+)  # nv
+
+# ── (c) a dimension mismatch is refused ──────────────────────────────────────
+
+# --8<-- [start:dimension_mismatch]
+test('c: kelvin plus pascal is refused by simplify') <- (
+    catch((simplify(10(kelvin) + 5(pascal), _), OUTCOME is 'computed'),
+          error(system_error(CODE), _),
+          OUTCOME is CODE),
+    OUTCOME is 'units_mismatch'
+)  # nv
+# --8<-- [end:dimension_mismatch]
+
+test('c: a mismatch beside the unknown is refused by solve') <- (
+    specific_heat(SPECIFIC_HEAT), temperature_difference(TEMPERATURE_DIFFERENCE), target_duty(TARGET_DUTY),
+    catch((solve(FLOW * SPECIFIC_HEAT * TEMPERATURE_DIFFERENCE - TARGET_DUTY + 3(pascal), FLOW, _), OUTCOME is 'computed'),
+          error(system_error(CODE), _),
+          OUTCOME is CODE),
+    OUTCOME is 'units_mismatch'
+)  # nv
+
+# ── (d) logarithms ───────────────────────────────────────────────────────────
+
+# --8<-- [start:log_mean_temperature_difference]
+test('d: log mean temperature difference from a dimensionless ratio of temperature differences') <- (
+    eval_(30(kelvin), HOT_END_DIFFERENCE), eval_(10(kelvin), COLD_END_DIFFERENCE),
+    simplify((HOT_END_DIFFERENCE - COLD_END_DIFFERENCE) / log(HOT_END_DIFFERENCE / COLD_END_DIFFERENCE), LOG_MEAN_TEMPERATURE_DIFFERENCE),
+    has_units(LOG_MEAN_TEMPERATURE_DIFFERENCE, kelvin),
+    LOG_MEAN_TEMPERATURE_DIFFERENCE > 18.2047(kelvin),
+    LOG_MEAN_TEMPERATURE_DIFFERENCE < 18.2048(kelvin)
+)  # nv
+# --8<-- [end:log_mean_temperature_difference]
+
+test('d: log of a temperature difference is refused') <- (
+    catch((simplify(log(30(kelvin)), _), OUTCOME is 'computed'),
+          error(system_error(CODE), _),
+          OUTCOME is CODE),
+    OUTCOME is 'units_mismatch'
+)  # nv
+
+# ── (e) round trip into the units module ─────────────────────────────────────
+
+test('e: the result compares and converts as a quantity') <- (
+    flow(FLOW), specific_heat(SPECIFIC_HEAT), temperature_difference(TEMPERATURE_DIFFERENCE),
+    simplify(FLOW * SPECIFIC_HEAT * TEMPERATURE_DIFFERENCE, DUTY),
+    DUTY > 25(kilowatt),
+    DUTY < 26(kilowatt),
+    eval_(DUTY / 1(kilowatt), IN_KILOWATTS),
+    IN_KILOWATTS == 25838085 / 1000000
+)  # nv
+
+test('e: a quantity result feeds the next sympy call') <- (
+    flow(FLOW), specific_heat(SPECIFIC_HEAT), temperature_difference(TEMPERATURE_DIFFERENCE),
+    simplify(FLOW * SPECIFIC_HEAT * TEMPERATURE_DIFFERENCE, DUTY),
+    simplify(DUTY * 2, TWICE),
+    has_units(TWICE, watt),
+    eval_(DUTY * 2, EXPECTED),
+    TWICE == EXPECTED
+)  # nv
+
+test('e: sympy_term turns a quantity into a quantity') <- (
+    sympy_term(SYMPY_FORM, 3(kelvin)),
+    sympy_term(SYMPY_FORM, TERM),
+    has_units(TERM, kelvin),
+    TERM == 3(kelvin)
+)  # nv
+
+test('e: a symbolic result keeps its units for printing') <- (
+    simplify(X * 3(kelvin), OUTCOME),
+    sym_str(OUTCOME, TEXT),
+    ++("kelvin" in TEXT)
+)  # nv
