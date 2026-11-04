@@ -568,6 +568,45 @@ from ._vars import _collect_var_ids, _collect_bound_vars  # noqa: E402,F401
 _TRO_MARK_NAME = "_tro_mark"
 _TRO_FLOOR_NAME = "_tro_floor"
 
+# The logical update view (ISO 7.5.4) for a DYNAMIC predicate.  A tail call is
+# a new call: it sees the clause set as it is when it is made, which the
+# activation's own prefix may have changed (``\+ \+ assertz(p(..))``,
+# ``once(retract(..))``, or any predicate the prefix calls).  The in-place
+# restart re-enters the clauses this function was compiled with, so it is
+# taken only when the row's ``clause_generation`` still has the value it had
+# when the activation began; otherwise the tail is the ordinary call, which
+# dispatches to the current clauses.  A loop that writes OTHER predicates (a
+# counter fact) keeps its constant-space restart.  A static predicate's clause
+# set cannot change under a running call, so it compiles without the check.
+_TRO_GEN_NAME = "_tro_gen"
+#: Generated-code name of the predicate's ``PredRow``.
+TRO_ROW_NAME = "$tro_row"
+
+
+def bind_tro_generation(ctx: CompilationContext, base_globals: dict, db,
+                        functor: str, arity: int) -> None:
+    """Arm the clause-generation check for this compile of *functor*/*arity*
+    when it is a dynamic predicate of *db* (see ``_TRO_GEN_NAME``)."""
+    if db is None or not db.is_dynamic(functor, arity):
+        return
+    row = db.row(functor, arity)
+    if row is None:
+        return
+    base_globals[TRO_ROW_NAME] = row
+    ctx.tro_generation_check = True
+
+
+def _tro_generation_expr() -> ast.expr:
+    return _attr(TRO_ROW_NAME, "clause_generation")
+
+
+def tro_generation_snapshot(ctx: CompilationContext) -> list[ast.stmt]:
+    """The statement recording the clause generation at the start of an
+    activation, beside ``_tro_mark``; none when the check is not armed."""
+    if not ctx.tro_generation_check:
+        return []
+    return [_assign(_TRO_GEN_NAME, _tro_generation_expr())]
+
 
 class TroCutRestart(BaseException):
     """ISO cut on a loop-mode TRO path: a cut's exit raises this when the
@@ -714,6 +753,12 @@ def _compile_tro_tail(
         ast.UnaryOp(op=ast.Not(), operand=_call(_name("$is_var"), _name(f"_tro_arg{i}")))
         for i in sorted(check_indices or ())
     ]
+    if ctx.tro_generation_check:
+        # A dynamic predicate whose clause set changed since the activation
+        # began makes the ordinary call (see ``_TRO_GEN_NAME``).
+        checks.append(ast.Compare(
+            left=_tro_generation_expr(), ops=[ast.Eq()],
+            comparators=[_name(_TRO_GEN_NAME)]))
     checks.append(commit_cond)
     if len(checks) == 1:
         ground_cond = checks[0]

@@ -186,6 +186,15 @@ class PredRow:
     # Database's row freely; a class on a REAL row may not be moved off it by
     # an unauthorized write (see ``PredicateMeta._bind_row``).
     detached: bool = False
+    # Counts the transactions that wrote this row's clause list (and
+    # wholesale replacements of it).  A dynamic predicate's tail-recursive
+    # clause restarts in place over the clauses its activation was compiled
+    # with, which ISO 7.5.4 allows only while they are still the clause set:
+    # the generated code reads this at the activation's start and again at
+    # the tail, and makes an ordinary call when it moved
+    # (``compiler/tro.py``, ``tro_generation_snapshot``).
+    clause_generation: int = dataclasses.field(
+        default=0, repr=False, compare=False)
 
     @property
     def db(self) -> "Database":
@@ -249,6 +258,7 @@ class PredRow:
         """
         self._db._clauses[self._key] = value
         self._unminted_clauses = None
+        self.clause_generation += 1
 
     def ensure_clauses(self) -> list:
         """Mint this predicate's clause list in the Database and return it.
@@ -1218,6 +1228,17 @@ class Database:
             for row in opened:
                 row._txn -= 1
             stamp = f"{detail} (failed)" if failed else detail
+            if kind in _CLAUSE_KINDS:
+                # The clause set changed (or may have): a running
+                # activation must not restart in place over its old one.
+                # Bumped whether or not the transaction installed a
+                # dispatch of its own, so a write that leaves nothing to
+                # invalidate still moves the generation.
+                for row in opened:
+                    row.clause_generation += 1
+                if target._txn:
+                    # Written inside a transaction opened on it before.
+                    target.clause_generation += 1
             for row, dispatch in before:
                 row.record_write(author, kind, stamp)
                 if kind not in _CLAUSE_KINDS or row.dispatch_fn is not dispatch:

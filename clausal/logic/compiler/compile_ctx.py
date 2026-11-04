@@ -210,6 +210,11 @@ class CompilationContext:
     # abandons the remaining clauses too).  Set by the trampoline funcdef
     # builder around its clause loop; read only by the cut exit.
     cut_tro_restart: "str | None" = None
+    # True when the predicate being compiled is dynamic: a TRO restart then
+    # also checks that its clause set is unchanged since the activation
+    # began (``tro.bind_tro_generation``).  Read only by the TRO tail and
+    # the activation-start statements.
+    tro_generation_check: bool = False
     # XSB's run-time cut check (D61 Q1, ``cut_scope.cut_check_stmts``): the
     # current barrier scope's one-slot mark holder, set wherever
     # ``cut_exit`` is, and the ``F/N`` text of the predicate being compiled

@@ -39,6 +39,24 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A tail call of a dynamic predicate sees the clauses its own clause
+  asserted or retracted before it (the logical update view, ISO 7.5.4).**
+  Tail-recursion optimisation restarts the predicate in place over the
+  clauses the running call was compiled with. A prefix that changed those
+  clauses and still counted as deterministic (`\+ \+ assertz(q(N1))`,
+  `once(assertz(...))`, `findall(_, assertz(...), _)`, `once(retract(...))`)
+  hid the change from the tail call: `q(N) :- N > 0, N1 is N - 1,
+  once(assertz(q(N1))), q(N1).` answered `findall(x, q(2), L)` with `[]`
+  where ISO and Scryer give `[x, x]`. Every compile had this, and since the
+  recompile fix below a recompiled predicate too. A dynamic predicate's
+  restart now first checks that its clause set is unchanged since the call
+  began (a per-predicate generation count bumped by every clause write) and
+  otherwise makes the ordinary call. A dynamic loop that writes other
+  predicates keeps its constant-space restart (a 100 000-iteration counter
+  loop runs in flat memory; without the restart it grows by about 800 MB).
+  Static predicates compile as before. Pinned by
+  `tests/iso_l3/test_l3_tro_logical_update_view.py`.
+
 - **A predicate recompiled after `assertz`/`retract` compiles as a fresh
   compile does; it no longer lowers its clause bodies against the first
   compile's context.** The lazy recompile handed the next compile the
@@ -46,8 +64,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   every recompile used the first compile's per-predicate settings and its
   body-IR cache, keyed by `id(clause)` of clauses long since freed. A
   tail-recursive dynamic predicate recompiled to different code from a
-  fresh compile of the same clauses (its tail call without the
-  `trail.commit_fresh` check). When CPython reused a freed clause's address
+  fresh compile of the same clauses (an ordinary recursive call where the
+  fresh compile restarts in place behind the `trail.commit_fresh` check;
+  that restart broke the logical update view, see the entry above). When CPython reused a freed clause's address
   for a new clause, the recompile compiled the dead clause's body in its
   place: with a deep ground term in it, a `NameError` on a
   `$headlit_<id>` global

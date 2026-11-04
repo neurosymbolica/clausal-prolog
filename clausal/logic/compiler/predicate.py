@@ -352,6 +352,8 @@ from .tro import (  # noqa: E402,F401
     _contains_star_unpack,
     _compile_tro_tail,
     _TRO_MARK_NAME, _TRO_FLOOR_NAME,
+    bind_tro_generation as _bind_tro_generation,
+    tro_generation_snapshot as _tro_generation_snapshot,
     TroCutRestart as _TroCutRestart,
     TRO_CUT_RESTART_NAME as _TRO_CUT_RESTART_NAME,
     TRO_SIG_NAME as _TRO_SIG_NAME,
@@ -1178,6 +1180,7 @@ def _build_predicate_trampoline_funcdef_impl(
         loop_stmts[:0] = [
             _assign(_TRO_MARK_NAME, _call(_attr(_tn, "mark"))),
             _assign(_TRO_FLOOR_NAME, _call(_attr(_tn, "var_floor"))),
+            *_tro_generation_snapshot(ctx_template),
         ]
 
     if use_tro and tro_mode == "loop" and _raises_tro_cut_restart(loop_stmts):
@@ -1587,6 +1590,7 @@ def _compile_predicate_trampoline_impl(
     _locked_keys = frozenset(k for k in base_globals if k.startswith(_DISP_PREFIX))
     ctx_template.locked_dispatch_keys = _locked_keys
     ctx_template.base_globals = base_globals
+    _bind_tro_generation(ctx_template, base_globals, db, functor, arity)
     try:
         # Slice E6b: ``_inject_bucket_refs_trampoline`` retired.  The
         # IR-path per-body populator in ``goal_shallow.
