@@ -112,7 +112,10 @@ add :- assertz((p(X) :- member(X, [1, 2, 3]), X > 1, !)), assertz(p(9)).
 
 - The asserted clause is a **copy** of the term (ISO 8.9.1.1): binding the
   caller's variables afterwards does not change it, and a variable goal in
-  the body is stored as `call(G)`.
+  the body is stored as `call(G)`. In a `.pl` module this holds for an
+  asserted **fact** too: after `assertz(q(X)), X = 1`, `q(V)` leaves `V`
+  unbound. (A Clausal Prolog or seam fact still keeps an unbound argument
+  the caller's variable.)
 - It is compiled as the same clause **written in that file** would be: the
   native front end's own clause lowering, under the file's directives (its
   imports, `library(reif)`'s `if_/3`, `library(clpq)`'s `{}/1`). So `!` and
@@ -128,6 +131,10 @@ add :- assertz((p(X) :- member(X, [1, 2, 3]), X > 1, !)), assertz(p(9)).
   iterates the clauses as they were at its call.
 - A non-callable body is `type_error(callable, Body)`, the whole body as
   culprit, as in Scryer (`assertz((p :- (a, 4)))`).
+- A rule holds data as deep as a fact can (tested to 20000 levels). A body
+  whose control constructs nest too deeply to compile (a few hundred
+  levels of `->`) is `error(resource_error(stack), assertz/1)`, raised
+  before anything is stored.
 
 Where a rule may **not** be asserted, the assert raises
 `permission_error(assert, rule, Head)` and leaves the predicate untouched:

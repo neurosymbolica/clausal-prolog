@@ -921,7 +921,8 @@ LOWERING_CONTEXT_KEY = "$lowering_context"
 _BUILT_VALUES_KEY = "$term_expansion_values"
 
 
-def lower_iso_clause(head, body, module_dict: dict, ctx, filename: str):
+def lower_iso_clause(head, body, module_dict: dict, ctx, filename: str,
+                     *, embed_deep: bool = False):
     """The ``Predicate`` node the native front end's own clause lowering
     (``iso_l3.lower_clause``) gives the run-time clause ``Head :- Body``
     (``Body`` ``True`` for a fact), under the directive state *ctx*
@@ -938,7 +939,8 @@ def lower_iso_clause(head, body, module_dict: dict, ctx, filename: str):
     values: list = []
     seen: dict = {}
     reader = _AsReaderTerm(values, seen,
-                           chars=getattr(ctx, "dq_mode", "chars") == "chars")
+                           chars=getattr(ctx, "dq_mode", "chars") == "chars",
+                           embed_deep=embed_deep)
     if body is True or (type(body) is str and body == "true"):
         term = reader(head)
     else:
@@ -1125,13 +1127,20 @@ class _AsReaderTerm:
     -- goes in *values* too, and is spliced back verbatim
     (``iso_l3_directives.Embedded``)."""
 
-    def __init__(self, values: list, seen: dict, chars: bool = True):
+    def __init__(self, values: list, seen: dict, chars: bool = True,
+                 embed_deep: bool = False):
         self._values = values
         self._seen = seen
         # Under ``double_quotes`` chars (always, in .clausal) the reader's
         # ``"..."`` IS the string carrier, so it is given as read: in a goal
         # position the front end then refuses it in its own words.
         self._chars = chars
+        # A rule asserted at run time (``database_ops._rule_clause``): a
+        # DATA subterm nested deeper than ``_EMBED_DEPTH`` is spliced in
+        # verbatim (see :meth:`_deep_data`), so the lowering -- recursive,
+        # and compiled by CPython's recursive compiler -- never sees it,
+        # and a rule's data goes as deep as an asserted fact's.
+        self._embed_deep = embed_deep
 
     def _slot(self, value) -> int:
         self._values.append(value)
@@ -1145,7 +1154,69 @@ class _AsReaderTerm:
             slice=ast.Constant(value=self._slot(value)), ctx=ast.Load()),
             term=value)
 
+    #: The data nesting (compound arguments, list elements; the control
+    #: constructs' goal positions do not count) beyond which a rule's
+    #: subterm is spliced in verbatim when ``embed_deep`` is on.
+    _EMBED_DEPTH = 32
+
+    #: Functors whose arguments are the SAME level: a body's control spine
+    #: (a long conjunction is a ','/2 chain that deep) is never data.
+    _SPINE = frozenset({(",", 2), (";", 2), ("->", 2), ("*->", 2),
+                        ("\\+", 1)})
+
+    @staticmethod
+    def _deep_data(t) -> bool:
+        """*t* (a compound) is the term the lowering would build from its
+        reader spelling, so splicing it in verbatim changes nothing: it holds
+        no partial list or string (``SegList``/``SegString``, lowered to the
+        compiler's source form with the hole a clause variable), no cons
+        cell, no ``undefined`` and no ``constant/1`` cell.  Its variables
+        are the clause's own (the rule is a fresh copy), shared by identity
+        with the ones the lowering reads from *values*."""
+        from clausal.logic.variables import is_var  # noqa: PLC0415
+        from clausal.terms import SegList, SegString, Undefined  # noqa: PLC0415
+        stack = [t]
+        while stack:
+            x = deref(stack.pop())
+            tx = type(x)
+            if tx is tuple:
+                if not x or type(x[0]) is not str:
+                    return False
+                if (len(x) == 3 and x[0] == ".") or (
+                        len(x) == 2 and x[0] == "constant"):
+                    return False
+                stack.extend(x[1:])
+            elif tx is list:
+                stack.extend(x)
+            elif tx in (int, float, str, bool) or is_var(x):
+                continue
+            elif x is Undefined or isinstance(x, (SegList, SegString)):
+                return False
+            else:
+                return False
+        return True
+
     def __call__(self, raw):
+        """The conversion, ITERATIVE (an explicit work stack, children
+        converted left to right): a long conjunction or a deep term must not
+        exhaust Python's recursion limit here."""
+        out: list = []
+        work = [(0, raw, 0)]          # (0, term, depth) | (1, builder, n)
+        while work:
+            op, a, b = work.pop()
+            if op == 1:
+                args = out[len(out) - b:] if b else []
+                del out[len(out) - b:]
+                out.append(a(args))
+                continue
+            leaf = self._leaf(a, b, work)
+            if leaf is not _PENDING:
+                out.append(leaf)
+        return out[0]
+
+    def _leaf(self, raw, depth, work):
+        """The converted *raw*, or ``_PENDING`` after pushing its children
+        and their builder on *work*."""
         from clausal.tools.prolog_reader import VarRef  # noqa: PLC0415
         from clausal.logic.variables import is_var  # noqa: PLC0415
         from clausal.logic.cells import (  # noqa: PLC0415
@@ -1165,14 +1236,19 @@ class _AsReaderTerm:
             return "undefined"
         if type(t) in (int, float, str):
             return t
+        if (self._embed_deep and depth > self._EMBED_DEPTH
+                and type(t) in (tuple, list) and self._deep_data(t)):
+            return self._embedded(t)
         if type(t) is list:
-            return [self(e) for e in t]
+            self._push(work, list, t, depth + 1)
+            return _PENDING
         if isinstance(t, SegList):            # SegListView too
-            return self._partial_list(t)
+            return self._partial_list(t, depth, work)
         if isinstance(t, SegString):
             walked = t._walk_raw()
             if type(walked) is str:
-                return self(chars(walked))
+                work.append((0, chars(walked), depth))
+                return _PENDING
             return self._embedded(t)
         if self._chars and is_chars(t):
             return ("$chars", chars_text(t))
@@ -1181,12 +1257,24 @@ class _AsReaderTerm:
             # A cons cell: the reader's own, which the front end lowers to
             # the list it is (``[H, *T]`` over a variable tail) or keeps as
             # the improper list it is.
-            return (".", self(t[1]), self(t[2]))
+            self._push(work, lambda a: (".", *a), t[1:], depth + 1)
+            return _PENDING
         if is_cell and not (functor == "constant" and len(t) == 2):
-            return (functor, *(self(a) for a in t[1:]))
+            same = (functor, len(t) - 1) in self._SPINE
+            self._push(work, lambda a, f=functor: (f, *a), t[1:],
+                       depth if same else depth + 1)
+            return _PENDING
         return self._embedded(t)
 
-    def _partial_list(self, t):
+    @staticmethod
+    def _push(work, build, children, depth):
+        """Push *children* (converted left to right) and then *build* over
+        their results."""
+        work.append((1, build, len(children)))
+        for c in reversed(children):
+            work.append((0, c, depth))
+
+    def _partial_list(self, t, depth, work):
         """A partial list ``[E1, ..., En | T]`` (a ``SegList``) as the
         reader's cons chain ending in ``T``'s VarRef, which the front end
         lowers to ``[E1, ..., *T]`` with ``T`` a clause variable, fresh at
@@ -1199,17 +1287,26 @@ class _AsReaderTerm:
         from clausal.terms import ConcreteSeg, SegList, VarSeg  # noqa: PLC0415
         walked = t._walk_raw()
         if not isinstance(walked, SegList):
-            return self(walked)               # a list, or a cons chain, now
+            work.append((0, walked, depth))   # a list, or a cons chain, now
+            return _PENDING
         *front, last = walked.segments
         if (isinstance(last, VarSeg)
                 and all(isinstance(seg, ConcreteSeg) for seg in front)):
             elements = [e for seg in front for e in seg.elements]
-            out = self(last.var)
-            for e in reversed(elements):
-                out = (".", self(e), out)
-            return out
+
+            def build(a):
+                out = a[-1]
+                for e in reversed(a[:-1]):
+                    out = (".", e, out)
+                return out
+            self._push(work, build, [*elements, last.var], depth + 1)
+            return _PENDING
         from clausal.logic.builtins.database_ops import _seglists_as_source  # noqa: PLC0415
         return self._embedded(_seglists_as_source(walked))
+
+
+#: :meth:`_AsReaderTerm._leaf`'s "children pushed" answer.
+_PENDING = object()
 
 
 def _extract_init_final(module_state):

@@ -26,7 +26,13 @@ surface described in [docs/public-api.md](docs/public-api.md).
   culprit. Two deliberate differences from Scryer, both following ISO and
   the same clause consulted: a variable body goal is stored as `call(G)`,
   and a cut in an if-then-else condition is local to it (Trealla agrees).
-  `*->` is refused at assert time (`existence_error(procedure, '*->'/2)`).
+  `*->` is refused at assert time (`existence_error(procedure, '*->'/2)`),
+  before anything is stored. A rule's data goes as deep as a fact's (20000
+  levels tested); a body too deeply nested to compile is
+  `resource_error(stack)`, refused before it is stored, never a raw
+  RecursionError. In a `.pl` module an asserted FACT is a copy too (ISO
+  8.9.1.1): `assertz(q(X)), X = 1` leaves `q(V)` with `V` unbound, where it
+  answered 1 (Clausal Prolog and seam facts are unchanged).
   Tests: `tests/iso/test_assert_rules_iso.py` (its xfail rows now pass),
   `tests/iso/test_assert_rules_more_iso.py` (Scryer oracle),
   `tests/iso_l3/test_l3_assert_rules.py`.

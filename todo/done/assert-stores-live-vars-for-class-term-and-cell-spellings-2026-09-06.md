@@ -76,3 +76,14 @@ The class-term spelling no longer exists: the PredicateMeta class was deleted
 (5d9fc36f), and a predicate name is bound to its HANDLE (a mangled str, not
 callable), so `m.seen(X)` cannot build a term. Re-measured on 9b6b58a1: the
 collect-by-assert idiom through the remaining (cell) spelling stores `[1, 2]`.
+
+## The unbound residual, 2026-11-03
+
+In a `.pl` module (and at the `?-` top level under `--prolog`) assertz/asserta
+now copy the clause, facts included, per ISO 8.9.1.1 (operator ruling
+2026-11-03, assertz of rules): `assertz(q(X)), X = b1, q(V)` leaves `V`
+unbound (`database_ops._build_clause`; pinned in
+`tests/iso/test_assert_rules_more_iso.py`, the "a FACT is a copy too" rows,
+against Scryer). Clausal Prolog and seam modules keep the residual described
+above -- an unbound argument stays the caller's variable -- until a ruling
+settles their `assert/1` contract.
