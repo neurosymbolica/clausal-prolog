@@ -39,6 +39,25 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **Last-call optimisation no longer reverses the order of answers.**  A
+  tail-recursive clause restarts its predicate in place, but only after the
+  clauses below it have run, so where one of those answers the same call its
+  answer came first: `p(N, X) :- N > 0, M is N - 1, p(M, X).  p(N, N).` gave
+  `p(3, X)` as X = 3, 2, 1, 0 (ISO and Scryer: 0, 1, 2, 3), and `once/1` the
+  wrong first answer, in `.pl`, `.clausal` and `.seam`.  A clause now
+  restarts in place only where no later clause can answer first: it is the
+  last clause, it cuts before its tail call, every later head cannot unify
+  with its head, an arithmetic comparison it made before the tail refutes the
+  later clause (`down(N) :- N > 0, ..., down(M).` before `down(N) :- N =<
+  0.`; `up(I, N) :- I < N, ..., up(I1, N).` before `up(N, N).`), or the
+  later clauses are keyed out by the call's bound argument, a runtime test
+  (`cnt(N) :- N > 0, ..., cnt(M).` before `cnt(0).`).  Elsewhere the tail is
+  an ordinary call and memory grows with the depth of the recursion, as it
+  must where a later clause is still to be tried (`p/2` above).  Index
+  buckets follow the same rule.  A predicate none of whose clauses may
+  restart is compiled as with the optimisation off.
+  Tests: `tests/test_tro_clause_order.py`.
+
 - **A loop through an indexed predicate runs in constant space again.**
   A predicate indexed on an argument is compiled into one function per index
   bucket, and a tail-recursive clause in one restarts the predicate in place

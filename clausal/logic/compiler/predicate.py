@@ -701,29 +701,15 @@ def _sweep_tro_eligible(
     return frozenset(eligible)
 
 
-def _signal_safe_tro_indices(clauses: list, tro_indices, db):
-    """The clauses of a bucket, default or fallback function that may
-    signal an in-place restart without changing the order of answers.
-
-    The dispatch loop takes a signalled tail call only after the function
-    has run out, so every later clause would answer before the tail call's
-    answers -- clause order reversed.  A restart is in order for the
-    function's last clause, and for a clause whose body cuts before the
-    tail (the cut drops the later clauses: its exit returns with the tail
-    pending).  The other clauses make the tail an ordinary call."""
-    from . import ir as _ir
-    from .terms_to_goalop import terms_to_goalop
-    last = len(clauses) - 1
-    keep = []
-    for i in sorted(tro_indices):
-        if i == last:
-            keep.append(i)
-            continue
-        body_ir = terms_to_goalop(clauses[i].body, db=db)
-        ops = body_ir.ops if isinstance(body_ir, _ir.Sequence) else [body_ir]
-        if any(isinstance(op, _ir.Cut) for op in ops[:-1]):
-            keep.append(i)
-    return frozenset(keep)
+def _order_safe_tro_restarts(clauses: list, tro_indices, arity: int, db,
+                             env=None) -> dict:
+    """The TRO-eligible clauses of one predicate, bucket, default or
+    fallback function whose tail may restart in place without changing the
+    order of answers, each with its runtime condition or None
+    (``tro_order.order_safe_restarts``).  The others make the ordinary
+    call."""
+    from .tro_order import order_safe_restarts
+    return order_safe_restarts(clauses, tro_indices, arity, db, env)
 
 
 def _clauses_have_cut(clauses: list, db) -> bool:
@@ -895,8 +881,9 @@ def _later_clauses_excluded(clauses, matches, arity, env):
     return out, frozenset(id(m) for m in matches)
 
 
-def _exclusion_test(later_keys, name, env):
-    """The test that the call's first argument keys outside *later_keys*.
+def _exclusion_test(later_keys, name, env, pos=0):
+    """The test that the call's first argument (or the one at *pos*) keys
+    outside *later_keys*.
 
     Inline for the usual tables -- every later head's first argument an
     integer, or every one a (non-empty) atom: ``_d0``, the argument as
@@ -912,15 +899,16 @@ def _exclusion_test(later_keys, name, env):
         raw = frozenset(later_keys) if ints else frozenset(k[0] for k in later_keys)
         env[name] = raw
         return ast.BoolOp(op=ast.And(), values=[
-            ast.Compare(left=ast.Attribute(value=_name("_d0"), attr="__class__",
+            ast.Compare(left=ast.Attribute(value=_name(f"_d{pos}"), attr="__class__",
                                            ctx=ast.Load()),
                         ops=[ast.Is()],
                         comparators=[_name("$int" if ints else "$str")]),
-            ast.Compare(left=_name("_d0"), ops=[ast.NotIn()],
+            ast.Compare(left=_name(f"_d{pos}"), ops=[ast.NotIn()],
                         comparators=[_name(name)])])
     env[name] = later_keys
     return ast.Call(func=_name("$first_arg_excludes"),
-                    args=[_name("_d0"), _name("arg0"), _name(name)], keywords=[])
+                    args=[_name(f"_d{pos}"), _name(f"arg{pos}"), _name(name)],
+                    keywords=[])
 
 
 def _build_predicate_trampoline_funcdef(*args, **kwargs) -> ast.FunctionDef:
@@ -987,6 +975,21 @@ def _build_predicate_trampoline_funcdef_impl(
             db=db, var_context={}, trail_name=_TRAIL_PARAM_NAME,
             strategy=TrampolineStrategy(),
         )
+    # A TRO clause restarts in place only where that keeps clause order
+    # (``_order_safe_tro_restarts``): the restart runs after this
+    # function's later clauses.  Its other eligible clauses make the
+    # ordinary call.  A loop-mode function none of whose clauses may
+    # restart is built without TRO -- exactly as with TRO disabled; a
+    # signal-mode one keeps its TRO shape (its dispatch loop expects it).
+    _restarts: dict = {}
+    if use_tro:
+        _restarts = _order_safe_tro_restarts(
+            clauses, tro_indices, arity, db, ctx_template.base_globals)
+        if ctx_template.base_globals is None:
+            # No namespace to hold a runtime test's key set.
+            _restarts = {i: c for i, c in _restarts.items() if c is None}
+        if not _restarts and tro_mode == "loop":
+            use_tro = False
     arg_names = [f"arg{i}" for i in range(arity)]
     params = ctx_template.strategy.function_params(ctx_template, arg_names)
 
@@ -1022,13 +1025,17 @@ def _build_predicate_trampoline_funcdef_impl(
     # emits ``_compile_tro_tail`` as the leaf.  Replaces the legacy
     # ``_compile_tro_body`` bypass entirely.
     if use_tro:
-        # A signal-mode function restarts only where answer order allows
-        # (``_signal_safe_tro_indices``); its other eligible clauses make
-        # the ordinary call.  The function keeps its TRO shape either way.
-        _restart_indices = (
-            tro_indices if tro_mode == "loop"
-            else _signal_safe_tro_indices(clauses, tro_indices, db))
-        _tro_clause_set = {id(clauses[i]) for i in _restart_indices}
+        _tro_clause_set = {id(clauses[i]) for i in _restarts}
+        # The runtime condition of a restart that some later clause could
+        # otherwise answer before (``tro_order``), keyed like ``_tset``.
+        _restart_tests: dict = {}
+        for _ri, _cond in _restarts.items():
+            if _cond is not None:
+                _n = ctx_template.base_globals.get("$final_keys_count", 0)
+                ctx_template.base_globals["$final_keys_count"] = _n + 1
+                _restart_tests[id(clauses[_ri])] = _exclusion_test(
+                    _cond[1], f"$final_keys_{_n}", ctx_template.base_globals,
+                    pos=_cond[0])
         _orig_bc = body_compiler
         _tro_m = tro_mode
         _tro_ctx = ctx_template
@@ -1116,13 +1123,16 @@ def _build_predicate_trampoline_funcdef_impl(
                     _plans[id(clause)] = _plan
                 _prev_plan = _ctx.tro_plan
                 _prev_mode = _ctx.tro_mode
+                _prev_test = _ctx.tro_restart_test
                 _ctx.tro_plan = _plan
                 _ctx.tro_mode = _tm
+                _ctx.tro_restart_test = _restart_tests.get(id(clause))
                 try:
                     return _orig_bc(clause, var_context)
                 finally:
                     _ctx.tro_plan = _prev_plan
                     _ctx.tro_mode = _prev_mode
+                    _ctx.tro_restart_test = _prev_test
             return _orig_bc(clause, var_context)
         body_compiler = _tro_aware_bc
 
@@ -1694,13 +1704,13 @@ def _compile_predicate_trampoline_impl(
                 """The TRO-eligible positions within *subset* (a bucket's
                 or default's clauses, before any lift), or None.  With
                 *restarting_only*, None as well when none of them may
-                restart (``_signal_safe_tro_indices``): the joint and
+                restart (``_order_safe_tro_restarts``): the joint and
                 secondary functions, built without TRO before, take its
                 shape only where a clause restarts."""
                 found = frozenset(
                     i for i, cl in enumerate(subset) if id(cl) in _tro_orig_ids)
-                if found and restarting_only and not _signal_safe_tro_indices(
-                        subset, found, _effective_db):
+                if found and restarting_only and not _order_safe_tro_restarts(
+                        subset, found, arity, _effective_db, base_globals):
                     return None
                 return found or None
 

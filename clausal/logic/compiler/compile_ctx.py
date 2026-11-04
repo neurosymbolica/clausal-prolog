@@ -215,6 +215,12 @@ class CompilationContext:
     # began (``tro.bind_tro_generation``).  Read only by the TRO tail and
     # the activation-start statements.
     tro_generation_check: bool = False
+    # The runtime test under which the TRO tail of the clause being
+    # compiled keeps clause order (``tro_order``: no later clause of the
+    # function can answer this call), or None.  Set by the trampoline
+    # funcdef builder around the clause's body compile; read only by the
+    # TRO tail.
+    tro_restart_test: "Any | None" = None
     # XSB's run-time cut check (D61 Q1, ``cut_scope.cut_check_stmts``): the
     # current barrier scope's one-slot mark holder, set wherever
     # ``cut_exit`` is, and the ``F/N`` text of the predicate being compiled

@@ -14,6 +14,7 @@ clause fires.
 from __future__ import annotations
 
 import ast
+import copy
 from typing import Any
 
 from clausal.logic.variables import is_var, deref  # noqa: F401
@@ -753,6 +754,10 @@ def _compile_tro_tail(
         ast.UnaryOp(op=ast.Not(), operand=_call(_name("$is_var"), _name(f"_tro_arg{i}")))
         for i in sorted(check_indices or ())
     ]
+    if ctx.tro_restart_test is not None:
+        # No later clause of this function may answer the call, or the
+        # restart would come after its answer (``tro_order``).
+        checks.append(copy.deepcopy(ctx.tro_restart_test))
     if ctx.tro_generation_check:
         # A dynamic predicate whose clause set changed since the activation
         # began makes the ordinary call (see ``_TRO_GEN_NAME``).

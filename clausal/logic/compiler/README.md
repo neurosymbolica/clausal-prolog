@@ -178,6 +178,7 @@ more detail. Listed roughly in the order the pipeline touches them.
 | `arg_index.py`            | Argument-indexing analysis + all dispatch-builder variants (indexed, joint, secondary, groundness-keyed). Phase 2 + 3. |
 | `destructive_reuse.py`    | `_find_destructive_reuse_goals` + `_apply_destructive_reuse` — trampoline-only preprocess. |
 | `tro.py`                  | Tail-recursion optimisation: detection + `_compile_tro_tail` / `_compile_tro_body`. Trampoline-only. |
+| `tro_order.py`            | Which TRO clauses may restart in place without reversing the order of answers (`order_safe_restarts`): last clause, cut before the tail, later heads that cannot unify, arithmetic guards, runtime argument keys. |
 | `predicate.py`            | The three top-level entrypoints (`compile_predicate_trampoline/shallow/ast` + variants), `_build_predicate_{trampoline_,}funcdef`, `_install`. Owns Phase 3 + 7 and orchestrates the others. |
 | `strategy.py`             | `Strategy` — every shallow-vs-trampoline decision (leaf yield, sub-call, clause preprocess, function parameters) in one object. |
 | `ir.py`                   | `GoalOp`, the target- and strategy-agnostic body IR (pure type definitions + `walk_goal_ops`). |
