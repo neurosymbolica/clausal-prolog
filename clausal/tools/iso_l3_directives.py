@@ -245,13 +245,8 @@ class Uses:
                     continue
                 if t[0] == "#" and len(t) == 2 and type(t[1]) is str:
                     # ``#(Name)``, the same fold (operator ruling
-                    # 2026-11-04).  clp(q,r)'s ``#(pi)`` ... is counted as
-                    # before (inside a {}/1 an undeclared one is not
-                    # folded); clpz's ``#X`` / ``#3`` is data.
-                    from clausal.tools.iso_l3 import (  # noqa: PLC0415
-                        _CLPQ_NAMED_CONSTANTS)
-                    if t[1] not in _CLPQ_NAMED_CONSTANTS:
-                        continue
+                    # 2026-11-04); clpz's ``#X`` / ``#3`` is data.
+                    continue
                 if t[0] != ".":
                     self.functors.setdefault(t[0], set()).add(len(t) - 1)
                 stack.extend(t[1:])
@@ -511,6 +506,11 @@ class DirectiveContext:
         from clausal.end_module import EndModuleCheck  # noqa: PLC0415
         self.end_module = EndModuleCheck()
         self._t = None
+        #: library(clpq)'s constants (``iso_l3.CLPQ_LIBRARY_CONSTANTS``)
+        #: used so far, name -> the line of the first use: a declaration or
+        #: import of one of those names after it is refused (one name, one
+        #: value per file).
+        self.library_constant_uses: dict = {}
 
     # ── the seam transformer, one per file ──
 
@@ -707,7 +707,33 @@ class DirectiveContext:
         handler = _DIRECTIVES.get(key)
         if handler is None:
             raise _refused(_unknown(key), span)
-        return handler(self, args, arg_spans, span)
+        out = handler(self, args, arg_spans, span)
+        if self.library_constant_uses and self._t is not None:
+            self._check_library_constant_uses(key, args, span)
+        return out
+
+    def line_of(self, span) -> "int | None":
+        """The 1-based line a span starts on, or None."""
+        start = _top(span)
+        if start is None or self._source is None or start[0] < 0:
+            return None
+        return self._source.count("\n", 0, start[0]) + 1
+
+    def _check_library_constant_uses(self, key, args, span) -> None:
+        """Refuse a directive that declared or imported a name already used
+        above as library(clpq)'s constant: the uses above folded to clpq's
+        value, the ones below would get this one -- one name, two values in
+        one file, silently."""
+        t = self._t
+        for name, line in self.library_constant_uses.items():
+            if name in t._constants or name in t._import_remap:
+                head = (f"{key[0]}({_show(args[0])}, …)" if args
+                        else key[0])
+                where = f" (line {line})" if line is not None else ""
+                raise _refused(
+                    f"{head}: `{name}` is already used above as "
+                    f"library(clpq)'s constant{where}; declare it before "
+                    f"its first use", span)
 
     def auto_declare(self, uses: "Uses", span=None) -> list:
         """Declare every atom and data functor the file USES (ruling
@@ -1642,13 +1668,18 @@ def _const_value(ctx, cell, span, what, *, units: bool) -> ast.expr:
             return ast.Tuple(elts=[ast.Constant(value="$chars"),
                                    ast.Constant(value=cell[1])],
                              ctx=ast.Load())
-        if cell[0] == "#" and len(cell) == 2 and type(cell[1]) is str:
-            return _name(cell[1])       # ``#(Earlier)``: constant(Earlier)
-        if cell[0] == "constant" and len(cell) == 2:
+        if cell[0] in ("constant", "#") and len(cell) == 2 \
+                and (cell[0] == "constant" or type(cell[1]) is str):
+            # ``constant(Earlier)``, and ``#(Earlier)`` the same (operator
+            # ruling 2026-11-04).
             if type(cell[1]) is not str:
                 raise _refused(f"{what}: constant() takes the name of a "
                                f"declared constant, got {_show(cell[1])}",
                                span)
+            from clausal.tools.iso_l3 import library_constant  # noqa: PLC0415
+            library = library_constant(ctx, cell[1], ctx.line_of(span))
+            if library is not None:
+                return ast.Constant(value=library)   # library(clpq)'s
             return _name(cell[1])
         return ast.Tuple(
             elts=[ast.Constant(value=cell[0])]

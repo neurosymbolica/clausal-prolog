@@ -365,10 +365,33 @@ test("half is 3/2 euro") :-
 
 `#(Name)` is the short spelling of `constant(Name)` (ruled 2026-11-04,
 [directives](directives.md#name-the-short-spelling)): `{Q = 100 * #(one_euro)}`
-is the same constraint. A declared or imported constant wins; with nothing
-declaring them, clp(q,r)'s own `#(p)`, `#(pi)`, `#(e)` and `#(zero)` inside
-`{}/1` are lowered as before, and any other undeclared name is refused at
-load.
+is the same constraint, and any undeclared name is refused at load.
+
+Loading `library(clpq)` also declares clp(q,r) 1.3.3's named constants
+(ruled 2026-11-04: "#(pi) undeclared, etc: error is ok for now. let CLPQ
+declare them too."): `#(p)` and `#(pi)` are `3.141592653589793`, `#(e)` is
+`2.718281828459045` and `#(zero)` is `0` (Q's arithmetic epsilon), and
+`constant(pi)` ... reads the same; a module's own declaration of the name
+wins. The float meets the solver as a float literal does: the port
+(`CLAUSAL_CLPQ=holzbaur`) reads it through 1.3.3's `float_rat`, so
+`{X = #(pi)}` gives `X = 245850922/78256779`, exactly what its own
+`#(pi)` gave; the default solver takes the float's exact binary value. The
+atoms `pi`, `e` ... as data are unchanged.
+
+```clausal
+:- use_module(library(clpq)).
+
+turns(X) :- {X = 2 * #(pi)}.
+
+test("#(pi) is clpq's declared constant") :-
+    turns(X),
+    X > 6.28,
+    X < 6.29,
+    Y is #(e),
+    Y =:= 2.718281828459045,
+    Z = pi,
+    atom(Z).
+```
 
 ```clausal
 :- use_module(library(clpq)).

@@ -629,11 +629,18 @@ test("# folds like constant/1") :-
     constant(retry_budget) =:= 3.
 ```
 
-A declared or imported constant wins. With nothing declaring it, a name is
-refused at load exactly as `constant/1` refuses it ("#(foo): nothing
-declares `foo`"), with one exception kept from clp(q,r): inside a CLP(Q)/CLP(R)
-`{}/1`, the undeclared names `p`, `pi`, `e` and `zero` (clp(q,r) 1.3.3's
-`#(pi)` ...) are lowered exactly as they were before `#(Name)` folded. A
+With nothing declaring it, a name is refused at load exactly as
+`constant/1` refuses it ("#(foo): nothing declares `foo`"). A module that
+loads `library(clpq)` has clp(q,r)'s four named constants declared (ruled
+2026-11-04: "#(pi) undeclared, etc: error is ok for now. let CLPQ declare
+them too."): `p` and `pi` are `3.141592653589793`, `e` is
+`2.718281828459045` and `zero` is `0`, for `#(Name)` and `constant(Name)`
+alike, in `{}/1`, `is/2` and data. A declaration or import of the same
+name in the module wins, provided it comes before the first use: a declaration or import of
+`pi` below a `#(pi)` that already meant clpq's is refused at load ("`pi` is
+already used above as library(clpq)'s constant (line N); declare it before
+its first use"). Only the references change: the atoms `pi`, `e`
+... written as data stay atoms, and no module global is bound. A
 `#` over a variable or an integer — CLP(Z)'s `#X` / `#3` markers — is not a
 constant reference and is untouched, and a `#(Name)` term built at run time
 (`T =.. ['#', max_retries]`) is a plain term, as a run-time `constant(Name)`
