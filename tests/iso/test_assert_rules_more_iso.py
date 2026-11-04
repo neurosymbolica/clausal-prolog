@@ -7,7 +7,8 @@
 * retract/1 of rules: the body unifies, ``retract(H)`` removes a fact only,
   re-execution over the call's snapshot;
 * clause/2 of an asserted rule gives the ISO body term;
-* variables shared between head and body, and ISO's copy at assert time;
+* variables shared between head and body, and ISO's copy at assert time
+  (of a fact too);
 * cut: local to the asserted clause whoever calls it, opaque inside
   ``\\+``, ``call/1`` and findall/3;
 * an asserted rule called from a Clausal Prolog module through call/N.
@@ -154,6 +155,25 @@ ROWS = [
      "assertz((y10(X) :- ( X = 1, ! ; X = 2 ))), assertz(y10(3)),"
      " findall(X, y10(X), R)",
      ["[1]"]),
+    # ── a FACT is a copy too (ISO 8.9.1.1) ──
+    ("a fact's variable bound later is not bound in the clause",
+     "assertz(f1(X)), X = b1, findall(V, f1(V), L1),"
+     " findall(V, clause(f1(V), true), L2), R = L1-L2",
+     ["[_]-[_]"]),
+    ("a fact written as (H :- true) is a copy",
+     "assertz((f2(X) :- true)), X = b2, findall(V, f2(V), R)", ["[_]"]),
+    ("a compound argument of a fact is a copy",
+     "asserta(f3(g(X), Y)), X = b3, findall(A-B, f3(A, B), R)",
+     ["[g(_)-_]"]),
+    ("a fact asserted among others is a copy",
+     "assertz(f4(X)), assertz(f4(2)), X = b4, findall(V, f4(V), R)",
+     ["[_,2]"]),
+    ("a partial list in a fact is a copy",
+     "assertz(f5([X|T])), X = b5, T = [], findall(V, f5(V), R)",
+     ["[[_|_]]"]),
+    ("retract of a copied fact binds nothing of the asserter's",
+     "assertz(f6(X)), X = b6, retract(f6(V)), ( var(V) -> R = free ; R = V )",
+     ["free"]),
     # ── a body variable goal ──
     ("a variable body goal is call/1 at run time",
      "assertz((z1(G) :- G)), findall(X, z1(member(X, [1, 2])), R)",

@@ -12,6 +12,7 @@ from clausal.logic.exceptions import (
 )
 from clausal.logic.exceptions import _error as _error_term
 from clausal.logic.atoms import mint
+from clausal.end_module import SURFACE_PL as _SURFACE_PL
 
 from clausal.logic.builtins._registry import (
     _db_builtin,
@@ -159,6 +160,17 @@ def _build_clause(term_val: Any, context: str, db, module_dict,
     from clausal.terms import Predicate as _Predicate
     from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
 
+    caller = caller if caller is not None else db
+    copied = asserts_rules(caller)
+    if copied:
+        # ISO 8.9.1.1: the clause asserted is a COPY of the term -- a later
+        # binding of the caller's variables does not reach it.  On the ISO
+        # (``.pl``) surface, facts included (operator ruling 2026-11-03).  A
+        # Clausal Prolog or seam fact still keeps an unbound argument live
+        # (todo/done/assert-stores-live-vars-for-class-term-and-cell-
+        # spellings-2026-09-06.md, its residual): a contract change there
+        # waits for a ruling.
+        term_val = _copy_term()(term_val, {})
     raw = term_val
     term_val = _seglists_as_source(term_val)
     if isinstance(term_val, _Predicate):
@@ -168,11 +180,12 @@ def _build_clause(term_val: Any, context: str, db, module_dict,
     if type(term_val) is _RuleTerm:
         head, body = neck_parts(raw)
         return _rule_clause(deref(head), deref(body), context, db,
-                            module_dict, caller if caller is not None else db)
+                            module_dict, caller, copied=copied)
     was_cell, _cell_functor = compound_cell_shape(term_val)
     term_val, hoist_all = _resolve_cell_head(term_val, context, db,
                                              module_dict)
-    if was_cell:
+    if was_cell and not copied:
+        # (a copy already holds every argument's value, never the caller's)
         term_val = _freeze_asserted_head_args(term_val)
     return _normalize_fact_clause(term_val, hoist_all=hoist_all)
 
@@ -274,6 +287,101 @@ def _refuse_non_callable_body(body, context):
             stack.extend(t[1:])
 
 
+def _refuse_soft_cut(body, context):
+    """``*->`` is refused on every surface (D59): in a goal position the
+    asserted body's own clause compiles -- its control spine, ``\\+`` and a
+    call/N goal argument, where the front end refuses it in a written
+    clause -- it is the error call/1 gives it,
+    ``existence_error(procedure, '*->'/2)``, raised before anything is
+    stored.  Deeper meta-call arguments (``findall/3``, ``catch/3``) are
+    converted when they run, and refused then."""
+    from clausal.logic.builtins.call_body import (  # noqa: PLC0415
+        if_then_refusal_error)
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+    stack = [body]
+    while stack:
+        t = deref(stack.pop())
+        ok, functor = compound_cell_shape(t)
+        if not ok:
+            continue
+        n = len(t) - 1
+        if functor == "*->" and n == 2:
+            raise LogicException(if_then_refusal_error("*->", context))
+        if (n == 2 and functor in (",", ";", "->")) or (
+                n == 1 and functor == "\\+") or (functor == "call" and n >= 1):
+            stack.extend(t[1:] if functor != "call" else t[1:2])
+
+
+#: The control nesting (:func:`_control_depth`) beyond which an asserted
+#: rule is compiled alone before it is stored (:func:`_probe_compile`).  A
+#: rule within it compiles: the compiler's recursion follows the nesting of
+#: the control constructs (a conjunction is flat, and deep DATA is spliced
+#: in whole), and a body nested 200 deep still compiles.
+_PROBE_DEPTH = 64
+
+
+def _control_depth(body) -> int:
+    """How deeply *body*'s control constructs nest: ``;``, ``->``, ``\\+``
+    and every other compound around a goal count one level, a ``,``/2 chain
+    none (it is compiled flat).  Stops counting past ``_PROBE_DEPTH``."""
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+    deepest = 0
+    stack = [(body, 0)]
+    while stack:
+        t, d = stack.pop()
+        t = deref(t)
+        ok, functor = compound_cell_shape(t)
+        if not ok:
+            continue
+        if d > deepest:
+            deepest = d
+            if deepest > _PROBE_DEPTH:
+                return deepest
+        if functor == "," and len(t) == 3:
+            stack.append((t[1], d))
+            stack.append((t[2], d))
+        elif functor in (";", "->", "*->", "\\+", "call", "findall",
+                         "forall", "catch", "bagof", "setof", "once"):
+            stack.extend((a, d + 1) for a in t[1:])
+    return deepest
+
+
+def _probe_compile(clause, functor, arity, home, home_globals):
+    """Compile *clause* ALONE, on a scratch database of *home*'s module,
+    before it is stored: a rule whose body is too deeply nested to compile
+    (``RecursionError``) is refused here, as ``resource_error(stack)``.
+
+    Stored first, it would only fail at the predicate's next call -- the
+    recompile is lazy -- and every call after it, the clauses that were
+    there before included (the predicate poisoned, A09-F005).  Only the
+    stack overflow is decided here; any other compile error is left to the
+    real compile of the whole predicate, which knows its neighbours."""
+    from clausal.logic.compiler import compile_predicate_trampoline  # noqa: PLC0415
+    from clausal.logic.database import Database  # noqa: PLC0415
+    scratch = Database(module_dict=home.module_dict)
+    scratch.surface = home.surface
+    scratch.lowering_context = home.lowering_context
+    try:
+        compile_predicate_trampoline(functor, arity, [clause], scratch,
+                                     globals_=home_globals)
+    except RecursionError:
+        raise
+    except Exception:  # noqa: BLE001 -- the real compile decides these
+        pass
+
+
+def _copy_term():
+    """``inspection._copy_term`` (the C walker), imported once."""
+    global _COPY_TERM
+    if _COPY_TERM is None:
+        from clausal.logic.builtins.inspection import _copy_term as ct  # noqa: PLC0415
+        _COPY_TERM = ct
+    return _COPY_TERM
+
+
+_COPY_TERM = None
+
+
 def asserts_rules(db) -> bool:
     """May a goal running in *db*'s module assert a RULE (ISO 8.9.1)?  A
     ``.pl`` module may; a Clausal Prolog or seam module, or one no file
@@ -282,11 +390,11 @@ def asserts_rules(db) -> bool:
     flag = getattr(db, "asserts_rules", None)
     if flag is not None:
         return bool(flag)
-    from clausal.logic.builtins.call_body import cut_allowed  # noqa: PLC0415
-    return cut_allowed(db)
+    return getattr(db, "surface", None) == _SURFACE_PL
 
 
-def _rule_clause(head, body, context, db, module_dict, caller):
+def _rule_clause(head, body, context, db, module_dict, caller,
+                 copied=False):
     """The Clause of the asserted rule ``head :- body`` (ISO 8.9.1), for
     the procedure *head* names in *db*, or the refusal.
 
@@ -336,28 +444,35 @@ def _rule_clause(head, body, context, db, module_dict, caller):
         raise refuse(f"{functor}/{arity} belongs to a module that is not a "
                      f".pl file the native front end compiled, and a rule "
                      f"is compiled under its home module's surface")
+    _refuse_soft_cut(body, context)
     # The write's permission (dynamic, static, unknown -- created dynamic
     # when the module's flag says so), exactly as for a fact.
     resolved, _hoist_all = _resolve_cell_head(
         _seglists_as_source(head), context, db, module_dict)
     if ok and resolved[0] != functor:
         head = make_cell(resolved[0], *head[1:])   # the canonical name
-    head, body = _copy_term((head, body), {})
+    if not copied:
+        head, body = _copy_term((head, body), {})
     try:
         node = lower_iso_clause(head, body, home_dict, home.lowering_context,
-                                f"<{context}>")
+                                f"<{context}>", embed_deep=True)
+        # A run-time clause has no source variable names (regex groups bind
+        # nothing) and no position.
+        node.var_names = None
+        clause = clause_from_predicate_node(node)
+        if _control_depth(body) > _PROBE_DEPTH:
+            _probe_compile(clause, functor if not ok else head[0], arity,
+                           home, _home_globals(db, module_dict, home))
+        return clause
     except LoweringRefused as e:
-        from clausal.logic.builtins.call_body import (  # noqa: PLC0415
-            if_then_refusal_error)
-        if "*->" in str(e):
-            raise LogicException(if_then_refusal_error("*->", context)) \
-                from None
         raise refuse(f"the clause is refused, as the same clause written in "
                      f"the file would be: {e}") from None
-    # A run-time clause has no source variable names (regex groups bind
-    # nothing) and no position.
-    node.var_names = None
-    return clause_from_predicate_node(node)
+    except RecursionError:
+        # What an assert of a fact too deep to store gives (ISO 7.12.2 h);
+        # the deep DATA of a rule is spliced in whole (``_AsReaderTerm``),
+        # so this is a body too deeply nested in its control constructs.
+        from clausal.logic.exceptions import resource_error  # noqa: PLC0415
+        raise LogicException(resource_error("stack", context)) from None
 
 
 def _freeze_asserted_head_args(head: Any) -> Any:

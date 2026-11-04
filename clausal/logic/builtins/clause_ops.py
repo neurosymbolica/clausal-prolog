@@ -380,19 +380,20 @@ def _capturing_thunk(t: Any) -> Any:
     its value, exactly as term position builds it."""
     import dataclasses  # noqa: PLC0415
     from clausal.terms import PyThunk  # noqa: PLC0415
-    if isinstance(t, PyThunk):
-        return t if t.var_objects else None
-    if type(t) in (list, tuple):
-        for e in t:
-            hit = _capturing_thunk(e)
-            if hit is not None:
-                return hit
-        return None
-    if isinstance(t, nodes.Node) and dataclasses.is_dataclass(t):
-        for f in dataclasses.fields(t):
-            hit = _capturing_thunk(getattr(t, f.name))
-            if hit is not None:
-                return hit
+    # A work stack, first child first, not recursion: an asserted clause
+    # can hold a term thousands deep.
+    stack = [t]
+    while stack:
+        t = stack.pop()
+        if isinstance(t, PyThunk):
+            if t.var_objects:
+                return t
+            continue
+        if type(t) in (list, tuple):
+            stack.extend(reversed(t))
+        elif isinstance(t, nodes.Node) and dataclasses.is_dataclass(t):
+            stack.extend(getattr(t, f.name)
+                         for f in reversed(dataclasses.fields(t)))
     return None
 
 
