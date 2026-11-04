@@ -824,6 +824,10 @@ def _empty_predicate_funcdef(
     return func_def
 
 
+#: How many of a predicate's last arms ``_later_clauses_excluded`` tests.
+_FINAL_EXCLUSION_ARMS = 64
+
+
 def _later_clauses_excluded(clauses, matches, arity, env):
     """``({id(match): cond}, {id(match)})``: for each clause arm, the runtime test under
     which no LATER clause can match the call -- every later head's first
@@ -837,7 +841,15 @@ def _later_clauses_excluded(clauses, matches, arity, env):
         return None
     keys = [head_first_arg_key(c, arity, env) for c in clauses]
     out = {}
-    for i in range(len(clauses) - 1):
+    # Only the last ``_FINAL_EXCLUSION_ARMS`` arms are given a test: arm i's
+    # set holds every LATER key, so testing all n arms built O(n^2) keys
+    # and n globals -- quadratic time and memory at the first call of a
+    # dynamic predicate with thousands of asserted clauses (todo/done/
+    # dynamic-predicate-first-call-after-many-asserts-is-super-linear-
+    # 2026-11-04.md).  An arm without one only leaves its answer's choice
+    # point open, as before this test existed; answers are unchanged.
+    for i in range(max(0, len(clauses) - 1 - _FINAL_EXCLUSION_ARMS),
+                   len(clauses) - 1):
         later = keys[i + 1:]
         if any(k is _INDEX_VAR for k in later):
             continue
@@ -1461,6 +1473,7 @@ def _compile_predicate_trampoline_impl(
     # A deep ground sub-term compiles as a constant (deep_literals.py): the
     # twins below are what this compile reads; the database keeps the
     # clauses as written.
+    _stored_clauses = clauses
     clauses = rewrite_clauses(clauses)
     # Phase 6: single combined traversal replacing three separate walks.
     _head_types, _py_thunks, _call_targets = _collect_globals_info(clauses)
@@ -1524,9 +1537,25 @@ def _compile_predicate_trampoline_impl(
         # importable for verification tests (``tests/
         # test_bucket_refs_ir_parallel.py``, D6c parity).
         pass
-        # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────
-        index_positions = _analyze_index_positions(clauses, arity, env=base_globals)
-        if index_positions:
+        # ── A large predicate: a clause table (compiler/clause_table.py) ──
+        if _use_clause_table(db, clauses, enabled_optimisations):
+            index_positions = None
+            fn = _compile_clause_table(
+                functor, arity, _stored_clauses, clauses, db, _effective_db,
+                body_compiler, ctx_template, base_globals)
+            # Nothing for a call site to specialise on: no bucket functions.
+            _plan_row = _plan_row_for(pred_cls, db, functor, arity)
+            if _plan_row is not None:
+                _plan_row.index_plans = {}
+                _plan_row.index_plans_joint = {}
+                _plan_row.index_plans_hierarchical = {}
+        else:
+            # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────
+            index_positions = _analyze_index_positions(
+                clauses, arity, env=base_globals)
+        if index_positions is None:
+            pass
+        elif index_positions:
             # TRO: detect tail-recursive clauses (same check as non-indexed path).
             # Gated on the strategy's ``supports_tro`` flag — see
             # ``compiler/strategy.py``.  Today only ``TrampolineStrategy``
@@ -1560,7 +1589,7 @@ def _compile_predicate_trampoline_impl(
                 ctx_template=ctx_template,
             )
 
-            fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
+            fallback_fn = _shared_fn(fallback_def, base_globals)
 
             plans: list[tuple[int, dict, Callable, bool]] = []
             for pos, index in index_positions:
@@ -1627,7 +1656,7 @@ def _compile_predicate_trampoline_impl(
                         skip_trail=_skip_trail,
                 ctx_template=ctx_template,
             )
-                    idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
+                    idx_dict[key] = _shared_fn(bdef, base_globals)
                 # Default bucket (clauses with Var at indexed position).
                 _d_tro = None
                 if _idx_tro_indices is not None:
@@ -1643,7 +1672,7 @@ def _compile_predicate_trampoline_impl(
                     tro_indices=_d_tro,
                 ctx_template=ctx_template,
             )
-                pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
+                pos_default_fn = _shared_fn(ddef, base_globals)
                 plans.append((pos, idx_dict, pos_default_fn, _pos_needs_deep_gate))
 
             # Phase 10a: single-position bucket dicts are exposed on the
@@ -1691,8 +1720,8 @@ def _compile_predicate_trampoline_impl(
                                             emit_done=False,
                 ctx_template=ctx_template,
             )
-                                        l1_fns[kj] = functiondef_to_function(
-                                            bdef, globals_=base_globals)
+                                        l1_fns[kj] = _shared_fn(
+                                            bdef, base_globals)
                                     # level-1 default: clauses with var at pos_j
                                     l1d_lifted = [
                                         _lift_clause_at_pos(
@@ -1711,8 +1740,8 @@ def _compile_predicate_trampoline_impl(
             )
                                     level0_compiled[ki] = (
                                         l1_fns,
-                                        functiondef_to_function(
-                                            l1ddef, globals_=base_globals),
+                                        _shared_fn(
+                                            l1ddef, base_globals),
                                     )
                                 else:
                                     # sub-bucket too small for level-1 index
@@ -1733,8 +1762,8 @@ def _compile_predicate_trampoline_impl(
             )
                                     level0_compiled[ki] = (
                                         None,
-                                        functiondef_to_function(
-                                            bdef, globals_=base_globals),
+                                        _shared_fn(
+                                            bdef, base_globals),
                                     )
                             # level-0 default (var at pos_i)
                             if sec["level0_defaults"]:
@@ -1745,8 +1774,8 @@ def _compile_predicate_trampoline_impl(
                                     emit_done=False,
                 ctx_template=ctx_template,
             )
-                                level0_default_fn = functiondef_to_function(
-                                    l0ddef, globals_=base_globals)
+                                level0_default_fn = _shared_fn(
+                                    l0ddef, base_globals)
                             else:
                                 level0_default_fn = _compile_always_fail_trampoline(
                                     functor, arity)
@@ -1777,8 +1806,8 @@ def _compile_predicate_trampoline_impl(
                                 _effective_db, body_compiler, emit_done=False,
                 ctx_template=ctx_template,
             )
-                            joint_dict[jk] = functiondef_to_function(
-                                jbdef, globals_=base_globals)
+                            joint_dict[jk] = _shared_fn(
+                                jbdef, base_globals)
                         # joint default (either arg var)
                         if joint_info["defaults"]:
                             jddef = _build_predicate_trampoline_funcdef(
@@ -1787,8 +1816,8 @@ def _compile_predicate_trampoline_impl(
                                 _effective_db, body_compiler, emit_done=False,
                 ctx_template=ctx_template,
             )
-                            joint_default_fn = functiondef_to_function(
-                                jddef, globals_=base_globals)
+                            joint_default_fn = _shared_fn(
+                                jddef, base_globals)
                         else:
                             joint_default_fn = _compile_always_fail_trampoline(
                                 functor, arity)
@@ -2058,6 +2087,40 @@ def compile_predicate_trampoline_ast(
     return _build_predicate_trampoline_funcdef(functor, arity, clauses, db, body_compiler)
 
 
+def _compile_clause_table(functor, arity, stored_clauses, clauses, db,
+                          effective_db, body_compiler, ctx_template,
+                          base_globals):
+    """The dispatch of a predicate of many clauses: a clause table
+    (``compiler/clause_table.py``).  A clause the table does not hold as
+    data is compiled here, now, as a predicate of its one clause: its
+    answers are FINAL only when it is the predicate's last clause."""
+    final_on = "final_yield" in ctx_template.enabled_optimisations
+
+    def compile_clause(clause, i, last):
+        saved = ctx_template.enabled_optimisations
+        if not last:
+            ctx_template.enabled_optimisations = saved - {"final_yield"}
+        try:
+            fdef = _build_predicate_trampoline_funcdef(
+                f"{functor}__c{i}", arity, [clause], effective_db,
+                body_compiler, emit_done=False, ctx_template=ctx_template)
+        finally:
+            ctx_template.enabled_optimisations = saved
+        return _shared_fn(fdef, base_globals)
+
+    return _build_table_dispatch(
+        functor, arity, stored_clauses, clauses, db, compile_clause,
+        final_answers=final_on, env=base_globals)
+
+
+def _shared_fn(func_def, base_globals):
+    """One of the functions an indexed compile makes (fallback, bucket,
+    default), its globals *base_globals* itself, shared, not a copy each:
+    see ``codegen.functiondef_to_function``'s *share_globals*."""
+    return functiondef_to_function(func_def, globals_=base_globals,
+                                   share_globals=True)
+
+
 def _compile_always_fail_trampoline(functor: str, arity: int) -> Callable:
     """Trampoline variant: generator that immediately yields (_tramp_parent, DONE)."""
     func_def = _empty_predicate_funcdef(functor, arity, None, TrampolineStrategy())
@@ -2084,6 +2147,10 @@ _EXTRA_FUNCDEF: dict = (
 
 
 # ── Argument indexing / dispatch builders (moved to .arg_index) ──────────────
+from .clause_table import (  # noqa: E402
+    build_table_dispatch as _build_table_dispatch,
+    use_clause_table as _use_clause_table,
+)
 from .arg_index import (  # noqa: E402,F401
     _INDEX_VAR, _INDEXABLE_TYPES, _INDEX_THRESHOLD, _JOINT_COVERAGE_THRESHOLD,
     _arg_to_index_key, _runtime_arg_key, _static_call_key,
@@ -2449,7 +2516,7 @@ def _compile_predicate_shallow_impl(
                 f"{functor}__all", arity, clauses, _effective_db, body_compiler, ctx_template=ctx_template,
             )
 
-            fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
+            fallback_fn = _shared_fn(fallback_def, base_globals)
 
             plans: list[tuple[int, dict, Callable, bool]] = []
             for pos, index in index_positions:
@@ -2461,13 +2528,13 @@ def _compile_predicate_shallow_impl(
                         bname, arity, bucket_clauses, _effective_db, body_compiler, ctx_template=ctx_template,
                         skip_trail=_skip_trail,
                     )
-                    idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
+                    idx_dict[key] = _shared_fn(bdef, base_globals)
                 if index["defaults"]:
                     ddef = _build_predicate_funcdef(
                         f"{functor}__p{pos}_dflt", arity, index["defaults"],
                         _effective_db, body_compiler, ctx_template=ctx_template,
                     )
-                    pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
+                    pos_default_fn = _shared_fn(ddef, base_globals)
                 else:
                     pos_default_fn = _compile_always_fail(functor, arity)
                 # P3-2 Task 4 fix round 2: shallow mode NEVER lifts a bucket
@@ -2509,8 +2576,8 @@ def _compile_predicate_shallow_impl(
                                             _effective_db, body_compiler, ctx_template=ctx_template,
                                             skip_trail=len(bkt) == 1,
                                         )
-                                        l1_fns[kj] = functiondef_to_function(
-                                            bdef, globals_=base_globals)
+                                        l1_fns[kj] = _shared_fn(
+                                            bdef, base_globals)
                                     l1dname = (
                                         f"{functor}__s{pos_i}_{pos_j}"
                                         f"_l0b{len(level0_compiled)}_l1dflt"
@@ -2521,8 +2588,8 @@ def _compile_predicate_shallow_impl(
                                     )
                                     level0_compiled[ki] = (
                                         l1_fns,
-                                        functiondef_to_function(
-                                            l1ddef, globals_=base_globals),
+                                        _shared_fn(
+                                            l1ddef, base_globals),
                                     )
                                 else:
                                     bname = (
@@ -2535,8 +2602,8 @@ def _compile_predicate_shallow_impl(
                                     )
                                     level0_compiled[ki] = (
                                         None,
-                                        functiondef_to_function(
-                                            bdef, globals_=base_globals),
+                                        _shared_fn(
+                                            bdef, base_globals),
                                     )
                             if sec["level0_defaults"]:
                                 l0ddef = _build_predicate_funcdef(
@@ -2544,8 +2611,8 @@ def _compile_predicate_shallow_impl(
                                     arity, sec["level0_defaults"],
                                     _effective_db, body_compiler, ctx_template=ctx_template,
                                 )
-                                level0_default_fn = functiondef_to_function(
-                                    l0ddef, globals_=base_globals)
+                                level0_default_fn = _shared_fn(
+                                    l0ddef, base_globals)
                             else:
                                 level0_default_fn = _compile_always_fail(
                                     functor, arity)
@@ -2565,16 +2632,16 @@ def _compile_predicate_shallow_impl(
                                 _effective_db, body_compiler, ctx_template=ctx_template,
                                 skip_trail=len(bkt) == 1,
                             )
-                            joint_dict[jk] = functiondef_to_function(
-                                jbdef, globals_=base_globals)
+                            joint_dict[jk] = _shared_fn(
+                                jbdef, base_globals)
                         if joint_info["defaults"]:
                             jddef = _build_predicate_funcdef(
                                 f"{functor}__j{pos_i}_{pos_j}_dflt",
                                 arity, joint_info["defaults"],
                                 _effective_db, body_compiler, ctx_template=ctx_template,
                             )
-                            joint_default_fn = functiondef_to_function(
-                                jddef, globals_=base_globals)
+                            joint_default_fn = _shared_fn(
+                                jddef, base_globals)
                         else:
                             joint_default_fn = _compile_always_fail(
                                 functor, arity)

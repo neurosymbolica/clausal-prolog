@@ -7,7 +7,51 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Added
+
+- **A `.pl` module asserts rules** (ISO 13211-1 8.9, operator ruling
+  2026-11-03): `assertz/1`, `asserta/1`, `retract/1` and `clause/2` take
+  `(Head :- Body)` with any body, cut and if-then-else included. The rule is
+  a copy of the term, lowered by the native front end as the same clause
+  written in that file would be (its directives, `library(reif)`,
+  `library(clpq)`), so its cut is local to the asserted clause whoever calls
+  it; the predicate is recompiled lazily as for facts. The logical update
+  view holds (a running call does not see clauses asserted meanwhile and
+  still answers ones retracted meanwhile; Scryer agrees). A Clausal Prolog
+  or seam module still refuses a rule with `permission_error(assert, rule,
+  Head)`, as does a `.pl` assert into a Clausal Prolog module's procedure
+  and the `?-` top level on its default surface (allowed under `--prolog` or
+  with a `.pl` file loaded). A non-callable body anywhere in its
+  `,`/`;`/`->`/`\+` structure is `type_error(callable, Body)`, Scryer's
+  culprit. Two deliberate differences from Scryer, both following ISO and
+  the same clause consulted: a variable body goal is stored as `call(G)`,
+  and a cut in an if-then-else condition is local to it (Trealla agrees).
+  `*->` is refused at assert time (`existence_error(procedure, '*->'/2)`).
+  Tests: `tests/iso/test_assert_rules_iso.py` (its xfail rows now pass),
+  `tests/iso/test_assert_rules_more_iso.py` (Scryer oracle),
+  `tests/iso_l3/test_l3_assert_rules.py`.
+
 ### Fixed
+
+- **A predicate with thousands of clauses compiles in linear time and
+  memory.** The first call of a dynamic predicate after many asserts (and
+  the load of a file with a large fact table) compiled one Python function
+  per index bucket, each holding a copy of the compile's globals, and the
+  FINAL pass built a set of every later clause's key for every clause:
+  4.5 s at 2,000 asserted facts, 14 GB (killed) at 10,000. From 256 clauses
+  a predicate now compiles to a clause table: plain-data facts stay terms,
+  unified left to right with the call's arguments; other clauses are
+  compiled one by one; dict indexes on each argument choose the candidates
+  (`clausal/logic/compiler/clause_table.py`). 20,000 asserted facts: first
+  call 0.3 s; 3,000 rules 4 s (each compiled once); a 10,000-fact `.pl`
+  file loads in 3.4 s. Answers, their order, the logical update view,
+  retract/clause/2 and errors are unchanged. Below 256 clauses the code is
+  as before, except that the one-function compile's functions share their
+  globals and the FINAL "no later clause can match" test covers only the
+  last 64 clauses. Not observable in answers: a table fact binds the call's
+  variables left to right (woken goals run in that order), a table
+  predicate's rules get no tail-recursion optimisation, and "last answer"
+  is detected per indexed argument. Tests: `tests/test_clause_table.py`.
 
 - **A clause head qualified with the file's own module defines the
   predicate** (`.pl` and `.clausal`): in a file whose `module/2` names `m`,

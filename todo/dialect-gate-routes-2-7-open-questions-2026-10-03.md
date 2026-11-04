@@ -8,8 +8,8 @@ ruling. Each one is a default that can be reversed with a small edit.
 1. **A module with no source file is allowed.** A target `Module` built in
    memory (Python `Module("x")`, a test database, anything without a
    `__file__`) has no dialect. The gate lets a Clausal Prolog caller reach it.
-   Rules cannot be asserted into one (`_build_clause` refuses rules), so no
-   cut can get in. Should it be refused like a Python module instead?
+   Rules cannot be asserted into one (only a `.pl` module's own procedures
+   take an asserted rule, `database_ops._rule_clause`), so no cut can get in. Should it be refused like a Python module instead?
 
 2. **Python `solve()` is exempt, but `call/N` run under it is not.**
    `solve((":", "legacy", G), module=kit)` runs (route 5: Python is the

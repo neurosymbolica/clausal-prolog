@@ -921,6 +921,61 @@ LOWERING_CONTEXT_KEY = "$lowering_context"
 _BUILT_VALUES_KEY = "$term_expansion_values"
 
 
+def lower_iso_clause(head, body, module_dict: dict, ctx, filename: str):
+    """The ``Predicate`` node the native front end's own clause lowering
+    (``iso_l3.lower_clause``) gives the run-time clause ``Head :- Body``
+    (``Body`` ``True`` for a fact), under the directive state *ctx*
+    (``iso_l3_directives.DirectiveContext``, or None), its generated code
+    run in *module_dict*.  The clause's variables are the run-time ``Var``
+    objects themselves (``_AsReaderTerm``): a caller that needs a fresh
+    renaming copies the clause first.  Raises ``iso_l3.LoweringRefused``
+    for whatever the front end refuses in a written clause.
+
+    Shared by a clause a ``term_expansion/4`` rule builds and a rule
+    asserted at run time (``database_ops._rule_clause``)."""
+    import ast  # noqa: PLC0415
+    from clausal.tools import iso_l3  # noqa: PLC0415
+    values: list = []
+    seen: dict = {}
+    reader = _AsReaderTerm(values, seen,
+                           chars=getattr(ctx, "dq_mode", "chars") == "chars")
+    if body is True or (type(body) is str and body == "true"):
+        term = reader(head)
+    else:
+        term = (":-", reader(head), reader(body))
+    stmts = iso_l3.lower_clause(
+        term, positions=iso_l3._Positions(None),
+        ctx=ctx, values_global=_BUILT_VALUES_KEY)
+    code = compile(ast.fix_missing_locations(
+        ast.Module(body=stmts, type_ignores=[])), filename, "exec")
+    from clausal.logic.predicate import PREDICATE_HEADS_KEY  # noqa: PLC0415
+    built: list = []
+    md = module_dict
+    missing = object()
+    saved = md.get("$define_predicate", missing)
+    saved_values = md.get(_BUILT_VALUES_KEY, missing)
+    # After the load, the ``$declare_head`` record is retired (the Database
+    # is the authority, ``end_loading_declarations``): the declaration this
+    # code runs must not bring it back.
+    loading = PREDICATE_HEADS_KEY in md
+    md["$define_predicate"] = lambda pred, _lm: built.append(pred)
+    md[_BUILT_VALUES_KEY] = values
+    try:
+        exec(code, md)  # noqa: S102 -- the front end's own lowering
+    finally:
+        if not loading:
+            md.pop(PREDICATE_HEADS_KEY, None)
+        if saved_values is missing:
+            del md[_BUILT_VALUES_KEY]
+        else:
+            md[_BUILT_VALUES_KEY] = saved_values
+        if saved is missing:
+            del md["$define_predicate"]
+        else:
+            md["$define_predicate"] = saved
+    return built[0]
+
+
 class _AnswerLowering:
     """Turns a clause a term_expansion/4 rule BUILT -- a ``(Head, Body)``
     pair of run-time terms -- into the ``Predicate`` node the same clause
@@ -965,43 +1020,16 @@ class _AnswerLowering:
     # ── .clausal / .pl: the front end's own clause lowering ──────────────
 
     def _iso_clause(self, head, body, where):
-        import ast  # noqa: PLC0415
         from clausal.tools import iso_l3  # noqa: PLC0415
-        values: list = []
-        seen: dict = {}
-        ctx = self._module_dict.get(LOWERING_CONTEXT_KEY)
-        reader = _AsReaderTerm(values, seen,
-                             chars=getattr(ctx, "dq_mode", "chars") == "chars")
-        if body is True or (type(body) is str and body == "true"):
-            term = reader(head)
-        else:
-            term = (":-", reader(head), reader(body))
         try:
-            stmts = iso_l3.lower_clause(
-                term, positions=iso_l3._Positions(None),
-                ctx=ctx, values_global=_BUILT_VALUES_KEY)
+            node = lower_iso_clause(
+                head, body, self._module_dict,
+                self._module_dict.get(LOWERING_CONTEXT_KEY),
+                "<term_expansion/4>")
         except iso_l3.LoweringRefused as e:
             raise SyntaxError(
                 f"{where}: the clause it built is refused, as the same "
                 f"clause written in the file would be: {e}") from None
-        code = compile(ast.fix_missing_locations(
-            ast.Module(body=stmts, type_ignores=[])),
-            "<term_expansion/4>", "exec")
-        built: list = []
-        md = self._module_dict
-        missing = object()
-        saved = md.get("$define_predicate", missing)
-        md["$define_predicate"] = lambda pred, _lm: built.append(pred)
-        md[_BUILT_VALUES_KEY] = values
-        try:
-            exec(code, md)  # noqa: S102 -- the front end's own lowering
-        finally:
-            del md[_BUILT_VALUES_KEY]
-            if saved is missing:
-                del md["$define_predicate"]
-            else:
-                md["$define_predicate"] = saved
-        node = built[0]
         # The front end records the body AS READ for clause/2; a built
         # clause has no variable names to give (see the class docstring).
         node.var_names = None

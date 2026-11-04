@@ -6,10 +6,13 @@ nothing (the atom never unified with ``True``), even for a procedure
 created by assertz, and a ``Head :- Body`` clause term was taken as a fact
 of ``(:-)/2``: ``assertz((k(1) :- true))`` stored an uncallable clause and
 ``retract((u(1) :- true))`` removed nothing.  Every answer and error term
-below is Scryer's for the same goal (2026-09-30), except the runtime rule
-refusal (Clausal asserts no rule at runtime; it used to be silent) -- which
-an unbound body gets too, where Scryer asserts ``foo :- call(X)``."""
+below is Scryer's for the same goal (2026-09-30).  A ``.pl`` module asserts
+rules (ISO 8.9.1, operator ruling 2026-11-03; they used to be refused with
+permission_error(assert, rule, Head)), an unbound body included: it is the
+rule ``foo :- call(X)``."""
 from __future__ import annotations
+
+from clausal.logic.variables import Var
 
 SRC = """\
 :- dynamic(dd/1).
@@ -28,6 +31,8 @@ t10(B) :- assertz(v(1)), retract((v(1) :- B)).
 t11(L) :- assertz(w(1)), assertz(w(2)), retract((w(X) :- _)), findall(X-Y, w(Y), L).
 t12(E) :- catch(assertz((foo :- X)), E, true), var(X).
 t13(E) :- catch(asserta((bar(1) :- _)), E, true).
+t15(R) :- catch(foo, error(R, _), true).
+t16(L) :- findall(X, foo(X), L).
 t14(L) :- X = true, assertz((baz(7) :- X)), findall(Y, baz(Y), L).
 """
 
@@ -42,17 +47,21 @@ def test_true_body_in_prolog_source(native, ans):
     assert ans(mod, "t6") == [("error", "instantiation_error", ("/", "assertz", 1))]
     assert ans(mod, "t7") == [("error", ("type_error", "callable", 4), ("/", "assertz", 1))]
     assert ans(mod, "t8") == [("error", "instantiation_error", ("/", "retract", 1))]
+    # a rule is asserted: nothing is caught
     (e,) = ans(mod, "t9")
-    assert e[0] == "permission_error" and e[1:3] == ("assert", "rule")
+    assert isinstance(e, Var), e
+    assert ans(mod, "t16") == [[1]]
     # an unbound body is `true` for a fact (the engine's True)
     assert ans(mod, "t10") == [True]
     # retract/1 is re-executable: the second answer removes w(2) too
     assert ans(mod, "t11") == [[("-", 1, 2)], []]
-    # An UNBOUND body is a rule body (ISO 8.9.1.1: ``call(X)``; Scryer
-    # asserts ``foo :- call(X)``), so it gets the runtime rule refusal -- it
-    # was instantiation_error.  Bound to ``true`` it is a fact.
-    assert ans(mod, "t12") == [("error", ("permission_error", "assert", "rule", "foo"),
-                                ("/", "assertz", 1))]
-    assert ans(mod, "t13") == [("error", ("permission_error", "assert", "rule",
-                                          ("bar", 1)), ("/", "asserta", 1))]
+    # An UNBOUND body is a rule body (ISO 8.9.1.1: ``call(X)``), asserted
+    # as one -- it was instantiation_error, then the runtime rule refusal.
+    # Bound to ``true`` it is a fact.
+    (e,) = ans(mod, "t12")
+    assert isinstance(e, Var), e
+    (e,) = ans(mod, "t13")
+    assert isinstance(e, Var), e
+    # ``foo :- call(_)``: calling it is instantiation_error
+    assert ans(mod, "t15") == ["instantiation_error"]
     assert ans(mod, "t14") == [[7]]

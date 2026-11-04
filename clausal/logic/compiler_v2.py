@@ -159,6 +159,10 @@ def compile_module(
     # run time against its db may cut (``call_body.cut_allowed``).
     from clausal.end_module import surface_of  # noqa: PLC0415
     db.surface = surface_of(module_dict.get("__file__") or "")
+    # The native front end's directive state at the file's end, kept for a
+    # rule the running program asserts (``Database.lowering_context``).
+    from clausal.logic.term_expansion import LOWERING_CONTEXT_KEY  # noqa: PLC0415
+    db.lowering_context = module_dict.get(LOWERING_CONTEXT_KEY)
     _install_real_module(module_dict, logic_module)
 
     # ── Step 0-: Reserved truth-value names ───────────────────────────────
