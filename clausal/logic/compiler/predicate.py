@@ -1605,7 +1605,7 @@ def _compile_predicate_trampoline_impl(
             index_positions = None
             fn = _compile_clause_table(
                 functor, arity, _stored_clauses, clauses, db, _effective_db,
-                body_compiler, ctx_template, base_globals)
+                body_compiler, ctx_template, base_globals, globals_)
             # Nothing for a call site to specialise on: no bucket functions.
             _plan_row = _plan_row_for(pred_cls, db, functor, arity)
             if _plan_row is not None:
@@ -2167,11 +2167,13 @@ def compile_predicate_trampoline_ast(
 
 def _compile_clause_table(functor, arity, stored_clauses, clauses, db,
                           effective_db, body_compiler, ctx_template,
-                          base_globals):
+                          base_globals, globals_):
     """The dispatch of a predicate of many clauses: a clause table
     (``compiler/clause_table.py``).  A clause the table does not hold as
-    data is compiled here, now, as a predicate of its one clause: its
-    answers are FINAL only when it is the predicate's last clause."""
+    data is compiled here, now, as a predicate of its one clause whose
+    answers are not FINAL; the table compiles it again, with FINAL answers,
+    when a call first needs that (no candidate clause after it) -- at run
+    time, so the compile reopens this one's lowering scope (*globals_*)."""
     final_on = "final_yield" in ctx_template.enabled_optimisations
 
     def compile_clause(clause, i, last):
@@ -2179,9 +2181,10 @@ def _compile_clause_table(functor, arity, stored_clauses, clauses, db,
         if not last:
             ctx_template.enabled_optimisations = saved - {"final_yield"}
         try:
-            fdef = _build_predicate_trampoline_funcdef(
-                f"{functor}__c{i}", arity, [clause], effective_db,
-                body_compiler, emit_done=False, ctx_template=ctx_template)
+            with lowering_scope(globals_):
+                fdef = _build_predicate_trampoline_funcdef(
+                    f"{functor}__c{i}", arity, [clause], effective_db,
+                    body_compiler, emit_done=False, ctx_template=ctx_template)
         finally:
             ctx_template.enabled_optimisations = saved
         return _shared_fn(fdef, base_globals)

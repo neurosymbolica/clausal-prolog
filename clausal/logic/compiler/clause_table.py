@@ -19,7 +19,11 @@ here instead, into a table:
   when it has variables;
 * any other clause (a rule, or a fact with a head the table does not
   hold as data) is compiled by the ordinary compiler as a predicate of its
-  own one clause, and the driver delegates to it (``yield from``).  A cut
+  own one clause, and the driver delegates to it (``yield from``).  When no
+  candidate clause follows it, the driver delegates instead to a second
+  compile of it whose answers are FINAL where its own code knows them to be
+  the last, made the first time a call needs it (so a full scan compiles
+  one, the last clause's).  A cut
   in it leaves the whole predicate, as in the one-function compile: the
   clause function yields ``(_fail, DONE)`` and is never resumed.
 
@@ -119,9 +123,14 @@ def _plain(term: Any) -> bool:
     float, an unbound variable, a compound or string cell, a list, built of
     those only?  Anything else -- a partial list (``SegList``), a dict, a
     set, a Python object, another number kind -- keeps its clause compiled.
-    So does a head of more than ``_PLAIN_NODES`` nodes: the walk is bounded
-    (a stored clause is never cyclic -- assertz refuses one -- but a cycle
-    must not hang a compile)."""
+    So does a head of more than ``_PLAIN_NODES`` nodes: the walk is bounded,
+    because a stored clause CAN be cyclic (assertz stores one: todo/
+    asserting-a-cyclic-term-is-stored-and-fails-at-recompile-2026-11-04.md)
+    and a cycle must not hang a compile.
+
+    ``true`` and ``false`` are the Python bools: plain.  They unify only
+    with themselves (never with 1 or 0), and their index keys are their
+    atoms' (``arg_index._runtime_arg_key``), not the ints'."""
     stack = [term]
     budget = _PLAIN_NODES
     while stack:
@@ -130,7 +139,7 @@ def _plain(term: Any) -> bool:
             return False
         t = deref(stack.pop())
         tt = type(t)
-        if tt is str or tt is int or tt is float:
+        if tt is str or tt is int or tt is float or tt is bool:
             continue
         if is_var(t):
             continue
@@ -217,7 +226,9 @@ def build_table_dispatch(
         if args is not None:
             facts[i] = (args, _ground(args))
         else:
-            fns[i] = compile_clause(cl, i, i == n - 1)
+            # [as when a candidate follows it, as when none does (made at
+            # the first call that needs it), the clause, its index]
+            fns[i] = [compile_clause(cl, i, False), None, cl, i]
 
     # Index: per argument position, key -> indices of the clauses whose
     # head has that key there (ascending), and the indices of those whose
@@ -288,8 +299,16 @@ def build_table_dispatch(
                 # A cut in the clause yields ``(_fail, DONE)``: this
                 # generator is not resumed after it (a compiled predicate's
                 # own cut exit relies on the same).
-                yield from fns[i](this_generator, _proceed, _fail, _catcher,
-                                  *rest)
+                # The clause's answers can be FINAL only when no candidate
+                # is left after it: its FINAL-marking compile then, else its
+                # plain one.
+                entry = fns[i]
+                fn = entry[0]
+                if nxt is _END and final_answers:
+                    fn = entry[1]
+                    if fn is None:
+                        fn = entry[1] = compile_clause(entry[2], entry[3], True)
+                yield from fn(this_generator, _proceed, _fail, _catcher, *rest)
                 continue
             args, ground = fact
             if not ground:
@@ -325,10 +344,16 @@ def build_table_dispatch(
         """Add *clause* (just assertz'd: stored after every clause this
         table holds) to the table in place, and return the dispatch to
         install, a new function over the same table -- or None, when it
-        has to be recompiled instead: *clause* is not a fact held as data,
-        or the last clause is compiled, its answers FINAL as the last."""
-        if fns and fns[-1] is not None and final_answers:
-            return None
+        has to be recompiled instead: *clause* is not a fact held as data.
+        (A compiled clause before it needs nothing: which of its two
+        compiles answers is chosen per call, by whether a candidate follows
+        it.)
+
+        Safe for a call running meanwhile (also with free threading): it
+        took ``len(facts)`` when it began, every index list is appended to
+        before ``facts`` is, and it reads index lists only up to that
+        length (``_below``, ``islice``), so it never reaches the new
+        clause."""
         args = fact_arguments(clause, db, arity)
         if args is None:
             return None

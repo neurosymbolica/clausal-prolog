@@ -425,8 +425,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   mark/undo invariant walk runs only under
   `CLAUSAL_CHECK_COMPILED_FUNCTIONS=1` (the test suite sets it), and the
   location check that could not fail after the position pass is skipped.
+  A clause a table cannot hold as data (a rule, a fact with a partial list)
+  gives its answer as known to be the last when no candidate clause follows
+  it, as in the one-function compile (a table marked it last only as the
+  table's final clause): it is compiled a second time, with that marking,
+  at the first call that needs it. Facts holding `true`
+  or `false` are held as data, keyed and unified apart from 1 and 0.
   Pinned in `tests/test_clause_table.py` (counts of compiled clause arms
-  and recompiles).
+  and recompiles, known-last answers).
 
 - **A re-led tabled SCC member skips a re-run that could find nothing
   new** (operator ruling 2026-11-03).  When nothing its clauses can read has

@@ -432,19 +432,62 @@ LAST_RULE_GOALS = ["findall(X, r(X), R)",
                    "r(X), R = X"]
 
 
-def test_no_append_after_a_compiled_last_clause(tmp_path, monkeypatch):
-    """A table whose last clause is compiled (a rule) gave that clause's
-    answers as FINAL: a fact after it is recompiled, not appended, so they
-    are not FINAL any more."""
+def test_a_fact_after_a_compiled_last_clause_is_appended_in_place(
+        tmp_path, monkeypatch):
+    """A table whose last clause is compiled (a rule) gives that clause's
+    answers as FINAL only when no candidate follows it, chosen per call, so
+    a fact assertz'd after it is appended in place and the rule's answers
+    are no longer FINAL."""
     monkeypatch.setattr(clause_table, "CLAUSE_TABLE_THRESHOLD", 4)
     mod = _load(tmp_path, "ctab_last_rule", (
         ":- dynamic(r/1).\nr(a).\nr(b).\nr(c).\nr(X) :- X = rule.\n"),
         LAST_RULE_GOALS)
-    assert _answers(mod, LAST_RULE_GOALS[0]) == ["[a,b,c,rule]"]
+    assert _answers(mod, LAST_RULE_GOALS[2], with_last=True) == [
+        ("a", False), ("b", False), ("c", False), ("rule", True)]
     assert _is_table(mod, "r", 1)
     recompiles = _row(mod, "r", 1).recompiles_after_write
     assert _answers(mod, LAST_RULE_GOALS[1]) == ["[a,b,c,rule,new]"]
-    assert _row(mod, "r", 1).recompiles_after_write == recompiles + 1
+    assert _row(mod, "r", 1).recompiles_after_write == recompiles
     got = _answers(mod, LAST_RULE_GOALS[2], with_last=True)
     assert got == [("a", False), ("b", False), ("c", False),
                    ("rule", False), ("new", True)]
+
+
+PARTIAL_GOALS = ["p(3, L), R = L", "p(15, L), R = L"]
+
+
+def test_a_compiled_fact_in_a_table_knows_its_last_answer(tmp_path):
+    """16 facts ``p(I, [I|_])``: a partial list is not held as data, so
+    each fact is compiled.  Its answer is the last when no candidate clause
+    follows it -- as in the one-function compile; it was never marked last
+    in a table unless it was the table's last clause."""
+    src = "".join(f"p({i}, [{i}|_]).\n" for i in range(16))
+    mod = _load(tmp_path, "ctab_partial", src, PARTIAL_GOALS)
+    assert _is_table(mod, "p", 2)
+    assert [last for _, last in _answers(mod, PARTIAL_GOALS[0], True)] == [True]
+    assert [last for _, last in _answers(mod, PARTIAL_GOALS[1], True)] == [True]
+
+
+BOOL_GOALS = ["findall(K-V, b(K, V), R)", "findall(V, b(true, V), R)",
+              "findall(V, b(1, V), R)", "findall(V, b(1.0, V), R)",
+              "findall(K, b(K, tt), R)", "findall(K, b(K, ff), R)"]
+
+
+def test_true_and_false_are_held_as_data_and_kept_apart_from_1_and_0(
+        tmp_path, builds):
+    """``true``/``false`` are Python bools, equal and hash-equal to 1 and 0:
+    the table holds them as data (no clause compiled), but keys and
+    unification keep the atom, the integer and the float apart."""
+    rows = [("true", "tt"), ("1", "one"), ("1.0", "onef"), ("false", "ff"),
+            ("0", "zero")] * 4
+    src = "".join(f"b({k}, {v}).\n" for k, v in rows)
+    mod = _load(tmp_path, "ctab_bool", src, BOOL_GOALS)
+    assert _is_table(mod, "b", 2)
+    assert builds[0] <= len(BOOL_GOALS)          # the goal predicates only
+    assert _answers(mod, BOOL_GOALS[0]) == [
+        "[" + ",".join(f"{k}-{v}" for k, v in rows) + "]"]
+    assert _answers(mod, BOOL_GOALS[1]) == ["[tt,tt,tt,tt]"]
+    assert _answers(mod, BOOL_GOALS[2]) == ["[one,one,one,one]"]
+    assert _answers(mod, BOOL_GOALS[3]) == ["[onef,onef,onef,onef]"]
+    assert _answers(mod, BOOL_GOALS[4]) == ["[true,true,true,true]"]
+    assert _answers(mod, BOOL_GOALS[5]) == ["[false,false,false,false]"]
