@@ -266,12 +266,25 @@ Var_get_is_bound(VarObject *self, void *closure)
 
 static int walk_types_ready(void);
 static PyObject *walk_seglistview_type;     /* defined with the walk types below */
+static PyObject *walk_headlink_type;        /* likewise (terms.HeadLink) */
+static PyObject *headlink_rebind(PyObject *arg, PyObject *result);
 
 static PyObject *
 Var_get_value(VarObject *self, void *closure)
 {
     (void)closure;
     PyObject *root = var_deref((PyObject *)self);
+    if (walk_headlink_type && (PyObject *)Py_TYPE(root) == walk_headlink_type) {
+        /* a list a clause head built: the list it denotes */
+        PyObject *r = headlink_rebind((PyObject *)self, root);
+        if (!r) return NULL;
+        if ((PyObject *)Py_TYPE(r) == walk_seglistview_type) {
+            PyObject *el = PyObject_CallMethod(r, "elements", NULL);
+            Py_DECREF(r);
+            return el;
+        }
+        return r;
+    }
     /* ``.value`` is how Python reads an answer: a text VIEW carrier comes out
      * as the str carrier of its text, at the depth ``.value`` resolves (the
      * deep walk flattens nested ones).  Views stay inside a parse. */
@@ -2993,8 +3006,85 @@ py_unify_with_occurs_check(PyObject *Py_UNUSED(module), PyObject *args)
 /*
  * deref(term) -> term
  */
+static PyObject *walk_headlink_type = NULL;   /* terms.HeadLink */
+
+/* deref(term)'s head-link rebind: when the last variable of the chain is
+ * bound to a terms.HeadLink (a list a clause head built, see there), or to
+ * a SegListView of a whole list (what a flattened link becomes, and the
+ * same term as that list), the link is flattened and the variable rebound
+ * -- untrailed -- to the plain list, so every later read through it reads
+ * a plain list, as it read the copy the head used to build.  The binding
+ * is replaced by the same term, and everything that term holds was bound
+ * before the binding was made, so undoing the binding (restoring its old
+ * value, unbound) restores exactly what it restored before.  Returns a new
+ * reference, or NULL on error. */
+static PyObject *
+headlink_rebind(PyObject *arg, PyObject *result)
+{
+    VarObject *holder = NULL;
+    PyObject *t = arg;
+    while (Var_Check(t)) {
+        PyObject *b = FT_ATOMIC_LOAD_PTR(Var_CAST(t)->binding);
+        if (b == NULL) break;
+        holder = Var_CAST(t);
+        t = b;
+    }
+    if (!holder || t != result) { Py_INCREF(result); return result; }
+    Py_INCREF(result);                       /* kept alive across Python */
+    if ((PyObject *)Py_TYPE(result) == walk_headlink_type) {
+        PyObject *r = PyObject_CallMethod(result, "_flatten", NULL);
+        if (!r) { Py_DECREF(result); return NULL; }
+        Py_DECREF(r);
+    }
+    if ((PyObject *)Py_TYPE(result) != walk_seglistview_type)
+        return result;
+    PyObject *lo = PyObject_GetAttrString(result, "_lo");
+    if (!lo) { Py_DECREF(result); return NULL; }
+    Py_ssize_t lov = PyLong_AsSsize_t(lo);
+    Py_DECREF(lo);
+    if (lov != 0) { PyErr_Clear(); return result; }
+    PyObject *base = PyObject_GetAttrString(result, "_base");
+    PyObject *hi = base ? PyObject_GetAttrString(result, "_hi") : NULL;
+    if (!hi) { Py_XDECREF(base); Py_DECREF(result); return NULL; }
+    Py_ssize_t hiv = PyLong_AsSsize_t(hi);
+    Py_DECREF(hi);
+    if (!PyList_CheckExact(base) || hiv != PyList_GET_SIZE(base)
+            || FT_ATOMIC_LOAD_PTR(holder->binding) != result) {
+        Py_DECREF(base);
+        return result;
+    }
+    /* holder->binding: result -> base (the binding's reference moves) */
+    Py_INCREF(base);
+    FT_ATOMIC_STORE_PTR(holder->binding, base);
+    Py_DECREF(result);                       /* the binding's reference */
+    Py_DECREF(result);                       /* ours */
+    return base;                             /* the reference from GetAttr */
+}
+
 static PyObject *
 py_deref(PyObject *Py_UNUSED(module), PyObject *arg)
+{
+    PyObject *result = var_deref(arg);
+    if (result != arg && walk_headlink_type
+            && ((PyObject *)Py_TYPE(result) == walk_headlink_type
+                || (PyObject *)Py_TYPE(result) == walk_seglistview_type))
+        return headlink_rebind(arg, result);
+    Py_INCREF(result);
+    return result;
+}
+
+static PyObject *
+py_register_head_link(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *hl, *lv;
+    if (!PyArg_ParseTuple(args, "OO", &hl, &lv)) return NULL;
+    Py_XSETREF(walk_headlink_type, Py_NewRef(hl));
+    if (!walk_seglistview_type) walk_seglistview_type = Py_NewRef(lv);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+py_deref_raw(PyObject *Py_UNUSED(module), PyObject *arg)
 {
     PyObject *result = var_deref(arg);
     Py_INCREF(result);
@@ -3611,6 +3701,10 @@ walk_types_ready(void)
     PyObject *vs = pe ? PyObject_GetAttrString(mod, "VarSeg") : NULL;
     PyObject *lv = vs ? PyObject_GetAttrString(mod, "SegListView") : NULL;
     PyObject *dt = lv ? PyObject_GetAttrString(mod, "DictTerm") : NULL;
+    if (dt && !walk_headlink_type) {
+        walk_headlink_type = PyObject_GetAttrString(mod, "HeadLink");
+        if (!walk_headlink_type) PyErr_Clear();
+    }
     Py_DECREF(mod);
     if (!dt) {
         /* Partially initialised (a circular import in progress): nothing
@@ -3656,7 +3750,8 @@ walk_container_kind(PyObject *term)
     /* A SegListView (the rest of a list, read in place) is a SegList: its
      * _segments is one ConcreteSeg of its elements, read as any other. */
     if (tp == walk_seglist_type || tp == walk_segstring_type
-            || tp == walk_segbytes_type || tp == walk_seglistview_type)
+            || tp == walk_segbytes_type || tp == walk_seglistview_type
+            || (walk_headlink_type && tp == walk_headlink_type))
         return WALK_SEG;
     if (tp == walk_dictterm_type) return WALK_DICTTERM;
     return WALK_NONE;
@@ -5209,6 +5304,14 @@ static PyMethodDef module_methods[] = {
      "\n"
      "Like unify() but performs the occurs check before each variable\n"
      "binding.  Prevents creation of circular/infinite terms."},
+    {"_register_head_link", py_register_head_link, METH_VARARGS,
+     "_register_head_link(HeadLink, SegListView): the types deref rebinds."},
+    {"deref_raw", py_deref_raw, METH_O,
+     "deref_raw(term) -> term\n"
+     "\n"
+     "deref(term) without the head-link rebind: a list a clause head\n"
+     "built (terms.HeadLink) is returned as it is, never flattened.  For\n"
+     "the code that builds and flattens links."},
     {"deref", py_deref, METH_O,
      "deref(term) -> term\n"
      "\n"

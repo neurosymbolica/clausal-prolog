@@ -33,6 +33,7 @@ from ._variables import (
     unify,
     unify_with_occurs_check,
     deref,
+    deref_raw,
     walk,
     is_var,
     occurs_check,

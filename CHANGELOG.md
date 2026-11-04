@@ -9,6 +9,22 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A long list a clause head builds after its body is built in linear
+  time** (operator ruling 2026-11-03, R10). `mk(N, L, [N|T]) :- ...,
+  mk(N1, L, T).` with a `[]` tail copied the rest at every level: N^2/2
+  element copies, and every copy stayed alive (3.4 GB at 16 000 elements,
+  over 8 GB at 64 000). When the star is a list of 64 or more elements, a
+  list view or such a link, the head now builds a link
+  (`clausal.terms.HeadLink`), flattened into one list on its first read;
+  `deref` then rebinds the variable to that plain list, so every later
+  read costs what it did. 16 000 elements: 1.9 s to 0.22 s, 3.4 GB to
+  350 MB. Answers, element identity and promotion to text are unchanged
+  (a copy that would be text is still built as text). An open-tailed list
+  is still copied (a link there slowed `==` and `compare/3`). New:
+  `clausal.logic.variables.deref_raw`, `deref` without the rebind. Pinned in
+  `tests/test_head_link_build.py`; numbers in
+  `todo/a-list-a-clause-head-builds-after-its-body-copies-the-tail-quadratic-2026-11-03.md`.
+
 - **A clause head qualified with the file's own module defines the
   predicate** (`.pl` and `.clausal`): in a file whose `module/2` names `m`,
   `m:foo(1).` and `m:bar(X) :- ...` are clauses of `foo/1` and `bar/1`, as
