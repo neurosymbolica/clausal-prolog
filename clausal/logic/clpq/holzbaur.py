@@ -895,6 +895,38 @@ def residual_q(target_vars, trail, name_of, attributed=()):
             shadows, trail, name, attributed))
 
 
+def residual_q_goals(target_vars, trail, attributed=()):
+    """residual_q's goals as terms (toplevel_goals's goals): each target
+    and each variable of *attributed* stands for itself (a united variable
+    for the variable the program wrote, not its shadow), and every other
+    variable is fresh.  ``[]`` when none of them carries CLP(Q) state.
+    Raises where residual_q raises."""
+    refuse_inside_attribute_hooks(
+        trail, ("residual_q", target_vars), "residual_q", 1)
+    target_vars = _proper_list(target_vars, "residual_q/1")
+    attributed = list(attributed)
+    shadows = _labels(target_vars, "residual_q/1")
+    goals = _without_a_queue(
+        trail, lambda: _residual_constraints.toplevel_goal_terms(
+            shadows, trail, attributed))
+    renaming = {}
+    for variable, shadow in zip(target_vars, shadows):
+        variable, shadow = deref(variable), deref(shadow)
+        if is_var(shadow):
+            renaming.setdefault(id(shadow), variable)
+            renaming.setdefault(id(variable), variable)
+    for variable in attributed:
+        variable = deref(variable)
+        if is_var(variable):
+            renaming.setdefault(id(variable), variable)
+    if not goals or all(key == id(variable)
+                        for key, variable in renaming.items()):
+        return goals
+    from clausal.logic.builtins.inspection import _copy_term_impl  # noqa: PLC0415
+    # one copy of them all: a variable two goals share stays shared
+    return list(_copy_term_impl(list(goals), renaming))
+
+
 # ---------------------------------------------------------------- ordering
 
 def ordering(spec, trail):

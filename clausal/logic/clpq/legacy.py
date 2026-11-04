@@ -2528,6 +2528,52 @@ def residual_q(target_vars: list, trail: Trail, name_of,
     return dump_q(target_vars, trail, name_of, toplevel=True)
 
 
+def residual_q_goals(target_vars: list, trail: Trail, attributed=()) -> list:
+    """residual_q's constraints as terms: ``("=<", Sum, Bound)`` and so on,
+    over *target_vars* (a united variable as the variable the program
+    wrote), with engine numbers, written the way residual_q writes them
+    (format_term of each term, in braces, is residual_q's text).  A
+    variable the projection could not eliminate is a fresh variable.
+    *attributed* is accepted and not used, as in residual_q."""
+    if id(trail) not in _tableaux:
+        return []
+    id_to_var: dict[int, Any] = {}
+    for v, s in _target_shadows(target_vars, "dump_q/2"):
+        id_to_var.setdefault(s._id, v)
+    constraints = _projected_constraints(set(id_to_var), trail)
+    goals: list = []
+    seen: set = set()
+    for coeffs, rel, rhs in constraints:
+        if not coeffs:
+            continue
+        if all(c < ZERO for c in coeffs.values()):
+            coeffs = {v: -c for v, c in coeffs.items()}
+            rel, rhs = _FLIPPED[rel], -rhs
+        key = (tuple(sorted(coeffs.items())), rel, rhs)
+        if key in seen:             # the same bound can reach the answer
+            continue                # twice, through linked columns
+        seen.add(key)
+        lhs = None
+        for vid in sorted(coeffs):
+            if vid not in id_to_var:
+                id_to_var[vid] = Var()
+            c, v = coeffs[vid], id_to_var[vid]
+            if lhs is None:
+                if c == ONE:
+                    lhs = v
+                elif c == -ONE:
+                    lhs = ('-', v)
+                else:
+                    lhs = ('*', present_number(c), v)
+            elif abs(c) == ONE:
+                lhs = ('-' if c < ZERO else '+', lhs, v)
+            else:
+                lhs = ('-' if c < ZERO else '+', lhs,
+                       ('*', present_number(abs(c)), v))
+        goals.append((rel, lhs, present_number(rhs)))
+    return goals
+
+
 def _collect_constraints(tableau: Tableau, target_ids: set[int],
                          ) -> list[tuple[dict[int, Fraction], str, Fraction]]:
     """Extract all constraints from the tableau as explicit triples."""

@@ -431,7 +431,7 @@ class ResidualConstraints(Exception):
     """An exported variable is still unbound and carries constraint attributes.
 
     Exports are answers; a constraint store crossing a seam is the lower
-    level (``solve`` with an explicit ``Trail``) or, once it exists,
+    level (``solve`` with an explicit ``Trail``) or
     ``copy_term/3`` inside the goal.
     """
 
@@ -469,7 +469,7 @@ def export(var: Any) -> Any:
 
     An unbound, constrained variable is refused: exports are answers; a
     constraint store crossing a seam is the lower level (``solve`` with an
-    explicit ``Trail``) or, once it exists, ``copy_term/3`` inside the goal.
+    explicit ``Trail``) or ``copy_term/3`` inside the goal.
     An unbound, unattributed variable is the variable itself."""
     from clausal.logic.variables import deref, is_var
     d = deref(var)

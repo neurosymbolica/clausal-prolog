@@ -270,144 +270,8 @@ def _term_vars(t, out: dict) -> None:
         out.setdefault(id(x), x)
 
 
-def _attribute_closure(variables) -> list:
-    """*variables*, and the variables their ``dif/2`` pairs and pending
-    ``freeze/2``/``when/2`` goals reach, and so on: the variables whose
-    constraints an answer shows, as Scryer's projection reaches them.
-    ``dif(A, E), copy_term(E, F)`` leaves ``dif(_1, F)``, and ``_1`` may
-    carry constraints of its own."""
-    from clausal.logic.builtins.inspection import _collect_vars_impl  # noqa: PLC0415
-    from clausal.logic.constraints import DIF_KEY  # noqa: PLC0415
-    from clausal.logic.coroutining import pending_goals  # noqa: PLC0415
-    from clausal.logic.variables import get_attr  # noqa: PLC0415
-    out: list = []
-    seen: set = set()
-    queue = list(variables)
-    i = 0
-    while i < len(queue):
-        v = queue[i]
-        i += 1
-        if id(v) in seen:
-            continue
-        seen.add(id(v))
-        out.append(v)
-        reached: list = []
-        for pair in get_attr(v, DIF_KEY) or ():
-            _collect_vars_impl(pair, reached)
-        for goal in pending_goals([v]):
-            _collect_vars_impl(goal, reached)
-        queue.extend(x for x in reached if id(x) not in seen)
-    return out
-
-
-def _fd_domain_text(domain) -> str:
-    """A CLP(FD) domain as ``1..3\\/5..7`` (``inf``/``sup`` for open ends)."""
-    def end(x, low):
-        if x in (float("-inf"), float("inf")):
-            return "inf" if low else "sup"
-        return str(x)
-    parts = []
-    for lo, hi in domain:
-        parts.append(end(lo, True) if lo == hi
-                     else f"{end(lo, True)}..{end(hi, False)}")
-    return "\\/".join(parts)
-
-
-_RELATIONS = {"EqConstraint": "#=", "NeConstraint": "#\\=",
-              "LtConstraint": "#<", "LeConstraint": "#=<"}
-
-
-def _fd_constraint_text(c, spell) -> str:
-    """One pending CLP(FD) propagator as a goal, or ``pending(Kind, Vars)``
-    for a kind not spelled yet (so an answer never claims more freedom than
-    it has)."""
-    kind = type(c).__name__
-    if kind in _RELATIONS:
-        return f"{spell(c.lhs)} {_RELATIONS[kind]} {spell(c.rhs)}"
-    if kind == "AllDiffConstraint":
-        return "all_different([" + ",".join(spell(v) for v in c.vars) + "])"
-    if kind == "SumConstraint":
-        return ("sum([" + ",".join(spell(v) for v in c.sum_vars)
-                + f"],#=,{spell(c.total)})")
-    if kind == "ScalarProductConstraint":
-        return ("scalar_product([" + ",".join(spell(v) for v in c.coeffs)
-                + "],[" + ",".join(spell(v) for v in c.sum_vars)
-                + f"],#=,{spell(c.total)})")
-    if kind in _NONLINEAR:
-        op = _NONLINEAR[kind]
-        a, b = spell(c.a), spell(c.b)
-        rhs = f"{op}({a},{b})" if op in ("min", "max") else f"{a}{op}{b}"
-        return f"{spell(c.z)} #= {rhs}"
-    if kind == "LinearNeConstraint" and c.lhs is not None:
-        return f"{spell(c.lhs)} #\\= {spell(c.rhs)}"
-    if kind == "LinearNeConstraint":
-        parts = []
-        for k, v in zip(c.coeffs, c.lvars):
-            term = spell(v) if abs(k) == 1 else f"{abs(k)}*{spell(v)}"
-            parts.append(("-" if k < 0 else "+") + term)
-        lhs = "".join(parts).lstrip("+")
-        return f"{lhs} #\\= {spell(c.k)}"
-    return (f"pending({kind.removesuffix('Constraint').lower()},["
-            + ",".join(spell(v) for v in getattr(c, "vars", ())) + "])")
-
-
-#: clpfd_nonlinear's propagators, as the operator each one is
-_NONLINEAR = {"TimesConstraint": "*", "TruncDivConstraint": "//",
-              "FloorDivConstraint": " div ", "ModConstraint": " mod ",
-              "RemConstraint": " rem ", "PowConstraint": "^",
-              "MinConstraint": "min", "MaxConstraint": "max"}
-
-
-def _fd_dif_residuals(variables, spell) -> list[str]:
-    """The ``dif/2`` and CLP(FD) goals on *variables*, in plain form
-    (``dif(X,a)``, ``X in 4..5``, ``Y #< X``): what a toplevel prints for a
-    constraint left on an answer (operator ruling 2026-10-24: not
-    module-qualified).  A domain with no bound is not printed."""
-    from clausal.logic.constraints import DIF_KEY, reify_eq  # noqa: PLC0415
-    from clausal.logic.builtins.inspection import _copy_term_impl  # noqa: PLC0415
-    from clausal.logic.variables import Trail, deref, get_attr, is_var  # noqa: PLC0415
-
-    goals: list[str] = []
-    seen: set[int] = set()
-    for v in variables:
-        for pair in get_attr(v, DIF_KEY) or ():
-            if id(pair) in seen:
-                continue
-            seen.add(id(pair))
-            # A pair a later binding made true for good stays in the
-            # attribute of its other variables (the wake-up hook only
-            # re-checks it): ``dif(C, [a|B]), C = 1`` leaves it on B.  It
-            # constrains nothing, and Scryer does not show it.
-            # (Tried on a copy with plain variables: on the pair itself the
-            # trial binding would run its own dif hook.)
-            var_map: dict = {}
-            if reify_eq(_copy_term_impl(pair[0], var_map, []),
-                        _copy_term_impl(pair[1], var_map, []),
-                        Trail()) is False:
-                continue
-            # One term, so an argument is written as an argument
-            # (``dif(A,=)``, as Scryer writes it), not as the right side of
-            # ``=`` (``(=)``).
-            goals.append(spell(("dif", pair[0], pair[1])))
-    inf = float("inf")
-    for v in variables:
-        state = get_attr(v, "fd")
-        if state is None or not state.domain:
-            continue
-        if state.domain != ((-inf, inf),):
-            goals.append(f"{spell(v)} in {_fd_domain_text(state.domain)}")
-    for v in variables:
-        state = get_attr(v, "fd")
-        for c in (state.constraints if state is not None else ()):
-            if id(c) in seen:
-                continue
-            seen.add(id(c))
-            # one with a single variable is what its domain already says
-            open_vars = {id(deref(x)) for x in getattr(c, "vars", ())
-                         if is_var(deref(x))}
-            if len(open_vars) >= 2:
-                goals.append(_fd_constraint_text(c, spell))
-    return goals
+# The residual goals an answer shows are computed in one place,
+# clausal.logic.residuals, which copy_term/3 reads too.
 
 
 def _fresh_names(taken):
@@ -425,21 +289,11 @@ def _fresh_names(taken):
             yield "_" + name
 
 
-def _coroutine_residuals(variables, spell) -> list[str]:
-    """The freeze/2 and when/2 goals pending on *variables*, as goals in
-    plain form (``freeze(X,write(hi))``, ``when((nonvar(X);ground(Y)),g)``):
-    what Scryer prints for them, without its module qualifiers (operator
-    ruling 2026-10-26).  A goal whose variable is bound since is gone."""
-    from clausal.logic.coroutining import pending_goals  # noqa: PLC0415
-    return [spell(g) for g in pending_goals(variables)]
-
-
 def _answer(shown, trail) -> str:
     """One answer as a toplevel prints it: ``Name = Value`` for each bound
     answer variable, an unbound one by its own name (``S = f(X)``), then
     the CLP(Q) constraints left on the answer's variables (``{X + Y = 3}``,
     ``{X >= 2}``); ``true`` when there is nothing to show."""
-    from clausal.logic import clpq  # noqa: PLC0415
     from clausal.logic.solve import _deref_walk  # noqa: PLC0415
     from clausal.logic.variables import Var  # noqa: PLC0415
     from clausal.terms import term_writeq, writer_op_table  # noqa: PLC0415
@@ -463,13 +317,8 @@ def _answer(shown, trail) -> str:
     # vanish into `true`.  (CLP(Q) projects onto the answer variables; the
     # port's projection takes these in as the SICStus toplevel's AttrVars,
     # so a non-linear goal on them still shows, DEVIATIONS.md D28.)
-    from clausal.logic.variables import deref  # noqa: PLC0415
-    hidden_residue: dict = {}
-    for av in trail.attvars_since(0):
-        d = deref(av)
-        if isinstance(d, Var) and getattr(d, "attrs", None) \
-                and id(d) not in free:
-            hidden_residue[id(d)] = d
+    from clausal.logic.residuals import residual_items, residue_variables  # noqa: PLC0415
+    hidden_residue = {id(d): d for d in residue_variables(trail, 0, free)}
     # The remaining unbound variables get the names _A, _B, ... in order of
     # appearance (not the engine's _123), skipping any the query uses.
     taken = {n for n, _ in shown} | {n for n, _ in getattr(shown, "hidden", ())}
@@ -491,16 +340,19 @@ def _answer(shown, trail) -> str:
                      f"{term_writeq(w, var_names=names, priority=699, ops=ops)}")
     if free or hidden_residue:
         def spell(x):
-            from clausal.logic.solve import _deref_walk as walk  # noqa: PLC0415
-            return term_writeq(walk(x), var_names=names, priority=699, ops=ops)
-        reached = _attribute_closure(
-            list(free.values()) + list(hidden_residue.values()))
-        parts += _fd_dif_residuals(reached, spell)
-        parts += _coroutine_residuals(reached, spell)
-        parts += clpq.residual_q(
-            list(free.values()), trail,
-            lambda v: names.get(id(v)) or term_writeq(v),
-            list(hidden_residue.values()))
+            return term_writeq(_deref_walk(x), var_names=names, priority=699,
+                               ops=ops)
+        # CLP(Q) names a variable it could not eliminate _Q1, _Q2, ...
+        internal: dict = {}
+
+        def name_of(v):
+            name = names.get(id(v))
+            if name is None:
+                name = internal.setdefault(id(v), f"_Q{len(internal) + 1}")
+            return name
+        for item in residual_items(free.values(), trail,
+                                   hidden_residue.values()):
+            parts.append(item.render(spell, name_of))
     return ", ".join(parts) if parts else "true"
 
 

@@ -9,6 +9,23 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Added
 
+- **`copy_term/3` and `call_residue_vars/2`** (Scryer's and SWI's), on
+  every surface. `copy_term(Term, Copy, Gs)`: Copy is Term with fresh
+  variables that carry no attributes, and Gs the goals that put back the
+  constraints Term's variables carry (`dif/2`, `freeze/2`, `when/2`,
+  CLP(Z), CLP(B), CLP(R), CLP(Q)): `dif(X, a), copy_term(X, Y, Gs)` gives
+  `Gs = [dif(Y,a)]`. `call_residue_vars(Goal, Vars)`: the variables that
+  got an attribute during Goal and still carry one, also those no argument
+  reaches. The goals are the ones the `-g` and `?-` printers show, from
+  one shared function (`clausal.logic.residuals`); compared with Scryer in
+  `tests/iso/test_copy_term_3_scryer.py` (plain goals, Clausal's own
+  CLP(Z) and CLP(B) forms, `{}/1` around CLP(Q) relations).
+- **The answer printers show CLP(B) and CLP(R) constraints** (`sat(X+Y)`,
+  `in_real(X,0.0,2.0)`, `X #< Y`), which they hid behind `true` before.
+- **`sat/1`, `taut/2` and `sat_count/2` read library(clpb)'s connectives**
+  from `.clausal` and `.pl`: `+`, `*`, `'#'/2`, `~/1`, `=:=`, `=\=`, `=<`,
+  `>=`, `<`, `>` as terms. They raised `TypeError` before.
+
 - **A `.pl` module asserts rules** (ISO 13211-1 8.9, operator ruling
   2026-11-03): `assertz/1`, `asserta/1`, `retract/1` and `clause/2` take
   `(Head :- Body)` with any body, cut and if-then-else included. The rule is

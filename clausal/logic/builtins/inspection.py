@@ -693,6 +693,35 @@ def _copy_term__2(original, copy, trail, k):
     trail.undo(mark)
 
 
+@_builtin("copy_term", 3)
+def _copy_term__3(original, copy, goals, trail, k):
+    """copy_term(Term, Copy, Gs) — Copy is a copy of Term with fresh
+    variables that carry NO attributes, and Gs the list of goals that,
+    called, put back on Copy's variables the constraints Term's carry
+    (``dif(X, a), copy_term(X, Y, Gs)`` gives ``Gs = [dif(Y, a)]``).
+
+    Scryer's copy_term/3: the residual goals of Term's attributed variables
+    (and of the variables their constraints reach) are computed, and Term
+    and those goals are copied together, so a variable the goals share
+    with Term is Copy's and any other is fresh.  The goals are the ones the
+    answer printers show (``clausal.logic.residuals``).  A Gs that is
+    neither a list nor a partial list is ``type_error(list, Gs)``."""
+    if not _list_or_partial_list(deref(goals)):
+        from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+        raise LogicException(type_error("list", deref(goals), "copy_term/3"))
+    from clausal.logic.residuals import residual_goals  # noqa: PLC0415
+    term_val = deref(original)
+    variables: list = []
+    _collect_vars_impl(term_val, variables)
+    residue = residual_goals(variables, trail) if any(
+        getattr(v, "attrs", None) for v in variables) else []
+    copied_term, copied_goals = _copy_term_impl((term_val, residue), {})
+    mark = trail.mark()
+    if unify(copy, copied_term, trail) and unify(goals, copied_goals, trail):
+        yield None
+    trail.undo(mark)
+
+
 def _list_or_partial_list(v) -> bool:
     """*v* (dereferenced) is a variable, a list, or a list whose tail is
     a variable."""

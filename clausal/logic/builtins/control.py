@@ -236,6 +236,42 @@ def _time_goal__2(db, this_generator, _proceed, _fail, _catcher, goal, elapsed, 
     yield (_fail, DONE)
 
 
+def _call_residue_vars__2(db, this_generator, _proceed, _fail, _catcher,
+                          goal, vars_out, trail):
+    """call_residue_vars(Goal, Vars) — call Goal; with each of its answers,
+    Vars is the list of variables that got an attribute (a constraint, a
+    delayed goal) during Goal and still carry one, unbound, also those no
+    argument of Goal reaches, in the order they got their first one
+    (Scryer's and SWI's call_residue_vars/2).  A Vars that is neither a
+    list nor a partial list is ``type_error(list, Vars)``.
+
+    Goal accepts the same forms as call/1 (see time_goal/1)."""
+    from clausal.logic.builtins.inspection import _list_or_partial_list  # noqa: PLC0415
+    from clausal.logic.residuals import residue_variables  # noqa: PLC0415
+    if not _list_or_partial_list(deref(vars_out)):
+        from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+        raise LogicException(
+            type_error("list", deref(vars_out), "call_residue_vars/2"))
+    goal_val = deref(goal)
+    dispatch, goal_args = _goal_dispatch_and_args(
+        goal_val, db, "call_residue_vars/2")
+    if dispatch is None:
+        yield (_fail, DONE)
+        return
+    start = trail.mark()
+    sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *goal_args, trail)
+    _st = yield (sg, None)
+    while _st is not DONE:
+        save = trail.mark()
+        if unify(vars_out, residue_variables(trail, start), trail):
+            yield (_proceed, None)
+        trail.undo(save)
+        _st = yield (sg, None)
+    yield (_fail, DONE)
+
+
+_DB_BUILTINS[("call_residue_vars", 2)] = _make_time_goal_factory(_call_residue_vars__2)
+_BUILTIN_FIELDS[("call_residue_vars", 2)] = ("goal", "vars")
 _DB_BUILTINS[("time_goal", 1)] = _make_time_goal_factory(_time_goal__1)
 _BUILTIN_FIELDS[("time_goal", 1)] = ("goal",)
 _DB_BUILTINS[("time_goal", 2)] = _make_time_goal_factory(_time_goal__2)

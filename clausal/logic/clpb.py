@@ -442,6 +442,26 @@ def _bool_binary_operands(expr):
     return None
 
 
+#: The CLP(B) connectives of Scryer's and SWI's library(clpb) as cells,
+#: (name, arity) -> the BDD operation: ``+`` or, ``*`` and, ``#`` xor,
+#: ``~`` not, ``=:=`` equivalence, ``=\=`` xor, ``=<`` and ``>=``
+#: implication, ``<`` and ``>`` the strict orders.  The residual goals of
+#: a network (``clausal.logic.residuals``) are written with them.
+_BOOL_CELLS = {("+", 2): "or", ("*", 2): "and", ("#", 2): "xor",
+               ("=:=", 2): "equiv", ("=\\=", 2): "xor",
+               ("=<", 2): "impl", (">=", 2): "rimpl",
+               ("<", 2): "lt", (">", 2): "gt", ("~", 1): "not"}
+
+
+def _bool_cell_operands(expr):
+    """``(operation, operands)`` for a connective cell of :data:`_BOOL_CELLS`
+    (``('+', X, Y)``), else None."""
+    if type(expr) is not tuple or len(expr) < 2 or type(expr[0]) is not str:
+        return None
+    op = _BOOL_CELLS.get((expr[0], len(expr) - 1))
+    return None if op is None else (op, expr[1:])
+
+
 def _expr_to_bdd(expr, trail: Trail | None = None):
     """Convert a Boolean expression tree to a BDD."""
     expr = deref(expr)
@@ -473,6 +493,22 @@ def _expr_to_bdd(expr, trail: Trail | None = None):
         right_bdd = _expr_to_bdd(right, trail)
         return apply('equiv' if functor == 'BoolEq' else 'impl',
                      left_bdd, right_bdd)
+
+    # The library(clpb) connectives, as cells
+    cell = _bool_cell_operands(expr)
+    if cell is not None:
+        op, args = cell
+        bdds = [_expr_to_bdd(a, trail) for a in args]
+        if op == "not":
+            return negate(bdds[0])
+        left, right = bdds
+        if op == "rimpl":
+            return apply('impl', right, left)
+        if op == "lt":
+            return apply('and', negate(left), right)
+        if op == "gt":
+            return apply('and', left, negate(right))
+        return apply(op, left, right)
 
     # Bitwise operators from AST nodes
     if isinstance(expr, _BitAnd):
@@ -508,7 +544,11 @@ def _collect_bool_vars(expr, result: set | None = None) -> set:
     if isinstance(expr, (int, bool)):
         return result
     _ensure_node_imports()
-    if isinstance(expr, (_BitAnd, _BitOr, _BitXor)):
+    cell = _bool_cell_operands(expr)
+    if cell is not None:
+        for operand in cell[1]:
+            _collect_bool_vars(operand, result)
+    elif isinstance(expr, (_BitAnd, _BitOr, _BitXor)):
         _collect_bool_vars(expr.left, result)
         _collect_bool_vars(expr.right, result)
     elif isinstance(expr, _Invert):
@@ -540,7 +580,11 @@ def _collect_bool_var_objects(expr, result: list | None = None) -> list:
     if isinstance(expr, (int, bool)):
         return result
     _ensure_node_imports()
-    if isinstance(expr, (_BitAnd, _BitOr, _BitXor)):
+    cell = _bool_cell_operands(expr)
+    if cell is not None:
+        for operand in cell[1]:
+            _collect_bool_var_objects(operand, result)
+    elif isinstance(expr, (_BitAnd, _BitOr, _BitXor)):
         _collect_bool_var_objects(expr.left, result)
         _collect_bool_var_objects(expr.right, result)
     elif isinstance(expr, _Invert):

@@ -126,10 +126,42 @@ The differential fuzzer (`tests/fuzz/scryer_diff.py`, run under pytest from `tes
 - **A `when/2` on two variables that are then aliased** is one delay here, and runs once, as in SWI-Prolog and SICStus; Scryer keeps a copy per variable and prints and runs it twice. Three aliased variables' `freeze/2` goals print as one conjunction nested to the left (`((a,b),c)`), whichever way the aliases are made.
 - **Errors of `when/2`** name `when/2` as their context (`error(domain_error(when_condition, C), when/2)`); Scryer leaves the context unbound. ISO leaves the context implementation-defined. Neither system takes `?=/2` as a condition (SWI-Prolog does).
 - **Scryer's `writeq/1` of a term holding a `dif/2` variable** can name one variable two ways (`f([_A|_B],_)` for `f([X|X],_)`; `==/2` says they are one).
-- **`copy_term/2` and `findall/3` do not copy `freeze/2` and `when/2` goals** (Scryer copies every attribute): `todo/copy-term-attributes-freeze-clpz-and-copy-term-3-2026-09-30.md`.
+- **`copy_term/2` does not copy `freeze/2` and `when/2` goals** (Scryer copies every attribute in `copy_term/2`): `todo/copy-term-attributes-freeze-clpz-and-copy-term-3-2026-09-30.md`. `copy_term/3` hands them back as goals. Neither system's `findall/3` copies them.
 
 ??? info "Implementation"
-    The goal term is not stored. Every delayed goal's thunk takes one optional argument: called with a true one, it returns its residual, `("freeze", key, Goal)` or `("when", key, when(Cond, Goal))`, built from the very variables it would run the goal over, and runs nothing (`compiler/control_constructs._residual_goal_ast`, `coroutining.residual_of`). The thunk is in the attribute, so the goal is trailed and undone with it, and installing or waking a delay costs what it did. `copy_term/2` still does not copy a `freeze` attribute (`todo/copy-term-attributes-freeze-clpz-and-copy-term-3-2026-09-30.md`); the residual is what a copier or `copy_term/3` would re-post.
+    The goal term is not stored. Every delayed goal's thunk takes one optional argument: called with a true one, it returns its residual, `("freeze", key, Goal)` or `("when", key, when(Cond, Goal))`, built from the very variables it would run the goal over, and runs nothing (`compiler/control_constructs._residual_goal_ast`, `coroutining.residual_of`). The thunk is in the attribute, so the goal is trailed and undone with it, and installing or waking a delay costs what it did. `copy_term/2` still does not copy a `freeze` attribute (`todo/copy-term-attributes-freeze-clpz-and-copy-term-3-2026-09-30.md`); the residual is what `copy_term/3` hands back.
+
+---
+
+## Residual goals: copy_term/3 and call_residue_vars/2
+
+`copy_term(+Term, -Copy, -Goals)` copies `Term` to `Copy` with fresh variables that carry **no** attributes, and gives in `Goals` the goals that, called, put back on those variables the constraints `Term`'s carry. `call_residue_vars(:Goal, -Vars)` calls `Goal` and, with each answer, gives the variables that got an attribute during it and still carry one, also those no argument of `Goal` reaches. Both are Scryer's (and SWI-Prolog's).
+
+```text
+?- dif(X, a), copy_term(X, Y, Gs).
+   Gs = [dif(Y,a)], dif(X,a).
+?- freeze(X, g), X in 1..3, copy_term(f(X, Z), C, Gs).
+   C = f(_A,_B), Gs = [_A in 1..3,freeze(_A,g)], X in 1..3, freeze(X,g).
+?- {X >= 2}, copy_term(X, Y, Gs).
+   Gs = [{Y>=2}], {X >= 2}.
+?- call_residue_vars((dif(Z, a), X = 1), Vs).
+   X = 1, Vs = [Z], dif(Z,a).
+```
+
+The goals are the ones `-g` and `?-` print for the same constraints, in the same order, computed by the same function (`clausal.logic.residuals`): `dif/2`, then CLP(ℤ) domains and constraints (`X in 1..3`, `X #< Y`, `all_different([X,Y])`), then `freeze/2` and `when/2`, then CLP(B) (`sat(F)`, one per network, F written with `+`, `*` and `~`), CLP(ℝ) (`in_real(X, Lo, Hi)`, `X #>= Lo`, `X #< Y`), and CLP(Q) (`{X >= 2}`, the projection the toplevel shows). Only the variables of `Term`, and those their `dif/2` and delayed goals reach, contribute: a constraint on another variable is not in `Goals`. A variable a goal shares with `Term` is `Copy`'s; any other is fresh (`dif(X, Z), copy_term(X, Y, Gs)` gives `Gs = [dif(Y,_A)]`). A cyclic `Term` is copied as a cycle.
+
+Calling the goals restores the constraints, so `copy_term(T, C, Gs), maplist(call, Gs)` copies `T` with them. Inside `findall/3`, which collects plain copies, the same goals keep each answer's constraints as data: `findall(X-Gs, (dif(X, a), copy_term(X, X, Gs)), L)` gives `L = [_A-[dif(_A,a)]]`.
+
+Where Scryer differs (`tests/iso/test_copy_term_3_scryer.py` holds the table):
+
+- Scryer qualifies each goal with its library (`dif:dif(Y,a)`, `clpz:(Y in 1..3)`); Clausal's are plain, as its printers' are.
+- CLP(ℤ) goals are Clausal's own forms (`X #< Y`, `scalar_product([1,-1,-1],[X,A,B],#=,0)`), not Scryer's (`X#=<Y+ -1`, `A+B#=X`).
+- CLP(B) goals are a formula of the BDD (`sat(X* ~(Y)+ ~(X)*Y)`), not Scryer's algebraic normal form (`sat(X=\=Y)`).
+- CLP(Q) goals are `{}/1` goals, which `{}/1` reads back; Scryer's library(clpq) gives the bare relation (`Y>=2`), and loses an equation (`{X + Z = 3}, copy_term(X-Z, Y, Gs)` gives `Gs = []`). Scryer ships no CLP(ℝ) of Clausal's kind; there the toplevel's output is the reference.
+- `call_residue_vars/2` does not list the internal variables Scryer's library(clpb) and library(clpq) create (`call_residue_vars(sat(A+B), Vs)`: Scryer `Vs = [A,B,_A]`, Clausal `Vs = [A,B]`).
+- The order of the goals is the printers' (dif, CLP(ℤ), freeze/when), not Scryer's.
+
+`copy_term/2` still copies only `dif/2` (`todo/copy-term-attributes-freeze-clpz-and-copy-term-3-2026-09-30.md`), and `findall/3` copies no attribute (`todo/findall-drops-dif-and-clpz-constraints-2026-11-04.md`, as Scryer).
 
 ---
 

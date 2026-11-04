@@ -1,0 +1,32 @@
+# copy_term/3 and call_residue_vars/2 from the seam: the copy carries no
+# constraint, and calling the goals copy_term/3 hands back restores it.
+
+test('dif: the copy is free') <- (
+    dif(X, 'a'),
+    copy_term(X, Y, GS_UNUSED),
+    Y is 'a'
+)  # nv
+
+test('dif: the goal restores it') <- (
+    dif(X, 'a'),
+    copy_term(X, Y, [G]),
+    call(G),
+    not Y is 'a'
+)  # nv
+
+test('freeze: the goal restores it') <- (
+    freeze(X, fail),
+    copy_term(X, Y, [G]),
+    call(G),
+    not Y is 1
+)  # nv
+
+test('no constraints, no goals') <- (
+    copy_term(['a', X_UNUSED], COPY_UNUSED, GS),
+    GS is []
+)  # nv
+
+test('call_residue_vars: an unreachable variable') <- (
+    call_residue_vars(dif(Z_UNUSED, 'a'), VS),
+    length(VS, 1)
+)  # nv

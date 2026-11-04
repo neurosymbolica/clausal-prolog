@@ -244,18 +244,17 @@ def _has_residual(shown, trail) -> bool:
     variable the query touched (call_residue_vars/2), also one no answer
     variable reaches."""
     from clausal import cli  # noqa: PLC0415
+    from clausal.logic import residuals  # noqa: PLC0415
     from clausal.logic.solve import _deref_walk  # noqa: PLC0415
-    from clausal.logic.variables import Var, deref  # noqa: PLC0415
     free: dict = {}
     for _, v in (*shown, *getattr(shown, "hidden", ())):
         cli._term_vars(_deref_walk(v), free)
-    for av in trail.attvars_since(0):
-        d = deref(av)
-        if isinstance(d, Var) and getattr(d, "attrs", None):
-            free.setdefault(id(d), d)
+    for d in residuals.residue_variables(trail, 0, free):
+        free[id(d)] = d
     variables = list(free.values())
-    return bool(cli._fd_dif_residuals(variables, str)
-                or cli._coroutine_residuals(variables, str))
+    return bool(residuals.dif_residuals(variables)
+                or residuals.fd_residuals(variables)
+                or residuals.coroutine_residuals(variables))
 
 
 # ── comparing ─────────────────────────────────────────────────────────────
