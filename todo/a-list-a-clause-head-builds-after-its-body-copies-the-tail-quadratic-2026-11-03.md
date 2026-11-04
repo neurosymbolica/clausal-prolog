@@ -1,6 +1,6 @@
 # A list a clause head builds after its body copies the tail: quadratic
 
-**Status: PARTLY FIXED 2026-11-03 (commit f4248cbb; commit LINKCOMMIT).**
+**Status: PARTLY FIXED 2026-11-03 (commit f4248cbb; commit 27a16c81).**
 Option 2 landed first: the unbound-tail build no longer walks every
 element at every level (54.5 s to 2.0 s at 16k; pinned in
 tests/test_head_list_build_scaling.py).  Then the hybrid ("link during
