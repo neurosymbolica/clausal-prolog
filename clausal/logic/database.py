@@ -1253,7 +1253,11 @@ class Database:
                 if kind not in _CLAUSE_KINDS or row.dispatch_fn is not dispatch:
                     # Not a clause write, or this transaction installed a
                     # dispatch of its own on the way out (the assert channels
-                    # recompile inside their transaction) — nothing is stale.
+                    # recompile inside their transaction; a clause table
+                    # takes an assertz'd fact in place) — nothing is stale.
+                    # Whoever installed it also answers for a ``-table``
+                    # table (``compiler._install`` and ``assertz`` abolish
+                    # it), since this skips the abolition below.
                     continue
                 # Unconditional for a clause-writing kind, rather than
                 # conditional on a clause-COUNT change: one transaction that
@@ -1301,12 +1305,21 @@ class Database:
             # A clause table takes a fact in place: it installs a dispatch
             # over the grown table, so this transaction leaves nothing stale
             # (``mutate``'s exit) and the next call recompiles nothing.  A
-            # call already running reads the clauses it began with.
+            # call already running reads the clauses it began with.  The
+            # row's ``clause_generation`` still moves at ``mutate``'s exit,
+            # so a running TRO loop does not restart over its old clauses.
             append = getattr(row.dispatch_fn, "table_append", None)
             if append is not None:
                 grown = append(clause)
                 if grown is not None:
                     row.dispatch_fn = grown
+                    # Installing a dispatch makes ``mutate``'s exit skip
+                    # its invalidation AND its abolition of a ``-table``
+                    # table, so abolish here.  (Unreachable today: a tabled
+                    # predicate's dispatch is the SLG wrapper, which has no
+                    # ``table_append``.)
+                    if (functor, arity) in self._tabled:
+                        self.abolish_table(functor, arity)
 
     def asserta(self, clause: Clause, author: str | None = None) -> None:
         """Add clause at front of its predicate's clause list.

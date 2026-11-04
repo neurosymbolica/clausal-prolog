@@ -2824,6 +2824,25 @@ fire_wakeups_dispatch(PyObject *wakeup_list, TrailObject *trail)
  * (Trail objects are per-thread too). */
 static CLAUSAL_THREAD_LOCAL int g_hook_dispatch_depth = 0;
 
+/* The C stack a nest of hook dispatches may use, measured from the
+ * outermost dispatch in this thread.  A hook that binds a variable runs
+ * that variable's hooks inside itself, so a cascade of bindings through
+ * attributed variables nests one dispatch per link; past this budget the
+ * dispatch raises RecursionError (resource_error(stack) to a program)
+ * rather than overflow the C stack and kill the process with SIGSEGV.
+ * CLP(FD)'s own cascades run in its propagation queue and do not nest
+ * (_clpfd_propagate.c, g_drain_queue); this is the backstop for every
+ * other hook.  The budget is half the 8 MB Linux stack (a chain of Python
+ * hooks reaches it after about 3,300 links, near where CPython's own C
+ * recursion limit stopped it before), a quarter of the 16 MB macOS thread
+ * stack, and inside the 2 MB main thread of python.exe on Windows. */
+#if defined(_WIN32)
+#  define HOOK_STACK_BUDGET ((ptrdiff_t)768 * 1024)
+#else
+#  define HOOK_STACK_BUDGET ((ptrdiff_t)4 * 1024 * 1024)
+#endif
+static CLAUSAL_THREAD_LOCAL uintptr_t g_hook_stack_base = 0;
+
 /* fire_wakeups: the dispatch, counted on trail->hooks_running and on the
  * thread's g_hook_dispatch_depth while it runs (every exit path: success,
  * a hook's failure, an exception). */
@@ -2832,6 +2851,22 @@ fire_wakeups(PyObject *wakeup_list, TrailObject *trail)
 {
     if (PyList_GET_SIZE(wakeup_list) == 0)
         return 1;
+    char here;
+    int outermost = (g_hook_dispatch_depth == 0);
+    if (outermost)
+        g_hook_stack_base = (uintptr_t)&here;
+    else {
+        uintptr_t at = (uintptr_t)&here;
+        uintptr_t used = at < g_hook_stack_base ? g_hook_stack_base - at
+                                                : at - g_hook_stack_base;
+        if (used > (uintptr_t)HOOK_STACK_BUDGET) {
+            PyErr_Format(PyExc_RecursionError,
+                         "attribute hooks nested %d deep: each hook binding "
+                         "a variable whose hooks bind the next",
+                         g_hook_dispatch_depth);
+            return -1;
+        }
+    }
     trail->hooks_running++;
     g_hook_dispatch_depth++;
     int r = fire_wakeups_dispatch(wakeup_list, trail);
