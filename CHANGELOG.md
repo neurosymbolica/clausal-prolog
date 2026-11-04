@@ -39,6 +39,22 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **Binding one end of a long chain of CLP(FD) constraints no longer
+  crashes the process.** With `X1 #= X0 + 1, X2 #= X1 + 1, ...` (or the
+  seam's `N1 == N - 1` on an unbound `N`, as in a counting-down predicate
+  called with its counter unbound), binding `X0` fixed each link inside the
+  previous one: the narrowing that made the next variable a singleton bound
+  it, the binding ran the FD attribute hook, and the hook propagated the
+  next link. Every link took another level of C stack, and a chain of about
+  4,500 links overflowed it (SIGSEGV), on every surface. A binding made
+  while CLP(FD) is draining its propagation queue now puts the variable's
+  constraints on that queue instead of propagating them in place, so a
+  cascade of any length runs in constant C stack and reaches the same
+  fixpoint. As a backstop for other hooks, nested attribute-hook dispatches
+  raise `RecursionError` (`resource_error(stack)` to a program) when they
+  have used 4 MB of C stack (768 KB on Windows) instead of overflowing it.
+  Pinned by `tests/test_clpfd_deep_binding_cascade.py`.
+
 - **A predicate recompiled after `assertz`/`retract` compiles as a fresh
   compile does; it no longer lowers its clause bodies against the first
   compile's context.** The lazy recompile handed the next compile the

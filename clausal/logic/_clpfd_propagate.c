@@ -7,6 +7,7 @@
  */
 
 #include "_clpfd_domain_ops.h"
+#include "variables/_ft_compat.h"
 #include <structmember.h>
 
 /* ================================================================
@@ -183,6 +184,34 @@ typedef struct {
 } FDVarObject;
 
 #define FDVar_Check(op) PyObject_TypeCheck(op, &FDVarType)
+
+/* ================================================================
+ * Binding cascades run in the queue, not on the C stack
+ *
+ * A narrowing to a singleton binds the variable, and the binding runs the
+ * FD attribute hook, which propagates the variable's constraints.  Run in
+ * place, a chain X1 #= X0 + 1, X2 #= X1 + 1, ... bound at one end nested
+ * one hook inside the next per link (c_narrow -> unify -> fd_hook ->
+ * propagate -> c_narrow ...) and a few thousand links overflowed the C
+ * stack (SIGSEGV).
+ *
+ * g_drain_queue is the queue a caller up this thread's stack is draining
+ * to its fixpoint (c_propagate, fd_hook): whatever is appended to it WILL
+ * be propagated before that caller returns success.  A c_narrow that binds
+ * a variable while narrowing into that queue sets g_defer_state to the
+ * FDVar it just stored and g_defer_queue to the queue for the length of
+ * the unify; the FD hook for exactly that FDVar checks the value is in
+ * the domain (as always) and appends the FDVar to the queue instead of
+ * propagating its constraints itself.  c_propagate propagates an FDVar
+ * popped from the queue as it propagates a variable's FDVar.  Every other
+ * hook of the binding (dif, CLP(R), user attributes) still runs in place,
+ * and a narrowing into any other queue -- a caller that might never drain
+ * it -- binds and propagates in place, as before.  Propagation reaches the
+ * same fixpoint in either order; only the C stack depth changes.
+ * ================================================================ */
+static CLAUSAL_THREAD_LOCAL PyObject *g_drain_queue = NULL;   /* borrowed */
+static CLAUSAL_THREAD_LOCAL PyObject *g_defer_state = NULL;   /* borrowed */
+static CLAUSAL_THREAD_LOCAL PyObject *g_defer_queue = NULL;   /* borrowed */
 
 static PyObject *
 FDVar_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
@@ -757,12 +786,12 @@ have_constraints:
     Py_DECREF(fdvar_args);
     if (!new_state) return -1;
 
-    /* Store it */
+    /* Store it.  new_state is held to the end: a binding below matches
+     * the FD hook's attr_value against it by identity. */
     if (call_put_attr(var, FD_KEY_STR, new_state, trail) < 0) {
         Py_DECREF(new_state);
         return -1;
     }
-    Py_DECREF(new_state);
 
     /* CLP(R) sync: delegate to Python _sync_real(var, fd_lo, fd_hi, trail)
      * so we never depend on the RealVar constructor signature. Gate on
@@ -780,21 +809,35 @@ have_constraints:
         PyObject *hi_obj = PyTuple_GET_ITEM(last_pair, 1);
         PyObject *sr = PyObject_CallFunctionObjArgs(
             fn_sync_real, var, lo_obj, hi_obj, trail, NULL);
-        if (!sr) return -1;
+        if (!sr) { Py_DECREF(new_state); return -1; }
         int ok = PyObject_IsTrue(sr);
         Py_DECREF(sr);
-        if (ok <= 0) return ok;  /* 0 = wipeout, -1 = error */
+        if (ok <= 0) { Py_DECREF(new_state); return ok; }  /* 0 = wipeout, -1 = error */
     }
 
-    /* Singleton → unify */
+    /* Singleton → unify.  Into the queue being drained, the FD hook of
+     * this binding only enqueues new_state (see g_drain_queue above). */
     PyObject *val = domain_singleton_c(new_domain);
-    if (!val) return -1;
+    if (!val) { Py_DECREF(new_state); return -1; }
     if (val != Py_None) {
-        int ok = call_unify(var, val, trail);
+        int ok;
+        if (queue == g_drain_queue) {
+            PyObject *saved_state = g_defer_state;
+            PyObject *saved_queue = g_defer_queue;
+            g_defer_state = new_state;
+            g_defer_queue = queue;
+            ok = call_unify(var, val, trail);
+            g_defer_state = saved_state;
+            g_defer_queue = saved_queue;
+        } else {
+            ok = call_unify(var, val, trail);
+        }
         Py_DECREF(val);
+        Py_DECREF(new_state);
         if (ok <= 0) return ok;
     } else {
         Py_DECREF(val);
+        Py_DECREF(new_state);
     }
 
     /* Enqueue for propagation */
@@ -937,8 +980,22 @@ c_post_constraint(PyObject *constraint, PyObject *trail)
 /*
  * c_propagate — AC-3 fixpoint loop
  */
+static int c_propagate_drain(PyObject *queue, PyObject *trail);
+
+/* The queue is drained here to its fixpoint, so it is g_drain_queue for
+ * the length of the drain (see g_drain_queue). */
 static int
 c_propagate(PyObject *queue, PyObject *trail)
+{
+    PyObject *saved = g_drain_queue;
+    g_drain_queue = queue;
+    int r = c_propagate_drain(queue, trail);
+    g_drain_queue = saved;
+    return r;
+}
+
+static int
+c_propagate_drain(PyObject *queue, PyObject *trail)
 {
     for (;;) {
         Py_ssize_t len;
@@ -967,7 +1024,14 @@ c_propagate(PyObject *queue, PyObject *trail)
             if (!var) return -1;
         }
 
-        PyObject *dvar = call_deref(var);
+        PyObject *dvar, *state_obj;
+        if (FDVar_Check(var)) {
+            /* The FDVar of a variable a deferred binding bound (see
+             * g_drain_queue): propagate its constraints as the hook would. */
+            dvar = Py_NewRef(Py_None);
+            state_obj = var;
+        } else {
+        dvar = call_deref(var);
         Py_DECREF(var);
         if (!dvar) return -1;
 
@@ -975,8 +1039,9 @@ c_propagate(PyObject *queue, PyObject *trail)
         if (isv < 0) { Py_DECREF(dvar); return -1; }
         if (!isv) { Py_DECREF(dvar); continue; }
 
-        PyObject *state_obj = call_get_attr(dvar, FD_KEY_STR);
+        state_obj = call_get_attr(dvar, FD_KEY_STR);
         if (!state_obj) { Py_DECREF(dvar); return -1; }
+        }
         if (state_obj == Py_None) {
             Py_DECREF(state_obj);
             Py_DECREF(dvar);
@@ -3041,15 +3106,38 @@ py_fd_hook(PyObject *self, PyObject *args)
             Py_RETURN_FALSE;
         }
 
-        /* Propagate all constraints */
+        /* The binding a c_narrow made into the queue being drained (see
+         * g_drain_queue): that drain propagates the constraints. */
+        if (attr_value == g_defer_state && g_defer_queue != NULL) {
+            PyObject *dq = g_defer_queue;
+            g_defer_state = NULL;   /* one binding, one hook */
+            int app;
+            if (PyList_Check(dq))
+                app = PyList_Append(dq, attr_value);
+            else {
+                PyObject *r = PyObject_CallMethod(dq, "append", "O", attr_value);
+                app = r ? 0 : -1;
+                Py_XDECREF(r);
+            }
+            if (domain_newref) { Py_DECREF(domain); Py_DECREF(constraints); }
+            Py_DECREF(bt);
+            if (app < 0) return NULL;
+            Py_RETURN_TRUE;
+        }
+
+        /* Propagate all constraints; the queue is drained below, so it is
+         * g_drain_queue from the first narrowing on. */
         PyObject *queue = PyList_New(0);
         if (!queue) goto hook_error;
+        PyObject *saved_drain = g_drain_queue;
+        g_drain_queue = queue;
 
         Py_ssize_t nc = PyTuple_GET_SIZE(constraints);
         for (Py_ssize_t i = 0; i < nc; i++) {
             PyObject *c = PyTuple_GET_ITEM(constraints, i);
             int ok = constraint_propagate_c(c, trail, queue);
             if (ok <= 0) {
+                g_drain_queue = saved_drain;
                 Py_DECREF(queue);
                 if (domain_newref) { Py_DECREF(domain); Py_DECREF(constraints); }
                 Py_DECREF(bt);
@@ -3059,6 +3147,7 @@ py_fd_hook(PyObject *self, PyObject *args)
         }
 
         int ok = c_propagate(queue, trail);
+        g_drain_queue = saved_drain;
         Py_DECREF(queue);
         if (domain_newref) { Py_DECREF(domain); Py_DECREF(constraints); }
         Py_DECREF(bt);
