@@ -17,7 +17,7 @@ import time
 
 import pytest
 
-from clausal import Var, deref, solve
+from clausal import Var, call, deref, solve
 from clausal.logic import time_limit
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import walk
@@ -30,8 +30,9 @@ PROGRAM = """
 :- module(tl, [spin/0, answers/2, first/2, nested/1, inner_caught/1,
                inner_own/1, catch_all/1, err/3, kept/2, attrs/2, db/1,
                t/1, all_t/1, limited_t/1, fails/1, throws/1, retimed/1,
-               tiny/1]).
+               tiny/1, cleaned/2, plain_cleaned/2, done_list/1, huge/1]).
 :- dynamic(fact/1).
+:- dynamic(done/1).
 :- table(t/1).
 spin :- spin(0).
 spin(N) :- N1 is N + 1, spin(N1).
@@ -66,6 +67,17 @@ limited_t(R) :- catch(call_with_time_limit(0.15, all_t(_)), B, R = B).
 fails(L) :- findall(x, call_with_time_limit(1, fail), L).
 throws(R) :- catch(call_with_time_limit(1, throw(mine)), B, R = B).
 tiny(R) :- catch(call_with_time_limit(1.0e-9, spin), B, R = B).
+% The cleanup of setup_call_cleanup/3 runs while the ball unwinds: it
+% must run to its end, as it does for an ordinary ball.
+cleaned(N, R) :- retractall(done(_)),
+    catch(call_with_time_limit(0.05,
+              setup_call_cleanup(true, spin, (busy(N), assertz(done(N))))),
+          B, R = B).
+plain_cleaned(N, R) :- retractall(done(_)),
+    catch(setup_call_cleanup(true, throw(x), (busy(N), assertz(done(N)))),
+          B, R = B).
+done_list(L) :- findall(N, done(N), L).
+huge(R) :- catch(call_with_time_limit(1.0e300, true), B, R = B), (var(R), R = ok ; nonvar(R)).
 retimed(R) :- catch(call_with_time_limit(0.2, spin), B, true),
               call_with_time_limit(1, R = B).
 :- end_module(tl).
@@ -108,6 +120,16 @@ def test_time_must_be_a_positive_number(tl, time_arg, error):
     E = Var()
     t = Var() if time_arg is None else time_arg
     assert first_answer(("err", t, "true", E), E, tl) == error
+    clean_alarm()
+
+
+def test_an_enormous_time_is_no_limit_in_practice(tl):
+    """setitimer cannot take 1e300 s or 10**400 s: such a limit is capped
+    (at about 31 years), never an OverflowError."""
+    R = Var()
+    assert first_answer(("huge", R), R, tl) == "ok"
+    assert list(solve(("call_with_time_limit", 10 ** 400, "true"),
+                      module=tl))
     clean_alarm()
 
 
@@ -211,6 +233,91 @@ def test_an_inner_limit_is_its_own_to_catch(tl):
     t0 = time.monotonic()
     assert first_answer(("inner_own", R), R, tl) == "inner"
     assert time.monotonic() - t0 < 0.2 + 0.5
+    clean_alarm()
+
+
+# ── cleanup while the ball unwinds ──────────────────────────────────────────
+
+
+@pytest.mark.parametrize("n", [20000, 200000])
+def test_cleanup_runs_to_its_end_while_the_ball_unwinds(tl, n):
+    """Once the alarm has been raised into the goal (and not swallowed), it
+    does not strike again: setup_call_cleanup/3's cleanup completes, as for
+    an ordinary ball."""
+    R, L = Var(), Var()
+    assert first_answer(("plain_cleaned", n, R), R, tl) == "x"
+    assert first_answer(("done_list", L), L, tl) == [n]
+    R, L = Var(), Var()
+    assert first_answer(("cleaned", n, R), R, tl) == BALL
+    assert first_answer(("done_list", L), L, tl) == [n]
+    clean_alarm()
+
+
+def test_a_tabled_evaluation_is_closed_cleanly_when_it_times_out(tmp_path):
+    """The tabled wrapper's finally (closing its open-table record) runs to
+    its end: no "Exception ignored" report, and the tables answer in full."""
+    import subprocess
+    import sys
+    from tests.test_sandbox import ENGINE_ROOT
+    (tmp_path / "tab.clausal").write_text(textwrap.dedent("""
+        :- module(tab, [lim/2, n/1]).
+        :- table(path/2).
+        edge(X, Y) :- between(1, 120, X), Y is X + 1.
+        edge(120, 1).
+        path(X, Y) :- edge(X, Y).
+        path(X, Y) :- path(X, Z), edge(Z, Y).
+        n(N) :- findall(X-Y, path(X, Y), L), length(L, N).
+        lim(T, R) :- catch(call_with_time_limit(T, n(_)), B, R = B).
+        :- end_module(tab).
+    """))
+    (tmp_path / "run.py").write_text(textwrap.dedent("""
+        import random
+        from clausal import Var, deref, solve
+        from clausal.logic.variables import walk
+        from clausal.testing import load_clausal_module
+        m = load_clausal_module("tab.clausal")
+        random.seed(7)
+        bad = 0
+        for i in range(40):
+            R = Var()
+            for _ in solve(("lim", random.uniform(0.001, 0.08), R), module=m):
+                break
+            N = Var()
+            got = [walk(deref(N)) for _ in solve(("n", N), module=m)]
+            if got != [14520]:   # 120 nodes reach all 121
+                bad += 1
+                print("GOT", got)
+        print("BAD", bad)
+    """))
+    r = subprocess.run([sys.executable, "run.py"], cwd=tmp_path,
+                       env={**__import__("os").environ,
+                            "PYTHONPATH": ENGINE_ROOT},
+                       capture_output=True, text=True, timeout=300)
+    assert "BAD 0" in r.stdout, (r.stdout, r.stderr[-2000:])
+    assert "Exception ignored" not in r.stderr, r.stderr[-3000:]
+
+
+def test_a_swallowed_alarm_still_ends_the_goal(tl):
+    """Python code that swallows every exception (a library's ``except
+    Exception``) keeps the goal running after the alarm: the alarm strikes
+    again until it gets out, and the call throws the ball."""
+    from clausal.modules.py import ModulePredicate, simple_to_trampoline
+    from clausal.logic.trampoline import DONE  # noqa: F401
+
+    def _stubborn(trail, k):
+        while True:
+            try:
+                sum(range(1000))
+            except Exception:  # noqa: BLE001 -- the point of the test
+                pass
+        yield None
+    p = ModulePredicate("stubborn")
+    p._register(0, simple_to_trampoline(_stubborn))
+    t0 = time.monotonic()
+    with pytest.raises(LogicException) as info:
+        list(call("call_with_time_limit", 0.2, p, module=tl))
+    assert info.value.term == BALL
+    assert time.monotonic() - t0 < 0.2 + 1.0
     clean_alarm()
 
 
@@ -387,4 +494,31 @@ def test_the_seam_surface(tmp_path):
     X = Var()
     assert [walk(deref(X)) for _ in solve(("one", X), module=m)] == ["a"]
     assert first_answer(("timed", X), X, m) == BALL
+    clean_alarm()
+
+
+# ── the per-call budget's delegation (time_limit.budgeted) ─────────────────
+
+
+def test_every_throw_into_a_budgeted_generator_reaches_it():
+    """budgeted() is ``yield from`` with a clock: a ball thrown into it a
+    second time is handed to the generator too, not raised past it."""
+    seen = []
+
+    def gen():
+        i = 0
+        while i < 4:
+            try:
+                yield ("step", i)
+            except ValueError as e:
+                seen.append(str(e))
+                continue
+            i += 1
+    g = time_limit.budgeted(gen(), 10.0, "g/0")
+    assert next(g) == ("step", 0)
+    assert g.throw(ValueError("one")) == ("step", 0)
+    assert g.throw(ValueError("two")) == ("step", 0)
+    assert seen == ["one", "two"]
+    assert g.send(None) == ("step", 1)
+    g.close()
     clean_alarm()

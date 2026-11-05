@@ -136,11 +136,19 @@ test("a goal that runs out throws the ball") :-
   takes it: bindings and constraints made since are undone; `assertz` and
   `retract` are not (ISO). A tabled evaluation cut short leaves no table
   that a later call reads as complete.
+- **Cleanup runs to its end.** Once the alarm is on its way out, it is
+  not raised again: a `setup_call_cleanup/3` cleanup, a `finally` in Python
+  code and a tabled evaluation's close run to completion, as for any other
+  ball (SWI-Prolog does the same).
 - **A swallowed alarm.** If code inside the goal catches the alarm in
-  Python (a library's `except Exception`), the alarm repeats every 50 ms
-  until it reaches its call, and that call throws the ball whatever the
-  goal then answered: a result produced after the alarm struck is not
-  trusted.
+  Python and drops it (a library's `except Exception`), it strikes again
+  50 ms later in a form `except Exception` does not catch, and that call
+  throws the ball whatever the goal then answered: a result produced after
+  the alarm struck is not trusted. (Code that catches the alarm and keeps
+  it is taken to be still unwinding; the goal then runs until it returns,
+  and its call throws the ball.)
+- **A huge `Time`** (`1.0e300`, `10**400`) is capped at 10^9 seconds
+  (about 31 years), which is no limit in practice.
 - **Main thread only.** The limit is enforced with `SIGALRM`, which only
   the main thread receives. In another thread, or on a platform without
   `SIGALRM`, the call is refused with

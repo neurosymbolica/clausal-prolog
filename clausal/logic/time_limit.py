@@ -29,13 +29,24 @@ ball ``time_limit_exceeded``, which from there on is an ordinary ball.  So a
 ``catch(..., time_limit_exceeded, ...)`` around an inner limit cannot
 swallow the outer limit's timeout.
 
-Lost alarms.  Code that catches every exception (``except Exception`` in a
-library, a ``__del__`` the interpreter reports as unraisable) can swallow
-the alarm.  So once a deadline has fired, the alarm repeats every
-:data:`REPEAT` seconds until its owner has seen it, and the owner answers
-the ball on ANY exit after its deadline fired -- an answer, a failure or
-another exception -- so a swallowed alarm that made some code give up early
-cannot read as that code's answer.
+Unwinding and lost alarms.  Once raised, the alarm is left alone while it
+unwinds: a ``finally`` block, ``setup_call_cleanup/3``'s cleanup or a
+tabled evaluation's close runs to its end, as for any other ball.  The
+deadline keeps a weak reference to the alarm it raised; while that object
+is alive the alarm is still on its way.  Code that catches every exception
+(``except Exception`` in a library, a ``__del__`` the interpreter reports
+as unraisable) can swallow it instead: then the object dies without
+reaching its owner, and :data:`REPEAT` seconds later the alarm strikes
+again as a :class:`TimeLimitEscalation`, a ``BaseException`` that
+``except Exception`` does not catch.  The boundary of every Python
+predicate adapter (``clausal.modules.py._catchable_dispatch``) turns it back
+into the routed alarm; one that reaches the query's root driver is the
+ball.  And the owner answers the ball on ANY exit after its deadline fired
+-- an answer, a failure or another exception -- so a swallowed alarm that
+made some code give up early cannot read as that code's answer.  (An alarm
+swallowed AND kept alive -- stored by the code that caught it -- is taken
+as still unwinding: the goal then runs on until it returns, and its call
+throws the ball.)
 
 Main thread only.  Python runs signal handlers in the main thread, and only
 the main thread may install one.  Elsewhere a limit cannot be enforced, so
@@ -51,13 +62,15 @@ import os
 import signal
 import threading
 import time
+import weakref
 
 from clausal.logic.exceptions import LogicException
 
 __all__ = ["BALL", "REPEAT", "Deadline", "TimeLimitAlarm", "new", "start",
            "push", "pop", "budgeted", "owned", "live",
            "check_seconds", "ball", "unavailable_error", "available",
-           "release_from_depth"]
+           "release_from_depth", "TimeLimitEscalation", "alarm_from",
+           "MAX_SECONDS"]
 
 #: The ball a time limit throws when it runs out (SWI's).
 BALL = "time_limit_exceeded"
@@ -67,6 +80,10 @@ REPEAT = 0.05
 
 #: The shortest interval the timer is set to (setitimer treats 0 as "off").
 _TINY = 1e-6
+
+#: The longest limit the timer is set to (setitimer overflows on 1e300 s):
+#: about 31 years, which is no limit in practice.
+MAX_SECONDS = 1e9
 
 
 class TimeLimitAlarm(LogicException):
@@ -86,10 +103,33 @@ class TimeLimitAlarm(LogicException):
         self.deadline = deadline
 
 
+class TimeLimitEscalation(BaseException):
+    """The alarm of :attr:`deadline` raised again after the first one was
+    swallowed: a ``BaseException``, so ``except Exception`` lets it through.
+    Turned back into :class:`TimeLimitAlarm` where it leaves a Python
+    predicate adapter (:func:`alarm_from`), and into the ball at the root
+    driver."""
+
+    def __init__(self, deadline: "Deadline") -> None:
+        super().__init__(BALL)
+        self.deadline = deadline
+
+
+def alarm_from(escalation: TimeLimitEscalation) -> TimeLimitAlarm:
+    """The routed alarm for *escalation* (its deadline's new alarm)."""
+    return _new_alarm(escalation.deadline)
+
+
+def _new_alarm(d: "Deadline") -> TimeLimitAlarm:
+    alarm = TimeLimitAlarm(d)
+    d.alarm = weakref.ref(alarm)
+    return alarm
+
+
 class Deadline:
     """One live time limit: due at :attr:`at` (``time.monotonic``)."""
 
-    __slots__ = ("at", "fired", "depth", "label", "live")
+    __slots__ = ("at", "fired", "depth", "label", "live", "alarm")
 
     def __init__(self, at: float, depth: int, label: str) -> None:
         self.at = at
@@ -97,6 +137,7 @@ class Deadline:
         self.depth = depth      # the drive-episode depth it was pushed at
         self.label = label
         self.live = True
+        self.alarm = None       # weakref to the alarm last raised
 
     def __repr__(self) -> str:
         return (f"<Deadline {self.label} in "
@@ -168,10 +209,18 @@ def check_seconds(value, context: str) -> float:
         raise LogicException(instantiation_error(context))
     if type(v) is bool or not isinstance(v, (int, float, Fraction, Decimal)):
         raise LogicException(type_error("number", v, context))
-    seconds = float(v)
-    if not (seconds > 0) or math.isinf(seconds):
+    if isinstance(v, float) and math.isnan(v):
         raise LogicException(domain_error("positive_number", v, context))
-    return seconds
+    if isinstance(v, Decimal) and v.is_nan():
+        raise LogicException(domain_error("positive_number", v, context))
+    if not v > 0:
+        raise LogicException(domain_error("positive_number", v, context))
+    if (isinstance(v, float) and math.isinf(v)) or (
+            isinstance(v, Decimal) and v.is_infinite()):
+        raise LogicException(domain_error("positive_number", v, context))
+    if v >= MAX_SECONDS:
+        return MAX_SECONDS          # compared exactly: 10**400 is no float
+    return float(v)
 
 
 # ── the handler and the timer ───────────────────────────────────────────────
@@ -203,9 +252,18 @@ def _fire(signum, frame) -> None:
         now = time.monotonic()
     for d in _CLOCK.stack:              # outermost first
         if now >= d.at:
+            first = not d.fired
             d.fired = True
-            _rearm(now)                 # repeat until the owner has it
-            raise TimeLimitAlarm(d)
+            _rearm(now)                 # look again in REPEAT seconds
+            if d.alarm is not None and d.alarm() is not None:
+                return                  # still unwinding: let it finish
+            if not first:
+                # The alarm raised before died on the way: swallowed.
+                raise TimeLimitEscalation(d)
+            # Built in a helper: a local here would tie the alarm to this
+            # frame, which its own traceback holds -- a cycle that keeps a
+            # swallowed alarm alive until the garbage collector runs.
+            raise _new_alarm(d)
     _rearm(now)
 
 
@@ -338,9 +396,11 @@ def live() -> "tuple[Deadline, ...]":
 
 
 def owned(exc: BaseException, d: Deadline) -> bool:
-    """Whether *exc* is the alarm of *d*, or anything at all once *d* fired
-    (a swallowed alarm makes every outcome after it suspect)."""
-    return (isinstance(exc, TimeLimitAlarm) and exc.deadline is d) or d.fired
+    """Whether *exc* is the alarm of *d* (routed or escalated), or anything
+    at all once *d* fired (a swallowed alarm makes every outcome after it
+    suspect)."""
+    return (isinstance(exc, (TimeLimitAlarm, TimeLimitEscalation))
+            and exc.deadline is d) or d.fired
 
 
 def budgeted(gen, seconds: float, context: str, on_timeout=None):
@@ -383,18 +443,20 @@ def budgeted(gen, seconds: float, context: str, on_timeout=None):
             _timed_out(on_timeout)
             raise ball(context)
         remaining -= time.monotonic() - t0
-        try:
-            value = yield step
-        except GeneratorExit:
-            gen.close()
-            raise
-        except BaseException as e:
-            # Thrown into us from the catcher chain: hand it to gen.
+        while True:
             try:
-                step = gen.throw(e)
-            except StopIteration:
-                return
-            value = yield step
+                value = yield step
+                break
+            except GeneratorExit:
+                gen.close()
+                raise
+            except BaseException as e:
+                # Thrown into us from the catcher chain, once or again: hand
+                # each to gen.
+                try:
+                    step = gen.throw(e)
+                except StopIteration:
+                    return
 
 
 def _timed_out(on_timeout) -> None:

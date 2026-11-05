@@ -20,8 +20,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   OUTER call throws: the alarm is in flight to its owner, and no `catch/3`
   on the way matches it (`catch_match`), not even a catch-all inside the
   goal -- a deliberate difference from SWI, where a catch-all there takes
-  it. A swallowed alarm repeats every 50 ms and its call then throws the
-  ball whatever the goal answered. Built on `SIGALRM`/`setitimer`
+  it. Once raised, the alarm is not raised again while it unwinds
+  (cleanup, `finally`, a tabled close run to their end); one that Python
+  code swallowed strikes again 50 ms later as a `BaseException`, routed back
+  at the adapter boundary, and its call throws the ball whatever the goal
+  answered. A `Time` of 10^9 s or more is capped there. Built on `SIGALRM`/`setitimer`
   (`clausal/logic/time_limit.py`): an alarm already armed (quad runner,
   test runner, pytest-timeout) still fires at its own time and is restored
   with its remaining time. Main thread only: elsewhere it is refused with

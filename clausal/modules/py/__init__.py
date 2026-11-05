@@ -144,6 +144,16 @@ def _catchable_dispatch(dispatch_fn):
             raise
         except Exception as exc:  # noqa: BLE001 — deliberate boundary conversion
             raise LogicException(python_error_term(exc)) from exc
+        except BaseException as exc:
+            # A time limit's alarm, raised again after the implementation
+            # swallowed the first one (clausal.logic.time_limit): routed
+            # again from here, so catch/3 frames and the limit's own call
+            # see it.  Any other BaseException passes as it is.
+            from clausal.logic.time_limit import (  # noqa: PLC0415
+                TimeLimitEscalation, alarm_from)
+            if isinstance(exc, TimeLimitEscalation):
+                raise alarm_from(exc) from None
+            raise
     return wrapped
 
 
