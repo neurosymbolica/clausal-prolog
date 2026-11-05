@@ -17,9 +17,15 @@ import subprocess
 import sys
 import textwrap
 
+import importlib.util
+
 import pytest
 
-pytest.importorskip("sympy")
+# Never IMPORTED here: SymPy's own Predicate classes would stay alive in
+# the pytest process (tests/test_w4b3_rewriter_mints_no_class.py counts
+# live classes of that name).  Every scenario imports it in its child.
+if importlib.util.find_spec("sympy") is None:
+    pytest.skip("sympy is not installed", allow_module_level=True)
 
 from tests.test_sandbox import (  # noqa: E402
     ENGINE_ROOT, LOAD, PYMOD, PYOBJ, _Sandbox, ok, refused)
@@ -452,9 +458,9 @@ def test_a_wrong_sympy_version_refuses(sbx, tmp_path):
 def test_a_dist_info_for_another_sympy_refuses(sbx, tmp_path):
     """The metadata says 1.14.0, but it does not describe the sympy package
     the adapter would import (its RECORD lists no file of it)."""
-    import sympy
+    import importlib.metadata as md
     site = tmp_path / "fake_site"
-    _fake_dist(site, "sympy", sympy.__version__, ["elsewhere/__init__.py"])
+    _fake_dist(site, "sympy", md.version("sympy"), ["elsewhere/__init__.py"])
     res = sbx.run(f"        sys.path.insert(0, {str(site)!r})\n" + splice() + """
         import clausal.sandbox as sb
         probe("enable", lambda: sb.enable(allow_package_adapters=["sympy"]))
