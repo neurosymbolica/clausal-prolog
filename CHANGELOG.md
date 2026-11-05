@@ -193,6 +193,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A `.clausal` atom spelled like a runtime name loads in the sandbox.**
+  `t(simplify, 1).` was refused as `python_statement`: the native front
+  end binds each atom to itself (`simplify = $mint('simplify')`), and the
+  audit refused any assignment to a name the loader injects. That exact
+  shape binds a `str`, which calls nothing; any other rebinding is still
+  refused (`seam_audit._own_atom_binding`).
 - **A tail-recursive clause whose head has a list pattern binds an unbound
   argument before restarting.**  The head meets an unbound argument by
   binding it to its list pattern only at the answer, which the in-place
