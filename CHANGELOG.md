@@ -26,7 +26,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
   a `BaseException`, routed back at the adapter boundary; in engine code as
   the routed alarm -- and one Python turned into another error is the
   timeout again where that error is converted (the adapter boundary,
-  `catch_match`). Its call throws the ball whatever the goal answered. A `Time` of 10^9 s or more is capped there. Built on `SIGALRM`/`setitimer`
+  `catch_match`). Its call throws the ball whatever the goal answered. A `Time` of 10^9 s or more is capped there. An alarm Python drops as
+  "unraisable" (it landed in a `__del__` or a weakref callback the garbage
+  collector ran) is marked swallowed by a `sys.unraisablehook` wrapper
+  while a limit is live, so it strikes again even when the hook keeps the
+  exception (pytest's does: without this a limit could stop firing and the
+  goal run to the OOM killer). The timer is armed only while the limit's
+  own SIGALRM handler is installed; the handler, timer and unraisable hook
+  found at the first limit are restored at the last, and
+  `tests/conftest.py` fails any test that leaves an alarm hazard. Built on `SIGALRM`/`setitimer`
   (`clausal/logic/time_limit.py`): an alarm already armed (quad runner,
   test runner, pytest-timeout) still fires at its own time and is restored
   with its remaining time. Main thread only: elsewhere it is refused with

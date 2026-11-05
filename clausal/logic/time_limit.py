@@ -50,10 +50,13 @@ the owning call).  An alarm Python code turned into ANOTHER exception
 (:func:`rerouted`), so the timeout is the outcome.  One that reaches the
 query's root driver is the ball.  And the owner answers the ball on ANY exit after its deadline fired
 -- an answer, a failure or another exception -- so a swallowed alarm that
-made some code give up early cannot read as that code's answer.  (An alarm
-swallowed AND kept alive -- stored by the code that caught it -- is taken
-as still unwinding: the goal then runs on until it returns, and its call
-throws the ball.)
+made some code give up early cannot read as that code's answer.  An alarm Python drops as
+"unraisable" (it landed in a ``__del__`` or a weakref callback the garbage
+collector ran) is marked swallowed by :func:`_unraisable` while a limit is
+live, whatever the unraisable hook then keeps.  (An alarm swallowed AND kept
+alive by the code that caught it -- stored in a list -- is still taken as
+unwinding: the goal then runs on until it returns, and its call throws the
+ball.)
 
 Main thread only.  Python runs signal handlers in the main thread, and only
 the main thread may install one.  Elsewhere a limit cannot be enforced, so
@@ -208,9 +211,34 @@ class _Clock:
         self.saved_interval = 0.0
         self.critical = False
         self.deferred = False
+        self.saved_unraisable = None    # sys.unraisablehook found at it
 
 
 _CLOCK = _Clock()
+
+
+def _unraisable(unraisable) -> None:
+    """``sys.unraisablehook`` while a limit is live.  An alarm raised where
+    Python cannot propagate it -- a ``__del__`` or a weakref callback the
+    garbage collector runs, a generator closed during collection -- is
+    reported here and dropped.  The hook that receives it may KEEP the
+    exception (pytest's unraisableexception plugin does, until the test
+    ends), which would leave the alarm alive and so taken for still
+    unwinding, never raised again: the goal would run on with no limit.
+    So a reported alarm is marked swallowed here (its weak reference
+    dropped) before the report goes on, and the next tick raises again."""
+    e = getattr(unraisable, "exc_value", None)
+    if isinstance(e, (TimeLimitAlarm, TimeLimitEscalation)):
+        e.deadline.alarm = None
+    hook = _CLOCK.saved_unraisable
+    (hook if callable(hook) else sys.__unraisablehook__)(unraisable)
+
+
+def _restore_unraisable() -> None:
+    if sys.unraisablehook is _unraisable:
+        sys.unraisablehook = (_CLOCK.saved_unraisable
+                              or sys.__unraisablehook__)
+    _CLOCK.saved_unraisable = None
 
 
 def available() -> bool:
@@ -277,9 +305,37 @@ def check_seconds(value, context: str) -> float:
 # ── the handler and the timer ───────────────────────────────────────────────
 
 
+def _ours() -> bool:
+    """Whether SIGALRM's handler is this module's (:func:`_fire`)."""
+    return signal.getsignal(signal.SIGALRM) is _fire
+
+
+def _drop_orphans() -> None:
+    """The stack holds limits while SIGALRM's handler is someone else's:
+    the code that owned SIGALRM before (the quad runner's or the test
+    runner's watchdog, unwinding through limits whose frames its
+    ``BaseException`` skipped) took it back.  Those limits are orphans --
+    their calls are gone or will only close -- and the handler and timer
+    now belong to that code, so nothing of ours is restored over them:
+    the stack is emptied, its saved state forgotten, and each orphan's
+    late :func:`pop` is a no-op."""
+    for d in _CLOCK.stack:
+        d.live = False
+    _CLOCK.stack.clear()
+    _restore_unraisable()
+    _CLOCK.saved_handler = None
+    _CLOCK.saved_at = None
+    _CLOCK.saved_interval = 0.0
+
+
 def _rearm(now: float) -> None:
     """Set the timer to the next thing due: a deadline not yet fired, a
-    fired one's repeat, or the saved outer timer."""
+    fired one's repeat, or the saved outer timer.  THE INVARIANT: the timer
+    is armed here only while the handler is ours -- an armed ITIMER_REAL
+    under SIG_DFL ends the process ("Alarm clock") at its expiry."""
+    if not _ours():
+        _drop_orphans()
+        return
     nxt = None
     for d in _CLOCK.stack:
         due = (now + REPEAT) if d.fired else d.at
@@ -386,12 +442,17 @@ def start(d: Deadline) -> None:
     now = time.monotonic()
     _begin_critical()
     try:
+        if _CLOCK.stack and not _ours():
+            _drop_orphans()
         if not _CLOCK.stack:
             value, interval = signal.getitimer(signal.ITIMER_REAL)
             _CLOCK.saved_handler = signal.getsignal(signal.SIGALRM)
             _CLOCK.saved_at = (now + value) if value > 0 else None
             _CLOCK.saved_interval = interval
             signal.signal(signal.SIGALRM, _fire)
+            if sys.unraisablehook is not _unraisable:
+                _CLOCK.saved_unraisable = sys.unraisablehook
+                sys.unraisablehook = _unraisable
         _CLOCK.stack.append(d)
         _rearm(now)
     finally:
@@ -416,17 +477,27 @@ def pop(d: Deadline) -> None:
             _rearm(now)
             return
         _CLOCK.deferred = False
+        if not _ours():
+            # Someone else's handler is in place (they took SIGALRM back
+            # while this limit was live): theirs, with their timer.
+            _drop_orphans()
+            return
         signal.setitimer(signal.ITIMER_REAL, 0)
         handler = _CLOCK.saved_handler
         signal.signal(signal.SIGALRM,
                       handler if handler is not None else signal.SIG_DFL)
-        if _CLOCK.saved_at is not None:
+        # The timer found at the first push, minus the time elapsed -- with
+        # the handler found with it.  Not when that handler cannot be put
+        # back (None: installed from C; SIG_DFL stands in for it): an armed
+        # timer under SIG_DFL would end the process where it did not.
+        if _CLOCK.saved_at is not None and handler is not None:
             signal.setitimer(signal.ITIMER_REAL,
                              max(_CLOCK.saved_at - now, _TINY),
                              _CLOCK.saved_interval)
         _CLOCK.saved_handler = None
         _CLOCK.saved_at = None
         _CLOCK.saved_interval = 0.0
+        _restore_unraisable()
     finally:
         _CLOCK.critical = False
         _CLOCK.deferred = False
@@ -447,6 +518,36 @@ def release_from_depth(depth: int) -> None:
 def live() -> "tuple[Deadline, ...]":
     """The live limits, outermost first (for tests and diagnostics)."""
     return tuple(_CLOCK.stack)
+
+
+def alarm_hazard() -> "str | None":
+    """A description of the process's SIGALRM state when it would end the
+    process or misfire, else None: ITIMER_REAL armed while the handler is
+    not a Python callable (SIG_DFL ends the process at expiry, silently),
+    or limits on the stack while the handler is not this module's.  What
+    the test suite's tripwire asserts after every test."""
+    if not hasattr(signal, "SIGALRM"):
+        return None
+    value, interval = signal.getitimer(signal.ITIMER_REAL)
+    handler = signal.getsignal(signal.SIGALRM)
+    if (value or interval) and not callable(handler):
+        return (f"ITIMER_REAL is armed ({value:.3f} s, interval "
+                f"{interval:.3f} s) while the SIGALRM handler is {handler!r}")
+    if _CLOCK.stack and handler is not _fire:
+        return (f"time limits {list(_CLOCK.stack)!r} are live while the "
+                f"SIGALRM handler is {handler!r}")
+    if _CLOCK.stack and not _anything_running():
+        # Between tests nothing runs a query: a limit still on the stack
+        # outlived its call, and (expired, its alarm kept alive) it would
+        # keep every later limit from firing.
+        return (f"time limits {list(_CLOCK.stack)!r} outlived their calls")
+    return None
+
+
+def _anything_running() -> bool:
+    """Whether a query is being driven now (an open drive episode)."""
+    tab = sys.modules.get("clausal.logic.tabling")
+    return bool(tab is not None and tab._drive_ctx.episodes)
 
 
 # ── running Python code under a limit ───────────────────────────────────────

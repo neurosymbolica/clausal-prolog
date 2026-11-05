@@ -476,9 +476,33 @@ def test_the_test_runner_keeps_working(tmp_path):
 # ── the seam surface ────────────────────────────────────────────────────────
 
 
+SEAM_SURFACE_RUNNER = """
+import faulthandler, importlib, resource, sys, time
+from clausal import Var, deref, solve
+from clausal.logic.variables import walk
+faulthandler.dump_traceback_later(60, exit=True)   # where a runaway spins
+sys.path.insert(0, ".")
+m = importlib.import_module("tls")
+X = Var()
+print("ONE", [walk(deref(X)) for _ in solve(("one", X), module=m)])
+B = Var(); t0 = time.monotonic()
+for _ in solve(("timed", B), module=m):
+    print("TIMED", walk(deref(B)), round(time.monotonic() - t0, 2))
+    break
+"""
+
+
 def test_the_seam_surface(tmp_path):
-    import importlib
+    """In a child capped at 4 GB: the seam's spin/1 builds an ever-deeper
+    term (the seam's ``is`` unifies), about 45 MB/s, so a limit that failed
+    to stop it would take the whole pytest process to the OOM killer
+    (SIGKILL, no report) -- as a full-suite gate once died here.  In a child
+    it is a named failure with a traceback instead."""
+    import os
+    import resource
+    import subprocess
     import sys
+    from tests.test_sandbox import ENGINE_ROOT
     (tmp_path / "tls.seam").write_text(textwrap.dedent("""
         -module(tls, [one/1, timed/1])
         -private([a, b])
@@ -486,16 +510,17 @@ def test_the_seam_surface(tmp_path):
         one(X) <- call_with_time_limit(1, member(X, [a, b]))
         timed(B) <- catch(call_with_time_limit(0.2, spin(0)), B, True)
     """))
-    sys.path.insert(0, str(tmp_path))
-    try:
-        m = importlib.import_module("tls")
-    finally:
-        sys.path.remove(str(tmp_path))
-    X = Var()
-    assert [walk(deref(X)) for _ in solve(("one", X), module=m)] == ["a"]
-    assert first_answer(("timed", X), X, m) == BALL
-    clean_alarm()
+    (tmp_path / "run.py").write_text(textwrap.dedent(SEAM_SURFACE_RUNNER))
 
+    def cap():
+        resource.setrlimit(resource.RLIMIT_AS, (4 << 30, 4 << 30))
+    r = subprocess.run([sys.executable, "run.py"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=120,
+                       preexec_fn=cap,
+                       env={**os.environ, "PYTHONPATH": ENGINE_ROOT})
+    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr[-4000:])
+    assert "ONE ['a']" in r.stdout, r.stdout
+    assert f"TIMED {BALL}" in r.stdout, r.stdout
 
 # ── the per-call budget's delegation (time_limit.budgeted) ─────────────────
 
@@ -632,3 +657,151 @@ def test_an_alarm_turned_into_another_exception_is_still_the_timeout(
         else:
             assert got == want
         assert secs < 0.13 + 1.0
+
+
+# ── the alarm invariant: never an armed timer without a Python handler ─────
+
+ORPHAN_RUNNER = """
+import signal, sys, time
+from clausal import solve
+from clausal.logic import time_limit
+from clausal.testing import load_clausal_module
+m = load_clausal_module("tl.clausal")
+# A limit whose frame an unrouted exception skipped is left on the stack ...
+d1 = time_limit.push(30.0, "orphan")
+# ... and the code that owned SIGALRM before takes it back, as the quad
+# runner's or the test runner's watchdog's disarm does.
+signal.setitimer(signal.ITIMER_REAL, 0)
+signal.signal(signal.SIGALRM, signal.SIG_DFL)
+# The next limit must still be enforced by a Python handler.
+try:
+    list(solve(("call_with_time_limit", 0.1, "spin"), module=m))
+    print("NO BALL")
+except Exception as e:
+    print("BALL", getattr(e, "term", e))
+print("TIMER", signal.getitimer(signal.ITIMER_REAL),
+      "HANDLER", signal.getsignal(signal.SIGALRM), flush=True)
+time.sleep(0.3)        # an armed timer with SIG_DFL would kill us here
+time_limit.pop(d1)     # the orphan's late pop changes nothing
+print("TIMER2", signal.getitimer(signal.ITIMER_REAL),
+      "HANDLER2", signal.getsignal(signal.SIGALRM), flush=True)
+time.sleep(0.2)
+print("ALIVE", flush=True)
+"""
+
+
+def test_an_orphaned_limit_never_leaves_a_default_handler_armed(tmp_path):
+    """A limit left on the stack after another component took SIGALRM back
+    (a skipped frame) must not make the next limit arm the timer under
+    SIG_DFL: SIGALRM's default action ends the process, silently ("Alarm
+    clock"), as a full-suite run once ended."""
+    import os
+    import subprocess
+    import sys
+    from tests.test_sandbox import ENGINE_ROOT
+    (tmp_path / "tl.clausal").write_text(textwrap.dedent(PROGRAM))
+    (tmp_path / "run.py").write_text(textwrap.dedent(ORPHAN_RUNNER))
+    r = subprocess.run([sys.executable, "run.py"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=60,
+                       env={**os.environ, "PYTHONPATH": ENGINE_ROOT})
+    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr[-1500:])
+    assert f"BALL {BALL}" in r.stdout, r.stdout
+    assert "TIMER (0.0, 0.0) HANDLER 0" in r.stdout, r.stdout
+    assert "TIMER2 (0.0, 0.0) HANDLER2 0" in r.stdout
+    assert "ALIVE" in r.stdout
+
+
+def test_the_suite_s_tripwire_names_a_leaked_alarm(tmp_path):
+    """tests/conftest.py's tripwire fails the test that leaves ITIMER_REAL
+    armed under SIG_DFL (and disarms it), instead of the run dying."""
+    import os
+    import subprocess
+    import sys
+    conftest = os.path.join(os.path.dirname(__file__), "conftest.py")
+    with open(conftest, encoding="utf-8") as f:
+        text = f.read()
+    tripwire = text[text.index("# ── the SIGALRM tripwire"):]
+    (tmp_path / "conftest.py").write_text("import sys\nimport pytest\n"
+                                          + tripwire)
+    (tmp_path / "test_leak.py").write_text(textwrap.dedent("""
+        import signal
+        def test_leaks():
+            signal.signal(signal.SIGALRM, signal.SIG_DFL)
+            signal.setitimer(signal.ITIMER_REAL, 0.5)
+        def test_after():
+            import time
+            time.sleep(1.0)          # the leaked timer would have killed us
+            assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)
+    """))
+    r = subprocess.run([sys.executable, "-m", "pytest", "-q",
+                        "-p", "no:cacheprovider", "--rootdir", str(tmp_path),
+                        str(tmp_path)], cwd=tmp_path, capture_output=True,
+                       text=True, timeout=120)
+    out = r.stdout + r.stderr
+    assert r.returncode == 1, (r.returncode, out[-2000:])
+    assert "test_leaks left a SIGALRM hazard" in out, out[-2000:]
+    assert "2 passed, 1 error" in out, out[-2000:]
+
+
+# ── an alarm dropped as "unraisable" (in a finalizer during GC) ─────────────
+
+UNRAISABLE_RUNNER = """
+import os, resource, sys, threading, time
+resource.setrlimit(resource.RLIMIT_AS, (4 << 30, 4 << 30))
+sys.path.insert(0, ".")
+from clausal import Var, deref, solve
+import tls
+
+KEPT = []
+def hook(u):                 # pytest's unraisableexception plugin keeps them
+    KEPT.append(u.exc_value)
+sys.unraisablehook = hook
+
+class Fin:
+    def __init__(self): self.me = self      # a cycle: freed by the GC only
+    def __del__(self): sum(range(300))      # Python code an alarm lands in
+
+def watchdog():
+    while True:
+        time.sleep(0.1)
+        t0 = state.get("t0")
+        if t0 is not None and time.monotonic() - t0 > 3.0:
+            print("HANG", state["T"], flush=True)
+            os._exit(3)
+state = {}
+threading.Thread(target=watchdog, daemon=True).start()
+for i in range(120):
+    T = 0.001 + 0.0003 * i
+    junk = [Fin() for _ in range(20000)]
+    del junk
+    B = Var(); state["T"] = T; state["t0"] = time.monotonic()
+    for _ in solve(("timed", T, B), module=tls):
+        break
+    state["t0"] = None
+    assert deref(B) == "time_limit_exceeded", (T, deref(B))
+print("ALL", len(KEPT), "kept", flush=True)
+"""
+
+
+def test_an_alarm_dropped_in_a_finalizer_strikes_again(tmp_path):
+    """An alarm that lands in a __del__ run by the garbage collector is
+    reported as unraisable and dropped; an unraisable hook that KEEPS it
+    (pytest's does) kept it alive, the limit took it for still unwinding,
+    and never raised again: spin/1 ran on to the OOM killer (the full-suite
+    gate's silent death).  Swept over 120 deadlines (1 ms to 37 ms in
+    0.3 ms steps) the window is hit without any machine load."""
+    import os
+    import subprocess
+    import sys
+    from tests.test_sandbox import ENGINE_ROOT
+    (tmp_path / "tls.seam").write_text(textwrap.dedent("""
+        -module(tls, [timed/2])
+        spin(N) <- (N1 is N + 1, spin(N1))
+        timed(T, B) <- catch(call_with_time_limit(T, spin(0)), B, True)
+    """))
+    (tmp_path / "run.py").write_text(textwrap.dedent(UNRAISABLE_RUNNER))
+    r = subprocess.run([sys.executable, "run.py"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=300,
+                       env={**os.environ, "PYTHONPATH": ENGINE_ROOT})
+    assert r.returncode == 0 and "ALL" in r.stdout, (
+        r.returncode, r.stdout[-1500:], r.stderr[-1500:])
