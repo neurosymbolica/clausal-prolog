@@ -43,8 +43,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   only `.seam` files that may import it. `enable()` verifies every pin before
   importing anything, failing closed with `PackageAdapterError`
   (`sha256_mismatch`, `version_mismatch`, `distribution_mismatch`,
-  `impostor_module`, `not_found`), and executes the pinned files from the
-  bytes it hashed. Only a Python-free `.seam`'s `-import_from` of listed
+  `impostor_module`, `not_found`), refuses an adapter module anything else
+  imported first (a planted `.pyc` may have run), and executes the pinned
+  files from the bytes it hashed. Only a Python-free `.seam`'s `-import_from` of listed
   names is clean at load; `-import_module`, dotted `py.sympy.x` and other
   names stay refused, and it is never a bridge. Each vetted call runs under
   a per-call wall-clock budget (`package_adapter_time_limit`, default 15 s,
@@ -199,6 +200,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   audit refused any assignment to a name the loader injects. That exact
   shape binds a `str`, which calls nothing; any other rebinding is still
   refused (`seam_audit._own_atom_binding`).
+- **clausal-sympy reads ISO arithmetic cells.** A `.clausal`/`.pl` term
+  `X**2 - 4` reached SymPy as functions named `-` and `**`, and `solve/3`
+  raised NotImplementedError; `+ - * / ** ^ mod` and unary `-`/`+` now
+  convert as the seam's operators, in the units check too. (Re-pinned in
+  `PACKAGE_ADAPTERS`.)
 - **A tail-recursive clause whose head has a list pattern binds an unbound
   argument before restarting.**  The head meets an unbound argument by
   binding it to its list pattern only at the answer, which the in-place
@@ -683,6 +689,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **clausal-sympy: `SymExpr` equality and hash are SymPy's structural
+  ones** (operator ruling 2026-11-04, review of the sandbox admission).
+  `__eq__` ran `sympy.simplify` and up to 120 variable renamings from `=`,
+  `==` and `sort/2` on two SymPy results -- outside any time budget (17 s
+  under a 1 s sandbox budget) and with answers that depended on the route
+  (`expand((x+1)**2)` against `factor(x**2+2*x+1)` was unequal in the
+  engine, equal called directly). Now two results are equal only as
+  expression trees, and a Clausal term on the other side is never
+  converted. Symbolic equality is `sym_equal/2`'s, which is budgeted;
+  the package's own tests that compared a result with `==` against a term
+  (`R == cos(X)`) now use `sym_equal/2`, as its docs already did.
+  (Re-pinned in `PACKAGE_ADAPTERS`.)
 - **findall/3, bagof/3 and setof/3 keep dropping attribute constraints**
   (operator ruling 2026-11-04, follow Scryer). A collected answer carries no
   `dif/2`, `freeze/2` or CLP(Z) constraint, as in Scryer and Trealla. To keep

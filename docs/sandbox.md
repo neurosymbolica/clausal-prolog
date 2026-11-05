@@ -382,7 +382,11 @@ or, for a child process, in its environment:
 variable without `CLAUSAL_SANDBOX=1`, or a name that is not vetted, is an
 `ImportError` at engine import. An entry may also be
 `{"name": "sympy", "importers": [path, {"path": ..., "sha256": ...}]}`:
-then only those `.seam` files may import it.
+then only those `.seam` files may import it. The importers list is a
+load-time gate: narrowing it on a second `enable()` refuses later loads of
+the files it drops, while a module already loaded keeps running (its calls
+are still checked one by one, so dropping the adapter itself,
+`allow_package_adapters=[]`, does revoke them).
 
 **Verified at `enable()`, before anything of it is imported.** A pin that
 does not hold raises `clausal.sandbox.PackageAdapterError`, whose message
@@ -393,14 +397,21 @@ starts with the reason in brackets, and the sandbox stays off:
 | `sha256_mismatch` | a pinned file's content is not its pin (one changed byte is enough) |
 | `version_mismatch` | the installed (or source-tree) version of the package, of `sympy` or of `mpmath` is not the pinned one |
 | `distribution_mismatch` | the installed metadata does not describe the file on the path |
-| `impostor_module` | `sys.modules` already holds the adapter, its helper, `sympy` or `mpmath` from another file |
+| `impostor_module` | `sys.modules` already holds the adapter or its helper (imported by anything but `enable()`, from whatever file: a planted bytecode cache could have run instead of the source), or `sympy` or `mpmath` from another file than the path finders give |
 | `not_found` | a pinned module resolves to no file, or a listed predicate is not one |
 
 The package's own version is read from its installed distribution, which
 must list the adapter file (an editable install's source tree must contain
 it), or else from the `pyproject.toml` of the source tree the file lies in.
 The pinned files are then executed from the very bytes that were hashed,
-never from a bytecode cache.
+never from a bytecode cache. So the host must not import the adapter
+before `enable()`; the environment variables enable at engine import,
+before anything can.
+
+The adapter reads the ISO arithmetic cells of a `.clausal` or `.pl` term
+(`X**2 - 4` is `-(**(X, 2), 4)`; `+ - * / ** ^ mod` and unary `-`, `+`)
+as SymPy's operators, so a Clausal Prolog domain can solve its own
+equations through a `.seam` wrapper.
 
 **At load.** Only a `.seam` module may import a vetted adapter, and only
 with `-import_from` of listed names; that import alone is no Python route,

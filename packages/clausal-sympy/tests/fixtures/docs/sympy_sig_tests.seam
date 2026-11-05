@@ -89,7 +89,7 @@ test("diff power rule") <- (
 
 test("diff sin") <- (
     diff(sin(X), X, R),
-    R == cos(X)
+    sym_equal(R, cos(X))
 )  # nv
 
 test("diff partial") <- (
@@ -106,7 +106,7 @@ test("integrate power") <- (
 
 test("integrate cos") <- (
     integrate(cos(X), X, R),
-    R == sin(X)
+    sym_equal(R, sin(X))
 )  # nv
 
 # ── limit/4 ─────────────────────────────────────────────────────────────────
@@ -194,7 +194,7 @@ test("trig simp pythagorean") <- (
 
 test("trig simp double angle") <- (
     trig_simp(2 * sin(X) * cos(X), R),
-    R == sin(2*X)
+    sym_equal(R, sin(2*X))
 )  # nv
 
 # ── expand_trig/2 ────────────────────────────────────────────────────────────
@@ -332,7 +332,7 @@ test("sym named") <- (
 
 test("diff sin cos") <- (
     diff(sin(X), X, R),
-    R == cos(X)
+    sym_equal(R, cos(X))
 )  # nv
 
 test("simplify exp log") <- (

@@ -66,6 +66,8 @@ This handles term reordering (SymPy may internally reorder `x + 1` to `1 + x`) a
 
 `==` is arithmetic comparison and does not compare symbolic expressions: `R == 3*X**2` with `R` bound to a SymPy result raises `domain_error(clpz_expression, ...)`. Numeric results (integers, floats) are collapsed to plain Python values, so `simplify(X - X, R), R == 0` still works with `==`.
 
+Two SymPy results unify, compare equal as terms and sort by their expression trees only: `expand((X+1)**2, A), factor(X**2 + 2*X + 1, B), A = B` fails, since `x**2 + 2*x + 1` and `(x + 1)**2` are different trees. Unifying never simplifies (it used to, unbounded in time); decide symbolic equality with `sym_equal/2`.
+
 ### Chaining
 
 Results from one predicate can be fed directly into another:

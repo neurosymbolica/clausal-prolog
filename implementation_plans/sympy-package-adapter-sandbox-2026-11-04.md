@@ -40,6 +40,12 @@
    `CLAUSAL_SANDBOX_ADAPTER_TIME_LIMIT`, read with `CLAUSAL_SANDBOX=1`.
 10. **The predicate list** is the symbolic-algebra set (23 names, `docs/sandbox.md`); not the
     printers, number theory, sums/products or `sym/2`.
+11. **Stricter than step 3** (after the adversarial review): any adapter module already in
+    `sys.modules` is refused, whatever file it came from, since an import enable() did not do
+    may have run a planted `.pyc`. `sympy`/`mpmath` keep the file check.
+12. **After the review, in the wrapper (re-pinned):** `SymExpr` equality is structural (the
+    old `simplify`-based `__eq__` ran unbudgeted from unification and sorting), and ISO
+    arithmetic cells convert as operators, so `.clausal` domains can solve their own terms.
 
 ## Problem
 

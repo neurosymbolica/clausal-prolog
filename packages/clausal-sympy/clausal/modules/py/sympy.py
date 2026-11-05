@@ -22,8 +22,8 @@ Unbound Vars are auto-named alphabetically in discovery order:
 first Var -> ``x``, second -> ``y``, etc.  This gives readable ``str()``
 output without requiring explicit ``sym("x", X)`` calls.
 
-Results are wrapped in ``SymExpr``, whose ``__eq__`` does symbolic
-comparison for PYTHON callers.  Clausal's ``==`` goal is arithmetic and does
+Results are wrapped in ``SymExpr``, whose ``__eq__`` is SymPy's
+structural equality (no simplification).  Clausal's ``==`` goal is arithmetic and does
 NOT use it: ``diff(X**3, X, R), R == 3*X**2`` raises
 ``domain_error(clpz_expression, ...)``.  Compare symbolically with
 ``sym_equal/2``::
@@ -392,6 +392,12 @@ def _to_sympy_value(term: Any, ctx: _ConversionContext) -> _sp.Expr:
             ctx._has_units = True
         return _detag_vars(term, ctx)
 
+    # An ISO arithmetic cell (a .clausal or .pl term) is the seam node it
+    # denotes: ('-', ('**', X, 2), 4) is X**2 - 4, not a function named '-'.
+    node = _sympy_units.iso_node(term)
+    if node is not None:
+        return _to_sympy_ctx(node, ctx)
+
     # Binary arithmetic nodes
     _BINOP_MAP = {
         Add: _sp.Add,
@@ -601,19 +607,16 @@ def _from_sympy_ctx(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
     return text_result(str(expr))
 
 
-# -- SymExpr wrapper -- symbolic __eq__ for Python callers --------------------
+# -- SymExpr wrapper -- structural __eq__ ------------------------------------
 
 
 class SymExpr:
     """Thin wrapper around a SymPy expression.
 
-    Overrides ``__eq__`` for PYTHON-side comparison: it converts the other
-    operand (e.g. a Clausal ``3*X**2`` term) to SymPy and checks
-    ``simplify(a - b) == 0``, with alpha-equivalence for variable names.
-
-    Clausal's ``==`` goal does NOT reach this method: ``==`` is arithmetic
-    and raises ``domain_error(clpz_expression, ...)`` on a SymPy result.
-    Clausal code compares symbolically with ``sym_equal/2``.
+    Equality and hash are SymPy's structural ones (see ``__eq__``).  The
+    seam's ``==`` goal is arithmetic and raises
+    ``domain_error(clpz_expression, ...)`` on a SymPy result.  Clausal code
+    compares symbolically with ``sym_equal/2``.
     """
 
     __slots__ = ("_expr",)
@@ -621,38 +624,24 @@ class SymExpr:
     def __init__(self, expr: _sp.Basic) -> None:
         self._expr = expr
 
-    # -- Symbolic equality ---------------------------------------------------
+    # -- Structural equality -------------------------------------------------
 
     def __eq__(self, other: Any) -> bool:
-        try:
-            if isinstance(other, SymExpr):
-                other_expr = other._expr
-            elif isinstance(other, _sp.Basic):
-                other_expr = other
-            else:
-                other_expr = _to_sympy(other)
+        """SymPy's STRUCTURAL equality: the same expression tree (operator
+        ruling 2026-11-04).  It never simplifies, renames or converts: it
+        is what ``=``, ``==`` and ``sort/2`` reach, which run outside any
+        time budget, so it must cost no more than a tree comparison.
+        ``expand((x+1)**2)`` and ``factor(x**2+2*x+1)`` are different
+        terms; symbolic equality is ``sym_equal/2``."""
+        if isinstance(other, SymExpr):
+            return self._expr == other._expr
+        if isinstance(other, _sp.Basic):
+            return self._expr == other
+        return NotImplemented
 
-            # Fast path: direct symbolic equality
-            if _sp.simplify(self._expr - other_expr) == 0:
-                return True
-
-            # Slow path: alpha-equivalence (different Symbol names)
-            free_a = _sympy_units.free_variables(self._expr)
-            free_b = _sympy_units.free_variables(other_expr)
-            if len(free_a) != len(free_b) or len(free_a) == 0:
-                return False
-            if len(free_a) <= 5:
-                from itertools import permutations
-                sorted_a = sorted(free_a, key=str)
-                sorted_b = sorted(free_b, key=str)
-                for perm in permutations(sorted_b):
-                    subs_list = list(zip(sorted_a, perm))
-                    renamed = self._expr.subs(subs_list, simultaneous=True)
-                    if _sp.simplify(renamed - other_expr) == 0:
-                        return True
-            return False
-        except (TypeError, ValueError):
-            return NotImplemented
+    def __ne__(self, other: Any) -> bool:
+        eq = self.__eq__(other)
+        return eq if eq is NotImplemented else not eq
 
     def __hash__(self) -> int:
         return hash(self._expr)

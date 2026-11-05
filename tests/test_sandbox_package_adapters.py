@@ -169,6 +169,38 @@ sys.meta_path.append(_Finder)
 """
 
 
+def test_a_clausal_domain_solves_its_own_iso_terms(sbx):
+    """The intended use: equations written in a .clausal domain (ISO cells,
+    ``X**2 - 4`` is ``-(**(X, 2), 4)``) solved through a .seam wrapper, with
+    quantities, under the sandbox."""
+    sbx.write("sym.seam", """
+        -module(sym, [w_solve/3, w_solve_all/3])
+        -import_from(py.sympy, [solve, solve_all])
+        w_solve(E, X, R) <- solve(E, X, R)
+        w_solve_all(E, X, R) <- solve_all(E, X, R)
+    """)
+    sbx.write("eqs.clausal", """
+        :- module(eqs, [two/1, three/1, warm/1]).
+        :- use_module(sym, [w_solve/3, w_solve_all/3]).
+        :- use_module(library(units), [kelvin]).
+        two(R) :- w_solve(X**2 - 4, X, R).
+        three(L) :- w_solve_all((X - 10) * (X - 3) * (X + 7), X, L).
+        warm(R) :- w_solve(X - 10 * kelvin, X, R).
+        :- end_module(eqs).
+    """)
+    res = sbx.run(splice() + _enable() + """
+        from clausal import Var
+        eqs = load("eqs")
+        R = Var()
+        probe("two", lambda: sorted(answers(("two", R), eqs, R)))
+        probe("three", lambda: answers(("three", R), eqs, R))
+        probe("warm", lambda: answers(("warm", R), eqs, R))
+    """)
+    assert ok(res, "two") == "[-2, 2]"
+    assert ok(res, "three") == "[[-7, 3, 10]]"
+    assert "kelvin" in ok(res, "warm"), res["warm"]
+
+
 def test_the_environment_opts_a_child_in(sbx, tmp_path):
     sbx.write("phys.seam", IMPORTER)
     site = tmp_path / "site"
@@ -483,6 +515,52 @@ def test_an_impostor_in_sys_modules_refuses(sbx, name):
         probe("on", lambda: sb.is_enabled())
     """)
     _refused_enable(res, "impostor_module")
+
+
+@pytest.mark.parametrize("name", ["clausal.modules.py.sympy",
+                                  "clausal.modules.py._sympy_units"])
+def test_an_adapter_imported_before_enable_refuses(sbx, name):
+    """Even from the pinned file: an import enable() did not do itself may
+    have run a planted bytecode cache (``__pycache__``), never the bytes
+    the pin hashed."""
+    res = sbx.run(splice() + f"""
+        import importlib
+        importlib.import_module({name!r})
+        import clausal.sandbox as sb
+        probe("enable", lambda: sb.enable(allow_package_adapters=["sympy"]))
+        probe("on", lambda: sb.is_enabled())
+    """)
+    r = _refused_enable(res, "impostor_module")
+    assert "enable() did not import it" in r["msg"], r
+
+
+def test_a_planted_bytecode_cache_never_runs(sbx, tmp_path):
+    """A .pyc beside a copy of the pinned file, valid for its mtime and
+    size, holding other code: enable() executes the hashed source bytes,
+    not the cache."""
+    import importlib.util as iu
+    import importlib._bootstrap_external as be
+    dst = _copy_package(tmp_path)
+    src = dst / "clausal" / "modules" / "py" / "sympy.py"
+    evil = (src.read_text() + "\nopen('PWNED', 'w').write('pyc ran')\n")
+    st = src.stat()
+    cache = iu.cache_from_source(str(src))
+    os.makedirs(os.path.dirname(cache), exist_ok=True)
+    with open(cache, "wb") as f:
+        f.write(be._code_to_timestamp_pyc(compile(evil, str(src), "exec"),
+                                          st.st_mtime, st.st_size))
+    sbx.write("phys.seam", IMPORTER)
+    res = sbx.run(splice(str(dst / "clausal" / "modules" / "py")) + """
+        import clausal.sandbox as sb
+        from clausal import Var
+        sb.enable(allow_package_adapters=["sympy"])
+        phys = load("phys")
+        R = Var()
+        probe("roots", lambda: sorted(answers(("roots", R), phys, R)))
+        probe("ran", lambda: os.path.exists("PWNED"))
+    """)
+    assert ok(res, "roots") == "[-2, 2]"
+    assert ok(res, "ran") == "False"
 
 
 def test_a_second_enable_only_narrows(sbx):

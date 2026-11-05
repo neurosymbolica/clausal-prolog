@@ -265,9 +265,9 @@ PACKAGE_ADAPTERS: "dict[str, PackageAdapter]" = {a.name: a for a in (
         "sympy", _PY + "sympy", "clausal-sympy", "0.1.0",
         files=(
             (_PY + "sympy",
-             "5b9a657d123386af35a51a86a1635093a8855df87f94704937e293a661e285ab"),
+             "441246d7d0abcd974aab9b995bf6dfcc17486628c9d2e5187b28547944ca6e5b"),
             (_PY + "_sympy_units",
-             "3c69993c20326e5a9c05e4d118c9b45823591d51066dcd3931d63669a0d22a97"),
+             "21be0fbe4eea7bc5f26599384c5c4122c59e53a5eb4b004651610cd9fdcb52ea"),
         ),
         third_party=(("sympy", "1.14.0", "sympy"),
                      ("mpmath", "1.3.0", "mpmath")),
@@ -530,7 +530,19 @@ def _verify_package_adapter(row: PackageAdapter) -> "tuple[dict, tuple]":
             raise PackageAdapterError(
                 "not_found", f"{module} resolves to no Python file "
                              f"({origin!r}); is {row.distribution} installed?")
-        _check_not_impostor(module, origin)
+        if module in sys.modules:
+            # Whatever file it came from: an import enable() did not do may
+            # have run a planted bytecode cache instead of the source (the
+            # path finders trust a .pyc by its timestamp and size), so only
+            # the bytes enable() hashes and executes itself are the adapter.
+            f = _module_file(sys.modules[module])
+            raise PackageAdapterError(
+                "impostor_module",
+                f"sys.modules already holds {module} (from {f!r}): enable() "
+                f"did not import it, so the code that ran is not known to "
+                f"be the pinned file's.  Enable the sandbox before anything "
+                f"imports the adapter (CLAUSAL_SANDBOX=1 and "
+                f"{PACKAGE_ADAPTERS_ENV_VAR} do that at engine import)")
         data, sha = _sha256_file(origin)
         if sha != pin:
             raise PackageAdapterError(
@@ -557,7 +569,7 @@ def _verify_package_adapter(row: PackageAdapter) -> "tuple[dict, tuple]":
     loaded = []
     for module, origin, data in reversed(sources):
         mod = sys.modules.get(module)
-        if mod is None:
+        if mod is None:     # (always: a module already there was refused)
             spec = importlib.util.spec_from_file_location(module, origin)
             mod = importlib.util.module_from_spec(spec)
             sys.modules[module] = mod
