@@ -277,9 +277,36 @@ def check_seconds(value, context: str) -> float:
 # ── the handler and the timer ───────────────────────────────────────────────
 
 
+def _ours() -> bool:
+    """Whether SIGALRM's handler is this module's (:func:`_fire`)."""
+    return signal.getsignal(signal.SIGALRM) is _fire
+
+
+def _drop_orphans() -> None:
+    """The stack holds limits while SIGALRM's handler is someone else's:
+    the code that owned SIGALRM before (the quad runner's or the test
+    runner's watchdog, unwinding through limits whose frames its
+    ``BaseException`` skipped) took it back.  Those limits are orphans --
+    their calls are gone or will only close -- and the handler and timer
+    now belong to that code, so nothing of ours is restored over them:
+    the stack is emptied, its saved state forgotten, and each orphan's
+    late :func:`pop` is a no-op."""
+    for d in _CLOCK.stack:
+        d.live = False
+    _CLOCK.stack.clear()
+    _CLOCK.saved_handler = None
+    _CLOCK.saved_at = None
+    _CLOCK.saved_interval = 0.0
+
+
 def _rearm(now: float) -> None:
     """Set the timer to the next thing due: a deadline not yet fired, a
-    fired one's repeat, or the saved outer timer."""
+    fired one's repeat, or the saved outer timer.  THE INVARIANT: the timer
+    is armed here only while the handler is ours -- an armed ITIMER_REAL
+    under SIG_DFL ends the process ("Alarm clock") at its expiry."""
+    if not _ours():
+        _drop_orphans()
+        return
     nxt = None
     for d in _CLOCK.stack:
         due = (now + REPEAT) if d.fired else d.at
@@ -386,6 +413,8 @@ def start(d: Deadline) -> None:
     now = time.monotonic()
     _begin_critical()
     try:
+        if _CLOCK.stack and not _ours():
+            _drop_orphans()
         if not _CLOCK.stack:
             value, interval = signal.getitimer(signal.ITIMER_REAL)
             _CLOCK.saved_handler = signal.getsignal(signal.SIGALRM)
@@ -416,11 +445,20 @@ def pop(d: Deadline) -> None:
             _rearm(now)
             return
         _CLOCK.deferred = False
+        if not _ours():
+            # Someone else's handler is in place (they took SIGALRM back
+            # while this limit was live): theirs, with their timer.
+            _drop_orphans()
+            return
         signal.setitimer(signal.ITIMER_REAL, 0)
         handler = _CLOCK.saved_handler
         signal.signal(signal.SIGALRM,
                       handler if handler is not None else signal.SIG_DFL)
-        if _CLOCK.saved_at is not None:
+        # The timer found at the first push, minus the time elapsed -- with
+        # the handler found with it.  Not when that handler cannot be put
+        # back (None: installed from C; SIG_DFL stands in for it): an armed
+        # timer under SIG_DFL would end the process where it did not.
+        if _CLOCK.saved_at is not None and handler is not None:
             signal.setitimer(signal.ITIMER_REAL,
                              max(_CLOCK.saved_at - now, _TINY),
                              _CLOCK.saved_interval)
@@ -447,6 +485,25 @@ def release_from_depth(depth: int) -> None:
 def live() -> "tuple[Deadline, ...]":
     """The live limits, outermost first (for tests and diagnostics)."""
     return tuple(_CLOCK.stack)
+
+
+def alarm_hazard() -> "str | None":
+    """A description of the process's SIGALRM state when it would end the
+    process or misfire, else None: ITIMER_REAL armed while the handler is
+    not a Python callable (SIG_DFL ends the process at expiry, silently),
+    or limits on the stack while the handler is not this module's.  What
+    the test suite's tripwire asserts after every test."""
+    if not hasattr(signal, "SIGALRM"):
+        return None
+    value, interval = signal.getitimer(signal.ITIMER_REAL)
+    handler = signal.getsignal(signal.SIGALRM)
+    if (value or interval) and not callable(handler):
+        return (f"ITIMER_REAL is armed ({value:.3f} s, interval "
+                f"{interval:.3f} s) while the SIGALRM handler is {handler!r}")
+    if _CLOCK.stack and handler is not _fire:
+        return (f"time limits {list(_CLOCK.stack)!r} are live while the "
+                f"SIGALRM handler is {handler!r}")
+    return None
 
 
 # ── running Python code under a limit ───────────────────────────────────────

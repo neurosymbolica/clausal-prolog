@@ -632,3 +632,87 @@ def test_an_alarm_turned_into_another_exception_is_still_the_timeout(
         else:
             assert got == want
         assert secs < 0.13 + 1.0
+
+
+# ── the alarm invariant: never an armed timer without a Python handler ─────
+
+ORPHAN_RUNNER = """
+import signal, sys, time
+from clausal import solve
+from clausal.logic import time_limit
+from clausal.testing import load_clausal_module
+m = load_clausal_module("tl.clausal")
+# A limit whose frame an unrouted exception skipped is left on the stack ...
+d1 = time_limit.push(30.0, "orphan")
+# ... and the code that owned SIGALRM before takes it back, as the quad
+# runner's or the test runner's watchdog's disarm does.
+signal.setitimer(signal.ITIMER_REAL, 0)
+signal.signal(signal.SIGALRM, signal.SIG_DFL)
+# The next limit must still be enforced by a Python handler.
+try:
+    list(solve(("call_with_time_limit", 0.1, "spin"), module=m))
+    print("NO BALL")
+except Exception as e:
+    print("BALL", getattr(e, "term", e))
+print("TIMER", signal.getitimer(signal.ITIMER_REAL),
+      "HANDLER", signal.getsignal(signal.SIGALRM), flush=True)
+time.sleep(0.3)        # an armed timer with SIG_DFL would kill us here
+time_limit.pop(d1)     # the orphan's late pop changes nothing
+print("TIMER2", signal.getitimer(signal.ITIMER_REAL),
+      "HANDLER2", signal.getsignal(signal.SIGALRM), flush=True)
+time.sleep(0.2)
+print("ALIVE", flush=True)
+"""
+
+
+def test_an_orphaned_limit_never_leaves_a_default_handler_armed(tmp_path):
+    """A limit left on the stack after another component took SIGALRM back
+    (a skipped frame) must not make the next limit arm the timer under
+    SIG_DFL: SIGALRM's default action ends the process, silently ("Alarm
+    clock"), as a full-suite run once ended."""
+    import os
+    import subprocess
+    import sys
+    from tests.test_sandbox import ENGINE_ROOT
+    (tmp_path / "tl.clausal").write_text(textwrap.dedent(PROGRAM))
+    (tmp_path / "run.py").write_text(textwrap.dedent(ORPHAN_RUNNER))
+    r = subprocess.run([sys.executable, "run.py"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=60,
+                       env={**os.environ, "PYTHONPATH": ENGINE_ROOT})
+    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr[-1500:])
+    assert f"BALL {BALL}" in r.stdout, r.stdout
+    assert "TIMER (0.0, 0.0) HANDLER 0" in r.stdout, r.stdout
+    assert "TIMER2 (0.0, 0.0) HANDLER2 0" in r.stdout
+    assert "ALIVE" in r.stdout
+
+
+def test_the_suite_s_tripwire_names_a_leaked_alarm(tmp_path):
+    """tests/conftest.py's tripwire fails the test that leaves ITIMER_REAL
+    armed under SIG_DFL (and disarms it), instead of the run dying."""
+    import os
+    import subprocess
+    import sys
+    conftest = os.path.join(os.path.dirname(__file__), "conftest.py")
+    with open(conftest, encoding="utf-8") as f:
+        text = f.read()
+    tripwire = text[text.index("# ── the SIGALRM tripwire"):]
+    (tmp_path / "conftest.py").write_text("import sys\nimport pytest\n"
+                                          + tripwire)
+    (tmp_path / "test_leak.py").write_text(textwrap.dedent("""
+        import signal
+        def test_leaks():
+            signal.signal(signal.SIGALRM, signal.SIG_DFL)
+            signal.setitimer(signal.ITIMER_REAL, 0.5)
+        def test_after():
+            import time
+            time.sleep(1.0)          # the leaked timer would have killed us
+            assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)
+    """))
+    r = subprocess.run([sys.executable, "-m", "pytest", "-q",
+                        "-p", "no:cacheprovider", "--rootdir", str(tmp_path),
+                        str(tmp_path)], cwd=tmp_path, capture_output=True,
+                       text=True, timeout=120)
+    out = r.stdout + r.stderr
+    assert r.returncode == 1, (r.returncode, out[-2000:])
+    assert "test_leaks left a SIGALRM hazard" in out, out[-2000:]
+    assert "2 passed, 1 error" in out, out[-2000:]
