@@ -522,3 +522,113 @@ def test_every_throw_into_a_budgeted_generator_reaches_it():
     assert g.send(None) == ("step", 1)
     g.close()
     clean_alarm()
+
+
+# ── the escalation path (review of the swallowed-alarm handling) ────────────
+
+ESC_PROGRAM = """
+:- module(esc, [a/2, c/2, c2/2]).
+spin :- spin(0).
+spin(N) :- N1 is N + 1, spin(N1).
+a(P, R) :- catch(call_with_time_limit(0.1, (call(P), spin)), B, R = caught(B)).
+c(P, R) :- catch(call_with_time_limit(0.1, catch(call(P), _, spin)), B,
+                 R = caught(B)).
+c2(P, R) :- catch(call_with_time_limit(0.1, (catch(call(P), E, true), spin)),
+                  B, R = caught(B-E)).
+:- end_module(esc).
+"""
+
+ESC_RUNNER = """
+import sys, time
+from clausal import Var, deref, call
+from clausal.logic.variables import walk
+from clausal.modules.py import ModulePredicate, simple_to_trampoline
+from clausal.testing import load_clausal_module
+m = load_clausal_module("esc.clausal")
+
+def swallow(trail, k):      # the alarm at 0.1 s lands here, is dropped
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < 0.13:
+        try:
+            sum(range(200))
+        except Exception:
+            pass
+    yield None
+
+def convert(trail, k):      # the alarm becomes a ValueError (its __context__)
+    try:
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < 0.13:
+            sum(range(200))
+    except Exception:
+        raise ValueError("converted")
+    yield None
+
+preds = {}
+for n, f in (("swallow", swallow), ("convert", convert)):
+    p = ModulePredicate(n); p._register(0, simple_to_trampoline(f)); preds[n] = p
+def norm(t):
+    if isinstance(t, (tuple, list)):
+        return type(t)(norm(a) for a in t)
+    return "_" if type(t).__name__.endswith("Var") else t
+
+goal, pred = sys.argv[1], sys.argv[2]
+for i in range(int(sys.argv[3])):
+    R = Var(); t0 = time.monotonic()
+    try:
+        got = [norm(walk(deref(R)))
+               for _ in call(goal, preds[pred], R, module=m)]
+    except BaseException as e:
+        got = "UNCAUGHT " + type(e).__name__ + " " + str(e)[:60]
+    print("RESULT", repr(got), round(time.monotonic() - t0, 2), flush=True)
+"""
+
+
+def _esc(tmp_path, goal, pred, runs=5):
+    import os
+    import subprocess
+    import sys
+    from tests.test_sandbox import ENGINE_ROOT
+    (tmp_path / "esc.clausal").write_text(textwrap.dedent(ESC_PROGRAM))
+    (tmp_path / "run.py").write_text(textwrap.dedent(ESC_RUNNER))
+    try:
+        r = subprocess.run([sys.executable, "run.py", goal, pred, str(runs)],
+                           cwd=tmp_path, capture_output=True, text=True,
+                           env={**os.environ, "PYTHONPATH": ENGINE_ROOT},
+                           timeout=60)
+    except subprocess.TimeoutExpired as e:
+        pytest.fail(f"hung: the limit was defeated ({e.stdout!r})")
+    lines = [ln.split(" ", 1)[1] for ln in r.stdout.splitlines()
+             if ln.startswith("RESULT ")]
+    assert len(lines) == runs, (r.stdout, r.stderr[-2000:])
+    assert "Exception ignored" not in r.stderr, r.stderr[-2000:]
+    return [(eval(ln.rsplit(" ", 1)[0]), float(ln.rsplit(" ", 1)[1]))
+            for ln in lines]
+
+
+def test_after_a_swallowed_alarm_catch_3_still_catches_the_ball(tmp_path):
+    """A Python predicate drops the first alarm and returns; the second
+    strikes in plain engine code (spin), where it must still be routed to
+    its call and so to the user's catch/3."""
+    for got, secs in _esc(tmp_path, "a", "swallow"):
+        assert got == [("caught", BALL)]
+        assert secs < 0.13 + 1.0
+
+
+@pytest.mark.parametrize("goal,want", [
+    ("c", [("caught", BALL)]),
+    ("c2", "c2"),
+])
+def test_an_alarm_turned_into_another_exception_is_still_the_timeout(
+        tmp_path, goal, want):
+    """Python code turns the alarm into a ValueError (whose __context__ is
+    the alarm): the timeout is the outcome, not the ValueError, and the
+    goal does not run on unlimited."""
+    for got, secs in _esc(tmp_path, goal, "convert", runs=3):
+        if want == "c2":
+            # catch(call(P), E, true) does not take the timeout either: E
+            # is left unbound, and the outer catch gets the ball.
+            assert got == [("caught", ("-", BALL, "_"))], got
+        else:
+            assert got == want
+        assert secs < 0.13 + 1.0

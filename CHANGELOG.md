@@ -22,9 +22,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   goal -- a deliberate difference from SWI, where a catch-all there takes
   it. Once raised, the alarm is not raised again while it unwinds
   (cleanup, `finally`, a tabled close run to their end); one that Python
-  code swallowed strikes again 50 ms later as a `BaseException`, routed back
-  at the adapter boundary, and its call throws the ball whatever the goal
-  answered. A `Time` of 10^9 s or more is capped there. Built on `SIGALRM`/`setitimer`
+  code swallowed strikes again 50 ms later -- inside a Python predicate as
+  a `BaseException`, routed back at the adapter boundary; in engine code as
+  the routed alarm -- and one Python turned into another error is the
+  timeout again where that error is converted (the adapter boundary,
+  `catch_match`). Its call throws the ball whatever the goal answered. A `Time` of 10^9 s or more is capped there. Built on `SIGALRM`/`setitimer`
   (`clausal/logic/time_limit.py`): an alarm already armed (quad runner,
   test runner, pytest-timeout) still fires at its own time and is restored
   with its remaining time. Main thread only: elsewhere it is refused with
