@@ -140,13 +140,18 @@ test("a goal that runs out throws the ball") :-
   not raised again: a `setup_call_cleanup/3` cleanup, a `finally` in Python
   code and a tabled evaluation's close run to completion, as for any other
   ball (SWI-Prolog does the same).
-- **A swallowed alarm.** If code inside the goal catches the alarm in
-  Python and drops it (a library's `except Exception`), it strikes again
-  50 ms later in a form `except Exception` does not catch, and that call
-  throws the ball whatever the goal then answered: a result produced after
-  the alarm struck is not trusted. (Code that catches the alarm and keeps
-  it is taken to be still unwinding; the goal then runs until it returns,
-  and its call throws the ball.)
+- **A swallowed alarm.** If Python code inside the goal catches the alarm
+  and drops it (a library's `except Exception`), it strikes again 50 ms
+  later: inside a Python predicate in a form `except Exception` does not
+  catch, elsewhere as the ordinary alarm, so either way it reaches its call
+  and every `catch/3` around that call can take the ball. If Python code
+  turns the alarm into another error (`except Exception: raise
+  ValueError(...)`), the timeout is the outcome where that error is
+  converted or caught. The call throws the ball whatever the goal then
+  answered: a result produced after the alarm struck is not trusted.
+  (Python code that catches the alarm and keeps a reference to it, in a
+  list say, is taken to be still unwinding; the goal then runs on until it
+  returns, and its call throws the ball.)
 - **A huge `Time`** (`1.0e300`, `10**400`) is capped at 10^9 seconds
   (about 31 years), which is no limit in practice.
 - **Main thread only.** The limit is enforced with `SIGALRM`, which only

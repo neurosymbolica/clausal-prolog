@@ -24,6 +24,7 @@ stays off the term, on the exception's ``.message``.
 from __future__ import annotations
 
 import re
+import sys as _sys
 import threading
 from typing import Any
 
@@ -347,6 +348,13 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
         # limit's timeout.  The owner rethrows it as the plain ball.
         # (Operator ruling 2026-11-04, call_with_time_limit/2.)
         raise exc
+    tl = _sys.modules.get("clausal.logic.time_limit")
+    if tl is not None:
+        alarm = tl.rerouted(exc)
+        if alarm is not None:
+            # A time limit's alarm that Python code turned into this error:
+            # the timeout is the outcome, on its way to its own call.
+            raise alarm from None
     catcher = deref(catcher)
     # A Python exception raised inside a module predicate reaches the
     # catcher chain wrapped (``_catchable_dispatch``: ``LogicException(

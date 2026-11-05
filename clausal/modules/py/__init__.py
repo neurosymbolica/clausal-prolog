@@ -143,6 +143,12 @@ def _catchable_dispatch(dispatch_fn):
         except LogicException:
             raise
         except Exception as exc:  # noqa: BLE001 — deliberate boundary conversion
+            from clausal.logic.time_limit import rerouted  # noqa: PLC0415
+            alarm = rerouted(exc)
+            if alarm is not None:
+                # The implementation turned a time limit's alarm into this
+                # error: the timeout is the outcome (clausal.logic.time_limit).
+                raise alarm from None
             raise LogicException(python_error_term(exc)) from exc
         except BaseException as exc:
             # A time limit's alarm, raised again after the implementation
@@ -155,6 +161,16 @@ def _catchable_dispatch(dispatch_fn):
                 raise alarm_from(exc) from None
             raise
     return wrapped
+
+
+#: The code of every adapter boundary frame (``_catchable_dispatch``'s
+#: ``wrapped``): a time limit's handler looks for it above the interrupted
+#: frame to know it struck inside a Python adapter.
+import types as _types
+_BOUNDARY_CODE = next(c for c in _catchable_dispatch.__code__.co_consts
+                      if isinstance(c, _types.CodeType)
+                      and c.co_name == "wrapped")
+del _types
 
 
 def simple_to_trampoline(simple_fn):

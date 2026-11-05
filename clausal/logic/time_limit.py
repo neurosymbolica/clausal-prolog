@@ -37,11 +37,18 @@ is alive the alarm is still on its way.  Code that catches every exception
 (``except Exception`` in a library, a ``__del__`` the interpreter reports
 as unraisable) can swallow it instead: then the object dies without
 reaching its owner, and :data:`REPEAT` seconds later the alarm strikes
-again as a :class:`TimeLimitEscalation`, a ``BaseException`` that
-``except Exception`` does not catch.  The boundary of every Python
-predicate adapter (``clausal.modules.py._catchable_dispatch``) turns it back
-into the routed alarm; one that reaches the query's root driver is the
-ball.  And the owner answers the ball on ANY exit after its deadline fired
+again.  If it lands inside a Python predicate adapter (below the boundary
+``clausal.modules.py._catchable_dispatch``), it is a
+:class:`TimeLimitEscalation`, a ``BaseException`` that ``except Exception``
+does not catch, turned back into the routed alarm at that boundary; in
+engine code, which the drive loop routes, it is the alarm itself (a
+``BaseException`` there would skip the catcher chain: every ``catch/3`` and
+the owning call).  An alarm Python code turned into ANOTHER exception
+(``except Exception: raise ValueError``) lives on in that exception's
+``__context__``; where the engine converts or catches such an exception
+(the adapter boundary, ``catch_match``) the alarm is raised again instead
+(:func:`rerouted`), so the timeout is the outcome.  One that reaches the
+query's root driver is the ball.  And the owner answers the ball on ANY exit after its deadline fired
 -- an answer, a failure or another exception -- so a swallowed alarm that
 made some code give up early cannot read as that code's answer.  (An alarm
 swallowed AND kept alive -- stored by the code that caught it -- is taken
@@ -60,6 +67,7 @@ from __future__ import annotations
 
 import os
 import signal
+import sys
 import threading
 import time
 import weakref
@@ -113,6 +121,49 @@ class TimeLimitEscalation(BaseException):
     def __init__(self, deadline: "Deadline") -> None:
         super().__init__(BALL)
         self.deadline = deadline
+
+
+def _inside_adapter(frame) -> bool:
+    """Whether the interrupted *frame* runs below a Python predicate
+    adapter's boundary (``clausal.modules.py._catchable_dispatch``): its
+    generator frames chain through ``yield from`` up to that boundary's
+    frame."""
+    py = sys.modules.get("clausal.modules.py")
+    boundary = getattr(py, "_BOUNDARY_CODE", None)
+    if boundary is None:
+        return False
+    depth = 0
+    while frame is not None and depth < 200:
+        if frame.f_code is boundary:
+            return True
+        frame = frame.f_back
+        depth += 1
+    return False
+
+
+def rerouted(exc: BaseException) -> "TimeLimitAlarm | None":
+    """The alarm to raise instead of *exc*, when *exc* is not an alarm but
+    holds, in its ``__cause__``/``__context__`` chain, the alarm of a limit
+    still running: Python code turned the alarm into another exception
+    (``except Exception: raise ValueError(...)``).  The timeout is then the
+    outcome -- not the converted error, which a ``catch/3`` would take while
+    the limit is gone -- so the conversion points (the adapter boundary,
+    ``catch_match``) raise a fresh alarm of that limit, routed to its call.
+    None otherwise."""
+    if not _CLOCK.stack or isinstance(exc, (TimeLimitAlarm,
+                                            TimeLimitEscalation)):
+        return None
+    seen = set()
+    e = exc
+    while e is not None and id(e) not in seen and len(seen) < 64:
+        seen.add(id(e))
+        nxt = e.__cause__ or e.__context__
+        e = nxt
+        if isinstance(e, (TimeLimitAlarm, TimeLimitEscalation)):
+            d = e.deadline
+            if d.live:
+                return _new_alarm(d)
+    return None
 
 
 def alarm_from(escalation: TimeLimitEscalation) -> TimeLimitAlarm:
@@ -257,9 +308,15 @@ def _fire(signum, frame) -> None:
             _rearm(now)                 # look again in REPEAT seconds
             if d.alarm is not None and d.alarm() is not None:
                 return                  # still unwinding: let it finish
-            if not first:
-                # The alarm raised before died on the way: swallowed.
+            if not first and _inside_adapter(frame):
+                # The alarm raised before died on the way: swallowed, and
+                # this tick lands in a Python adapter again, which may
+                # swallow an Exception again: a BaseException it lets
+                # through, routed again at the adapter's boundary.
                 raise TimeLimitEscalation(d)
+            # The first alarm, or a later one landing in engine code, whose
+            # drive loop routes a LogicException up the catcher chain to
+            # its owner (a BaseException would skip every frame).
             # Built in a helper: a local here would tie the alarm to this
             # frame, which its own traceback holds -- a cycle that keeps a
             # swallowed alarm alive until the garbage collector runs.
@@ -398,7 +455,10 @@ def live() -> "tuple[Deadline, ...]":
 def owned(exc: BaseException, d: Deadline) -> bool:
     """Whether *exc* is the alarm of *d* (routed or escalated), or anything
     at all once *d* fired (a swallowed alarm makes every outcome after it
-    suspect)."""
+    suspect) -- except the generator's own close (``GeneratorExit``), which
+    is never answered with a ball."""
+    if isinstance(exc, GeneratorExit):
+        return False
     return (isinstance(exc, (TimeLimitAlarm, TimeLimitEscalation))
             and exc.deadline is d) or d.fired
 
