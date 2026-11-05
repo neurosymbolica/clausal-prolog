@@ -155,6 +155,29 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **Posting a cyclic expression to CLP(Z) is clpz's domain error, as in
+  Scryer** (operator ruling 2026-11-04: "type_error if Scryer gives one";
+  Scryer's clpz gives a domain error here, so the engine follows it). There
+  is no occurs check, so `X = X+1` (the seam's `X is X + 1`) builds a
+  cyclic term. In the seam, `X is X + 1, X == 1` (and `<`, `!=`, `>=`, the
+  reified comparisons in `if_/3`) never returned; in `.pl` and `.clausal`,
+  `X = X+1, X #= 1` and the reified connectives raised
+  `resource_error(stack)`. A cyclic side of a comparison is now
+  `domain_error(clpz_expression, Side)`, the whole side as posted (`Y #= X*2`
+  names `X*2`), the left side first, a cycle in either side before a bad
+  leaf in either (`a #= X` names X); a cyclic operand of a reified
+  connective (`#<==>`, `#==>`, `#\/`, `#\`, `#=/3`, `if_/3` over them) is
+  `domain_error(clpz_reifiable_expression, Operand)`, operands left to
+  right. The context is as for every other clpz expression error: the
+  builtin's indicator in `.pl`/`.clausal`, unbound in the seam. `in/2`,
+  `labeling/2`, `sum/3` and `zcompare/3` already answered Scryer's
+  `type_error(integer, _)`. The walk that already visits every node of a
+  post finds the cycle on its way, keyed on the compounds reached through a
+  bound variable, so an acyclic post pays almost nothing; the reified
+  connectives check each operand exactly. CLP(B) is unchanged: Scryer's
+  clpb gives no answer for a cyclic expression (ruling 2026-11-04: follow
+  Scryer). Tests: `tests/iso/test_clpz_cyclic_scryer.py`.
+
 - **A tail-recursive clause whose head has a list pattern binds an unbound
   argument before restarting.**  The head meets an unbound argument by
   binding it to its list pattern only at the answer, which the in-place
@@ -656,8 +679,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
   variables on the current path, so a deep acyclic term still evaluates
   (or overflows with `resource_error(stack)`) as before. A list is refused
   as a list, cyclic or not (`'.'/2`); Scryer evaluates `[X]` as `X`.
-  The seam's `==` and `<` are CLP(Z) posts and are not covered yet:
-  `todo/clp-posting-a-cyclic-expression-loops-or-overflows-2026-11-04.md`.
+  The seam's `==` and `<` are CLP(Z) posts: see the Fixed entry on
+  posting a cyclic expression to CLP(Z).
 
 - **findall/3, bagof/3 and setof/3 keep dropping attribute constraints**
   (operator ruling 2026-11-04, follow Scryer). A collected answer carries no

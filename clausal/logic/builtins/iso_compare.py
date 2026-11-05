@@ -654,7 +654,10 @@ def _iso_structural_ne(a, b, trail, k):
 # builtin now hands both operands to `clpfd.clpz_refuse_non_numeric` first,
 # which raises that formal (context: the builtin's own indicator) for an
 # atom, a Python bool, a string, a list or a non-evaluable compound
-# anywhere in the operand.  Infix `==` is untouched.
+# anywhere in the operand.  Infix `==` is untouched.  A CYCLIC operand
+# (`X = X+1, X #= 1`, no occurs check) is domain_error(clpz_expression,
+# Operand), as Scryer's clpz (2026-11-04); the first call is handed the
+# other side too, since a cycle in either side comes before a bad leaf.
 #
 # Another difference from infix `==` (2026-09-30): under clpz `/` is exact
 # integer division, so each builtin first hands its operands to
@@ -683,7 +686,7 @@ def _clp_eq(a, b, trail, k):
     """
     from clausal.logic.clpfd import (  # noqa: PLC0415
         clpz_operands, clpz_refuse_non_numeric, fd_eq)
-    clpz_refuse_non_numeric(a, "#=/2")
+    clpz_refuse_non_numeric(a, "#=/2", b)
     clpz_refuse_non_numeric(b, "#=/2")
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_eq(*ops, trail):
@@ -695,7 +698,7 @@ def _clp_ne(a, b, trail, k):
     """CLP(FD) disequality constraint — the negation of `#=`."""
     from clausal.logic.clpfd import (  # noqa: PLC0415
         clpz_operands, clpz_refuse_non_numeric, fd_ne)
-    clpz_refuse_non_numeric(a, "#\\=/2")
+    clpz_refuse_non_numeric(a, "#\\=/2", b)
     clpz_refuse_non_numeric(b, "#\\=/2")
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_ne(*ops, trail):
@@ -708,7 +711,7 @@ def _clp_lt(a, b, trail, k):
     clpz's exact integer division, see clpfd.clpz_operands)."""
     from clausal.logic.clpfd import (  # noqa: PLC0415
         clpz_operands, clpz_refuse_non_numeric, fd_lt)
-    clpz_refuse_non_numeric(a, "#</2")
+    clpz_refuse_non_numeric(a, "#</2", b)
     clpz_refuse_non_numeric(b, "#</2")
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_lt(*ops, trail):
@@ -721,7 +724,7 @@ def _clp_gt(a, b, trail, k):
     clpz's exact integer division, see clpfd.clpz_operands)."""
     from clausal.logic.clpfd import (  # noqa: PLC0415
         clpz_operands, clpz_refuse_non_numeric, fd_gt)
-    clpz_refuse_non_numeric(a, "#>/2")
+    clpz_refuse_non_numeric(a, "#>/2", b)
     clpz_refuse_non_numeric(b, "#>/2")
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_gt(*ops, trail):
@@ -734,7 +737,7 @@ def _clp_le(a, b, trail, k):
     clpz's exact integer division, see clpfd.clpz_operands)."""
     from clausal.logic.clpfd import (  # noqa: PLC0415
         clpz_operands, clpz_refuse_non_numeric, fd_le)
-    clpz_refuse_non_numeric(a, "#=</2")
+    clpz_refuse_non_numeric(a, "#=</2", b)
     clpz_refuse_non_numeric(b, "#=</2")
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_le(*ops, trail):
@@ -747,7 +750,7 @@ def _clp_ge(a, b, trail, k):
     clpz's exact integer division, see clpfd.clpz_operands)."""
     from clausal.logic.clpfd import (  # noqa: PLC0415
         clpz_operands, clpz_refuse_non_numeric, fd_ge)
-    clpz_refuse_non_numeric(a, "#>=/2")
+    clpz_refuse_non_numeric(a, "#>=/2", b)
     clpz_refuse_non_numeric(b, "#>=/2")
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_ge(*ops, trail):
