@@ -1,5 +1,18 @@
 # Posting a cyclic expression to CLP(Z) or CLP(B) loops forever or overflows the stack
 
+**Status: FIXED 2026-11-05 (commit 10737fe8)** for CLP(Z). Posting a cyclic
+expression is clpz's `domain_error(clpz_expression, Side)`, or
+`domain_error(clpz_reifiable_expression, Operand)` for an operand of a
+reified connective, as in Scryer, on `.pl`, `.clausal` and the seam. It is
+detected on the way by the walks that already visit every node of a post,
+and exactly where none does. Pinned in `tests/iso/test_clpz_cyclic_scryer.py`.
+
+**Status: RESOLVED 2026-11-04 (operator ruling)** for CLP(B): "follow
+Scryer, document it (comments are enough)". Scryer's clpb gives no answer
+for a cyclic `sat/1`, `taut/2` or `labeling/1` argument, so no error term is
+invented and the behaviour is unchanged (`resource_error(stack)`). Comments
+at `clpb.sat`, `clpb.taut` and `clpb.bool_labeling` say so (commit 10737fe8).
+
 Found 2026-11-04 while making the arithmetic evaluator refuse a cyclic term
 (operator ruling 2026-11-04: "type_error if Scryer gives one";
 `exact_arith.evaluate`, `tests/iso/test_cyclic_eval_scryer.py`). The CLP
