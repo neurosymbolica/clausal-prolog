@@ -511,10 +511,17 @@ def _list_cycle(t):
     lambda t: units_clp.strip_list_for_solver(_list_cycle(t), "label/1", t),
 ], ids=["gt", "all_different", "sum", "scalar_product", "element",
         "global_cardinality", "strip_list"])
-def test_clpfd_with_units_refuses_a_cycle(units_on, post):
-    # Outside CLP(Q)/CLP(R): resource_error(finite_memory).
+def test_clpfd_with_units_refuses_a_cycle(units_on, post, request):
+    # Outside CLP(Q)/CLP(R): a cyclic EXPRESSION posted to CLP(Z) is clpz's
+    # domain_error(clpz_expression, E), as in Scryer (operator ruling
+    # 2026-11-04; tests/iso/test_clpz_cyclic_scryer.py); a cyclic list
+    # argument is still resource_error(finite_memory).
     t = Trail()
-    assert _raised_within(lambda: post(t))[1] == _FINITE
+    term = _raised_within(lambda: post(t))
+    if request.node.callspec.id == "gt":
+        assert term[1][:2] == ("domain_error", "clpz_expression"), term
+    else:
+        assert term[1] == _FINITE
 
 
 @pytest.mark.parametrize("solver", SOLVERS)
@@ -566,7 +573,12 @@ def test_a_seam_cycle_with_units_on_raises(units_on, tmp_path, name, arity):
     module = _load_module(module_name, str(path)).__dict__["$module"]
     args = [Var() for _ in range(arity)]
     term = _raised_within(lambda: list(call(name, *args, module=module)))
-    assert term[1] == _FINITE
+    if name == "cyc_gt":
+        # The seam's > posts the cyclic expression to CLP(Z): clpz's
+        # domain_error, as in Scryer (operator ruling 2026-11-04).
+        assert term[1][:2] == ("domain_error", "clpz_expression"), term
+    else:
+        assert term[1] == _FINITE
 
 
 # ------------------------------------------- a shared subterm is no cycle

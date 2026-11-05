@@ -3168,7 +3168,7 @@
   "tests/iso_l3/s3/native/s3pkg/__init__.pl": "7c52dcaf578972b9",
   "tests/iso_l3/s3/native/s3pkg/kinds.pl": "7c52dcaf578972b9",
   "tests/iso_l3/s4/s4_exit.pl": "2d5ba653e883ff9d",
-  "tests/iso_l3/s5/s5_clpq_exit.pl": "fec5cee1e7e944ec",
+  "tests/iso_l3/s5/s5_clpq_exit.pl": "1086709c96945bb3",
   "tests/iso_l3/s5/s5_clpz_exit.pl": "2dcd2b3b1f2be494"
  }
 }

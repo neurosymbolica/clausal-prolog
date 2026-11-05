@@ -279,7 +279,7 @@
    "key": "tests/iso_l3/s5/s5_clpq_exit.pl::load::",
    "class": "a",
    "note": "translator bug: it reads {...} as the seam's CLP(Q) set goal and refuses `is` inside it; native lowers clpq's {}/1, and the clpq build of Scryer (/workspace/scryer-prolog-clpq) loads the file cleanly; Scryer core has no library(clpq)",
-   "translator_sha": "e2a76f3397014f82",
+   "translator_sha": "42b046658fbbe09b",
    "native_sha": "c48b5b1a9776c846"
   },
   {
