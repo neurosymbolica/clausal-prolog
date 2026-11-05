@@ -503,7 +503,18 @@ def alarm_hazard() -> "str | None":
     if _CLOCK.stack and handler is not _fire:
         return (f"time limits {list(_CLOCK.stack)!r} are live while the "
                 f"SIGALRM handler is {handler!r}")
+    if _CLOCK.stack and not _anything_running():
+        # Between tests nothing runs a query: a limit still on the stack
+        # outlived its call, and (expired, its alarm kept alive) it would
+        # keep every later limit from firing.
+        return (f"time limits {list(_CLOCK.stack)!r} outlived their calls")
     return None
+
+
+def _anything_running() -> bool:
+    """Whether a query is being driven now (an open drive episode)."""
+    tab = sys.modules.get("clausal.logic.tabling")
+    return bool(tab is not None and tab._drive_ctx.episodes)
 
 
 # ── running Python code under a limit ───────────────────────────────────────

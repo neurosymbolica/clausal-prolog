@@ -476,9 +476,33 @@ def test_the_test_runner_keeps_working(tmp_path):
 # ── the seam surface ────────────────────────────────────────────────────────
 
 
+SEAM_SURFACE_RUNNER = """
+import faulthandler, importlib, resource, sys, time
+from clausal import Var, deref, solve
+from clausal.logic.variables import walk
+faulthandler.dump_traceback_later(60, exit=True)   # where a runaway spins
+sys.path.insert(0, ".")
+m = importlib.import_module("tls")
+X = Var()
+print("ONE", [walk(deref(X)) for _ in solve(("one", X), module=m)])
+B = Var(); t0 = time.monotonic()
+for _ in solve(("timed", B), module=m):
+    print("TIMED", walk(deref(B)), round(time.monotonic() - t0, 2))
+    break
+"""
+
+
 def test_the_seam_surface(tmp_path):
-    import importlib
+    """In a child capped at 4 GB: the seam's spin/1 builds an ever-deeper
+    term (the seam's ``is`` unifies), about 45 MB/s, so a limit that failed
+    to stop it would take the whole pytest process to the OOM killer
+    (SIGKILL, no report) -- as a full-suite gate once died here.  In a child
+    it is a named failure with a traceback instead."""
+    import os
+    import resource
+    import subprocess
     import sys
+    from tests.test_sandbox import ENGINE_ROOT
     (tmp_path / "tls.seam").write_text(textwrap.dedent("""
         -module(tls, [one/1, timed/1])
         -private([a, b])
@@ -486,16 +510,17 @@ def test_the_seam_surface(tmp_path):
         one(X) <- call_with_time_limit(1, member(X, [a, b]))
         timed(B) <- catch(call_with_time_limit(0.2, spin(0)), B, True)
     """))
-    sys.path.insert(0, str(tmp_path))
-    try:
-        m = importlib.import_module("tls")
-    finally:
-        sys.path.remove(str(tmp_path))
-    X = Var()
-    assert [walk(deref(X)) for _ in solve(("one", X), module=m)] == ["a"]
-    assert first_answer(("timed", X), X, m) == BALL
-    clean_alarm()
+    (tmp_path / "run.py").write_text(textwrap.dedent(SEAM_SURFACE_RUNNER))
 
+    def cap():
+        resource.setrlimit(resource.RLIMIT_AS, (4 << 30, 4 << 30))
+    r = subprocess.run([sys.executable, "run.py"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=120,
+                       preexec_fn=cap,
+                       env={**os.environ, "PYTHONPATH": ENGINE_ROOT})
+    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr[-4000:])
+    assert "ONE ['a']" in r.stdout, r.stdout
+    assert f"TIMED {BALL}" in r.stdout, r.stdout
 
 # ── the per-call budget's delegation (time_limit.budgeted) ─────────────────
 
