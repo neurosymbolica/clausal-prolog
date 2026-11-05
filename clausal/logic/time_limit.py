@@ -50,10 +50,13 @@ the owning call).  An alarm Python code turned into ANOTHER exception
 (:func:`rerouted`), so the timeout is the outcome.  One that reaches the
 query's root driver is the ball.  And the owner answers the ball on ANY exit after its deadline fired
 -- an answer, a failure or another exception -- so a swallowed alarm that
-made some code give up early cannot read as that code's answer.  (An alarm
-swallowed AND kept alive -- stored by the code that caught it -- is taken
-as still unwinding: the goal then runs on until it returns, and its call
-throws the ball.)
+made some code give up early cannot read as that code's answer.  An alarm Python drops as
+"unraisable" (it landed in a ``__del__`` or a weakref callback the garbage
+collector ran) is marked swallowed by :func:`_unraisable` while a limit is
+live, whatever the unraisable hook then keeps.  (An alarm swallowed AND kept
+alive by the code that caught it -- stored in a list -- is still taken as
+unwinding: the goal then runs on until it returns, and its call throws the
+ball.)
 
 Main thread only.  Python runs signal handlers in the main thread, and only
 the main thread may install one.  Elsewhere a limit cannot be enforced, so
@@ -208,9 +211,34 @@ class _Clock:
         self.saved_interval = 0.0
         self.critical = False
         self.deferred = False
+        self.saved_unraisable = None    # sys.unraisablehook found at it
 
 
 _CLOCK = _Clock()
+
+
+def _unraisable(unraisable) -> None:
+    """``sys.unraisablehook`` while a limit is live.  An alarm raised where
+    Python cannot propagate it -- a ``__del__`` or a weakref callback the
+    garbage collector runs, a generator closed during collection -- is
+    reported here and dropped.  The hook that receives it may KEEP the
+    exception (pytest's unraisableexception plugin does, until the test
+    ends), which would leave the alarm alive and so taken for still
+    unwinding, never raised again: the goal would run on with no limit.
+    So a reported alarm is marked swallowed here (its weak reference
+    dropped) before the report goes on, and the next tick raises again."""
+    e = getattr(unraisable, "exc_value", None)
+    if isinstance(e, (TimeLimitAlarm, TimeLimitEscalation)):
+        e.deadline.alarm = None
+    hook = _CLOCK.saved_unraisable
+    (hook if callable(hook) else sys.__unraisablehook__)(unraisable)
+
+
+def _restore_unraisable() -> None:
+    if sys.unraisablehook is _unraisable:
+        sys.unraisablehook = (_CLOCK.saved_unraisable
+                              or sys.__unraisablehook__)
+    _CLOCK.saved_unraisable = None
 
 
 def available() -> bool:
@@ -294,6 +322,7 @@ def _drop_orphans() -> None:
     for d in _CLOCK.stack:
         d.live = False
     _CLOCK.stack.clear()
+    _restore_unraisable()
     _CLOCK.saved_handler = None
     _CLOCK.saved_at = None
     _CLOCK.saved_interval = 0.0
@@ -421,6 +450,9 @@ def start(d: Deadline) -> None:
             _CLOCK.saved_at = (now + value) if value > 0 else None
             _CLOCK.saved_interval = interval
             signal.signal(signal.SIGALRM, _fire)
+            if sys.unraisablehook is not _unraisable:
+                _CLOCK.saved_unraisable = sys.unraisablehook
+                sys.unraisablehook = _unraisable
         _CLOCK.stack.append(d)
         _rearm(now)
     finally:
@@ -465,6 +497,7 @@ def pop(d: Deadline) -> None:
         _CLOCK.saved_handler = None
         _CLOCK.saved_at = None
         _CLOCK.saved_interval = 0.0
+        _restore_unraisable()
     finally:
         _CLOCK.critical = False
         _CLOCK.deferred = False

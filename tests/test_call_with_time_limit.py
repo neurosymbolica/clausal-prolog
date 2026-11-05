@@ -741,3 +741,67 @@ def test_the_suite_s_tripwire_names_a_leaked_alarm(tmp_path):
     assert r.returncode == 1, (r.returncode, out[-2000:])
     assert "test_leaks left a SIGALRM hazard" in out, out[-2000:]
     assert "2 passed, 1 error" in out, out[-2000:]
+
+
+# ── an alarm dropped as "unraisable" (in a finalizer during GC) ─────────────
+
+UNRAISABLE_RUNNER = """
+import os, resource, sys, threading, time
+resource.setrlimit(resource.RLIMIT_AS, (4 << 30, 4 << 30))
+sys.path.insert(0, ".")
+from clausal import Var, deref, solve
+import tls
+
+KEPT = []
+def hook(u):                 # pytest's unraisableexception plugin keeps them
+    KEPT.append(u.exc_value)
+sys.unraisablehook = hook
+
+class Fin:
+    def __init__(self): self.me = self      # a cycle: freed by the GC only
+    def __del__(self): sum(range(300))      # Python code an alarm lands in
+
+def watchdog():
+    while True:
+        time.sleep(0.1)
+        t0 = state.get("t0")
+        if t0 is not None and time.monotonic() - t0 > 3.0:
+            print("HANG", state["T"], flush=True)
+            os._exit(3)
+state = {}
+threading.Thread(target=watchdog, daemon=True).start()
+for i in range(120):
+    T = 0.001 + 0.0003 * i
+    junk = [Fin() for _ in range(20000)]
+    del junk
+    B = Var(); state["T"] = T; state["t0"] = time.monotonic()
+    for _ in solve(("timed", T, B), module=tls):
+        break
+    state["t0"] = None
+    assert deref(B) == "time_limit_exceeded", (T, deref(B))
+print("ALL", len(KEPT), "kept", flush=True)
+"""
+
+
+def test_an_alarm_dropped_in_a_finalizer_strikes_again(tmp_path):
+    """An alarm that lands in a __del__ run by the garbage collector is
+    reported as unraisable and dropped; an unraisable hook that KEEPS it
+    (pytest's does) kept it alive, the limit took it for still unwinding,
+    and never raised again: spin/1 ran on to the OOM killer (the full-suite
+    gate's silent death).  Swept over 120 deadlines (1 ms to 37 ms in
+    0.3 ms steps) the window is hit without any machine load."""
+    import os
+    import subprocess
+    import sys
+    from tests.test_sandbox import ENGINE_ROOT
+    (tmp_path / "tls.seam").write_text(textwrap.dedent("""
+        -module(tls, [timed/2])
+        spin(N) <- (N1 is N + 1, spin(N1))
+        timed(T, B) <- catch(call_with_time_limit(T, spin(0)), B, True)
+    """))
+    (tmp_path / "run.py").write_text(textwrap.dedent(UNRAISABLE_RUNNER))
+    r = subprocess.run([sys.executable, "run.py"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=300,
+                       env={**os.environ, "PYTHONPATH": ENGINE_ROOT})
+    assert r.returncode == 0 and "ALL" in r.stdout, (
+        r.returncode, r.stdout[-1500:], r.stderr[-1500:])
