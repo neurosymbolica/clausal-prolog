@@ -10,7 +10,7 @@ test('trig simp pythagorean') <- (
 
 test('trig simp double angle') <- (
     trig_simp(2 * sin(X) * cos(X), R),
-    R == sin(2*X)
+    sym_equal(R, sin(2*X))
 )  # nv
 
 # ── expand_trig/2 ─────────────────────────────────────────────────────────────

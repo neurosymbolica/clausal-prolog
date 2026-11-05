@@ -255,6 +255,14 @@ def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any,
         # clause that used the name, and suppress the chained duplicate — the
         # replacement carries the same args.
         raise better.with_traceback(exc.__traceback__) from None
+    except BaseException as exc:
+        # A time limit's escalated alarm (clausal.logic.time_limit) that no
+        # adapter boundary routed back -- Python code in the query swallowed
+        # the first alarm: at the root it is the ball.
+        tl = sys.modules.get("clausal.logic.time_limit")
+        if tl is not None and isinstance(exc, tl.TimeLimitEscalation):
+            raise tl.ball() from None
+        raise
     finally:
         # A04-F007: close the root generator on ANY exit — normal, caller
         # abandonment (GeneratorExit), or a body exception that propagated past

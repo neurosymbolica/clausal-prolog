@@ -89,12 +89,16 @@ class ModulePredicate:
         return wrapper
 
     def _multi_dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
+        budget = None
         if _sandbox_state.ACTIVE:
             # The sandbox (clausal.sandbox): checked when the adapter RUNS,
             # so no route that reached it -- compiled, cached, meta-called,
             # through a facade -- runs one outside the allowlist.
-            from clausal.sandbox import check_adapter  # noqa: PLC0415
+            from clausal.sandbox import adapter_budget, check_adapter  # noqa: PLC0415
             check_adapter(self, f"{self._name}/{len(args) - 1}")
+            # A vetted package adapter's call runs under the sandbox's
+            # per-call time budget (operator ruling 2026-11-04).
+            budget = adapter_budget(self)
         arity = len(args) - 1  # exclude trail
         fn = self._dispatch_fns.get(arity)
         if fn is None:
@@ -106,6 +110,13 @@ class ModulePredicate:
             )
             indicator = ("/", mint(self._name), arity)
             raise LogicException(existence_error("procedure", indicator))
+        if budget is not None:
+            from clausal.logic.time_limit import budgeted  # noqa: PLC0415
+            seconds, reset = budget
+            yield from budgeted(
+                fn(this_generator, _proceed, _fail, _catcher, *args),
+                seconds, f"{self._name}/{arity}", reset)
+            return
         yield from fn(this_generator, _proceed, _fail, _catcher, *args)
 
     def __repr__(self) -> str:
@@ -133,6 +144,16 @@ def _catchable_dispatch(dispatch_fn):
             raise
         except Exception as exc:  # noqa: BLE001 — deliberate boundary conversion
             raise LogicException(python_error_term(exc)) from exc
+        except BaseException as exc:
+            # A time limit's alarm, raised again after the implementation
+            # swallowed the first one (clausal.logic.time_limit): routed
+            # again from here, so catch/3 frames and the limit's own call
+            # see it.  Any other BaseException passes as it is.
+            from clausal.logic.time_limit import (  # noqa: PLC0415
+                TimeLimitEscalation, alarm_from)
+            if isinstance(exc, TimeLimitEscalation):
+                raise alarm_from(exc) from None
+            raise
     return wrapped
 
 

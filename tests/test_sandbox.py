@@ -2790,3 +2790,28 @@ def test_a_qualified_regex_call_binds_its_groups_in_the_sandbox(sbx):
     want = repr([(("$chars", "2024"), ("$chars", "03"))])
     assert ok(on, "q") == want
     assert ok(off, "q") == want
+
+
+# ── an atom spelled like a runtime name ────────────────────────────────────
+
+
+def test_an_atom_spelled_like_a_runtime_name_loads(sbx):
+    """The native front end binds each atom of a .clausal file to itself
+    (``simplify = $mint('simplify')``); when the atom is spelled like a name
+    the runtime binds (``simplify``), that is still no Python statement.
+    It was refused as python_statement."""
+    sbx.write("at.clausal", """
+        :- module(at, [t/2]).
+        t(simplify, 1).
+        t(other, 2).
+        :- end_module(at).
+    """)
+    res = sbx.run("""
+        import clausal.sandbox as sb
+        sb.enable()
+        from clausal import Var
+        at = load("at")
+        X, Y = Var(), Var()
+        probe("t", lambda: answers(("t", X, 1), at, X))
+    """)
+    assert ok(res, "t") == "['simplify']"

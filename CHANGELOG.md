@@ -9,6 +9,53 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Added
 
+- **`call_with_time_limit/2`** (SWI-Prolog's library(time); operator
+  ruling 2026-11-04, "1+2 option"), on every surface. Runs Goal as
+  `once/1` does and throws the bare atom `time_limit_exceeded` (SWI's
+  ball, the one Scryer's library(clpz) optimisation code catches) when it
+  has not answered after Time seconds of wall-clock time. Time unbound:
+  `instantiation_error`; not a number: `type_error(number, Time)`; not
+  > 0: `domain_error(positive_number, Time)`. An inner limit never extends
+  an outer one, and when the outer deadline passes inside an inner call the
+  OUTER call throws: the alarm is in flight to its owner, and no `catch/3`
+  on the way matches it (`catch_match`), not even a catch-all inside the
+  goal -- a deliberate difference from SWI, where a catch-all there takes
+  it. Once raised, the alarm is not raised again while it unwinds
+  (cleanup, `finally`, a tabled close run to their end); one that Python
+  code swallowed strikes again 50 ms later as a `BaseException`, routed back
+  at the adapter boundary, and its call throws the ball whatever the goal
+  answered. A `Time` of 10^9 s or more is capped there. Built on `SIGALRM`/`setitimer`
+  (`clausal/logic/time_limit.py`): an alarm already armed (quad runner,
+  test runner, pytest-timeout) still fires at its own time and is restored
+  with its remaining time. Main thread only: elsewhere it is refused with
+  `error(system_error(time_limit_not_main_thread), call_with_time_limit/2)`.
+  A timeout undoes what any ball undoes; a tabled evaluation cut short is
+  not left as a complete table. Pinned by `tests/test_call_with_time_limit.py`.
+- **Vetted package adapters in the sandbox** (operator ruling 2026-11-04,
+  "vetted package: yes"; design
+  `implementation_plans/sympy-package-adapter-sandbox-2026-11-04.md`). A
+  new trust kind, narrower than a bridge: `clausal.sandbox.PACKAGE_ADAPTERS`,
+  in the engine only, with one row, `sympy` (clausal-sympy 0.1.0): sha256
+  pins of `sympy.py` and `_sympy_units.py`, `sympy==1.14.0`,
+  `mpmath==1.3.0`, and 23 listed predicates (no constructors, no raw SymPy
+  objects). Opt in with `enable(allow_package_adapters=["sympy"])` or, in a
+  child, `CLAUSAL_SANDBOX_PACKAGE_ADAPTERS=sympy`; an entry may name the
+  only `.seam` files that may import it. `enable()` verifies every pin before
+  importing anything, failing closed with `PackageAdapterError`
+  (`sha256_mismatch`, `version_mismatch`, `distribution_mismatch`,
+  `impostor_module`, `not_found`), refuses an adapter module anything else
+  imported first (a planted `.pyc` may have run), and executes the pinned
+  files from the bytes it hashed. Only a Python-free `.seam`'s `-import_from` of listed
+  names is clean at load; `-import_module`, dotted `py.sympy.x` and other
+  names stay refused, and it is never a bridge. Each vetted call runs under
+  a per-call wall-clock budget (`package_adapter_time_limit`, default 15 s,
+  `CLAUSAL_SANDBOX_ADAPTER_TIME_LIMIT`), only under the sandbox, on the
+  `call_with_time_limit/2` mechanism and with its ball
+  `time_limit_exceeded`; after a timeout SymPy's caches are cleared and
+  mpmath's precision reset. A second `enable()` only narrows (adapters,
+  importers, a shorter budget). Re-pinning needs engine review and a
+  CHANGELOG entry (docs/sandbox.md). Pinned by
+  `tests/test_sandbox_package_adapters.py`.
 - **`copy_term/3` and `call_residue_vars/2`** (Scryer's and SWI's), on
   every surface. `copy_term(Term, Copy, Gs)`: Copy is Term with fresh
   variables that carry no attributes, and Gs the goals that put back the
@@ -177,6 +224,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   connectives check each operand exactly. CLP(B) is unchanged: Scryer's
   clpb gives no answer for a cyclic expression (ruling 2026-11-04: follow
   Scryer). Tests: `tests/iso/test_clpz_cyclic_scryer.py`.
+
+- **A `.clausal` atom spelled like a runtime name loads in the sandbox.**
+  `t(simplify, 1).` was refused as `python_statement`: the native front
+  end binds each atom to itself (`simplify = $mint('simplify')`), and the
+  audit refused any assignment to a name the loader injects. That exact
+  shape binds a `str`, which calls nothing; any other rebinding is still
+  refused (`seam_audit._own_atom_binding`).
+- **clausal-sympy reads ISO arithmetic cells.** A `.clausal`/`.pl` term
+  `X**2 - 4` reached SymPy as functions named `-` and `**`, and `solve/3`
+  raised NotImplementedError; `+ - * / ** ^ mod` and unary `-`/`+` now
+  convert as the seam's operators, in the units check too. (Re-pinned in
+  `PACKAGE_ADAPTERS`.)
 
 - **A tail-recursive clause whose head has a list pattern binds an unbound
   argument before restarting.**  The head meets an unbound argument by
@@ -681,6 +740,19 @@ surface described in [docs/public-api.md](docs/public-api.md).
   as a list, cyclic or not (`'.'/2`); Scryer evaluates `[X]` as `X`.
   The seam's `==` and `<` are CLP(Z) posts: see the Fixed entry on
   posting a cyclic expression to CLP(Z).
+
+- **clausal-sympy: `SymExpr` equality and hash are SymPy's structural
+  ones** (code review of the sandbox admission, 2026-11-04).
+  `__eq__` ran `sympy.simplify` and up to 120 variable renamings from `=`,
+  `==` and `sort/2` on two SymPy results -- outside any time budget (17 s
+  under a 1 s sandbox budget) and with answers that depended on the route
+  (`expand((x+1)**2)` against `factor(x**2+2*x+1)` was unequal in the
+  engine, equal called directly). Now two results are equal only as
+  expression trees, and a Clausal term on the other side is never
+  converted. Symbolic equality is `sym_equal/2`'s, which is budgeted;
+  the package's own tests that compared a result with `==` against a term
+  (`R == cos(X)`) now use `sym_equal/2`, as its docs already did.
+  (Re-pinned in `PACKAGE_ADAPTERS`.)
 
 - **findall/3, bagof/3 and setof/3 keep dropping attribute constraints**
   (operator ruling 2026-11-04, follow Scryer). A collected answer carries no

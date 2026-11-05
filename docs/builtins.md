@@ -4,7 +4,7 @@ Complete index of all built-in and standard-library predicates. Predicates are l
 
 Behaviour follows ISO 13211-1 first, and Scryer Prolog where ISO is silent. Error terms are Scryer's `error(Formal, Culprit)`; see [Exceptions](exceptions.md). Which of these the 1.0 release covers is set out in [Public API](public-api.md).
 
-**Documented on their own pages, not here:** the ISO comparison builtins are summarised [below](#iso-comparison-and-term-order-quoted-forms) and in [Operators](operators.md); `is_chars/1`, `is_codes/1` in [Type checking](type_checking.md); `time_goal/1` in [Control](control.md); `has_units/2`, `quantity/…` in [Units](units.md); `rational/1` and `rdiv` in [Arithmetic](arithmetic.md); CLP(ℚ)/CLP(ℝ) (`in_q`, `in_real`, `label_real`, `minimize`, `maximize`, `inf`, `sup`, `bb_inf`, `entailed`, `dump_q`, …) in [CLP(ℚ)](clpq.md) and [CLP(ℝ)](clpr.md); and the solver packages (`z3.*`, `ortools.*`, `pysat.*`) in their own pages.
+**Documented on their own pages, not here:** the ISO comparison builtins are summarised [below](#iso-comparison-and-term-order-quoted-forms) and in [Operators](operators.md); `is_chars/1`, `is_codes/1` in [Type checking](type_checking.md); `time_goal/1` and `call_with_time_limit/2` in [Control](control.md); `has_units/2`, `quantity/…` in [Units](units.md); `rational/1` and `rdiv` in [Arithmetic](arithmetic.md); CLP(ℚ)/CLP(ℝ) (`in_q`, `in_real`, `label_real`, `minimize`, `maximize`, `inf`, `sup`, `bb_inf`, `entailed`, `dump_q`, …) in [CLP(ℚ)](clpq.md) and [CLP(ℝ)](clpr.md); and the solver packages (`z3.*`, `ortools.*`, `pysat.*`) in their own pages.
 
 Notation in signature lines:
 - `+` = must be bound (input)

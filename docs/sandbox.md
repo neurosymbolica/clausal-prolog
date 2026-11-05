@@ -88,8 +88,13 @@ clausal.sandbox.enable(allow_adapters=None, allow_bridges=())
   loads. Nothing is read from the working directory. A bridge imported
   any other way, by Python directly or by a `.seam` file, has no
   importer project and is refused.
+- **`allow_package_adapters`** turns on [vetted package
+  adapters](#vetted-package-adapters) (`["sympy"]`), and
+  **`package_adapter_time_limit`** sets their per-call budget.
 - **A second call may only narrow.** Calling `enable()` again can shrink
-  either list. A name outside the current lists raises `PermissionError`.
+  any list, and shorten the package adapters' budget. A name outside the
+  current lists, a package adapter that is not on, or a longer budget
+  raises `PermissionError`.
 - **Reading the state.** `clausal.sandbox.is_enabled()`,
   `allowed_adapters()` and `allowed_bridges()` report it.
 
@@ -306,7 +311,8 @@ spelling: it loads but does not resolve when it runs.
 
 Any adapter that is not engine-shipped is refused, including an optional
 `clausal-*` package's adapter, even one spliced into
-`clausal.modules.py`. A new engine adapter is refused until it gets a row
+`clausal.modules.py`, unless it is a [vetted package
+adapter](#vetted-package-adapters) turned on by `enable()`. A new engine adapter is refused until it gets a row
 in this table (`clausal.sandbox.ADAPTERS`). A test fails while one is
 missing.
 
@@ -343,6 +349,118 @@ The engine's Clausal stdlib (`library(clpz)`, `library(reif)`,
 `clausal.stdlib.*`) and the CLP solvers are engine code, not adapters, and
 stay available.
 
+## Vetted package adapters
+
+An optional package's adapter is refused in the sandbox, with one kind of
+exception (operator ruling 2026-11-04, "vetted package: yes"): a **vetted
+package adapter**, a row of the engine's own table
+`clausal.sandbox.PACKAGE_ADAPTERS`. A project's `pyproject.toml` cannot add
+one. Each row pins the package's Python files by sha256, the package's
+version and the versions of the libraries it imports, and lists the
+predicates a sandboxed module may import from it. One row exists:
+
+| Name | Module | Pins | Predicates |
+|---|---|---|---|
+| `sympy` | `clausal.modules.py.sympy` | `clausal-sympy==0.1.0`; sha256 of `sympy.py` and `_sympy_units.py`; `sympy==1.14.0`, `mpmath==1.3.0` | `simplify`, `expand`, `factor`, `cancel`, `apart`, `together`, `collect`, `trig_simp`, `expand_trig`, `solve`, `solve_all`, `roots`, `diff`, `integrate`, `limit`, `series`, `subs`, `free_vars`, `degree`, `coeffs`, `sym_equal`, `sym_str`, `sympy_term` |
+
+Not listed, and so refused: `sym/2`, the printers, number theory, sums
+and products, and every term constructor and raw SymPy object the module
+binds (`sin`, `log`, `pi`, `e`, `inf`, ...). An ISO cell such as
+`log(X)` converts without them.
+
+**Turning one on.** Off by default:
+
+```text
+clausal.sandbox.enable(allow_package_adapters=["sympy"],
+                       package_adapter_time_limit=15.0)
+```
+
+or, for a child process, in its environment:
+`CLAUSAL_SANDBOX=1 CLAUSAL_SANDBOX_PACKAGE_ADAPTERS=sympy`
+(comma-separated names) and optionally
+`CLAUSAL_SANDBOX_ADAPTER_TIME_LIMIT=<seconds>` (or `none`). Either package
+variable without `CLAUSAL_SANDBOX=1`, or a name that is not vetted, is an
+`ImportError` at engine import. An entry may also be
+`{"name": "sympy", "importers": [path, {"path": ..., "sha256": ...}]}`:
+then only those `.seam` files may import it. The importers list is a
+load-time gate: narrowing it on a second `enable()` refuses later loads of
+the files it drops, while a module already loaded keeps running (its calls
+are still checked one by one, so dropping the adapter itself,
+`allow_package_adapters=[]`, does revoke them).
+
+**Verified at `enable()`, before anything of it is imported.** A pin that
+does not hold raises `clausal.sandbox.PackageAdapterError`, whose message
+starts with the reason in brackets, and the sandbox stays off:
+
+| Reason | When |
+|---|---|
+| `sha256_mismatch` | a pinned file's content is not its pin (one changed byte is enough) |
+| `version_mismatch` | the installed (or source-tree) version of the package, of `sympy` or of `mpmath` is not the pinned one |
+| `distribution_mismatch` | the installed metadata does not describe the file on the path |
+| `impostor_module` | `sys.modules` already holds the adapter or its helper (imported by anything but `enable()`, from whatever file: a planted bytecode cache could have run instead of the source), or `sympy` or `mpmath` from another file than the path finders give |
+| `not_found` | a pinned module resolves to no file, or a listed predicate is not one |
+
+The package's own version is read from its installed distribution, which
+must list the adapter file (an editable install's source tree must contain
+it), or else from the `pyproject.toml` of the source tree the file lies in.
+The pinned files are then executed from the very bytes that were hashed,
+never from a bytecode cache. So the host must not import the adapter
+before `enable()`; the environment variables enable at engine import,
+before anything can.
+
+The adapter reads the ISO arithmetic cells of a `.clausal` or `.pl` term
+(`X**2 - 4` is `-(**(X, 2), 4)`; `+ - * / ** ^ mod` and unary `-`, `+`)
+as SymPy's operators, so a Clausal Prolog domain can solve its own
+equations through a `.seam` wrapper.
+
+**At load.** Only a `.seam` module may import a vetted adapter, and only
+with `-import_from` of listed names; that import alone is no Python route,
+so the module must still be Python-free otherwise (no `++`, no `--`, no
+Python f-string slot). `-import_module(py.sympy)`, a dotted
+`py.sympy.solve(...)` and any unlisted name stay routes, and the module is
+refused with `permission_error(load, python_escape, File)`. A `.clausal`
+or `.pl` file reaches the predicates through such a `.seam`, never
+directly, and the `.seam` is never admitted as a bridge. `simplify` is also
+a name the runtime binds, which an import may not shadow: import it under
+another name, `-import_from(py.sympy, [alias(simplify, sym_simplify)])`.
+
+**At run time.** Each predicate is checked when it runs, as every adapter
+is: narrowing with a second `enable(allow_package_adapters=[])` revokes it
+in code compiled before. A SymPy result (a `SymExpr`) passed back in through
+`solve()` is a Python object and refused like any other.
+
+**The time budget.** SymPy has no timeout, and one `solve/3` can run for
+minutes. Each call of a vetted predicate runs under a wall-clock budget,
+`package_adapter_time_limit` seconds in all (default 15; `None` for none),
+counted only while the predicate itself runs. Running out throws the ball
+`time_limit_exceeded`, the ball of
+[`call_with_time_limit/2`](control.md#call_with_time_limit2), whose
+mechanism it uses: an enclosing `call_with_time_limit/2` still fires at its
+own time, and a timeout is never "no roots". After a timeout SymPy's caches
+are emptied and mpmath's precision reset, so a later call recomputes rather
+than trust state the interrupted one may have left. The budget applies only
+under the sandbox. Off the main thread a budgeted call is refused with
+`error(system_error(time_limit_not_main_thread), Name/Arity)`; pass
+`package_adapter_time_limit=None` to run such calls unbudgeted there.
+
+### Re-pinning a vetted package adapter
+
+The pins bind the exact files, so any change to `sympy.py` or
+`_sympy_units.py`, or a new `sympy`/`mpmath` release, makes `enable()`
+refuse until the row is re-pinned. A re-pin is an engine change, and needs
+the same review as the row itself:
+
+1. Review the diff of the pinned files against the design's checks
+   (`implementation_plans/sympy-package-adapter-sandbox-2026-11-04.md`): no
+   `sympify`, `parse_expr` or `S()` on a value derived from a term, no raw
+   Python objects exported, imports limited to `clausal.*` and `sympy`.
+2. Run `python -m pytest tests/test_sandbox_package_adapters.py -s -k pins`:
+   it prints the pins of the files on disk and the installed versions.
+3. Copy them into the row in `clausal/sandbox.py` (`PACKAGE_ADAPTERS`), and
+   the version into `version` when `packages/clausal-sympy` was bumped.
+4. Add a `CHANGELOG.md` entry under "Unreleased" saying what changed and
+   that it was reviewed.
+
 ## Errors at a glance
 
 | When | Error term |
@@ -358,6 +476,9 @@ stay available.
 | A dotted name or `M:G` reaching a non-module Python object | `error(permission_error(access, python_object, Type), _)` |
 | `enable()` after an unchecked load | `RuntimeError` (Python) |
 | `enable()` asked to widen a list | `PermissionError` (Python) |
+| `enable()` with a vetted package adapter whose pin does not hold | `PackageAdapterError` (Python), `[reason]` first in its message |
+| A vetted package adapter call runs out of its budget | `time_limit_exceeded` (a bare atom, as `call_with_time_limit/2` throws) |
+| A budgeted call off the main thread | `error(system_error(time_limit_not_main_thread), Name/Arity)` |
 
 Every run-time refusal can be caught with `catch/3`. None of them turns
 into a silent failure.
@@ -403,7 +524,8 @@ Some practical points:
   name/arity against your own list. The sandbox keeps the goal away from
   Python, but which of your predicates it may call is your decision.
 - **Run the worker with time and memory limits.** The sandbox does not
-  bound resources.
+  bound resources. (A vetted package adapter's per-call budget bounds
+  that one call's time, not the query's.)
 - **Keep the rulebase's Python in bridges.** Rulebases written for the
   sandbox should be Python-free. Python that must run belongs in a `.seam`
   bridge listed in `pyproject.toml` and named in `allow_bridges`.

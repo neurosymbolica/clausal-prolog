@@ -279,7 +279,8 @@ def test_the_translators_goal_names_cover_the_table():
 #: Clausal's own names, which a ``.pl`` file may define for itself with
 #: other arguments, so the translator does not read them as goals.
 _PL_GOAL_BUILTIN_NAMES = {"aggregate_all", "time", "phrase", "maplist",
-                          "foldl", "include", "exclude", "partition"}
+                          "foldl", "include", "exclude", "partition",
+                          "call_with_time_limit"}
 #: The database builtins' CLAUSE argument: a translator-only extra (a goal
 #: NAME is collected from it, but it is not called).
 _PL_CLAUSE_ARG_NAMES = {"assert", "asserta", "assertz", "retract",

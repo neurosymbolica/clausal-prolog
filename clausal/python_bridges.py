@@ -810,6 +810,27 @@ def _sandbox_constructor(dotted: str, name: str) -> bool:
     return sandbox_constructor(dotted, name)
 
 
+def _vetted_import(dotted: str, name: "str | None") -> bool:
+    """In the sandbox only: True when *name* imported from *dotted* is a
+    listed predicate of a vetted package adapter turned on now
+    (:func:`clausal.sandbox.vetted_import`, operator ruling 2026-11-04):
+    such an ``-import_from`` is no route.  Always False outside it."""
+    from clausal import _sandbox_state  # noqa: PLC0415
+    if not _sandbox_state.ACTIVE:
+        return False
+    from clausal.sandbox import vetted_import  # noqa: PLC0415
+    return vetted_import(dotted, name)
+
+
+def _vetted_reference(kind, a, b, node) -> bool:
+    """In the sandbox only: :func:`clausal.sandbox.vetted_reference`."""
+    from clausal import _sandbox_state  # noqa: PLC0415
+    if not _sandbox_state.ACTIVE:
+        return False
+    from clausal.sandbox import vetted_reference  # noqa: PLC0415
+    return vetted_reference(kind, a, b, node)
+
+
 def _non_export_kind(dotted: str, name: str) -> str:
     """``submodule_name`` when *name* is not an export of *dotted* because
     it is the package's SUBMODULE (ruling M3), else ``non_export``."""
@@ -1086,6 +1107,8 @@ def _check_refs(refs) -> "tuple[list, list]":
         elif kind == "import_from":
             _k, resolved, orig, _local, line = ref
             dotted = _module_path(resolved)
+            if _vetted_import(dotted, orig):
+                continue
             ok, origin = module_ok(dotted, line)
             if (ok and orig not in _exports(dotted, origin)
                     and not _sandbox_constructor(dotted, orig)):
@@ -1169,6 +1192,10 @@ def audit_checker(routes: list, children: list):
 
     def check_module(kind, a, b, node) -> bool:
         from clausal.seam_audit import node_line  # noqa: PLC0415
+        if _vetted_reference(kind, a, b, node):
+            # (Decided from the node: a memoised replay, which has only the
+            # line, answers otherwise and audits afresh.)
+            return True
         return check(kind, a, b, node_line(node))
 
     # The same question by its line alone: what a memoised audit replays.

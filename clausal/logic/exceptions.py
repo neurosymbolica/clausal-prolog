@@ -339,6 +339,14 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
     """
     from clausal.logic.variables import deref, unify  # noqa: PLC0415
 
+    if getattr(type(exc), "_clausal_in_flight", False):
+        # A time limit's alarm on its way to the call that owns the expired
+        # deadline (clausal.logic.time_limit): no catch/3 between the point
+        # it struck and that call may take it -- else a catch of
+        # time_limit_exceeded around an INNER limit would swallow the OUTER
+        # limit's timeout.  The owner rethrows it as the plain ball.
+        # (Operator ruling 2026-11-04, call_with_time_limit/2.)
+        raise exc
     catcher = deref(catcher)
     # A Python exception raised inside a module predicate reaches the
     # catcher chain wrapped (``_catchable_dispatch``: ``LogicException(

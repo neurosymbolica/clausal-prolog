@@ -4203,6 +4203,7 @@ GOAL_TRANSPARENT: dict[tuple[str, int], tuple[int, ...]] = {
     ("freeze", 2): (1,),
     ("when", 2): (1,),
     ("aggregate_all", 3): (1,),
+    ("call_with_time_limit", 2): (1,),
     ("^", 2): (1,),
 }
 

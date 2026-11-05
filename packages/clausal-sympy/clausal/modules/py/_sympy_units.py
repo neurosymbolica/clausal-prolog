@@ -349,12 +349,40 @@ def _function_dimension(name: str, args: list, analysis: "Analysis") -> Dimensio
     return dimensionless()
 
 
+#: The ISO arithmetic cells, by (name, arity), as the seam's operator nodes:
+#: a ``.clausal`` or ``.pl`` term ``X**2 - 4`` is ``('-', ('**', X, 2), 4)``.
+#: ``^`` stays a function name (handled where functions are), ``//`` is not
+#: here (ISO truncates, the seam's ``//`` floors).
+_ISO_BINARY = {"+": Add, "-": Sub, "*": Mult, "/": Div, "**": Pow,
+               "mod": Mod}
+
+
+def iso_node(t: Any) -> Any:
+    """The seam operator node an ISO arithmetic cell *t* denotes
+    (``('-', A, B)`` -> ``Sub``, ``('-', A)`` -> ``Negate``, ``('+', A)`` ->
+    ``A``), else None."""
+    if type(t) is not tuple or not t or type(t[0]) is not str:
+        return None
+    if len(t) == 3:
+        cls = _ISO_BINARY.get(t[0])
+        return cls(left=t[1], right=t[2]) if cls is not None else None
+    if len(t) == 2:
+        if t[0] == "-":
+            return Negate(operand=t[1])
+        if t[0] == "+":
+            return t[1]
+    return None
+
+
 def term_dimension(term: Any, analysis: Analysis, *,
                    symbol_for_var: Callable, to_sympy: Callable) -> Dimension | None:
     """The dimension of a CLAUSAL term, carried node by node (before SymPy
     can fold anything).  Raises ``UnitsMismatch``."""
     def walk(t):
         t = deref(t)
+        node = iso_node(t)
+        if node is not None:
+            return walk(node)
         if is_var(t):
             return _variable(symbol_for_var(t))
         if isinstance(t, Quantity):

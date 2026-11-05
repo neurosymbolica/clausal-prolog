@@ -1,7 +1,51 @@
 # Admitting one vetted package adapter to the sandbox (clausal-sympy)
 
-2026-11-04. Status: **design, for review. Not implemented.** The operator has not yet ruled
-on whether the sandbox should admit a package adapter at all.
+2026-11-04. Status: **implemented** (operator ruling 2026-11-04, "vetted package: yes"; and
+"1+2 option" for the time limit). Code: `clausal/sandbox.py` (`PACKAGE_ADAPTERS`,
+`_verify_package_adapter`, `vetted_reference`), `clausal/logic/time_limit.py`; docs:
+`docs/sandbox.md#vetted-package-adapters`, `docs/control.md#call_with_time_limit2`; tests:
+`tests/test_sandbox_package_adapters.py`, `tests/test_call_with_time_limit.py`.
+
+### Deviations from the design below
+
+1. **The time is bounded.** "Not bounded" no longer holds: each vetted call runs under a per-call
+   wall-clock budget (`enable(package_adapter_time_limit=...)`, default 15 s), only under the
+   sandbox, built on the new general `call_with_time_limit/2`. A timeout throws that predicate's
+   ball, the bare atom `time_limit_exceeded` (SWI's), not an `error(resource_error(...), _)`.
+   After a timeout SymPy's caches are cleared and mpmath's precision reset (`_reset_sympy`).
+   Off the main thread a budgeted call is refused with
+   `error(system_error(time_limit_not_main_thread), Name/Arity)`.
+2. **Exact version pins** (`sympy==1.14.0`, `mpmath==1.3.0`, `clausal-sympy==0.1.0`), the
+   installed versions, not `1.14.*`.
+3. **clausal-sympy's own version** is read from its installed distribution, which must list the
+   adapter file (an editable install's source tree must contain it), or, with no distribution
+   installed (a source checkout, as `packages/conftest.py` runs it), from the `pyproject.toml`
+   of the tree the file is in. The sha256 pins are what bind the code either way.
+4. **Importers** are named by the caller, `enable(allow_package_adapters=[{"name": "sympy",
+   "importers": [...]}])`, not in the engine table (a domain's own files cannot be engine rows).
+   A plain `"sympy"` admits any Python-free `.seam` importer.
+5. **The pinned files are executed from the bytes hashed**, not imported (no bytecode cache, no
+   second read): step 4 of the verification.
+6. **The load hook is not in `_classify`.** `_classify` answers a module question, which cannot
+   tell `-import_from` from `-import_module`. The audit's own questions are answered instead,
+   by the shape of the generated node (`vetted_reference`): the `from py.sympy import ...`
+   statement with every name listed, and a use of an imported name (one dotted `LoadName`); an
+   `import py.sympy` and a `LoadAttr` chain stay routes. Same rule in the bridge gate's audit
+   (`python_bridges.audit_checker`) and the compiler record (`_check_refs`).
+7. **Only a `.seam` imports it.** A `.clausal` or `.pl` file reaches the predicates through
+   such a `.seam`.
+8. **`simplify` must be imported under an alias** (`alias(simplify, sym_simplify)`): it is also
+   a name the runtime binds, which the audit does not let an import shadow.
+9. **Activation by environment** for a child: `CLAUSAL_SANDBOX_PACKAGE_ADAPTERS` and
+   `CLAUSAL_SANDBOX_ADAPTER_TIME_LIMIT`, read with `CLAUSAL_SANDBOX=1`.
+10. **The predicate list** is the symbolic-algebra set (23 names, `docs/sandbox.md`); not the
+    printers, number theory, sums/products or `sym/2`.
+11. **Stricter than step 3** (after the adversarial review): any adapter module already in
+    `sys.modules` is refused, whatever file it came from, since an import enable() did not do
+    may have run a planted `.pyc`. `sympy`/`mpmath` keep the file check.
+12. **After the review, in the wrapper (re-pinned):** `SymExpr` equality is structural (the
+    old `simplify`-based `__eq__` ran unbudgeted from unification and sorting), and ISO
+    arithmetic cells convert as operators, so `.clausal` domains can solve their own terms.
 
 ## Problem
 

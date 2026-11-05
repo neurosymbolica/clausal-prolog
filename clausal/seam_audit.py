@@ -159,6 +159,21 @@ def _engine_meaning_names() -> frozenset:
     return _ENGINE_MEANING
 
 
+def _own_atom_binding(node: ast.Assign, name: str) -> bool:
+    """Whether *node* is exactly ``name = $mint('name')``: the binding the
+    native (``.clausal``/``.pl``) front end emits for an atom of the file.
+    A runtime bare name (:func:`_runtime_bare_names`) may not be rebound,
+    since a generated call through it would then reach another object; an
+    atom spelled the same (``simplify``) binds it to a ``str``, which is
+    data and calls nothing, so that one shape is no Python statement."""
+    v = node.value
+    return (len(node.targets) == 1 and isinstance(v, ast.Call)
+            and isinstance(v.func, ast.Name) and v.func.id == "$mint"
+            and len(v.args) == 1 and not v.keywords
+            and isinstance(v.args[0], ast.Constant)
+            and v.args[0].value == name)
+
+
 def _runtime_bare_names() -> frozenset:
     """The bare (non-``$``) names the loader injects into every module: the
     module may not rebind them (a walrus or assignment target)."""
@@ -411,7 +426,8 @@ class _Audit:
         elif isinstance(node, ast.Assign):
             for t in node.targets:
                 if not (isinstance(t, ast.Name)
-                        and t.id not in self.reserved
+                        and (t.id not in self.reserved
+                             or _own_atom_binding(node, t.id))
                         and (not t.id.startswith("_")
                              or t.id in _ENGINE_ASSIGNED)):
                     self.route("python_statement", node)
