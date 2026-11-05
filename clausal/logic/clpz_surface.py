@@ -470,7 +470,29 @@ def clpz_expression(e, context: str, reified: bool = False):
     subterm.  *reified*: inside a reified comparison, a functor clpfd cannot
     propagate (``abs``, ``min``, ``max``, the bitwise ones ...) over a
     non-ground subterm is refused loudly -- Scryer accepts it, and a
-    silently unwatched variable would give wrong answers."""
+    silently unwatched variable would give wrong answers.
+
+    A CYCLIC *e* (``X = X+1``: no occurs check) is
+    ``domain_error(clpz_expression, E)``, the whole expression, before any
+    bad leaf in it, as Scryer's clpz (2026-11-04; the descent used to
+    overflow the stack)."""
+    try:
+        return _clpz_expression(e, context, reified, None)
+    except _fd._CyclicExpression:
+        _raise(domain_error("clpz_expression", deref(e), context))
+    except Exception:
+        if _fd._is_cyclic(e):
+            _raise(domain_error("clpz_expression", deref(e), context))
+        raise
+
+
+def _clpz_expression(e, context, reified, path):
+    """:func:`clpz_expression`'s descent.  *path* holds the ``id`` of each
+    compound entered through a bound variable on the way down (None until
+    the first): meeting one again on its own path is a cycle.  Per path,
+    so a shared subterm is no cycle; paid only where a variable is bound to
+    a compound."""
+    e0 = e
     e = deref(e)
     if is_var(e) or _is_int(e):
         return e
@@ -481,8 +503,19 @@ def clpz_expression(e, context: str, reified: bool = False):
         _raise(type_error("integer", walk(inner), context))
     if type(e) is tuple and len(e) >= 2 and type(e[0]) is str \
             and (e[0], len(e) - 1) in _CLPZ_FUNCTORS:
-        out = (e[0],) + tuple(clpz_expression(a, context, reified)
+        vid = None
+        if e is not e0:
+            vid = id(e)
+            if path is None:
+                path = {vid}
+            elif vid in path:
+                raise _fd._CyclicExpression
+            else:
+                path.add(vid)
+        out = (e[0],) + tuple(_clpz_expression(a, context, reified, path)
                               for a in e[1:])
+        if vid is not None:
+            path.discard(vid)
         if (reified and (e[0], len(e) - 1) not in _PROPAGATED
                 and _term_vars(out)):
             raise LogicException(domain_error(
@@ -669,34 +702,55 @@ _CONNECTIVES = {("#<==>", 2), ("#==>", 2), ("#<==", 2), ("#\\/", 2),
                 ("#/\\", 2), ("#\\", 2), ("#\\", 1)}
 
 
-def _check_reifiable(e, whole, ctx):
+def _check_reifiable(e, whole, ctx, path=None):
     """Scryer's ``reifiable/1`` over the whole expression, BEFORE anything
     is posted: an ill-formed expression is ``domain_error(
     clpz_reifiable_expression, Whole)``; a bad arithmetic operand of a
-    comparison is ``domain_error(clpz_expression, Culprit)``."""
+    comparison is ``domain_error(clpz_expression, Culprit)``.  *path* as in
+    :func:`_clpz_expression`: a cycle raises ``clpfd._CyclicExpression``,
+    for :func:`post_connective` to name the operand that holds it."""
+    e0 = e
     e = deref(e)
     if is_var(e):
         return
     if _is_int(e):
         if e in (0, 1):
             return
-        _raise(domain_error("clpz_reifiable_expression", walk(whole), ctx))
+        _raise(domain_error("clpz_reifiable_expression", _walked(whole), ctx))
+    vid = None
+    if e is not e0 and type(e) is tuple:
+        vid = id(e)
+        if path is None:
+            path = {vid}
+        elif vid in path:
+            raise _fd._CyclicExpression
+        else:
+            path.add(vid)
     if type(e) is tuple and len(e) == 2 and e[0] in ("#", "?"):
-        clpz_expression(e, ctx)
-        return
-    if type(e) is tuple and len(e) == 3 and e[0] in _CMP:
-        clpz_expression(e[1], ctx, reified=True)
-        clpz_expression(e[2], ctx, reified=True)
-        return
-    if type(e) is tuple and len(e) == 3 and e[0] == "in":
+        _clpz_expression(e, ctx, False, path)
+    elif type(e) is tuple and len(e) == 3 and e[0] in _CMP:
+        _clpz_expression(e[1], ctx, True, path)
+        _clpz_expression(e[2], ctx, True, path)
+    elif type(e) is tuple and len(e) == 3 and e[0] == "in":
         _fd_variable(e[1], ctx)
         parse_domain(e[2], ctx)
-        return
-    if type(e) is tuple and (e[0], len(e) - 1) in _CONNECTIVES:
+    elif type(e) is tuple and (e[0], len(e) - 1) in _CONNECTIVES:
         for a in e[1:]:
-            _check_reifiable(a, whole, ctx)
-        return
-    _raise(domain_error("clpz_reifiable_expression", walk(whole), ctx))
+            _check_reifiable(a, whole, ctx, path)
+    else:
+        _raise(domain_error("clpz_reifiable_expression", _walked(whole), ctx))
+    if vid is not None:
+        path.discard(vid)
+
+
+def _walked(t):
+    """*t* walked for an error term -- or as it is when it is cyclic (a later
+    operand of the connective being checked may be), which ``walk`` cannot
+    copy."""
+    try:
+        return walk(t)
+    except RecursionError:
+        return deref(t)
 
 
 def reify(e, trail, ctx):
@@ -837,7 +891,24 @@ def post_connective(name: str, args: tuple, trail: Trail) -> bool:
     """A reified connective as a GOAL (Scryer's top-level definitions)."""
     ctx = f"{name}/{len(args)}"
     whole = (name,) + tuple(args)
-    _check_reifiable(whole, whole, ctx)
+    for a in args:
+        # A CYCLIC operand (``X = X+1, B #<==> (X #= 1)``: no occurs check)
+        # is domain_error(clpz_reifiable_expression, Operand), as Scryer's
+        # clpz: each operand is checked before it is descended into, left to
+        # right, so a bad leaf in an earlier operand comes first, and a
+        # cycle in this one comes before a bad leaf in it.  The check's own
+        # walk finds the cycle on its way; on any other error the operand is
+        # checked exactly.  Every walker after this one (reify,
+        # clpz_expression, the posts) then meets acyclic operands only
+        # (2026-11-04; they used to overflow the stack).
+        try:
+            _check_reifiable(a, whole, ctx)
+        except _fd._CyclicExpression:
+            _raise(domain_error("clpz_reifiable_expression", deref(a), ctx))
+        except Exception:
+            if _fd._is_cyclic(a):
+                _raise(domain_error("clpz_reifiable_expression", deref(a), ctx))
+            raise
     if name == "#\\" and len(args) == 1:
         q = reify(args[0], trail, ctx)
         return q is not None and unify_01(q, 0, trail)

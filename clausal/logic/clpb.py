@@ -646,6 +646,11 @@ def sat(expr, trail: Trail) -> bool:
     on connected variables, and propagates forced values.  This ensures that
     multiple sat() calls sharing variables form a single constraint network.
     """
+    # A CYCLIC expression (no occurs check: ``X = X*1``) is NOT refused here:
+    # Scryer's clpb defines no answer for one (no answer in 30 s), so
+    # there is no error term to follow, and it behaves as before (the
+    # BDD walk: resource_error(stack)).  Operator ruling 2026-11-04:
+    # "follow Scryer, document it (comments are enough)".
     expr = deref(expr)
     bdd = _expr_to_bdd(expr, trail)
 
@@ -792,6 +797,11 @@ def taut(expr, t_var, trail: Trail) -> bool:
     """Tautology check: unify t_var=1 if expr is always true,
     t_var=0 if always false. Fail if indeterminate.
     """
+    # A CYCLIC expression (no occurs check: ``X = X*1``) is NOT refused here:
+    # Scryer's clpb defines no answer for one (no answer in 30 s), so
+    # there is no error term to follow, and it behaves as before (the
+    # BDD walk: resource_error(stack)).  Operator ruling 2026-11-04:
+    # "follow Scryer, document it (comments are enough)".
     expr = deref(expr)
     bdd = _expr_to_bdd(expr, trail)
 
@@ -884,6 +894,11 @@ def bool_labeling(vars_list, trail: Trail):
 
     Generator: yields None for each satisfying assignment.
     """
+    # A CYCLIC argument (no occurs check: ``X = X*1``) is NOT refused here:
+    # Scryer's clpb defines no answer for one (no answer in 30 s), so
+    # there is no error term to follow, and it behaves as before (the
+    # BDD walk: resource_error(stack)).  Operator ruling 2026-11-04:
+    # "follow Scryer, document it (comments are enough)".
     vars_list = deref(vars_list)
     vars_ = vars_list if isinstance(vars_list, list) else [vars_list]
 

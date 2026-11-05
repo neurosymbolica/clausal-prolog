@@ -38,6 +38,7 @@ from dataclasses import replace as _replace   # a rebuilt node keeps its positio
 from clausal.logic.exact_arith import EVALUABLE as _EVALUABLE, NODE_EVALUABLE as _NODE_EVALUABLE
 from clausal.logic.exact_arith import cell_key_args as _cell_key_args, node_keys as _node_keys
 from clausal.logic.exact_arith import key_nodes as _key_nodes, not_evaluable as _not_evaluable
+from clausal.logic.exact_arith import _term_children
 from clausal.logic.variables import (
     present_number,
     exact_cell_number,
@@ -3221,6 +3222,10 @@ def fd_gt(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
     if type(l) is int and type(r) is int:
         return l > r
     if not _units_done:
+        if _units_flag_active():
+            # the side channel walks the sides: a cyclic one is refused
+            # first, as fd_lt/fd_le's entry refuses it
+            _refuse_cyclic_sides(l, r)
         stripped = _units_strip(l, r, "(>)/2", trail)   # name the operator the user wrote
         if stripped is not None:
             l, r = stripped
@@ -3234,6 +3239,10 @@ def fd_ge(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
     if type(l) is int and type(r) is int:
         return l >= r
     if not _units_done:
+        if _units_flag_active():
+            # the side channel walks the sides: a cyclic one is refused
+            # first, as fd_lt/fd_le's entry refuses it
+            _refuse_cyclic_sides(l, r)
         stripped = _units_strip(l, r, "(>=)/2", trail)   # name the operator the user wrote
         if stripped is not None:
             l, r = stripped
@@ -3535,6 +3544,15 @@ def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
     """
     x = deref(x)
     y = deref(y)
+    # A cyclic side (no occurs check: ``X is X + 1``) is clpz's
+    # domain_error(clpz_expression, Side), as for the plain posts, the left
+    # side first; the walkers below (_expr_tree_has_var, _resolve, the
+    # ground fallback) would go round it.  Checked exactly: no walk here
+    # visits every node to find it on the way.
+    if not (type(x) is int or is_var(x)) and _is_cyclic(x):
+        raise _unknown_expr_leaf_error(x)
+    if not (type(y) is int or is_var(y)) and _is_cyclic(y):
+        raise _unknown_expr_leaf_error(y)
     # A reified test commits nothing, so the side channel runs only when
     # both sides are ground: stripping a non-ground side would create a
     # shadow (and declare the variable's dimension) for an answer of None.
@@ -5083,15 +5101,27 @@ _NONLINEAR_KEYS = frozenset({("//", 2), ("div", 2), ("mod", 2), ("^", 2),
 
 def _has_var(x) -> bool:
     """*x* (an arithmetic term: nodes, cells, numbers) holds an unbound
-    variable."""
+    variable.  Terminates on a cyclic term (no occurs check: ``X = X*2``):
+    a compound reached through a bound variable is explored once (a cycle
+    passes through one; met again, it holds no variable not already seen)."""
+    seen = None
     stack = [x]
     while stack:
-        x = deref(stack.pop())
+        x0 = stack.pop()
+        x = deref(x0)
         if is_var(x):
             return True
         t = type(x)
         if t is int:
             continue
+        if x is not x0:
+            i = id(x)
+            if seen is None:
+                seen = {i}
+            elif i in seen:
+                continue
+            else:
+                seen.add(i)
         key = _NODE_KEYS.get(t)
         if key is not None:
             if key[1] == 1:
@@ -5126,11 +5156,94 @@ def _nonlinear_at(key, args, mode=True) -> bool:
     return d >= 0 if key == ("^", 2) else d != 0
 
 
+class _CyclicExpression(Exception):
+    """Internal: a walk over a posted expression re-entered a term it is
+    inside -- the expression is cyclic (``X = X+1``: there is no occurs
+    check).  The post's entry turns it into clpz's
+    ``domain_error(clpz_expression, Side)``."""
+
+
+#: the class of an unbound variable, for a walk's fastest test
+_VAR_TYPE = type(Var())
+
+
+class _PathExit:
+    """A marker on :func:`_fd_int_term`'s stack: the walk has left the value
+    of a bound variable, whose ``id`` leaves the path set here."""
+    __slots__ = ("vid",)
+
+    def __init__(self, vid):
+        self.vid = vid
+
+
+def _is_cyclic(x) -> bool:
+    """*x* is a cyclic term -- exactly, as :func:`exact_arith._reentered_term`
+    decides it, for the posts no path-checking walk covers (a reified post,
+    a side :func:`_fd_int_term` did not walk to the end).
+
+    Cheaper than that finder on the acyclic terms the posts see: a cycle
+    always passes through a bound variable (a term cannot contain itself),
+    so only a compound reached through one goes on the path set, and once
+    explored it is not explored again (it cannot reach the path without
+    re-entering itself).  A posted ``Y + 2*Z`` costs a plain walk."""
+    if _Add is None:
+        _ensure_term_imports()
+    node_keys = _NODE_KEYS
+    var_t = _VAR_TYPE
+    stack = [x]
+    pop, push = stack.pop, stack.append
+    path = done = None
+    while stack:
+        x0 = pop()
+        x = deref(x0)
+        t = type(x)
+        if t is int or t is var_t:
+            continue
+        key = node_keys.get(t)
+        if key is not None:
+            kids = (x.operand,) if key[1] == 1 else (x.left, x.right)
+        elif t is tuple:
+            kids = x[1:] if len(x) >= 2 and type(x[0]) is str else x
+        elif t is list:
+            kids = x
+        elif t is _PathExit:
+            path.discard(x.vid)
+            done.add(x.vid)
+            continue
+        elif t is str or t is float or is_var(x):
+            continue
+        else:
+            kids = _term_children(x)
+            if kids is None:
+                continue
+        if x is not x0:
+            i = id(x)
+            if path is None:
+                path, done = {i}, set()
+            elif i in path:
+                return True
+            elif i in done:
+                continue
+            else:
+                path.add(i)
+            push(_PathExit(i))
+        stack.extend(kids)
+    return False
+
+
 def _fd_int_term(x, nonlinear: bool = False) -> tuple[bool, bool]:
     """(*x* is an all-integer arithmetic term?, it holds an abs/min/max
     cell -- or, with *nonlinear*, a non-linear operator (``_nonlinear_at``)
     -- to lift?).  Iterative: a deep sum must not hit the recursion limit
-    here."""
+    here.
+
+    Raises :class:`_CyclicExpression` when *x* is cyclic and the walk gets
+    round the cycle (it used to go round it forever).  The detection is per
+    PATH and paid only where a bound variable leads to a compound: a cycle
+    always passes through one (a term cannot contain itself), so meeting the
+    same compound again while inside its value is a cycle, and a shared
+    (DAG) subterm met on another path is not.  A ``(False, _)`` answer may
+    come before the walk reaches a cycle: the caller checks then."""
     global _Q_KEY, _REAL_KEY
     if _Q_KEY is None:
         from clausal.logic.clpq import Q_KEY  # noqa: PLC0415
@@ -5140,15 +5253,31 @@ def _fd_int_term(x, nonlinear: bool = False) -> tuple[bool, bool]:
     if _Add is None:
         _ensure_term_imports()
     lifted = False
+    path = None
     stack = [x]
     while stack:
-        x = deref(stack.pop())
+        x0 = stack.pop()
+        x = deref(x0)
         t = type(x)
         if t is int:
             continue
         if is_var(x):
             if get_attr(x, Q_KEY) is not None or get_attr(x, REAL_KEY) is not None:
                 return False, False
+            continue
+        if x is not x0:
+            # reached through a bound variable: on the path until the marker
+            # pushed under its children pops
+            i = id(x)
+            if path is None:
+                path = {i}
+            elif i in path:
+                raise _CyclicExpression
+            else:
+                path.add(i)
+            stack.append(_PathExit(i))
+        elif t is _PathExit:
+            path.discard(x.vid)
             continue
         key = _NODE_KEYS.get(t)
         if key is not None:
@@ -5336,6 +5465,16 @@ def _post_linear_ne(l, r, trail):
         trail)
 
 
+def _refuse_cyclic_sides(l, r) -> None:
+    """clpz's ``domain_error(clpz_expression, Side)`` for the first cyclic
+    side of a comparison (left first, as Scryer), with the unbound context
+    every other clpz expression error of these posts carries."""
+    for side in (l, r):
+        side = deref(side)
+        if not (type(side) is int or is_var(side)) and _is_cyclic(side):
+            raise _unknown_expr_leaf_error(side)
+
+
 def _lifting_nonlinear_cells(post, context, is_eq=False, is_ne=False):
     def wrapped(l, r, trail, *args, **kwargs):
         dl, dr = deref(l), deref(r)
@@ -5344,13 +5483,26 @@ def _lifting_nonlinear_cells(post, context, is_eq=False, is_ne=False):
             # first (the post would run it), so a lifted product of two
             # lengths is an area, not a dimensionless number
             if not kwargs.get("_units_done") and _units_flag_active():
+                # the side channel walks the sides too: refuse a cycle first
+                _refuse_cyclic_sides(dl, dr)
                 stripped = _units_strip(l, r, context, trail)
                 if stripped is not None:
                     l, r = stripped
                 kwargs["_units_done"] = True
-            okl, liftl = _fd_int_term(l, True)
+            # A cyclic side (``X = X+1``, no occurs check) is clpz's
+            # domain_error(clpz_expression, Side), as Scryer's clpz: the walk
+            # below finds the cycle on its way (an acyclic post pays ~nothing
+            # for it), and a side it did not walk to the end is checked
+            # exactly, so no walker after this one meets a cyclic term.
+            try:
+                okl, liftl = _fd_int_term(l, True)
+                okr, liftr = _fd_int_term(r, True) if okl else (False, False)
+            except _CyclicExpression:
+                _refuse_cyclic_sides(dl, dr)
+                raise
+            if not okr:
+                _refuse_cyclic_sides(dl, dr)
             if okl:
-                okr, liftr = _fd_int_term(r, True)
                 if okr and (liftl or liftr):
                     aux: list = []
                     l = _lift_cells(l, aux, True)
@@ -5428,7 +5580,10 @@ def _lift_exact_div(x, aux: list):
 _CLPZ_MARKERS = frozenset({("#", 1), ("?", 1)})
 
 
-def clpz_refuse_non_numeric(e, context: str) -> None:
+_NO_OTHER = object()
+
+
+def clpz_refuse_non_numeric(e, context: str, other=_NO_OTHER) -> None:
     """Raise clpz's ``domain_error(clpz_expression, Culprit)`` when the
     operand *e* of a ``#``-family comparison (``#=``, ``#\\=``, ``#<``, ...)
     holds something that is not arithmetic; return None otherwise.
@@ -5452,7 +5607,35 @@ def clpz_refuse_non_numeric(e, context: str) -> None:
     belongs in the ``#`` family is a separate ruling), exact rationals,
     decimals, units quantities and other number-like objects, and the
     evaluable compounds and operator nodes, whose arguments are checked the
-    same way."""
+    same way.
+
+    A CYCLIC operand (``X = X+1``: there is no occurs check) is
+    ``domain_error(clpz_expression, Operand)``, the whole operand, as
+    Scryer's clpz (operator ruling 2026-11-04 -- the descent used to recurse
+    to Python's limit, ``resource_error(stack)``).  A cycle comes before a
+    bad leaf, in this operand or in *other* (the comparison's other side,
+    checked after this one): ``X = a+X, X #= 1`` names ``a+ ...``, and
+    ``X = X+1, a #= X`` names X's cycle, as Scryer does."""
+    try:
+        _refuse_non_numeric(e, context, None)
+    except _CyclicExpression:
+        raise _clpz_domain_error(deref(e), context) from None
+    except Exception:
+        # a bad leaf (or a walk that overflowed) where a side is cyclic:
+        # the cycle is what Scryer reports
+        for side in (e, other):
+            if side is not _NO_OTHER and _is_cyclic(side):
+                raise _clpz_domain_error(deref(side), context) from None
+        raise
+
+
+def _refuse_non_numeric(e, context: str, path) -> None:
+    """:func:`clpz_refuse_non_numeric`'s descent.  *path* holds the ``id``
+    of each compound entered through a bound variable on the way down from
+    the operand (None until the first): meeting one again on its own path
+    is a cycle (:class:`_CyclicExpression`).  Per path, so a shared subterm
+    is no cycle; paid only where a variable is bound to a compound."""
+    e0 = e
     e = deref(e)
     if is_var(e) or type(e) is int:
         return
@@ -5460,6 +5643,15 @@ def clpz_refuse_non_numeric(e, context: str) -> None:
         raise _clpz_domain_error(e, context)
     if isinstance(e, numbers.Number):
         return
+    vid = None
+    if e is not e0:
+        vid = id(e)
+        if path is None:
+            path = {vid}
+        elif vid in path:
+            raise _CyclicExpression
+        else:
+            path.add(vid)
     from clausal.logic.runtime._seg_helpers import walk_seg  # noqa: PLC0415
     e = walk_seg(e)
     if is_atom(e) or type(e) is list:
@@ -5469,24 +5661,21 @@ def clpz_refuse_non_numeric(e, context: str) -> None:
         key = _NODE_KEYS.get(type(e))
         if key is not None:
             for a in ((e.operand,) if key[1] == 1 else (e.left, e.right)):
-                clpz_refuse_non_numeric(a, context)
+                _refuse_non_numeric(a, context, path)
         # A node the evaluator has no key for (``UnaryPlus``, the bitwise
         # nodes, ...) is left to the posts, which already decide it: this
         # check only closes the GROUND-leaf holes and must not refuse an
         # operand the posts accept today.
-        return
-    if exact_cell_number(e) is not None:
-        return
-    ka = _cell_key_args(e)
-    if ka is None:
-        return
-    if ka[0] in _CLPZ_MARKERS:
-        return
-    if ka[0] not in _CLP_CELL_EVALUABLE:
-        # an unknown functor, or the string carrier ``('$chars', Text)``
-        raise _clpz_domain_error(e, context)
-    for a in ka[1]:
-        clpz_refuse_non_numeric(a, context)
+    elif exact_cell_number(e) is None:
+        ka = _cell_key_args(e)
+        if ka is not None and ka[0] not in _CLPZ_MARKERS:
+            if ka[0] not in _CLP_CELL_EVALUABLE:
+                # an unknown functor, or the string carrier ``('$chars', Text)``
+                raise _clpz_domain_error(e, context)
+            for a in ka[1]:
+                _refuse_non_numeric(a, context, path)
+    if vid is not None:
+        path.discard(vid)
 
 
 def _clpz_domain_error(culprit, context: str) -> "Exception":

@@ -329,7 +329,17 @@ no answer for a cyclic term raises an ISO error, never a raw Python
 RecursionError: `resource_error(finite_memory)` where the engine saw the
 cycle (`assertz` of a cyclic term, where Scryer panics; ruling 2026-10-24,
 provisional), `resource_error(stack)` for a depth overflow.  Pinned row by
-row against Scryer in `tests/iso/test_cyclic_terms_scryer.py`.  The same
+row against Scryer in `tests/iso/test_cyclic_terms_scryer.py`.  Evaluating
+a cyclic term (`X = X+1, Y is X`, the comparisons, `eval_/2`) is Scryer's
+`type_error(evaluable, Name/Arity)`, naming the term where the cycle
+closes: `(+)/2` for `X = 1+X, Y is X*2` (operator ruling 2026-11-04;
+`tests/iso/test_cyclic_eval_scryer.py`).  Posting one to CLP(Z) (`X = X+1,
+X #= 1`, the reified connectives, the seam's `==` and `<`) is clpz's
+`domain_error(clpz_expression, Side)`, or
+`domain_error(clpz_reifiable_expression, Operand)` for an operand of a
+reified connective, as in Scryer (`tests/iso/test_clpz_cyclic_scryer.py`);
+CLP(B) does not refuse one, since Scryer's clpb defines no answer
+(ruling 2026-11-04).  The same
 holds at the Python entry: a cyclic or deep term handed to `solve()` works
 as inside a program, and `to_python`/`term_key` raise those two errors
 (`tests/test_python_entry_cyclic_deep.py`).
