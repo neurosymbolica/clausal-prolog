@@ -1517,7 +1517,7 @@ Succeeds if `X` contains no unbound `Var`s (is fully instantiated).
 ```
 Assert that `Term` is of the given type. Succeeds silently if it matches. Throws `instantiation_error` if Term is unbound, and `error(type_error(Type, Term), must_be/2)` if Term is ground but of the wrong type.
 
-The Type argument is an **atom**. Supported types: `integer`, `float`, `number`, `atom`, `string` / `str`, `list`, `boolean`, `callable`, `dict`, `compound`. `atom` and `string` are separate types: `must_be(atom, "abc")` raises, and so does `must_be(string, abc)`.
+The Type argument is an **atom**. Supported types: `integer`, `float`, `number`, `atom`, `atomic`, `string` / `str`, `list`, `character`, `chars`, `boolean`, `callable`, `dict`, `compound`. `character` is a one-character atom and `chars` a list of them, as Scryer's library(error): `must_be(chars, [a|_])` and `must_be(chars, [a,_])` raise `instantiation_error`, `must_be(chars, [a,1|_])` raises `type_error(character, 1)` and `must_be(chars, [a|b])` raises `type_error(list, [a|b])` -- those two type errors with the context `can_be/2`, as Scryer's. `atom` and `string` are separate types: `must_be(atom, "abc")` raises, and so does `must_be(string, abc)`.
 
 !!! warning "In the seam, quote a type name that is also a builtin"
     In a `.clausal` file `must_be(integer, 3)` is fine. In the seam, `integer`, `float`, `number`, `atom`, `callable` and `compound` are also builtin predicate names, and a bare builtin name in an argument is the builtin's object, not the atom: `must_be(integer, 3)` raises `type_error(atom, <builtin integer/1>)`. Write `must_be('integer', 3)` there.

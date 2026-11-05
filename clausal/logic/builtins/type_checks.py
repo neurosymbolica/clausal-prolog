@@ -22,7 +22,7 @@ from clausal.logic.builtins._helpers import (
     _is_non_empty_list,
 )
 from clausal.logic.runtime._seg_helpers import walk_seg
-from clausal.logic.cells import is_chars
+from clausal.logic.cells import is_chars, chars_text
 
 
 @_builtin("var", 1)
@@ -467,6 +467,7 @@ def _ground__1(x, trail, k):
 _KNOWN_TYPES = frozenset({
     "integer", "int", "float", "number", "atom", "atomic", "string", "str",
     "list", "boolean", "bool", "callable", "dict", "compound",
+    "character", "chars",
 })
 
 
@@ -502,6 +503,11 @@ def _check_type(type_name: str, term) -> bool:
         if isinstance(term, (list, bytes)) or is_chars(term):   # STAGE 2: a str is an ATOM; the carrier is the list
             return True
         return isinstance(term, (SegList, SegString, SegBytes)) and _seg_proper(term)
+    elif type_name == "character":
+        # Operator ruling 2026-11-05: a one-character atom, as Scryer's
+        # library(error) ``character``.  ``"a"`` is the one-char LIST, not
+        # a character, and ``''`` has no character.
+        return _is_char_atom(term)
     elif type_name in ("boolean", "bool"):
         return isinstance(term, bool)
     elif type_name == "callable":
@@ -548,6 +554,97 @@ def _open_list(term) -> bool:
             and seg_closed(term) is None)
 
 
+_NOT_A_LIST = object()   # _list_elements: the term is no list nor partial list
+
+
+def _list_elements(term):
+    """Read *term* (dereferenced) as a list or a partial list: ``(elements,
+    open)`` -- every element it is known to have, in order, and whether a
+    hole is still unbound (the tail, ``[a|_]``, or an inner star, ``[*A,
+    x]``) -- or ``_NOT_A_LIST`` when no binding can make it a list: an
+    improper list (``[a|b]``, ``[_|b]``), a non-list, a cyclic list.
+
+    Every list spelling: a ``list``, the chars carrier (its chars), a
+    ``bytes`` (its codes), nil in any spelling, a ``Seg*`` (walked through
+    its bound holes), and the ``'.'/2`` cells an improper or ``=..``-built
+    list is."""
+    from clausal.terms import ConcreteSeg, VarSeg  # noqa: PLC0415
+    from clausal.logic.runtime._seg_helpers import str_chars  # noqa: PLC0415
+    elements: list = []
+    seen: set = set()
+    t = term
+    while True:
+        if is_var(t):
+            return elements, True
+        if id(t) in seen:
+            return _NOT_A_LIST                 # a cyclic list: no proper list
+        seen.add(id(t))
+        if is_chars(t):
+            elements.extend(str_chars(chars_text(t)))
+            return elements, False
+        if _is_empty_list(t):
+            return elements, False
+        if type(t) is list or isinstance(t, bytes):
+            elements.extend(t)
+            return elements, False
+        if isinstance(t, (SegString, SegBytes)):
+            w = walk_seg(t)
+            if not isinstance(w, (SegString, SegBytes)):
+                t = w
+                continue
+            for seg in w.segments:             # open: its text, then holes
+                if isinstance(seg, str):
+                    elements.extend(str_chars(seg))
+                elif isinstance(seg, bytes):
+                    elements.extend(seg)
+            return elements, True
+        if isinstance(t, SegList):
+            w = t._walk_raw(deep=False)
+            if not isinstance(w, SegList):
+                t = w                          # a list, or the cells of [..|Tail]
+                continue
+            for seg in w.segments:
+                if isinstance(seg, ConcreteSeg):
+                    elements.extend(seg.elements)
+                elif not isinstance(seg, VarSeg):
+                    return _NOT_A_LIST
+            return elements, True
+        if type(t) is tuple and len(t) == 3 and t[0] == ".":
+            elements.append(t[1])              # '.'(H, T): [H|T]
+            t = deref(t[2])
+            continue
+        return _NOT_A_LIST
+
+
+def _chars_check(term, indicator: str) -> bool:
+    """The ``chars`` row of must_be/2 and can_be/2 (operator ruling
+    2026-11-05), Scryer's ``can_(chars, _)``: True when *term* is a list of
+    characters, False when it could still become one (a partial list, an
+    unbound element), else an error -- in this order, as Scryer checks:
+
+    - ``type_error(list, Term)`` when *term* can never be a list (``ab``,
+      ``1``, ``[a|b]``, ``[_|b]``, ``[a,1|b]``);
+    - ``type_error(character, E)`` for its first bound element that is no
+      one-character atom (``[1,2]``, ``[ab]``, ``[a,1|_]``, ``[_,1]``).
+
+    The error's context is ``can_be/2`` even when must_be/2 asks: Scryer's
+    ``must_be_(chars, _)`` is ``can_be(chars, _)`` first ("prioritize type
+    errors over instantiation errors"), and its type errors say so.  *indicator*
+    is that context."""
+    from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+    read = _list_elements(term)
+    if read is _NOT_A_LIST:
+        raise LogicException(type_error("list", term, indicator))
+    elements, is_open = read
+    for e in elements:
+        e = deref(e)
+        if is_var(e):
+            is_open = True
+        elif not _is_char_atom(e):
+            raise LogicException(type_error("character", e, indicator))
+    return not is_open
+
+
 @_builtin("must_be", 2)
 def _must_be__2(type_name, term, trail, k):
     """must_be(Type, Term) — assert that Term is of the given type.
@@ -575,6 +672,11 @@ def _must_be__2(type_name, term, trail, k):
         raise LogicException(type_error("type", type_val, "must_be/2"))
     term_val = deref(term)
     if is_var(term_val):
+        raise LogicException(instantiation_error("must_be/2"))
+    if type_val == "chars":
+        if _chars_check(term_val, "can_be/2"):
+            yield None
+            return
         raise LogicException(instantiation_error("must_be/2"))
     if _check_type(type_val, term_val):
         yield None
@@ -608,6 +710,9 @@ def _can_be__2(type_name, term, trail, k):
     term_val = deref(term)
     if is_var(term_val):
         # Unbound — could become anything
+        yield None
+    elif type_val == "chars":
+        _chars_check(term_val, "can_be/2")    # an error, or it can be chars
         yield None
     elif _check_type(type_val, term_val):
         yield None
