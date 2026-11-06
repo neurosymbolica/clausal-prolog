@@ -1,9 +1,10 @@
-"""The legacy CLP(Q) API on the port of clp(q,r) 1.3.3 (CLAUSAL_CLPQ=holzbaur).
+"""Clausal's CLP(Q) API on the port of clp(q,r) 1.3.3.
 
-Every name and signature here is legacy.py's, so the package can export
-either solver behind the same names (clausal/logic/clpq/__init__.py).  Each
-entry point does what legacy's does at the boundary and hands the rest to
-the port:
+Every name and signature here is that of the solver Clausal shipped before
+the port (legacy.py, retired by operator ruling 2026-11-05 and deleted);
+"legacy" in the comments below is that solver.  The package exports these
+names (clausal/logic/clpq/__init__.py).  Each entry point does what
+legacy's did at the boundary and hands the rest to the port:
 
 - an arithmetic cell becomes its operator node (``_cells_as_nodes``,
   ruling R9 A1), and the units side channel strips a Quantity or a united

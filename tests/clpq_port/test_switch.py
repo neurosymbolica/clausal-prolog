@@ -72,7 +72,7 @@ def test_the_subprocess_imports_this_tree():
 def test_an_unknown_solver_name_stops_the_import():
     r = _under("simplex", ["-c", "import clausal.logic.clpq"])
     assert r.returncode != 0
-    assert "CLAUSAL_CLPQ must be legacy or holzbaur, not 'simplex'" in r.stderr
+    assert "CLAUSAL_CLPQ must be holzbaur (or unset), not 'simplex'" in r.stderr
 
 
 # ---------------------------------------------------------------- sandbox

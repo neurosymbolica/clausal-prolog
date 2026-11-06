@@ -342,18 +342,14 @@ def _answer(shown, trail) -> str:
         def spell(x):
             return term_writeq(_deref_walk(x), var_names=names, priority=699,
                                ops=ops)
-        # CLP(Q) names a variable it could not eliminate _Q1, _Q2, ...;
-        # legacy numbers them on from the answer's variables, as dump_q
-        # does (_Q3 after two), the port from 1.
-        from clausal.logic import clpq  # noqa: PLC0415
+        # CLP(Q) names a variable it could not eliminate _Q1, _Q2, ...
         internal: dict = {}
-        offset = len(free) if clpq.SOLVER == "legacy" else 0
 
         def name_of(v):
             name = names.get(id(v))
             if name is None:
                 name = internal.setdefault(
-                    id(v), f"_Q{offset + len(internal) + 1}")
+                    id(v), f"_Q{len(internal) + 1}")
             return name
         items = residual_items(free.values(), trail, hidden_residue.values())
         # A variable only a goal mentions (a CLP(B) helper) is named

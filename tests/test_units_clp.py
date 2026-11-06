@@ -1620,7 +1620,7 @@ class TestInQDeclaredTarget:
         with pytest.raises(LogicException) as ei:
             clpq.in_q(x, Quantity(0, {}), Quantity(10, {}), t)
         _assert_system_error(ei, "units_mismatch")
-        assert get_attr(x, "clpq") is None                    # nothing posted on the way
+        assert get_attr(x, clpq.Q_KEY) is None                   # nothing posted on the way
 
 
 def is_var_unbound(v) -> bool:

@@ -46,9 +46,7 @@ of the CLP(Q) port of clp(q,r) 1.3.3, each a positive integer: past one
 the port raises ``error(resource_error(R), _)`` with R ``clpq_nodes``,
 ``clpq_work``, ``clpq_projection`` or ``clpq_expansion``
 (``clausal/logic/clpq/limits.py``, which holds the values, and
-``clausal/logic/clpq/DEVIATIONS.md`` D24).  They exist under the default
-solver, the port, and not under ``CLAUSAL_CLPQ=legacy``: the legacy solver
-has no such caps, and its flags are as they were.
+``clausal/logic/clpq/DEVIATIONS.md`` D24).
 
 In the sandbox (``clausal.sandbox``) a program sets no flag that reaches
 past its own module: the goal ``set_prolog_flag/2`` is refused there, and
@@ -104,7 +102,6 @@ with ``X`` unbound).
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from clausal.logic.variables import deref, is_var, unify
@@ -181,9 +178,6 @@ def _is_positive_int(v) -> bool:
 
 
 #: The CLP(Q) port's caps, flag -> resource (clausal.logic.clpq.limits).
-#: Absent under CLAUSAL_CLPQ=legacy; the variable is read here with the
-#: default clausal.logic.clpq gives it (holzbaur): importing that package
-#: from here would import the builtins again.
 CLPQ_LIMIT_FLAGS = {
     "clpq_max_nodes": "clpq_nodes",
     "clpq_max_work": "clpq_work",
@@ -192,10 +186,9 @@ CLPQ_LIMIT_FLAGS = {
     "clpq_max_expansion_bits": "clpq_expansion_bits",
     "clpq_max_coefficient_bits": "clpq_coefficient_bits",
 }
-if os.environ.get("CLAUSAL_CLPQ", "holzbaur") == "holzbaur":
-    for _name in CLPQ_LIMIT_FLAGS:
-        FLAGS[_name] = _Flag(_name, None, _is_positive_int,
-                             supported=_is_positive_int, scope="clpq")
+for _name in CLPQ_LIMIT_FLAGS:
+    FLAGS[_name] = _Flag(_name, None, _is_positive_int,
+                         supported=_is_positive_int, scope="clpq")
 
 #: The flags a SANDBOXED module may still set with a load-time directive.
 #: Each one's value lives on that module's own Database and governs that

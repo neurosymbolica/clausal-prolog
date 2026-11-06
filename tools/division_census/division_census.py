@@ -184,37 +184,52 @@ def install() -> list[str]:
 def _patch_clpq() -> None:
     """CLP(Q) divides WITHOUT going through ``exact_div``.
 
-    ``clpq._linearize``'s ``_Div`` arm flattens ``expr.left / expr.right`` by
-    dividing the coefficients directly (``{v: c / rv ...}, lv / rv``), so a
-    division that happens inside a posted CONSTRAINT rather than in ground
-    arithmetic is invisible to every other binding here.  That is not
-    hypothetical: a downstream run's row 7 (a scored domain
-    produced no census rows at all while five siblings produced plenty, and
-    this is the path such a site would take.
+    The port's normal form (``clausal.logic.clpq.normal_form``, nf.pl)
+    reads a constraint's ``/`` in ``normal_form_divide``: a constant divisor
+    is inverted and multiplied into the dividend, so a division that
+    happens inside a posted CONSTRAINT rather than in ground arithmetic is
+    invisible to every other binding here.  That is not hypothetical: a
+    downstream run's row 7 (a scored domain produced no census rows at all
+    while five siblings produced plenty, and this is the path such a site
+    would take.
 
-    Only the PROGRAM's division is recorded — the ``_Div`` node the source
-    wrote.  The simplex's own pivot arithmetic divides constantly (bound
-    computation, row reduction) and recording that would bury the signal.
+    Only the PROGRAM's division is recorded -- the ``/`` the source wrote
+    (``normal_form``, and ``_repair_skeleton`` when a delayed ``/`` gets
+    its divisor), by a constant: the dividend's constant part, the divisor
+    and the quotient's constant part.  A negative power's inverse and the
+    simplex's own pivot arithmetic divide too, and recording those would
+    bury the signal.
     """
-    from clausal.logic import clpq
-    if getattr(clpq._linearize, "_division_census_original", None):
-        return
-    clpq._ensure_term_imports()
-    div_type = clpq._Div
-    original = clpq._linearize
+    import sys
 
-    def linearize(expr, trail, *a, **kw):
-        result = original(expr, trail, *a, **kw)
-        if isinstance(expr, div_type) and result is not None:
-            left = original(expr.left, trail, *a, **kw)
-            right = original(expr.right, trail, *a, **kw)
-            if left is not None and right is not None and not right[0]:
-                _record("clpq._linearize", left[1], right[1], result[1])
+    from clausal.logic.clpq import normal_form
+    if getattr(normal_form.normal_form_divide, "_division_census_original",
+               None):
+        return
+    original = normal_form.normal_form_divide
+    callers = {"normal_form", "_repair_skeleton"}
+
+    def rational(coefficient):
+        return (Fraction(*coefficient) if type(coefficient) is tuple
+                else Fraction(coefficient))
+
+    def constant(form):
+        # A normal form is a list of monomials, the constant one first.
+        return (rational(form[0].coefficient)
+                if form and not form[0].powers else Fraction(0))
+
+    def normal_form_divide(divisor, dividend):
+        result = original(divisor, dividend)
+        if (result is not None and len(divisor) == 1
+                and not divisor[0].powers
+                and sys._getframe(1).f_code.co_name in callers):
+            _record("clpq.normal_form_divide", constant(dividend),
+                    rational(divisor[0].coefficient), constant(result))
         return result
 
-    linearize._division_census_original = original
-    clpq._linearize = linearize
-    _INSTALLED.append("clpq._linearize")
+    normal_form_divide._division_census_original = original
+    normal_form.normal_form_divide = normal_form_divide
+    _INSTALLED.append("clpq.normal_form_divide")
 
 
 def rows():

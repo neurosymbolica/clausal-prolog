@@ -1986,8 +1986,8 @@ def _refuse_cycle(term, strict):
     ``type_error(evaluable, F/A)`` under the CLP(Q) or CLP(R) context
     *strict*, ``resource_error(finite_memory)`` when *strict* is None.
     Shared by every stack walk over an arithmetic expression (the cell
-    walk, the units scan, CLP(R)'s and legacy CLP(Q)'s walks; clpq
-    DEVIATIONS.md D27)."""
+    walk, the units scan and CLP(R)'s walks;
+    clpq DEVIATIONS.md D27)."""
     if strict is not None:
         raise _not_evaluable(term, strict)
     from clausal.logic.rational_walk import unwalkable_term_error  # noqa: PLC0415

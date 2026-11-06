@@ -56,7 +56,7 @@ def _depth():
 
 
 def test_the_hook_is_registered_for_the_port_key():
-    # Ruling R1: registered at import, whatever CLAUSAL_CLPQ says.
+    # Ruling R1: registered at import.
     trail = Trail()
     x = Var()
     assert _post(trail, (">=", x, 1))
@@ -917,7 +917,6 @@ _KNOWN_HOOKS = {
     ("clausal.logic.clpfd", "ZCMP_KEY"),
     ("clausal.logic.clpq.attribute_hooks", "CLPQ_KEY"),
     ("clausal.logic.clpq.components", "COMPONENT_KEY"),
-    ("clausal.logic.clpq.legacy", "Q_KEY"),
     ("clausal.logic.clpr", "REAL_KEY"),
     ("clausal.logic.constraints", "DIF_KEY"),
     ("clausal.logic.coroutining", "FREEZE_KEY"),
