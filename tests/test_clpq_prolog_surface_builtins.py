@@ -1,12 +1,12 @@
 """The clp(Q,R) builtins the SICStus 3.7.1 manual documents, on the .pl
-surface, under each CLP(Q) solver.
+surface.
 
 ``maximize/1``, ``minimize/1``, ``bb_inf/5``, ``ordering/1`` and ``dump/3``
 raised existence_error (dump/3 a type_error: the name resolved to a Python
 function); see todo/done/clpq-port-vs-sicstus-manual-23-gaps-2026-10-16.md.  The manual's own
 queries are in tests/clpq_port/test_manual_examples.py (they need the
-example files); these run without them, under both solvers through the
-CLI, which is where a .pl program's answer is printed.
+example files); these run without them, through the CLI, which is where
+a .pl program's answer is printed.
 """
 import re
 
@@ -14,7 +14,7 @@ import pytest
 
 from tests.clpq_oracle import _equivalent, _sides, _value, clausal_answers
 
-SOLVERS = ["legacy", "holzbaur"]
+SOLVERS = ["holzbaur"]
 
 PROGRAM = r"""
 :- use_module(library(clpq)).
@@ -106,16 +106,14 @@ def test_bb_inf_5_gives_the_infimum_and_the_integral_vertex(solver):
                   ["X", "Y", "Z", "Inf", "Vertex"])
     assert answer.bindings["Inf"] == 4
     assert [_value(v) for v in _items(answer.bindings["Vertex"])] == [2, 2]
-    if solver == "holzbaur":
-        # bb.pl's shape: the store is as it was, Inf alone is bound.
-        assert set(answer.bindings) == {"Inf", "Vertex"}
-        assert _equivalent(answer.residual,
-                           ["Y>=3/2", "Z>=3/2", "X-Y-Z>=0"]) == (True, "")
+    # bb.pl's shape: the store is as it was, Inf alone is bound.
+    assert set(answer.bindings) == {"Inf", "Vertex"}
+    assert _equivalent(answer.residual,
+                       ["Y>=3/2", "Z>=3/2", "X-Y-Z>=0"]) == (True, "")
 
 
 def test_bb_inf_5_with_strict_bounds_on_the_port():
-    # The manual's bb_inf example ({Y > 1, Z > 1}); the default solver's
-    # bb_inf/3 fails on strict bounds, a limit it had before.
+    # The manual's bb_inf example ({Y > 1, Z > 1}).
     answer = _one("holzbaur", "q_bb_inf_5_strict(X, Y, Z, Inf, Vertex)",
                   ["X", "Y", "Z", "Inf", "Vertex"])
     assert answer.bindings["Inf"] == 4
@@ -150,10 +148,9 @@ def test_ordering_1_with_a_list_is_accepted(solver):
     answer = _one(solver, "q_ordering_list(X, Y)", ["X", "Y"])
     assert answer.bindings == {}
     assert _equivalent(answer.residual, ["X+Y=10"]) == (True, "")
-    if solver == "holzbaur":
-        # ordering.pl: the listed variable is the one the answer defines.
-        [constraint] = answer.residual
-        assert _sides(constraint)[0] == "X", constraint
+    # ordering.pl: the listed variable is the one the answer defines.
+    [constraint] = answer.residual
+    assert _sides(constraint)[0] == "X", constraint
 
 
 @pytest.mark.parametrize("solver", SOLVERS)
@@ -161,10 +158,9 @@ def test_ordering_1_with_a_relation_is_accepted(solver):
     answer = _one(solver, "q_ordering_lt(X, Y)", ["X", "Y"])
     assert answer.bindings == {}
     assert _equivalent(answer.residual, ["X+Y=10"]) == (True, "")
-    if solver == "holzbaur":
-        # ordering(A < B): the answer defines A in terms of B.
-        [constraint] = answer.residual
-        assert _sides(constraint)[0] == "X", constraint
+    # ordering(A < B): the answer defines A in terms of B.
+    [constraint] = answer.residual
+    assert _sides(constraint)[0] == "X", constraint
 
 
 # ---- dump/3 ---------------------------------------------------------------------
@@ -175,11 +171,10 @@ def test_dump_3_with_atoms_for_names(solver):
     assert set(answer.bindings) == {"Cs"}
     # The store is as it was ...
     assert _equivalent(answer.residual, ["A>=4", "A+B=<10"]) == (True, "")
-    # ... and CodedAnswer is its projection over the names, exactly: each
-    # solver in its projection's order, a bound the readable way round
-    # (a>=4, never -a=< -4).
-    assert answer.bindings["Cs"] == {"holzbaur": "[a>=4,a+b=<10]",
-                                     "legacy": "[a+b=<10,a>=4]"}[solver]
+    # ... and CodedAnswer is its projection over the names, exactly: in
+    # the projection's order, a bound the readable way round (a>=4, never
+    # -a=< -4).
+    assert answer.bindings["Cs"] == "[a>=4,a+b=<10]"
 
 
 @pytest.mark.parametrize("solver", SOLVERS)

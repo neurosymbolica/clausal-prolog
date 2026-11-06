@@ -267,7 +267,7 @@ def test_an_asserted_rule_keeps_a_run_time_hash_cell_as_data(native):
     assert _all(mod, "a3", V) == [(("#", "foo"),)]
 
 
-# ── library(clpq) declares p, pi, e, zero: under BOTH solvers ───────────────
+# ── library(clpq) declares p, pi, e, zero ──────────────────────────────────
 
 _CLPQ_PROBE = r'''
 import importlib, sys, textwrap
@@ -275,7 +275,7 @@ from fractions import Fraction
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
 import clausal.logic.clpq as clpq
-assert clpq.SOLVER == sys.argv[2], clpq.SOLVER
+assert clpq.SOLVER == "holzbaur", clpq.SOLVER
 sys.path.insert(0, sys.argv[1])
 with open(f"{sys.argv[1]}/hcq_lib.clausal", "w") as f:
     f.write(textwrap.dedent("""\
@@ -304,34 +304,29 @@ print(repr(out))
 '''
 
 
-def _under(solver, tmp_path):
-    env = dict(os.environ, CLAUSAL_CLPQ=solver, PYTHONPATH=str(ROOT))
+def _under(tmp_path):
+    env = dict(os.environ, PYTHONPATH=str(ROOT))
     env.pop("CLAUSAL_PL_FRONTEND", None)
-    r = subprocess.run([sys.executable, "-c", _CLPQ_PROBE, str(tmp_path),
-                        solver], cwd=tmp_path, env=env, capture_output=True,
+    r = subprocess.run([sys.executable, "-c", _CLPQ_PROBE, str(tmp_path)],
+                       cwd=tmp_path, env=env, capture_output=True,
                        text=True, timeout=300)
     assert r.returncode == 0, r.stderr
     return eval(r.stdout.strip().splitlines()[-1])
 
 
-@pytest.mark.parametrize("solver", ["legacy", "holzbaur"])
-def test_clpq_declares_p_pi_e_zero(solver, tmp_path):
-    out = _under(solver, tmp_path)
+def test_clpq_declares_p_pi_e_zero(tmp_path):
+    out = _under(tmp_path)
     # A folded #(pi) meets the solver as the float literal does.
     assert out["two_pi"] == out["two_pi_literal"], out
     assert out["pi_alone"] == out["pi_literal"] == out["p_alone"], out
     [two_pi] = out["two_pi"]
     [pi] = out["pi_alone"]
     assert type(two_pi) is Fraction and two_pi == 2 * pi, out
-    if solver == "holzbaur":
-        # The port reads a float through 1.3.3's float_rat, so the folded
-        # value is exactly what its own #(pi) gave (normal_form_number).
-        from clausal.logic.clpq import normal_form as nf
-        [m] = nf.normal_form(("#", "pi"))
-        assert pi == Fraction(*m.coefficient) == Fraction(245850922, 78256779)
-    else:
-        # The legacy solver takes a float's exact binary value.
-        assert pi == Fraction(3.141592653589793)
+    # The port reads a float through 1.3.3's float_rat, so the folded
+    # value is exactly what its own #(pi) gave (normal_form_number).
+    from clausal.logic.clpq import normal_form as nf
+    [m] = nf.normal_form(("#", "pi"))
+    assert pi == Fraction(*m.coefficient) == Fraction(245850922, 78256779)
     assert out["e_is"] == [2.718281828459045], out
     assert out["pi_constant"] == [3.141592653589793], out
     assert out["zero"] == [1] and out["zero_data"] == [0], out

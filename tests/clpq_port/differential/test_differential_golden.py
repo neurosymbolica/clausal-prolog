@@ -45,9 +45,7 @@ the observation diff of the first few.
 import os
 import re
 
-import pytest
 
-from clausal.logic.clpq import SOLVER
 from tests.clpq_port.differential import _engine, _golden
 from tests.clpq_port.differential._workloads import corpus
 
@@ -61,8 +59,6 @@ def test_every_workload_answers_and_decides_as_recorded():
     _compare(corpus(full=FULL))
 
 
-@pytest.mark.skipif(SOLVER != "holzbaur",
-                    reason="the engine reaches the port with CLAUSAL_CLPQ=holzbaur")
 def test_every_engine_workload_answers_and_decides_as_recorded():
     # Programs run through the engine (_engine.py): .pl and .clausal, with
     # freeze/2, dif/2, CLP(FD), findall/3, catch/3, negation, copy_term/2.

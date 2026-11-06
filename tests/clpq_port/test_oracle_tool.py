@@ -75,10 +75,10 @@ def test_the_oracle_collects_every_answer_with_bindings():
 
 
 @needs_scryer
-def test_clausal_legacy_matches_the_oracle():
+def test_clausal_matches_the_oracle():
     program = ":- use_module(library(clpq)).\np(X, Y) :- {X + Y =< 3, X >= 0}.\n"
     oracle = oracle_answers(program, "p(X, Y)", ["X", "Y"])
-    clausal = clausal_answers(program, "p(X, Y)", ["X", "Y"], solver="legacy")
+    clausal = clausal_answers(program, "p(X, Y)", ["X", "Y"], solver="holzbaur")
     ok, why = same_solution_sets(oracle, clausal)
     assert ok, why
 
@@ -95,7 +95,7 @@ def test_a_known_different_pair_is_reported():
 def test_no_answers_on_either_side():
     program = ":- use_module(library(clpq)).\np(X) :- {X >= 1, X =< 0}.\n"
     assert oracle_answers(program, "p(X)", ["X"]) == []
-    assert clausal_answers(program, "p(X)", ["X"], solver="legacy") == []
+    assert clausal_answers(program, "p(X)", ["X"], solver="holzbaur") == []
 
 
 # ---- fix round 1 -------------------------------------------------------------
@@ -110,7 +110,7 @@ def test_aliased_shown_variables_keep_their_answer():
     program = ":- use_module(library(clpq)).\na(X, Y) :- X = Y, {X >= 1}.\n"
     oracle = oracle_answers(program, "a(X, Y)", ["X", "Y"])
     assert len(oracle) == 1
-    clausal = clausal_answers(program, "a(X, Y)", ["X", "Y"], solver="legacy")
+    clausal = clausal_answers(program, "a(X, Y)", ["X", "Y"], solver="holzbaur")
     ok, why = same_solution_sets(oracle, clausal)
     assert ok, why
 
@@ -178,7 +178,7 @@ def test_clausal_answers_do_not_need_scryer(monkeypatch):
     import tests.clpq_oracle as tool
     monkeypatch.setattr(tool, "SCRYER", "/nonexistent/scryer-prolog")
     program = ":- use_module(library(clpq)).\np(X) :- {X >= 1}.\n"
-    assert tool.clausal_answers(program, "p(X)", ["X"], solver="legacy") == [
+    assert tool.clausal_answers(program, "p(X)", ["X"], solver="holzbaur") == [
         Answer({}, ["X >= 1"])]
 
 

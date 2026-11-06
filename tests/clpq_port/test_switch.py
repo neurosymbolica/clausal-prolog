@@ -1,14 +1,10 @@
 # tests/clpq_port/test_switch.py
-"""Task 14: CLAUSAL_CLPQ=holzbaur selects the port behind the legacy API.
+"""Task 14: the package exports the port (clausal/logic/clpq/holzbaur.py).
 
-The adapter (clausal/logic/clpq/holzbaur.py) is tested here in process,
-through its own functions, whatever CLAUSAL_CLPQ says.  What needs the
-package to export the port (clpfd's dispatch, the builtins, the CLI) runs
-in a subprocess with CLAUSAL_CLPQ=holzbaur: the legacy suites, and
-test_switch_engine.py, which is skipped unless the port is selected.  Those
-nested runs take minutes and run with CLAUSAL_SLOW_TESTS=1 (Fable M4); the
-default suite checks the switch in process
-(test_the_switch_exports_the_solver_it_names).
+The adapter is tested here in process, through its own functions; what
+goes through the package (clpfd's dispatch, the builtins, the CLI) is in
+test_switch_engine.py.  A few checks run in a subprocess with
+CLAUSAL_CLPQ set, which the package reads at import.
 """
 import os
 import pathlib
@@ -20,7 +16,6 @@ from fractions import Fraction
 import pytest
 
 from clausal.logic.clpq import holzbaur as h
-from clausal.logic.clpq import legacy
 from clausal.logic.clpq.attributes import CLPQ_KEY
 from clausal.logic.pending import drain
 from clausal.logic.variables import (
@@ -30,24 +25,10 @@ from clausal.pythonic_ast.nodes import (
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
-LEGACY_SUITES = ["tests/test_clpq.py", "tests/test_clpq_box_bounded_optimum.py",
-                 "tests/test_clpq_undo_on_backtracking.py",
-                 "tests/test_dump_q_projection.py", "tests/test_units_clp.py",
-                 "tests/test_seam_set_goal_clpq.py", "tests/test_cli.py"]
-
-
 def _under(solver, argv, timeout=1800):
     env = dict(os.environ, CLAUSAL_CLPQ=solver, PYTHONPATH=str(ROOT))
     return subprocess.run([sys.executable, *argv], cwd=ROOT, env=env,
                           capture_output=True, text=True, timeout=timeout)
-
-
-# The nested suites take minutes (Fable M4): they run with
-# CLAUSAL_SLOW_TESTS=1, as the Task 16 gate runs them, and the default
-# suite keeps the in-process smoke test below.
-_SLOW = pytest.mark.skipif(
-    os.environ.get("CLAUSAL_SLOW_TESTS") != "1",
-    reason="nested pytest runs of the legacy suites, set CLAUSAL_SLOW_TESTS=1")
 
 
 def _package_under(solver, monkeypatch):
@@ -63,18 +44,12 @@ def _package_under(solver, monkeypatch):
     return module
 
 
-@pytest.mark.parametrize("solver, implementation", [("legacy", legacy),
-                                                    ("holzbaur", h)])
-def test_the_switch_exports_the_solver_it_names(solver, implementation,
-                                                monkeypatch):
+def test_the_switch_exports_the_solver_it_names(monkeypatch):
     # In process and fast, whatever CLAUSAL_CLPQ the suite runs under.
-    package = _package_under(solver, monkeypatch)
-    assert package.SOLVER == solver
+    package = _package_under("holzbaur", monkeypatch)
+    assert package.SOLVER == "holzbaur"
     for name in package.HOLZBAUR_API:
-        if solver == "legacy" and not hasattr(legacy, name):
-            assert not hasattr(package, name), name     # ordering: port only
-            continue
-        assert getattr(package, name) is getattr(implementation, name), name
+        assert getattr(package, name) is getattr(h, name), name
     t, x, s = Trail(), Var(), Var()
     assert package.in_q(x, 0, 10, t) and package.q_le(x, 3, t)
     assert package.sup(x, s, t) and deref(s) == 3
@@ -84,22 +59,6 @@ def test_the_switch_exports_the_solver_it_names(solver, implementation,
 def test_the_switch_refuses_an_unknown_solver_in_process(monkeypatch):
     with pytest.raises(ValueError, match="not 'simplex'"):
         _package_under("simplex", monkeypatch)
-
-
-@_SLOW
-@pytest.mark.parametrize("suite", LEGACY_SUITES)
-def test_the_suite_passes_under_the_port(suite):          # Review Focus 4
-    r = _under("holzbaur", ["-m", "pytest", "-q", "-p", "no:cacheprovider",
-                            suite])
-    assert r.returncode == 0, r.stdout[-3000:]
-
-
-@_SLOW
-def test_the_engine_tests_pass_under_the_port():
-    r = _under("holzbaur", ["-m", "pytest", "-q", "-p", "no:cacheprovider",
-                            "tests/clpq_port/test_switch_engine.py"])
-    assert r.returncode == 0, r.stdout[-3000:]
-    assert "skipped" not in r.stdout.splitlines()[-1], r.stdout[-500:]
 
 
 def test_the_subprocess_imports_this_tree():
@@ -118,32 +77,30 @@ def test_an_unknown_solver_name_stops_the_import():
 
 # ---------------------------------------------------------------- sandbox
 
-def test_the_key_each_solver_puts_is_an_engine_key():
-    # sandbox.py reads ENGINE_ATTR_KEYS from source: legacy's Q_KEY row and
-    # the port's CLPQ_KEY row.  holzbaur.Q_KEY is CLPQ_KEY.
+def test_the_key_the_solver_puts_is_an_engine_key():
+    # sandbox.py reads ENGINE_ATTR_KEYS from source: the port's CLPQ_KEY
+    # row.  holzbaur.Q_KEY is CLPQ_KEY.
     from clausal.sandbox import _engine_attr_keys
     keys = _engine_attr_keys()
-    assert legacy.Q_KEY in keys
     assert h.Q_KEY == CLPQ_KEY and h.Q_KEY in keys
 
 
 # ---------------------------------------------------------------- posting
 
 def test_a_decimal_keeps_its_scale_through_an_equation():
-    # Task 4's carry: legacy's present_number keeps Decimal('2.50') as it
-    # is (ruled 2026-09-17); through nf.pl it would be the rational 5/2.
-    for solver in (legacy, h):
-        t, x = Trail(), Var()
-        assert solver.in_q(x, 0, 10, t)
-        assert solver.q_eq(x, Decimal("2.50"), t)
-        assert type(deref(x)) is Decimal and str(deref(x)) == "2.50", solver
+    # Task 4's carry: present_number keeps Decimal('2.50') as it is (ruled
+    # 2026-09-17); through nf.pl it would be the rational 5/2.
+    t, x = Trail(), Var()
+    assert h.in_q(x, 0, 10, t)
+    assert h.q_eq(x, Decimal("2.50"), t)
+    assert type(deref(x)) is Decimal and str(deref(x)) == "2.50"
     t, x = Trail(), Var()
     assert h.clpq_constraint_block(ArithEq(left=x, right=Decimal("2.0")), t)
     assert str(deref(x)) == "2.0"
 
 
 def test_a_non_linear_constraint_waits_as_in_1_3_3():
-    # Legacy raises TypeError; nf.pl delays {X*Y = 6} until it is linear.
+    # nf.pl delays {X*Y = 6} until it is linear.
     t, x, y = Trail(), Var(), Var()
     assert h.q_eq(Mult(left=x, right=y), 6, t)
     assert is_var(deref(x)) and is_var(deref(y))
@@ -198,13 +155,6 @@ def test_the_bool_block_refuses_a_disjunction():
         h.clpq_constraint_block((";", LtE(left=x, right=1),
                                  GtE(left=x, right=3)), t)
     assert caught.value.term[1][:2] == ("type_error", "constraint")
-
-
-def test_legacy_s_block_answers_once():
-    t, x = Trail(), Var()
-    answers = list(legacy.clpq_constraint_answers(
-        (GtE(left=x, right=0), LtE(left=x, right=3)), t))
-    assert answers == [None]
 
 
 def test_a_compare_chain_and_a_conjunction_cell_post():
@@ -520,7 +470,7 @@ print(json.dumps([narrowed(False), narrowed(True), promoted(), queued]))
 
 
 @pytest.mark.parametrize("twin", ["python", "c"])
-def test_fd_to_q_bare_and_under_a_driver_against_legacy_and_the_oracle(twin):
+def test_fd_to_q_bare_and_under_a_driver_against_the_oracle(twin):
     # Ruling R28's interplay check.  The oracle has no clpfd beside clpq,
     # so its programs are the store clpfd leaves, in clpq alone: Scryer
     # answers sup 9 and inf 1/2 for {X >= 1/2, X >= 0, X =< 9, X - W =< 0},
@@ -536,26 +486,20 @@ def test_fd_to_q_bare_and_under_a_driver_against_legacy_and_the_oracle(twin):
         program, "narrowed(S, I)", ["S", "I"])] == [{"S": 9, "I": Fraction(1, 2)}]
     assert [a.bindings for a in oracle_answers(program, "promoted(S)", ["S"])] \
         == [{"S": 3}]
-    answers = {}
-    for solver in ("legacy", "holzbaur"):
-        r = _under(solver, ["-c", _FD_TO_Q, twin], timeout=300)
-        assert r.returncode == 0, r.stderr[-2000:]
-        answers[solver] = json.loads(r.stdout)
-    port = answers["holzbaur"]
-    assert port[2] == answers["legacy"][2] == "3"
+    r = _under("holzbaur", ["-c", _FD_TO_Q, twin], timeout=300)
+    assert r.returncode == 0, r.stderr[-2000:]
+    port = json.loads(r.stdout)
+    assert port[2] == "3"
     if twin == "python":
         # The narrowing reaches the port's store (queued inside the hook,
         # run after W's hook), bare and under a driver.
         assert port[:2] == [[True, "9", "1/2"], [True, "9", "1/2"]]
         assert port[3] == [True, True]
-        # Legacy-only answer: legacy's sync writes the QVar record and
-        # not its tableau, so its sup/2 still says 10.
-        assert answers["legacy"][:2] == [[True, "10", "1/2"]] * 2
     else:
         # The C twin narrows without a CLP(Q) sync (c_narrow syncs CLP(R)
-        # only), under either solver: the store keeps X =< 10.
-        assert port[3] == [] and answers["legacy"][3] == []
-        assert port[:2] == answers["legacy"][:2] == [[True, "10", "1/2"]] * 2
+        # only): the store keeps X =< 10.
+        assert port[3] == []
+        assert port[:2] == [[True, "10", "1/2"]] * 2
 
 
 # ---------------------------------------------------------------- oracle

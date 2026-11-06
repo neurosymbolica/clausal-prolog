@@ -23,7 +23,7 @@ import collections
 
 import pytest
 
-from clausal.logic.clpq import SOLVER, linear_forms, normal_form
+from clausal.logic.clpq import linear_forms, normal_form
 from tests.clpq_port.differential import _engine, _golden, _observe
 from tests.clpq_port.differential._workloads import corpus
 
@@ -150,11 +150,9 @@ def test_every_engine_template_runs_on_both_surfaces_alike():
     assert not problems, "\n".join(problems)
 
 
-@pytest.mark.skipif(SOLVER != "holzbaur", reason="needs CLAUSAL_CLPQ=holzbaur")
 def test_the_engine_workloads_answer_and_pivot_through_the_port():
-    # The engine workloads exercise the port (CLAUSAL_CLPQ=holzbaur), not
-    # legacy: their recorded traces hold pivots, and their answers hold
-    # optima, bindings and residuals.
+    # The engine workloads exercise the port: their recorded traces hold
+    # pivots, and their answers hold optima, bindings and residuals.
     index, observations = _golden.load()
     workloads = _engine.corpus(full=False)
     assert sum(index[w["id"]]["pivots"] for w in workloads) > 0

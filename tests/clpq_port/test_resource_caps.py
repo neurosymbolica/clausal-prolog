@@ -1194,18 +1194,14 @@ def _program(directory):
     return path
 
 
-def _clausal(tmp_path, goal, solver="holzbaur"):
-    env = dict(os.environ, CLAUSAL_CLPQ=solver, CLAUSAL_PL_FRONTEND="native",
+def _clausal(tmp_path, goal):
+    env = dict(os.environ, CLAUSAL_PL_FRONTEND="native",
                PYTHONPATH=str(ROOT))
     return subprocess.run(
         [sys.executable, "-m", "clausal", "-g", goal,
          str(_program(tmp_path))],
         cwd=ROOT, env=env, stdin=subprocess.DEVNULL, capture_output=True,
         text=True, timeout=600)
-
-
-_HOLZBAUR = pytest.mark.skipif(clpq.SOLVER != "holzbaur",
-                               reason="needs CLAUSAL_CLPQ=holzbaur")
 
 
 @pytest.fixture
@@ -1228,7 +1224,6 @@ def _caught(module, goal):
     return None if is_var(answers[0]) else answers[0]
 
 
-@_HOLZBAUR
 def test_catch_takes_each_resource_error(probe, caps):
     caps("clpq_nodes", 500)
     caps("clpq_projection", 10)
@@ -1245,7 +1240,6 @@ def test_catch_takes_each_resource_error(probe, caps):
         is None
 
 
-@_HOLZBAUR
 def test_set_prolog_flag_sets_each_cap(probe, caps):
     from clausal.logic.solve import call
     for resource, flag in limits.FLAGS.items():
@@ -1322,12 +1316,3 @@ def test_the_answer_printer_reports_the_projection_cap(tmp_path):
     assert result.returncode != 0
     assert "resource_error(clpq_projection)" in result.stderr
     assert "{" not in result.stdout
-
-
-def test_the_legacy_switch_has_no_cap_flags(tmp_path):
-    result = _clausal(
-        tmp_path, "catch(current_prolog_flag(clpq_max_nodes, _), E, true)",
-        solver="legacy")
-    assert result.stdout.strip() == (
-        "E = error(domain_error(prolog_flag,clpq_max_nodes),"
-        "current_prolog_flag/2)."), result.stderr

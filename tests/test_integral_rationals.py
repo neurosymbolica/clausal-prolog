@@ -216,42 +216,33 @@ class TestClpqBinders:
         assert type(gx) is Fraction and type(gy) is Fraction
 
     def test_python_api_q_eq_and_bounds(self):
-        from clausal.logic.clpq import in_q, q_eq, _tableaux, _last_snapshot
-        _tableaux.clear(); _last_snapshot.clear()
-        try:
-            trail = Trail()
-            x, y, z = Var(), Var(), Var()
-            in_q([x, y], -100, 100, trail)
-            assert q_eq(Add(left=x, right=y), 10, trail)
-            assert q_eq(Sub(left=x, right=y), 4, trail)
-            assert (deref(x), deref(y)) == (7, 3)
-            assert type(deref(x)) is int and type(deref(y)) is int
-            # a pinched interval binds through _post_q_domain
-            assert in_q(z, 5, 5, trail)
-            assert deref(z) == 5 and type(deref(z)) is int
-            # the q_eq fast path
-            w = Var()
-            assert q_eq(w, Fraction(6, 3), trail)
-            assert type(deref(w)) is int
-        finally:
-            _tableaux.clear(); _last_snapshot.clear()
+        from clausal.logic.clpq import in_q, q_eq
+        trail = Trail()
+        x, y, z = Var(), Var(), Var()
+        in_q([x, y], -100, 100, trail)
+        assert q_eq(Add(left=x, right=y), 10, trail)
+        assert q_eq(Sub(left=x, right=y), 4, trail)
+        assert (deref(x), deref(y)) == (7, 3)
+        assert type(deref(x)) is int and type(deref(y)) is int
+        # a pinched interval binds
+        assert in_q(z, 5, 5, trail)
+        assert deref(z) == 5 and type(deref(z)) is int
+        # the q_eq fast path
+        w = Var()
+        assert q_eq(w, Fraction(6, 3), trail)
+        assert type(deref(w)) is int
 
     def test_python_api_optimum_is_int(self):
-        from clausal.logic.clpq import (in_q, q_le, maximize, sup,
-                                        _tableaux, _last_snapshot)
-        _tableaux.clear(); _last_snapshot.clear()
-        try:
-            trail = Trail()
-            x, s, m = Var(), Var(), Var()
-            in_q(x, 0, 10, trail)
-            assert q_le(Mult(left=2, right=x), 8, trail)
-            assert sup(x, s, trail)
-            assert deref(s) == 4 and type(deref(s)) is int
-            assert maximize(x, m, trail)
-            assert deref(m) == 4 and type(deref(m)) is int
-            assert deref(x) == 4 and type(deref(x)) is int
-        finally:
-            _tableaux.clear(); _last_snapshot.clear()
+        from clausal.logic.clpq import in_q, q_le, maximize, sup
+        trail = Trail()
+        x, s, m = Var(), Var(), Var()
+        in_q(x, 0, 10, trail)
+        assert q_le(Mult(left=2, right=x), 8, trail)
+        assert sup(x, s, trail)
+        assert deref(s) == 4 and type(deref(s)) is int
+        assert maximize(x, m, trail)
+        assert deref(m) == 4 and type(deref(m)) is int
+        assert deref(x) == 4 and type(deref(x)) is int
 
 
 # ── the evaluator itself ───────────────────────────────────────────────────
@@ -439,14 +430,10 @@ def _seam_runner(tmp_path):
 
 
 def _q_eq_fast_path_runner(tmp_path):
-    from clausal.logic.clpq import q_eq, _tableaux, _last_snapshot
-    _tableaux.clear(); _last_snapshot.clear()
-    try:
-        trail, w = Trail(), Var()
-        assert q_eq(w, Fraction(6, 3), trail)
-        return [deref(w)]
-    finally:
-        _tableaux.clear(); _last_snapshot.clear()
+    from clausal.logic.clpq import q_eq
+    trail, w = Trail(), Var()
+    assert q_eq(w, Fraction(6, 3), trail)
+    return [deref(w)]
 
 
 def _z3_runner(tmp_path):

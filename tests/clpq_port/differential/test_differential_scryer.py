@@ -26,7 +26,6 @@ import re
 
 import pytest
 
-import clausal.logic.clpq as clpq
 from tests._oracles import SCRYER
 from tests.clpq_oracle import same_solution_sets
 from tests.clpq_port.differential._scryer_batch import (
@@ -268,8 +267,6 @@ def engine_difference(workload):
 
 @pytest.mark.skipif(not pathlib.Path(SCRYER).exists(),
                     reason=f"needs the Scryer CLP(Q) build at {SCRYER}")
-@pytest.mark.skipif(clpq.SOLVER != "holzbaur",
-                    reason="the engine reaches the port with CLAUSAL_CLPQ=holzbaur")
 def test_engine_workloads_answer_as_scryer():
     # Every engine workload's answers: the same number, the same bindings,
     # the same residual text and order as Scryer's dump/3 (copy_term/2

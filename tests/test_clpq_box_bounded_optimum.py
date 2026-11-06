@@ -17,25 +17,13 @@ from fractions import Fraction as F
 import pytest
 
 from clausal.logic.clpq import (
-    in_q, q_eq, q_ge, q_le, q_lt, sup, inf, maximize, minimize, _tableaux, _last_snapshot,
+    in_q, q_eq, q_ge, q_le, q_lt, sup, inf, maximize, minimize,
 )
 from clausal.logic.solve import solve
 from clausal.logic.variables import Trail, Var, deref, unify
 from clausal.terms import Add, Mult, Sub
 from clausal.testing import load_clausal_module
 from clausal.logic.variables import is_var
-import clausal.logic.clpq as _clpq
-
-HOLZBAUR = _clpq.SOLVER == "holzbaur"
-
-
-@pytest.fixture(autouse=True)
-def _clean_tableaux():
-    _tableaux.clear()
-    _last_snapshot.clear()
-    yield
-    _tableaux.clear()
-    _last_snapshot.clear()
 
 
 _PL = """\
@@ -168,13 +156,11 @@ def test_random_box_bounded_lp_matches_the_vertices(seed):
         assert deref(r) == want, (op.__name__, n, boxes, extra, obj)
         if op in (maximize, minimize):
             if any(is_var(deref(x)) for x in xs):
-                # Task 14, legacy-only answer: 1.3.3's maximize/1 and
-                # minimize/1 post {Expr =:= Optimum} and bind only what that
-                # implies, so on an optimal edge or face the variables stay
-                # free (Scryer: {X >= 0, X =< 2, Y >= 0, Y =< 3},
-                # maximize(X) leaves Y unbound).  Legacy picks a vertex.
+                # 1.3.3's maximize/1 and minimize/1 post {Expr =:= Optimum}
+                # and bind only what that implies, so on an optimal edge or
+                # face the variables stay free (Scryer: {X >= 0, X =< 2,
+                # Y >= 0, Y =< 3}, maximize(X) leaves Y unbound).
                 # The face is optimal: the objective is fixed at the optimum.
-                assert HOLZBAUR
                 lo_r, hi_r = Var(), Var()
                 assert inf(_expr(obj, xs), lo_r, t)
                 assert sup(_expr(obj, xs), hi_r, t)
@@ -206,8 +192,7 @@ def test_an_eliminated_variable_keeps_its_bounds():
 
 
 @pytest.mark.parametrize("order", [
-    # {X < Y, X >= 3, Y =< 3} has no answer (Scryer's clpq, the port, and
-    # legacy since its strict bounds moved into the simplex, 2026-10-28).
+    # {X < Y, X >= 3, Y =< 3} has no answer (Scryer's clpq, the port).
     "bind_last", "bind_first", "bound_last",
 ])
 def test_a_strict_inequality_the_store_closes_fails(order):

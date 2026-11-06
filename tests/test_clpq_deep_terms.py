@@ -3,7 +3,7 @@
 A sum nested 100,000 deep (``lsum(N, X, T) :- ..., lsum(N1, X + 1, T)``,
 then ``{Y >= T}``) raised RecursionError from clpfd's cell walk
 (``_arith_cells_to_nodes``) before either solver was reached, then from
-legacy's ``_ensure_q_for_expr`` and ``_linearize`` and from CLP(R)'s
+the old solver's walks (retired 2026-11-05) and from CLP(R)'s
 ``_collect_vars_from`` (inf/2 and sup/2 ask it first).  Those walks now run
 on an explicit stack past a shallow depth, so the post answers at any depth.
 
@@ -11,8 +11,7 @@ How the tests stay fast and still mean something: the depth is 20,000, and
 the ``pinned_limit`` fixture pins Python's recursion limit at 1,000 for the
 test, so the walks the fix replaced cannot reach the bottom of these terms
 (``test_the_depth_is_past_the_recursive_walk`` checks that against the
-recursive walk itself).  Both solvers are called through their modules,
-whatever CLAUSAL_CLPQ says; the engine tests run under the solver it says.
+recursive walk itself).
 """
 import itertools
 import random
@@ -23,13 +22,13 @@ from fractions import Fraction
 import pytest
 
 from clausal.logic import clpfd, clpr
-from clausal.logic.clpq import holzbaur, legacy
+from clausal.logic.clpq import holzbaur
 from clausal.logic.exceptions import LogicException, render_error_term, type_error
 from clausal.logic.variables import Trail, Var, deref, unify
 from clausal.pythonic_ast.nodes import Add, Mult, Negate, Sub
 
 DEPTH = 20_000
-SOLVERS = [pytest.param(holzbaur, id="port"), pytest.param(legacy, id="legacy")]
+SOLVERS = [pytest.param(holzbaur, id="port")]
 _N = itertools.count()
 
 
@@ -229,86 +228,12 @@ def test_the_cell_walks_agree_term_by_term(strict, monkeypatch):
     assert walk(-1) == walk(10 ** 9)
 
 
-def _legacy_linearize_recursive(expr):
-    """legacy._linearize as it was before it took an explicit stack."""
-    from clausal.logic.clpq.legacy import ONE, ZERO, _exact_number
-    from clausal.terms import Add as A, Div as D, Mult as M, Negate as N, Sub as S
-    expr = deref(expr)
-    if isinstance(expr, bool):
-        return None
-    if isinstance(expr, int):
-        return {}, Fraction(expr)
-    if isinstance(expr, Fraction):
-        return {}, expr
-    if isinstance(expr, (Decimal, float)):
-        return {}, _exact_number(expr)
-    if isinstance(expr, Var):
-        return {expr._id: ONE}, ZERO
-    if isinstance(expr, (A, S, M, D)):
-        lc = _legacy_linearize_recursive(expr.left)
-        rc = _legacy_linearize_recursive(expr.right)
-        if lc is None or rc is None:
-            return None
-        (lk, lv), (rk, rv) = lc, rc
-        if isinstance(expr, (A, S)):
-            sign = 1 if isinstance(expr, A) else -1
-            m = dict(lk)
-            for v, c in rk.items():
-                m[v] = m.get(v, ZERO) + sign * c
-            return {v: c for v, c in m.items() if c != ZERO}, lv + sign * rv
-        if isinstance(expr, M):
-            if not lk:
-                return {v: lv * c for v, c in rk.items()}, lv * rv
-            if not rk:
-                return {v: rv * c for v, c in lk.items()}, lv * rv
-            return None
-        if rk or rv == ZERO:
-            return None
-        return {v: c / rv for v, c in lk.items()}, lv / rv
-    if isinstance(expr, N):
-        inner = _legacy_linearize_recursive(expr.operand)
-        if inner is None:
-            return None
-        return {x: -c for x, c in inner[0].items()}, -inner[1]
-    return None
-
-
-@pytest.mark.parametrize("seed", range(6))
-def test_legacy_linear_forms_match_the_recursive_walk(seed):
-    # The same coefficients, the same constant and the same variable order
-    # (dict order: the order legacy's tableau meets the variables).
-    rng = random.Random(seed)
-    xs = [Var() for _ in range(5)]
-    old = sys.getrecursionlimit()
-    sys.setrecursionlimit(20_000)
-    try:
-        node = clpfd._arith_cells_to_nodes(_mixed(rng, xs, 300), "x/0")
-        expected = _legacy_linearize_recursive(node)
-    finally:
-        sys.setrecursionlimit(old)
-    actual = legacy._linearize(node, None)
-    assert actual == expected
-    assert list(actual[0]) == list(expected[0])
-    # A product of two variables is not linear, at any depth.
-    assert legacy._linearize(Add(left=node, right=Mult(left=xs[0], right=xs[1])),
-                             None) is None
-
-
 # ------------------------------------------------------- errors, not overflows
 
 def _cyclic(trail):
     x = Var()
     assert unify(x, ("+", 1, x), trail)
     return x
-
-
-def test_a_cyclic_term_under_legacy_is_not_evaluable():
-    # The recursive walk overflowed (RecursionError); legacy now raises what
-    # the port raises (D23), with its own context.
-    t = Trail()
-    term = _raised(lambda: legacy.q_ge(Var(), _cyclic(t), t))
-    assert term[1][:2] == ("type_error", "evaluable")
-    assert term[1][2] == ("/", "+", 2)
 
 
 def test_a_cyclic_term_outside_clp_q_has_no_finite_value():
@@ -334,12 +259,6 @@ def test_a_deep_argument_of_abs_is_a_stack_error(pinned_limit, solver, make):
 def test_an_error_on_a_deep_term_renders(pinned_limit):
     text = render_error_term(type_error("evaluable", _left_sum(DEPTH), "x/0"))
     assert isinstance(text, str)
-
-
-def test_legacy_refuses_a_deep_non_linear_term(pinned_limit):
-    t = Trail()
-    term = _raised(lambda: legacy.q_ge(Var(), ("^", _left_sum(DEPTH, Var()), 2), t))
-    assert term[1][0] == "domain_error"
 
 
 # --------------------------------------------------------- through the engine
@@ -473,13 +392,8 @@ def units_on(monkeypatch):
     (lambda x, t: units_clp._first_money(x), "finite"),
     (lambda x, t: units_clp._first_money(x, "(>=)/2"), "evaluable"),
     (lambda x, t: clpr._collect_vars_from(x, [], "inf/2"), "evaluable"),
-    (lambda x, t: legacy._ensure_q_for_expr(x, t), "evaluable"),
-    (lambda x, t: legacy._promote_fd_in_expr(x, t), "evaluable"),
-    (lambda x, t: legacy._promote_fd_in_expr([1, x], t), "evaluable"),
-    (lambda x, t: legacy._linearize(x, t), "evaluable"),
 ], ids=["scan", "scan-strict", "first_money", "first_money-strict",
-        "clpr-vars", "ensure_q", "promote_fd", "promote_fd-list",
-        "linearize"])
+        "clpr-vars"])
 def test_each_walk_refuses_a_cycle(walk, expected, make):
     t = Trail()
     units_clp._ensure_imports()
@@ -596,21 +510,9 @@ def _shared(levels):
     lambda x, t: units_clp._scan(x, "(>=)/2"),
     lambda x, t: units_clp._first_money(x),
     lambda x, t: clpr._collect_vars_from(x, []),
-    lambda x, t: legacy._ensure_q_for_expr(x, t),
-    lambda x, t: legacy._promote_fd_in_expr([x, x], t),
-    lambda x, t: legacy._linearize(x, t),
     lambda x, t: clpfd._arith_cells_to_nodes_deep(x, "(>=)/2"),
-], ids=["scan", "first_money", "clpr-vars", "ensure_q", "promote_fd",
-        "linearize", "cells"])
+], ids=["scan", "first_money", "clpr-vars", "cells"])
 def test_a_shared_subterm_is_no_cycle(walk):
     units_clp._ensure_imports()
     t = Trail()
     _within_seconds(lambda: walk(_shared(10), t))
-
-
-def test_a_shared_subterm_linearises_once_per_occurrence():
-    t = Trail()
-    x = Var()
-    s = Add(left=x, right=1)
-    assert legacy._linearize(Add(left=s, right=s), t) == \
-        ({x._id: 2}, 2)

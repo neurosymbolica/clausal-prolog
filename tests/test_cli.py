@@ -229,15 +229,13 @@ CLPQ = textwrap.dedent("""\
 """)
 
 
-#: Task 14, output spelling: under CLAUSAL_CLPQ=holzbaur a residual is what
-#: the toplevel projection gives (project.pl project_attributes/2 and the
+#: Output spelling: a residual is what the toplevel projection gives (project.pl project_attributes/2 and the
 #: attribute_goal/2 hooks, not dump/3, which would also order the shown
 #: variables; DEVIATIONS.md D28), in Clausal's braces: {X + Y = 3} is
 #: Y = 3 - X, {X =\= 2} stays X =\= 2, and {X >= 2}, {Y >= 2} come in
 #: that order, as Scryer's own toplevel prints them (_ = 3-X, X=\=2,
-#: X>=2, Y>=2).  An internal variable is _Q1, as legacy names one.
-HOLZBAUR = os.environ.get("CLAUSAL_CLPQ", "holzbaur") == "holzbaur"
-DEPENDENT = "{Y = 3 - X}." if HOLZBAUR else "{X + Y = 3}."
+#: X>=2, Y>=2).  An internal variable is _Q1.
+DEPENDENT = "{Y = 3 - X}."
 
 
 @pytest.fixture
@@ -270,8 +268,7 @@ def test_g_answer_spelling(clpq_prog, goal, answer):
         line = r.stdout.strip()
         assert line.startswith("S = f(_") and "{_" in line, line
         names = line[len("S = f("):line.index(")")].split(",")
-        constraint = (f"{names[1]} = 3 - {names[0]}" if HOLZBAUR
-                      else f"{names[0]} + {names[1]} = 3")
+        constraint = f"{names[1]} = 3 - {names[0]}"
         assert line.endswith(f", {{{constraint}}}."), line
     else:
         assert r.stdout == answer + "\n"

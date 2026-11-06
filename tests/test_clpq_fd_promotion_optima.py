@@ -5,8 +5,8 @@ docs/clpq.md ("FD<->Q coexistence"): when a CLP(Z) variable enters a CLP(Q)
 context its FD bounds become rational bounds and both attributes stay.  A
 comparison post did that ({X =< 7}); in_q and the optima did not.  With
 X in 1..5 and no CLP(Q) state, ``sup(X, S)`` failed (X was unbounded to
-CLP(Q)), and ``in_q(X, 0, 20), sup(X, S)`` gave 20.  The default solver's
-promotion also raised OverflowError on an FD variable with an infinite end
+CLP(Q)), and ``in_q(X, 0, 20), sup(X, S)`` gave 20.  The promotion of the
+solver before the port (retired 2026-11-05) also raised OverflowError on an FD variable with an infinite end
 (``X #\\= 3, {X =< 7}``)
 (todo/done/clpq-prolog-surface-gaps-entailed-dump-tabling-2026-10-12.md,
 item 4).
@@ -14,8 +14,6 @@ item 4).
 A variable that has neither state is unbounded, as in clp(q,r) 1.3.3:
 sup/2 of it fails.  So does sup/2 of an FD variable whose domain has no
 upper end.
-
-Runs under the solver ``CLAUSAL_CLPQ`` selects; run the file under both.
 """
 from fractions import Fraction
 
@@ -100,7 +98,7 @@ def test_in_q_with_disjoint_bounds_fails():
 def test_an_fd_variable_with_an_infinite_end():
     """X #\\= 3: no finite bound to bring.  in_q/1 makes it a CLP(Q)
     variable; sup/2 fails, it is unbounded; a later bound counts.  The
-    default solver's promotion raised OverflowError (Fraction(inf))."""
+    old solver's promotion raised OverflowError (Fraction(inf))."""
     trail, x = Trail(), Var()
     assert fd_ne(x, 3, trail)
     assert not sup(x, Var(), trail)
@@ -307,16 +305,6 @@ def test_an_optimum_the_relaxation_answers_is_kept(
 def test_bb_inf_over_an_fd_variable_not_among_its_integers(tmp_path, suffix):
     """bb_inf([], X, I) asks for the relaxation over X.  The port leaves
     the store as it was (1.3.3's bb_inf binds nothing), so it answers
-    3/2.  The default solver binds the store at the optimum, X = 3/2,
-    which clpfd refused, so it failed; it now raises the integrality
-    error."""
-    from clausal.logic.clpq import SOLVER
-    from clausal.logic.exceptions import LogicException
+    3/2."""
     module = _linked_module(tmp_path, suffix)
-    if SOLVER == "holzbaur":
-        assert _first(module, "bb_relaxed") == [Fraction(3, 2)]
-        return
-    with pytest.raises(LogicException) as raised:
-        _first(module, "bb_relaxed")
-    assert raised.value.term[1] == ("representation_error",
-                                    "fd_relaxation_not_integral")
+    assert _first(module, "bb_relaxed") == [Fraction(3, 2)]

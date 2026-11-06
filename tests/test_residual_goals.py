@@ -66,12 +66,10 @@ _CHILD = textwrap.dedent(r'''
 ''')
 
 
-@pytest.mark.parametrize("solver", ["legacy", "holzbaur"])
-def test_clpq_goals_print_as_residual_q_writes_them(tmp_path, solver):
+def test_clpq_goals_print_as_residual_q_writes_them(tmp_path):
     prog = tmp_path / "prog.pl"
     prog.write_text(":- use_module(library(clpq)).\n")
     env = dict(os.environ)
-    env["CLAUSAL_CLPQ"] = solver
     env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
     proc = subprocess.run(
         [sys.executable, "-c", _CHILD, str(prog), *CLPQ_GOALS],
@@ -222,36 +220,3 @@ def test_clpb_chain_of_100_prints_in_linear_size(tmp_path):
     assert second.count("sat(") == 2 * 98    # Gs, then the residuals
     assert len(second) < 25_000, len(second)
     assert elapsed < 60, elapsed
-
-
-def test_legacy_names_unprojected_variables_after_the_answer(tmp_path):
-    """Where legacy's projection gives up, the printer names its internal
-    variables as legacy's dump_q does: _Q3 after two answer variables."""
-    prog = tmp_path / "prog.pl"
-    prog.write_text(":- use_module(library(clpq)).\n")
-    child = textwrap.dedent(r'''
-        import sys
-        from clausal.logic.clpq import legacy
-        legacy._project = lambda constraints, targets: None   # gives up
-        from clausal import solve
-        from clausal.cli import _answer, _goal_reader_ops, _read_goal
-        from clausal.logic.solve import _deref_walk
-        from clausal.testing import load_clausal_module
-        mod = load_clausal_module(sys.argv[1])
-        goal, shown = _read_goal("{X >= 1, Y >= X + 2, X + Y =< 9}",
-                                 _goal_reader_ops(""))
-        for trail in solve(("call", goal), module=mod):
-            names = {id(_deref_walk(v)): n for n, v in shown}
-            want = ", ".join(legacy.residual_q(
-                [_deref_walk(v) for _, v in shown], trail,
-                lambda v: names[id(v)]))
-            got = _answer(shown, trail)
-            print(got)
-            sys.exit(0 if got == want and "_Q3" in got else 1)
-    ''')
-    env = dict(os.environ)
-    env["CLAUSAL_CLPQ"] = "legacy"
-    env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
-    proc = subprocess.run([sys.executable, "-c", child, str(prog)], env=env,
-                          capture_output=True, text=True, timeout=300)
-    assert proc.returncode == 0, proc.stdout + proc.stderr

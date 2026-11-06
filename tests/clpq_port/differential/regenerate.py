@@ -33,11 +33,6 @@ def main(argv=None):
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--trace", metavar="ID")
     arguments = parser.parse_args(argv)
-    from clausal.logic.clpq import SOLVER
-    if SOLVER != "holzbaur":
-        # the engine workloads reach the port only through the switch
-        print("run with CLAUSAL_CLPQ=holzbaur (the engine workloads)")
-        return 2
     workloads = corpus(full=arguments.full) + _engine.corpus(full=arguments.full)
     if arguments.trace:
         found = [w for w in corpus(full=True) + _engine.corpus(full=True)

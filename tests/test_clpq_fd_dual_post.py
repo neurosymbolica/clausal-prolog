@@ -17,8 +17,6 @@ Unchanged: a #-constraint with a variable that has CLP(Q) state and no FD
 state (a rational variable, or a fresh one) stays CLP(Q)'s alone, and
 CLP(Q)'s own {}/1 does not narrow an FD domain (``X in 1..5, {X > 4}``
 leaves X unbound, as Scryer does).
-
-Runs under the solver ``CLAUSAL_CLPQ`` selects; run the file under both.
 """
 import json
 import os

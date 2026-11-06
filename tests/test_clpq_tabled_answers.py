@@ -13,15 +13,12 @@ solver's dump/3 of the constraints projected onto the answer's variables
 (its residue), and a replay re-posts the residue on the fresh copy, as
 clp(q,r)'s projecting_assert/1 stores a clause with its constraints.  Two
 answers that differ only in their constraints are two answers.
-
-Runs under the solver ``CLAUSAL_CLPQ`` selects; run the file under both.
 """
 from fractions import Fraction
 
 import pytest
 
 from clausal.import_hook import _load_module
-from clausal.logic.clpq import SOLVER
 from clausal.logic.solve import _query_cache, call
 from clausal.logic.variables import Var, deref
 
@@ -153,8 +150,6 @@ def test_a_constraint_through_a_variable_outside_the_answer(tmp_path, suffix):
         assert _answers(module, "e_sup") == [(2,)]
 
 
-@pytest.mark.skipif(SOLVER != "holzbaur",
-                    reason="the default solver refuses a nonlinear equation")
 @pytest.mark.parametrize("suffix", SURFACES)
 def test_a_nonlinear_residue_survives_the_table(tmp_path, suffix):
     module = _load(tmp_path, NONLINEAR, suffix)

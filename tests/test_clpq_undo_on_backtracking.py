@@ -10,20 +10,11 @@ import random
 
 import pytest
 
-from clausal.logic.clpq import q_eq, q_le, sup, inf, _tableaux, _last_snapshot
+from clausal.logic.clpq import q_eq, q_le, sup, inf
 from clausal.logic.solve import solve
 from clausal.logic.variables import Trail, Var, deref, unify
 from clausal.terms import Add, Mult
 from clausal.testing import load_clausal_module
-
-
-@pytest.fixture(autouse=True)
-def _clean_tableaux():
-    _tableaux.clear()
-    _last_snapshot.clear()
-    yield
-    _tableaux.clear()
-    _last_snapshot.clear()
 
 
 _PL = """\
@@ -101,7 +92,6 @@ def test_undo_restores_the_store(seed):
     assert [deref(x) for x in xs] == before
     got = _probe(t, xs, objs)
 
-    _tableaux.clear()
     t2, xs2 = Trail(), [Var() for _ in range(n)]
     assert all(_post(t2, xs2, c) for c in base)
     assert got == _probe(t2, xs2, objs)

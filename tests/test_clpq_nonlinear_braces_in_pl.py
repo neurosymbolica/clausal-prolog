@@ -4,8 +4,7 @@
 
 The native front end lowered only ``+ - * /`` inside the braces and refused
 the program at load (todo/done/clpq-port-vs-sicstus-manual-23-gaps-2026-10-16.md
-item 4); the port delays a non-linear constraint as SICStus does, the
-default solver refuses it when posted.  The manual's ten queries are in
+item 4); the port delays a non-linear constraint as SICStus does.  The manual's ten queries are in
 tests/clpq_port/test_manual_examples.py::test_nonlinear; these run without
 the example files, through the CLI.
 """
@@ -42,13 +41,6 @@ def test_a_nonlinear_function_in_braces_waits_on_the_port():
     answer = _one("holzbaur", "q_sin_cos(X)", ["X"])
     assert answer.bindings == {}
     assert answer.residual, answer
-
-
-def test_a_nonlinear_function_in_braces_is_refused_by_legacy_at_run_time():
-    # Legacy cannot delay a non-linear constraint (DEVIATIONS.md D20): the
-    # program loads, the post raises.  It was refused at load, for both.
-    with pytest.raises(RuntimeError, match=r"exited|linear"):
-        _answers("legacy", "q_sin_cos(X)", ["X"])
 
 
 def test_a_nested_nonlinear_function_reaches_the_port():

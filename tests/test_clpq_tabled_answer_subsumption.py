@@ -12,14 +12,12 @@ answer: the stored one already covers it (answer subsumption).  The solver
 decides the entailment, under a trail mark it undoes.
 
 The negation scan of a complete table read its rows on a scratch trail,
-which under the default solver is a separate store: the caller's
+which under the solver before the port was a separate store: the caller's
 constraints were not seen.  It reads them on the caller's trail now.
 
 An answer whose only constraints are CLP(Q) ones is stored whole, so it no
 longer bypasses the table (the D68 live hand-over is for constraints the
 table cannot store).
-
-Runs under the solver ``CLAUSAL_CLPQ`` selects; run the file under both.
 """
 import signal
 
@@ -169,7 +167,7 @@ def test_an_answer_with_only_clpq_constraints_waits_for_the_table(program):
 
 def test_negation_over_a_complete_table_sees_the_callers_store(program):
     """{X >= 10}, \\+ q(X): no answer of q/1 (1 =< X =< 5) is consistent
-    with X >= 10, so the negation holds.  The default solver failed it:
+    with X >= 10, so the negation holds.  The old solver failed it:
     the scan posted the row on a scratch trail, a store without X >= 10."""
     assert len(_answers(program, "prime", arity=0)) == 1
     for _ in range(2):

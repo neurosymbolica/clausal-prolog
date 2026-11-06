@@ -11,8 +11,7 @@ the same (``test_scryer_answers_the_same``).  Without the import ``{}/1``
 stays an ordinary undefined goal, as in Scryer.
 
 Each case runs on the ``.pl`` surface (native front end) and on Clausal
-Prolog, under CLAUSAL_CLPQ=legacy and holzbaur, in a subprocess (the solver
-is chosen at import).  See todo/done/brace-goal-is-not-callable-2026-10-11.md.
+Prolog, in a subprocess.  See todo/done/brace-goal-is-not-callable-2026-10-11.md.
 """
 from __future__ import annotations
 
@@ -85,11 +84,10 @@ def _program(suffix: str, name: str) -> str:
 
 
 @pytest.mark.parametrize("suffix", [".pl", ".clausal"])
-@pytest.mark.parametrize("solver", ["legacy", "holzbaur"])
-def test_a_meta_called_brace_goal_posts_its_block(tmp_path, solver, suffix):
-    name = f"brace_meta_{solver}_{suffix.strip('.')}"
+def test_a_meta_called_brace_goal_posts_its_block(tmp_path, suffix):
+    name = f"brace_meta_{suffix.strip('.')}"
     (tmp_path / f"{name}{suffix}").write_text(_program(suffix, name))
-    env = dict(os.environ, CLAUSAL_CLPQ=solver, CLAUSAL_PL_FRONTEND="native",
+    env = dict(os.environ, CLAUSAL_PL_FRONTEND="native",
                PYTHONPATH=str(_ROOT))
     proc = subprocess.run(
         [sys.executable, "-W", "ignore", "-c", _DRIVER, str(tmp_path), name,
@@ -101,13 +99,12 @@ def test_a_meta_called_brace_goal_posts_its_block(tmp_path, solver, suffix):
     assert not wrong, wrong
 
 
-@pytest.mark.parametrize("solver", ["legacy", "holzbaur"])
-def test_a_brace_goal_from_the_toplevel(tmp_path, solver):
+def test_a_brace_goal_from_the_toplevel(tmp_path):
     """``clausal -g "{X > 1}" lin.clausal`` raised existence_error({}/1)."""
     (tmp_path / "lin.clausal").write_text(
         ":- module(lin, [p/1]).\n" + HEADER + "p(X) :- {X >= 2}.\n"
         ":- end_module(lin).\n")
-    env = dict(os.environ, CLAUSAL_CLPQ=solver, PYTHONPATH=str(_ROOT))
+    env = dict(os.environ, PYTHONPATH=str(_ROOT))
     out = {}
     for goal in ("{X > 1, X < 3}, X = 2", "G = {Y >= 1, Y =< 1}, call(G)"):
         proc = subprocess.run(
@@ -133,7 +130,7 @@ def test_scryer_answers_the_same(tmp_path):
     assert not wrong, wrong
 
 
-# ── in process, under the solver CLAUSAL_CLPQ selects ──
+# ── in process ──
 
 
 def test_without_library_clpq_a_meta_called_brace_is_undefined(native, ans):

@@ -124,8 +124,10 @@ ROWS = [
     ("{X >= 2}, copy_term(X,Y,Gs)",
      "Gs = [{Y>=2}], {X >= 2}.",
      "Gs = [Y>=2], X>=2.", _CLPQ_BRACES),
+    # The port's toplevel projection solves the equation for Z, as its
+    # printer shows it.
     ("{X + Z = 3}, copy_term(X-Z,Y,Gs)",
-     "Y = _A-_B, Gs = [{_A+_B=3}], {X + Z = 3}.",
+     "Y = _A-_B, Gs = [{_B=3-_A}], {Z = 3 - X}.",
      None,       # Scryer: Gs = [], and the toplevel prints a stray binding
      "Scryer's clpq copy_term/3 loses the equation (Gs = [])"),
     ("dif(X,a), X in 0..5, freeze(X,g), copy_term(X,Y,Gs)",
@@ -175,24 +177,16 @@ ROWS = [
      "Vs = [A,B], sat(A+B).",
      "Vs = [A,B,_A], clpb:sat(A=\\=A*B#B).",
      "Scryer's clpb keeps an internal attributed variable"),
+    # call_residue_vars/2 lists the slack variable the library creates, as
+    # Scryer's does.
     ("call_residue_vars({A >= 2}, Vs)",
-     "Vs = [A], {A >= 2}.",
+     "Vs = [A,_A], {A >= 2}.",
      "Vs = [A,_A], A>=2.",
-     "Scryer's clpq keeps an internal attributed variable"),
+     _CLPQ_BRACES),
     ("call_residue_vars(p, Vs)",
      "Vs = [_A], dif(_A,a).",
      "Vs = [_A], dif:dif(_A,a).", None),
 ]
-
-#: Clausal's answer where the port of clp(Q,R) 1.3.3 (CLAUSAL_CLPQ=holzbaur)
-#: answers otherwise: its toplevel projection solves the equation for Z, as
-#: its printer shows it, and call_residue_vars/2 lists the slack variable
-#: its library creates, as Scryer's does.
-HOLZBAUR = {
-    "{X + Z = 3}, copy_term(X-Z,Y,Gs)":
-        "Y = _A-_B, Gs = [{_B=3-_A}], {Z = 3 - X}.",
-    "call_residue_vars({A >= 2}, Vs)": "Vs = [A,_A], {A >= 2}.",
-}
 
 #: (goal, Clausal's error, Scryer's): only the context differs.
 ERROR_ROWS = [
@@ -255,9 +249,8 @@ def _unqualified(text: str) -> str:
 def test_clausal_answers(tmp_path, mode, suffix):
     lines, err = _clausal(tmp_path, mode, suffix, [g for g, *_ in ROWS])
     assert len(lines) == len(ROWS), (lines, err)
-    port = os.environ.get("CLAUSAL_CLPQ", "holzbaur") == "holzbaur"
     wrong = [(g, want, got) for (g, want, *_), got in zip(ROWS, lines)
-             if got != (HOLZBAUR.get(g, want) if port else want)]
+             if got != want]
     assert not wrong, wrong
 
 

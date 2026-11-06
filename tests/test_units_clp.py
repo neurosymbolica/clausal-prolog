@@ -458,17 +458,13 @@ class TestComparatorsEngine:
         assert deref(x) == 5 and get_attr(x, UNITS_KEY) is None
 
     def test_attr_key_spellings_agree(self):
-        # Task 14, output spelling (the key): Q_KEY is the selected solver's,
-        # legacy's "clpq" or the port's CLPQ_KEY; units_clp and
-        # units_constraint spell both.
+        # The key (output spelling): Q_KEY is the port's CLPQ_KEY.
         from clausal.logic.clpfd import FD_KEY
-        from clausal.logic.clpq import Q_KEY, SOLVER
+        from clausal.logic.clpq import Q_KEY
         from clausal.logic.clpq.attributes import CLPQ_KEY
-        from clausal.logic.clpq.legacy import Q_KEY as LEGACY_Q_KEY
         from clausal.logic.clpr import REAL_KEY
         assert (FD_KEY, REAL_KEY) == ("fd", "real")
-        assert (LEGACY_Q_KEY, CLPQ_KEY) == ("clpq", "clpq_holzbaur")
-        assert Q_KEY == {"legacy": LEGACY_Q_KEY, "holzbaur": CLPQ_KEY}[SOLVER]
+        assert Q_KEY == CLPQ_KEY == "clpq_holzbaur"
 
 
 class TestDomainAndLabel:
@@ -1527,13 +1523,9 @@ class TestClpqFrontEnd:
         assert clpq.q_ge(_bin(Mult, 2, q), self._euro(3), t)
         assert clpq.bb_inf([q], q, m, t)
         assert deref(m) == self._euro(2)
-        if clpq.SOLVER == "holzbaur":
-            # Task 14, legacy-only answer: 1.3.3's bb_inf/3 binds Inf alone
-            # (Scryer: {X >= 3/2, X =< 10}, bb_inf([X], X, I) leaves X
-            # unbound); legacy binds the integer variables too.
-            assert is_var(deref(q))
-        else:
-            assert deref(q) == self._euro(2)
+        # 1.3.3's bb_inf/3 binds Inf alone (Scryer: {X >= 3/2, X =< 10},
+        # bb_inf([X], X, I) leaves X unbound).
+        assert is_var(deref(q))
 
 
 class TestCellsHoldingQuantities:

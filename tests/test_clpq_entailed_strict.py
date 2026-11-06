@@ -1,21 +1,22 @@
 """entailed/1 of a strict relation or a disequality the store implies.
 
-The legacy solver keeps ``X < c`` as ``X =< c`` plus a passive disequality
-``X =\\= c``; its ``entailed/4`` read only the closed polyhedron, so after
-``{X < 5}`` neither ``entailed(X < 5)`` nor, after ``{X =\\= 5}``,
-``entailed(X =\\= 5)`` held (SICStus, clp(q,r) 1.3.3 and the port all say
-true).  Each case runs on both solvers, so the port pins the expected answer.
+The solver Clausal shipped before the port (retired 2026-11-05) kept
+``X < c`` as ``X =< c`` plus a passive disequality ``X =\\= c``; its
+``entailed/4`` read only the closed polyhedron, so after ``{X < 5}``
+neither ``entailed(X < 5)`` nor, after ``{X =\\= 5}``, ``entailed(X =\\= 5)``
+held (SICStus, clp(q,r) 1.3.3 and the port all say true).  These cases ran
+on both solvers while both existed; the port pinned the expected answers.
 
-The fuzz that found the rest (legacy against the port, random small linear
-systems) also found two in_q/3 bugs on legacy, pinned below: a bound on a
+The fuzz that found the rest (the old solver against the port, random
+small linear systems) also found two in_q/3 bugs on it, pinned below: a bound on a
 variable an equality had eliminated was never read by the simplex
 (``{X + Y/2 = -4}, in_q(Y, 1, 2)`` left ``sup(X)`` unbounded), and a bound
 that closed a strict one to a point was accepted (``{X > 0}, in_q(X, -1,
 0)`` succeeded).
 
 A non-finite float or decimal operand raises ``evaluation_error(undefined)``
-(NaN) or ``evaluation_error(float_overflow)`` (an infinity) on the legacy
-entry points pinned below, as the port does; legacy raised a bare Python
+(NaN) or ``evaluation_error(float_overflow)`` (an infinity) on the
+entry points pinned below, as the port does; the old solver raised a bare Python
 ValueError / OverflowError, or answered.  A number where in_q/3 or bb_inf/3
 takes a variable is checked as the port checks it (in_q(0.5, 0, 1) holds,
 bb_inf([0.5], X, I) fails).
@@ -26,12 +27,10 @@ from fractions import Fraction
 import pytest
 
 from clausal.logic.clpq import holzbaur as _holzbaur
-from clausal.logic.clpq import legacy as _legacy
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Trail, Var, deref, unify
 
-SOLVERS = pytest.mark.parametrize("solver", [_legacy, _holzbaur],
-                                  ids=["legacy", "holzbaur"])
+SOLVERS = pytest.mark.parametrize("solver", [_holzbaur], ids=["holzbaur"])
 
 
 def _post(solver, posts, names, trail):
@@ -90,7 +89,7 @@ ENTAILED = [
     # removes: X =< 3, X + Y < 5, Y >= 2 leaves X + Y in [?, 5).
     ([("=<", "X", 3), ("<", ("+", "X", "Y"), 5), (">=", "Y", 2)],
      ("<", "X", 3)),
-    # The fuzzed cases (legacy answered false).
+    # The fuzzed cases (the old solver answered false).
     ([("<", ("+", ("*", Fraction(-1, 3), "Y"), ("+", ("*", -1, "X"), 2)), 2)],
      ("=\\=", ("+", ("*", Fraction(1, 2), "Y"), ("*", Fraction(3, 2), "X")), 0)),
     ([("=\\=", "X", 5), (">", ("+", ("*", Fraction(1, 2), "X"),

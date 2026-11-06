@@ -6,9 +6,8 @@ nodes, so every such call failed silently, on both CLP(Q) solvers.  See
 todo/clausal-surface-gaps-found-moving-the-docs-2026-10-17.md (engine bugs,
 item 2).
 
-The in-process tests run under the solver CLAUSAL_CLPQ selects (run the file
-under both); ``test_clausal_program_under_each_solver`` runs the .clausal
-program under each solver in a subprocess, so the default run pins both.
+``test_clausal_program_in_a_subprocess`` runs the .clausal program
+through the CLI.
 """
 import os
 import pathlib
@@ -128,11 +127,10 @@ def test_seam_entailed_relation_cell(seam_module, predicate, relation, bound,
     assert _succeeds(predicate, x, cell, module=seam_module) is expected
 
 
-@pytest.mark.parametrize("solver", ["legacy", "holzbaur"])
-def test_clausal_program_under_each_solver(solver, tmp_path):
+def test_clausal_program_in_a_subprocess(tmp_path):
     path = tmp_path / "entailed_cells.clausal"
     path.write_text(CLAUSAL_PROGRAM)
-    env = dict(os.environ, CLAUSAL_CLPQ=solver, PYTHONPATH=str(ROOT))
+    env = dict(os.environ, PYTHONPATH=str(ROOT))
     result = subprocess.run(
         [sys.executable, "-m", "clausal", str(path), "-g", "all_cases"],
         cwd=ROOT, env=env, capture_output=True, text=True, timeout=120)

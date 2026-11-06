@@ -1,9 +1,8 @@
 # tests/clpq_port/test_switch_engine.py
-"""Task 14: the port behind the engine (CLAUSAL_CLPQ=holzbaur).
+"""Task 14: the port behind the engine.
 
-These tests need the package to export the port, so the engine's builtins
-and clpfd's dispatch reach it.  They are skipped under the default switch;
-test_switch.py runs this file in a subprocess with CLAUSAL_CLPQ=holzbaur.
+The package exports the port, so the engine's builtins and clpfd's
+dispatch reach it.
 """
 import itertools
 from fractions import Fraction
@@ -16,9 +15,6 @@ from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
 from clausal.pythonic_ast.nodes import Add, ArithEq, GtE, LtE
 from tests._suffix import SEAM
-
-pytestmark = pytest.mark.skipif(clpq.SOLVER != "holzbaur",
-                                reason="needs CLAUSAL_CLPQ=holzbaur")
 
 _N = itertools.count()
 
@@ -147,9 +143,9 @@ def test_bb_inf_after_inline_comparisons_sees_the_binding(woken):
 def test_dump_q_after_inline_comparisons_sees_the_binding(woken):
     # Y is bound, so dump_q([Y], C) has nothing to project: C = [].
     # Scryer's dump/3 raises uninstantiation_error for a bound target, but
-    # dump_q/2 is legacy's API, whose contract leaves a bound target out
-    # (legacy's dump_q and the port's residual_strings both do), and the
-    # -g printer relies on that; the adapter keeps the legacy contract.
+    # dump_q/2 is Clausal's API, whose contract leaves a bound target out
+    # (the port's residual_strings does), and the -g printer relies on
+    # that; the adapter keeps that contract.
     assert _answers(woken, "dump_y", 3) == [(2, 2, [])]
 
 
@@ -198,7 +194,7 @@ def test_the_cli_prints_a_bound_past_4300_digits(tmp_path):
                     "big(Y) :- X is 10^5000, {Y >= X}.\n")
     import pathlib
     root = pathlib.Path(__file__).resolve().parents[2]
-    env = dict(os.environ, CLAUSAL_CLPQ="holzbaur", PYTHONPATH=str(root))
+    env = dict(os.environ, PYTHONPATH=str(root))
     r = subprocess.run([sys.executable, "-m", "clausal", str(path), "-1",
                         "-g", "big(Y)"], capture_output=True, text=True,
                        env=env, cwd=root, timeout=120)

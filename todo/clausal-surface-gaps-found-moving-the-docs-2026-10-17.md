@@ -28,7 +28,7 @@ re-run separately.
    now read a relation cell as well as a seam node, on both solvers; docs/clpq.md
    shows the Clausal Prolog spelling. Pinned in
    tests/test_clpq_entailed_relation_cells.py::test_clausal_entailed_relation_holds
-   and ::test_clausal_program_under_each_solver.
+   and ::test_clausal_program_in_a_subprocess.
    **`entailed/1` always fails, silently** (verified).
    - `:- use_module(library(clpq)). t :- in_q(X, 0, 100), {X =< 4},
      entailed(X =< 5).` answers `false`.

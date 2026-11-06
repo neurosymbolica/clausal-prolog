@@ -69,14 +69,12 @@ def _run_sub(code: str, timeout: float = 6.0):
 from clausal.logic.clpq import (  # noqa: E402
     in_q, q_eq, q_ne, q_le, q_lt, q_ge, q_gt,
     maximize, minimize, sup, inf, entailed, bb_inf, dump_q,
-    clpq_constraint_block, Q_KEY, _tableaux,
+    clpq_constraint_block, Q_KEY,
 )
 from clausal.terms import Add, Sub, Mult, Mod  # noqa: E402
 
-#: CLAUSAL_CLPQ=holzbaur: the port keeps its store in the variables'
-#: attributes, not in legacy's _tableaux, so the two tableau tests below
-#: assert the same behaviour through the API there (Task 16).
-HOLZBAUR = __import__("clausal.logic.clpq", fromlist=["SOLVER"]).SOLVER == "holzbaur"
+#: The port keeps its store in the variables' attributes, so the two
+#: store tests below assert the behaviour through the API (Task 16).
 
 
 class TestClpqSoundness:
@@ -134,11 +132,10 @@ class TestClpqSoundness:
         assert q_ne(x, y, t)
         assert not unify(x, y, t)
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F006: bb_inf branches on a Gaussian-eliminated "
-                              "(parametric) int var — set_bound is a no-op, "
-                              "B&B exhausts depth and fails")
     def test_bb_inf_parametric_int_var(self):
+        # A08-F006: the solver before the port branched on a
+        # Gaussian-eliminated (parametric) int var, its set_bound a no-op,
+        # and failed; the port branches on it.
         t = Trail()
         x, y = Var(), Var()
         assert in_q(x, 0, None, t)
@@ -150,33 +147,10 @@ class TestClpqSoundness:
         assert deref(rv) == F(1, 2)
 
     def test_no_stale_tableau_on_recycled_trail_id(self):
-        if HOLZBAUR:
-            self._no_stale_store_on_recycled_trail_id_under_the_port()
-            return
-        gc.collect()
-        t = Trail()
-        x = Var()
-        in_q(x, 0, 5, t)
-        tid = id(t)
-        assert tid in _tableaux
-        del t, x
-        gc.collect()
-        # Deterministic leak evidence: the entry is removed only by a
-        # trail-undo callback that never fires when the trail is dropped,
-        # so it survives GC of the Trail. A future Trail() allocated at the
-        # same address (observed in probing: 200 queries piled 200 vars into
-        # one recycled tableau) then inherits these stale constraints.
-        assert tid not in _tableaux, (
-            "tableau entry survives Trail GC — recycled trail ids inherit "
-            "stale constraint stores"
-        )
-
-
-    def _no_stale_store_on_recycled_trail_id_under_the_port(self):
         # The port keeps no store keyed by trail (no module-level mutable
         # state; a constraint is an attribute of its variable), so a Trail
         # at a recycled address inherits nothing: each query's bounds are
-        # exactly its own, and legacy's _tableaux is never written.
+        # exactly its own.
         seen, recycled = set(), 0
         for i in range(200):
             gc.collect()
@@ -189,7 +163,6 @@ class TestClpqSoundness:
             assert inf(x, low, t) and sup(x, high, t)
             assert (deref(low), deref(high)) == (i, i + 5)
             assert q_ge(x, i + 5, t) and deref(x) == i + 5
-            assert id(t) not in _tableaux
             del t, x, low, high
         assert recycled > 0, "no Trail address was recycled; the check is vacuous"
 
@@ -283,25 +256,17 @@ class TestClpqRegressionGuards:
         t = Trail()
         w = Var()
         assert in_q(w, 0, 100, t)
-        if HOLZBAUR:
-            # The port's bound is in w's attributes: sup reads it.  The
-            # oracle (local clpq.pl port on Scryer): {W >= 0, W =< 100},
-            # {W =< 5}, sup(W, S) gives S = 5; undone, S = 100.
-            mark = t.mark()
-            assert q_le(w, 5, t)
-            s = Var()
-            assert sup(w, s, t) and deref(s) == 5
-            t.undo(mark)
-            s = Var()
-            assert sup(w, s, t) and deref(s) == 100
-            assert unify(w, 50, t)          # 50 was out of [0, 5]
-            return
-        st = get_attr(w, Q_KEY)
+        # The port's bound is in w's attributes: sup reads it.  The
+        # oracle (local clpq.pl port on Scryer): {W >= 0, W =< 100},
+        # {W =< 5}, sup(W, S) gives S = 5; undone, S = 100.
         mark = t.mark()
         assert q_le(w, 5, t)
-        assert _tableaux[id(t)].hi[st.tab_id] == 5
+        s = Var()
+        assert sup(w, s, t) and deref(s) == 5
         t.undo(mark)
-        assert _tableaux[id(t)].hi[st.tab_id] == 100
+        s = Var()
+        assert sup(w, s, t) and deref(s) == 100
+        assert unify(w, 50, t)          # 50 was out of [0, 5]
 
     def test_q_ne_fires_on_grounding(self):
         t = Trail()

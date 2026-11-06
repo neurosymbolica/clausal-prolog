@@ -1,5 +1,5 @@
-"""CLP(Q) errors are ISO error terms, and the legacy solver answers as the
-port does where it used to raise a Python exception.
+"""CLP(Q) errors are ISO error terms where the solver Clausal shipped
+before the port (retired 2026-11-05) raised a Python exception.
 
 Two groups:
 
@@ -7,18 +7,16 @@ Two groups:
   relation: an unbound argument raises ``instantiation_error`` and any other
   non-relation ``type_error(constraint, T)``, as nf.pl's negate/2 does in
   clp(q,r) 1.3.3 (and SICStus).  It used to fail silently on both solvers.
-- The legacy solver raised bare Python exceptions (TypeError, ValueError)
-  that ``catch/3`` saw as Python objects.  Each case now answers what the
-  port (``CLAUSAL_CLPQ=holzbaur``) answers: a non-linear relation is not
+- The old solver raised bare Python exceptions (TypeError, ValueError)
+  that ``catch/3`` saw as Python objects.  Each case answers what the
+  port answers: a non-linear relation is not
   entailed, a zero divisor fails a post and an optimum and makes
   ``entailed`` hold (its negation cannot be posted), and in_q/3's bounds,
   a float binding and a block node that is no constraint raise the port's
   error terms.
 
-The in-process tests run under the solver CLAUSAL_CLPQ selects (run the
-file under both); ``test_clausal_program_under_each_solver`` runs the
-Clausal Prolog program under each solver in a subprocess, and the Python
-API tests call both solvers' modules directly.
+``test_clausal_program_in_a_subprocess`` runs the Clausal Prolog program
+through the CLI, and the Python API tests call the port's module directly.
 """
 import os
 import pathlib
@@ -30,7 +28,6 @@ from fractions import Fraction
 import pytest
 
 from clausal.logic.clpq import holzbaur as _holzbaur
-from clausal.logic.clpq import legacy as _legacy
 from clausal.logic.exceptions import (
     LogicException, instantiation_error, type_error)
 from clausal.logic.solve import call
@@ -208,11 +205,10 @@ def test_clausal_case(clausal_module, case):
         case, EXPECTED[case], outcomes)
 
 
-@pytest.mark.parametrize("solver", ["legacy", "holzbaur"])
-def test_clausal_program_under_each_solver(solver, tmp_path):
+def test_clausal_program_in_a_subprocess(tmp_path):
     path = tmp_path / "clpq_error_terms.clausal"
     path.write_text(_clausal_program())
-    env = dict(os.environ, CLAUSAL_CLPQ=solver, PYTHONPATH=str(ROOT))
+    env = dict(os.environ, PYTHONPATH=str(ROOT))
     result = subprocess.run(
         [sys.executable, "-W", "ignore", "-m", "clausal", str(path),
          "-g", "all_cases"],
@@ -292,8 +288,7 @@ def test_seam_in_q_bound_errors(seam_module):
 
 # ---------------------------------------------------------------- the API
 
-SOLVERS = pytest.mark.parametrize("solver", [_legacy, _holzbaur],
-                                  ids=["legacy", "holzbaur"])
+SOLVERS = pytest.mark.parametrize("solver", [_holzbaur], ids=["holzbaur"])
 
 
 @SOLVERS
