@@ -2861,6 +2861,12 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
     return unify(result_var, _units_result(best_val, dims), trail)
 
 
+def int_minimize(int_vars: list, expr: Any, result_var: Any,
+                 trail: Trail) -> bool:
+    """int_minimize/3: bb_inf/3, which binds the variables here already."""
+    return bb_inf(int_vars, expr, result_var, trail)
+
+
 _BB_MAX_DEPTH = 50  # safety limit for branch-and-bound recursion
 
 

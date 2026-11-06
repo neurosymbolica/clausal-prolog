@@ -161,7 +161,7 @@ Integral rationals are presented as integers by every binder — the arithmetic 
 | `sup` | 2 | `sup(Expr, Sup)` — compute upper bound without committing (variables stay unbound) |
 | `inf` | 2 | `inf(Expr, Inf)` — compute lower bound without committing (variables stay unbound) |
 | `entailed` | 1 | `entailed(C)` — test if constraint `C` is implied by current store |
-| `int_minimize` | 3 | `int_minimize(IntVars, Expr, Min)` — minimize with integrality constraints |
+| `int_minimize` | 3 | `int_minimize(IntVars, Expr, Min)` — minimize with integrality constraints; binds `IntVars` to the optimum (Clausal's own) |
 | `bb_inf` | 3, 5 | `bb_inf(IntVars, Expr, Inf)` is `int_minimize/3`; `bb_inf(IntVars, Expr, Inf, Vertex, Eps)` also gives the integral values of `IntVars` at the infimum |
 | `dump_q` | 2 | `dump_q(Vars, Constraints)` — project constraint store onto Vars (Fourier-Motzkin) |
 | `dump` | 3 | `dump(Vars, NewVars, Constraints)` — clp(Q,R)'s dump/3: the projection as terms over `NewVars` (fresh variables, or atoms to name them) |
@@ -278,7 +278,9 @@ not entailed: the call fails. A conjunction or disjunction of relations
 
 ### int_minimize/3
 
-Minimize a linear expression subject to the current constraints **and** the requirement that specified variables take integer values. Uses LP relaxation with branch-and-bound internally. `Min` is bound to the optimum. Under the default solver, the constrained variables are also bound to their optimal integer assignments.
+Minimize a linear expression subject to the current constraints **and** the requirement that specified variables take integer values. Uses LP relaxation with branch-and-bound internally. `Min` is bound to the optimum, and each variable of `IntVars` to its value at the integral point found, under both solvers.
+
+`int_minimize/3` is Clausal's own predicate; clp(q,r) 1.3.3 has none, so binding its variables is no deviation from it. Under `CLAUSAL_CLPQ=holzbaur` it runs 1.3.3's `bb_inf/3` search and then binds the variables to the vertex `bb_inf/5` gives (operator ruling 2026-11-06); its errors name `bb_inf/3`, and the vertex holds 1.3.3's rounded values, so where the optimum is integral only within `Eps` (below) the binding can fail.
 
 `bb_inf/3` is accepted as an alias (SICStus compatibility), and `bb_inf/5`
 (`bb_inf(IntVars, Expr, Inf, Vertex, Eps)`) unifies `Vertex` with the values
@@ -289,10 +291,8 @@ as integral. The default solver's integrality test is exact; it reads
 it at that.
 
 !!! note "Under `CLAUSAL_CLPQ=holzbaur`"
-    The opt-in port of clp(q,r) 1.3.3 binds `Min` alone and leaves the
-    variables unbound, as `bb_inf/3` does in SICStus and Scryer. In the
-    examples below, `COST` is the same under both solvers; `X`, `Y` and `Z`
-    are bound only under the default solver.
+    `bb_inf/3` binds `Min` alone and leaves the variables unbound, as in
+    SICStus and Scryer; `int_minimize/3` binds them, as above.
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:int_minimize_3"

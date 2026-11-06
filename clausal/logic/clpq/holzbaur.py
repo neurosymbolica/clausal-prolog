@@ -710,12 +710,14 @@ def _bind_optimum(value, result_var, dims, trail):
     return unify(result_var, _units_result(Fraction(number), dims), trail)
 
 
-def bb_inf(int_vars, expr, result_var, trail, vertex=None, epsilon=None):
+def bb_inf(int_vars, expr, result_var, trail, vertex=None, epsilon=None,
+           *, bind=False):
     """bb.pl bb_inf/3, and bb_inf/5 with *vertex* and *epsilon*: the
     infimum of *expr* with every variable of *int_vars* integral.  Binds
     *result_var* alone (and *vertex*, the integral values of *int_vars*
     there); the store is as it was (1.3.3's shape, Task 13).  A united
-    variable's shadow is the integer."""
+    variable's shadow is the integer.  *bind* (int_minimize/3, not 1.3.3)
+    then unifies each variable of *int_vars* with its value at that point."""
     if vertex is None and epsilon is None:
         context = "bb_inf/3"
         refuse_inside_attribute_hooks(
@@ -747,7 +749,21 @@ def bb_inf(int_vars, expr, result_var, trail, vertex=None, epsilon=None):
             expr, deref(result_var), dims, trail):
         return False
     _refuse_fd_vertex(integers, point, context, trail)
+    if bind:
+        values = deref(point)
+        return all(unify(variable, value, trail)
+                   for variable, value in zip(integers, values))
     return True
+
+
+def int_minimize(int_vars, expr, result_var, trail):
+    """int_minimize/3, Clausal's own predicate (no 1.3.3 counterpart): bb.pl's
+    bb_inf/3 (the same search, Eps 0.001, the same errors, which name
+    bb_inf/3), then each variable of *int_vars* bound to its value at the
+    integral point bb_inf/5 gives as its Vertex (operator ruling
+    2026-11-06).  The values are bb.pl's rounded ones, so where the point
+    is integral only within Eps the binding can fail."""
+    return bb_inf(int_vars, expr, result_var, trail, bind=True)
 
 
 def _refuse_fd_vertex(integers, vertex, context, trail):

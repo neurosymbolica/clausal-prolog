@@ -747,6 +747,17 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **`int_minimize/3` binds its variables under the clp(q,r) 1.3.3 port
+  too** (operator ruling 2026-11-06: it keeps its documented contract).
+  It is Clausal's own predicate (1.3.3 has none), so this is no deviation
+  from 1.3.3: under `CLAUSAL_CLPQ=holzbaur` it runs bb.pl's `bb_inf/3`
+  search (same Eps, same errors, which name `bb_inf/3`) and then binds each
+  variable to its value in the vertex `bb_inf/5` gives; it used to bind
+  only `Min` there. `bb_inf/3` still binds only the infimum under the
+  port, as in SICStus. The vertex holds 1.3.3's rounded values, so where
+  the optimum is integral only within Eps the binding can fail. The
+  legacy solver (the default) is unchanged.
+
 - **Evaluating a cyclic arithmetic term is a type error, as in Scryer**
   (operator ruling 2026-11-04: "type_error if Scryer gives one"). There is
   no occurs check, so `X = X+1` builds a cyclic term, and `Y is X` used to

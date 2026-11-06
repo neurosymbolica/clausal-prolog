@@ -261,10 +261,12 @@ def _minimize__1(expr, trail, k):
 
 @_builtin("int_minimize", 3)
 def _int_minimize__3(int_vars, expr, result, trail, k):
-    """int_minimize(IntVars, Expr, Min) — minimize with integrality constraints."""
-    from clausal.logic.clpq import bb_inf as _bb_inf_fn  # noqa: PLC0415
+    """int_minimize(IntVars, Expr, Min) — minimize with integrality
+    constraints: bb_inf/3, then IntVars bound to the integral point found
+    (Clausal's own predicate; operator ruling 2026-11-06)."""
+    from clausal.logic.clpq import int_minimize as _int_minimize_fn  # noqa: PLC0415
     from clausal.logic.variables import deref as _deref  # noqa: PLC0415
-    if _bb_inf_fn(_deref(int_vars), expr, result, trail):
+    if _int_minimize_fn(_deref(int_vars), expr, result, trail):
         yield None
 
 

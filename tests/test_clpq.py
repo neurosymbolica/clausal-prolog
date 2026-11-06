@@ -1459,12 +1459,9 @@ class TestClausalIntegration:
         assert result is not None
         x, cost = result
         assert cost == F(2)
-        if HOLZBAUR:
-            # Task 14, legacy-only answer: bb_inf/3 binds Inf alone (see
-            # TestBBInf.test_binds_variables).
-            assert is_var(x)
-        else:
-            assert x == F(2)  # variable bound to optimal integer
+        # int_minimize/3 binds the variables under both solvers (operator
+        # ruling 2026-11-06); bb_inf/3 does only under legacy.
+        assert x == F(2)  # variable bound to optimal integer
 
     def test_bb_sicstus(self):
         # nv
@@ -1472,11 +1469,7 @@ class TestClausalIntegration:
         assert result is not None
         x, y, z, cost = result
         assert cost == F(4)
-        if HOLZBAUR:
-            # Task 14, legacy-only answer: bb_inf/3 binds Inf alone (see
-            # TestBBInf.test_binds_variables).
-            assert all(is_var(v) for v in (x, y, z))
-            return
+        # int_minimize/3 binds under both solvers (operator ruling 2026-11-06).
         assert x == F(4)
         assert y == F(2)
         assert z == F(2)
