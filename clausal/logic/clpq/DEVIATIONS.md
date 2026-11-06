@@ -1609,7 +1609,10 @@ found are.  Timed at a load average of 9 to 11 on 8 cores:
   projects every answer, so a sandboxed program reaches it: past the cap
   the printer reports the error and prints no answer
   (`test_the_answer_printer_reports_the_projection_cap`).
-  Fourier-Motzkin in 1.3.3 is the same, uncapped.
+  Fourier-Motzkin in 1.3.3 is the same, uncapped.  The legacy solver
+  printed the stored constraints unprojected past its own limit; with the
+  port the default, the printer raising instead was accepted (operator
+  ruling 2026-11-06): no unprojected fallback.
 - **Expansions are polynomial in the exponent and exponential in the
   factors** (Medium 4, review F3 and F4).  `{X = (Y + 1)^N}` takes 0.04 s,
   0.12 s and 0.45 s at N = 1000, 2000 and 4000, `(Y + Z + W)^240` 7.1 s,

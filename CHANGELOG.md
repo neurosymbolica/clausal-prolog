@@ -758,6 +758,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   the optimum is integral only within Eps the binding can fail. The
   legacy solver (the default) is unchanged.
 
+- **CLP(Q) port: past the projection cap the `-g` printer reports the
+  error** (accepted, operator ruling 2026-11-06). Past
+  `clpq_max_projection` the printer reports
+  `resource_error(clpq_projection)` and prints no answer, where the legacy
+  solver printed the store unprojected over `_Q1`, `_Q2`, ...; no
+  unprojected fallback is added (DEVIATIONS.md D24, Medium 3). It matters
+  once the port is the default.
+
 - **CLP(Q) port, performance: its hot loops run in C** (operator ruling
   2026-11-06: the chain-unification cost is to be fixed before the
   default flip). `clausal/logic/clpq/_linear_forms_core.c` is a C twin of
