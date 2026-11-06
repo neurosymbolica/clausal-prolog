@@ -1,5 +1,12 @@
 # Retire the legacy CLP(Q) solver
 
+**Status: FIXED 2026-11-06 (commits 08ba4e5b, 294c6afa, 15914cf4, and the
+docs commit that moved this file).** `clausal/logic/clpq/legacy.py` is
+deleted, the port of clp(q,r) 1.3.3 is the only CLP(Q) solver, and
+`CLAUSAL_CLPQ=legacy` raises a named ValueError. Pinned in
+tests/clpq_port/test_package_surface.py::test_legacy_raises_a_named_error
+and ::test_the_legacy_module_is_gone.
+
 **Date:** 2026-11-05. **Operator ruling 2026-11-05:** "we should retire
 legacy CLPQ".
 
@@ -33,6 +40,31 @@ Both solvers' attribute hooks are registered whichever is selected
 already ran under `GATE_CLPQ=holzbaur`, so the suite's expectations were
 the port's; only tests that read the environment variable with a `legacy`
 default, and the test that pinned the default, changed.
+
+**Step 2 done 2026-11-06**, in the order below, one commit each:
+
+1. 08ba4e5b: the six boundary helpers moved to `clpq/boundary.py`.
+2. 294c6afa: the tests and fixtures converted or deleted as listed.  Also
+   legacy-only, not in the list: tests/test_clpq_deep_terms.py's walk
+   parametrisations at :476-479 and :599-615 and
+   test_a_shared_subterm_linearises_once_per_occurrence,
+   tests/test_clpq_undo_on_backtracking.py:95 (`_tableaux.clear()`), and
+   audit test_08's `_tableaux` import.  `tests/clpq_oracle.py` keeps its
+   `solver` argument (the callers pass `"holzbaur"`).
+3. 15914cf4: `legacy.py`, its key and hook rows and the solver switches
+   deleted; `CLAUSAL_CLPQ=legacy` raises `ValueError: CLAUSAL_CLPQ=legacy
+   was removed after clausal 1.4.0 (operator ruling 2026-11-05); ...` at
+   the package's import (the first CLP(Q) use); any other value but
+   `holzbaur` is refused as before.  `tools/division_census` retargeted
+   to `normal_form.normal_form_divide` (its `install()` fails at base on
+   an unrelated stale name, `terms_to_ast._exact_div`; not fixed here).
+4. Docs (`docs/clpq.md`'s "How it works" rewritten for the port,
+   `docs/cli.md`, `docs/flags.md`), CHANGELOG (Removed), DEVIATIONS.md
+   D20, the AGENTS.md maps; the four todos below closed (the
+   disequality one after its port pin,
+   tests/test_clpq_strict_bounds.py::test_a_disequation_the_inequalities_close_fails_in_every_order),
+   the two that stay open lose their legacy mentions, and this file
+   moved to `todo/done/`.
 
 ## Step 2 (deletion): the plan, for review before anything is deleted
 

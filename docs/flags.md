@@ -84,8 +84,7 @@ truth value is `true` / `false`.
   [Importing Prolog Code](importing_prolog.md#end_module-closing-a-module).
 - **`clpq_max_nodes`, `clpq_max_work`, `clpq_max_projection`,
   `clpq_max_expansion`, `clpq_max_expansion_bits`,
-  `clpq_max_coefficient_bits`** (implementation-defined,
-  absent under `CLAUSAL_CLPQ=legacy`): the resource caps of the clp(q,r)
+  `clpq_max_coefficient_bits`** (implementation-defined): the resource caps of the clp(q,r)
   1.3.3 port, each a positive integer, process wide and settable. Past one
   the port raises `error(resource_error(R), _)`: `clpq_nodes` (the nodes of
   one `bb_inf/3` search), `clpq_work` (the rows that search's pivots read
@@ -106,8 +105,7 @@ truth value is `true` / `false`.
   `{X = (1/3)^4000000 + (1/5)^2730000}` can run for minutes and can build
   a coefficient past `clpq_max_coefficient_bits`. Coefficients past 64 bits
   in a linear constraint count their bits, so about ten 19,000,000-bit
-  coefficients in one constraint answer and an eleventh raises. The legacy
-  solver has no such flags. In the [sandbox](sandbox.md) a program sets no
+  coefficients in one constraint answer and an eleventh raises. In the [sandbox](sandbox.md) a program sets no
   process-wide flag, as a goal or as a load-time directive.
 
 `current_prolog_flag(F, V)` with `F` unbound enumerates every flag that has a

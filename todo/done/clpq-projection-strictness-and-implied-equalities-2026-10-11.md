@@ -1,5 +1,7 @@
 # CLP(Q) legacy solver: implied equalities are not found
 
+**Status: FIXED 2026-11-06 (commits 294c6afa, 15914cf4).** Closed with the legacy solver, as this todo asked ("Close this when the port becomes the default"): the port, the only CLP(Q) solver, carries strictness through projection and binds implied equalities on every path; legacy's xfail(strict) cases went in 294c6afa, legacy itself in 15914cf4. Pinned in tests/clpq_port/test_projection_strictness_and_implied_equalities.py (test_the_port_projects_as_the_oracle, test_the_cli_keeps_strictness_as_the_oracle, test_the_cli_shows_implied_equalities_as_the_oracle, test_dump_q_keeps_strictness_through_an_eliminated_variable, test_dump_q_sees_implied_equalities_bound).
+
 **Status 2026-11-03: legacy only.**  Under `CLAUSAL_CLPQ=holzbaur` both
 gaps are closed: the port gives Scryer's answers through the Python-API
 driver (`residual_strings`), the `clausal -g` printer, `dump/3` and

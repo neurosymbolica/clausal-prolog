@@ -4,8 +4,8 @@
 # See clausal/logic/clpq/PROVENANCE.md.
 """The unification hook and the attribute interface: itf3.pl.
 
-`holzbaur_hook` is the CLPQ_KEY hook, registered at import whatever
-CLAUSAL_CLPQ says (ruling R1).  It is itf3.pl's verify_attributes/3 with
+`holzbaur_hook` is the CLPQ_KEY hook, registered at import
+(ruling R1).  It is itf3.pl's verify_attributes/3 with
 geler.pl's (delayed_goals.verify_delayed) for the same variable; class.pl's
 is the COMPONENT_KEY hook in components.py.
 

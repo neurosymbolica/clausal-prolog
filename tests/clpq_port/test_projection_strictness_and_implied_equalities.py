@@ -1,6 +1,6 @@
 """Strictness through projection, and implied equalities, against the oracle.
 
-todo/clpq-projection-strictness-and-implied-equalities-2026-10-11.md named
+todo/done/clpq-projection-strictness-and-implied-equalities-2026-10-11.md named
 two answers weaker than Scryer's (Scryer's copy of clp(Q,R) 1.3.3):
 
 * strictness carried by an eliminated variable: ``{X < Y, Y =< 3}`` onto X

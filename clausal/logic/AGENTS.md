@@ -62,7 +62,7 @@ repo-root `tests/`. Up: [../AGENTS.md](../AGENTS.md)
 | `clpfd_nonlinear.py` | CLP(Z) propagators for `*` of two unknowns, `//`, `div`, `mod`, `rem`, `^`, `min`, `max` (lifted out of a comparison by `clpfd._lift_cells`) | |
 | `clpz_surface.py` | Scryer-named `in/2`, `ins/2`, `labeling/2`, reified connectives over `clpfd` | |
 | `clpb.py` | CLP(B) via BDDs | `_clpb_core.c` |
-| `clpq/` / `clpr.py` | CLP(Q): the clp(q,r) 1.3.3 port behind `holzbaur.py` (the default) or `legacy.py` (exact simplex, `CLAUSAL_CLPQ=legacy`, to be retired: `todo/retire-legacy-clpq-2026-11-05.md`) / CLP(R) (intervals) | `clpq`: `clpq/_linear_forms_core.c` (the port's hot loops); `clpr`: `_clpr_core.c` |
+| `clpq/` / `clpr.py` | CLP(Q): the clp(q,r) 1.3.3 port behind `holzbaur.py` (the API; `boundary.py` its cell and units boundary; the old solver, `legacy.py`, was retired 2026-11-05: `todo/done/retire-legacy-clpq-2026-11-05.md`) / CLP(R) (intervals) | `clpq`: `clpq/_linear_forms_core.c` (the port's hot loops); `clpr`: `_clpr_core.c` |
 | `clpz3.py`, `clportools*.py`, `clpsat.py` | Optional Z3, OR-Tools (CP-SAT, LP, graph, routing), PySAT backends | |
 | `units_clp.py`, `units_constraint.py`, `_units_flag.py` | Physical-units side channel around CLP | |
 | `tabling.py` | SLG tabling and WFS (delayed negation, `_naf_tabled`) | `_tabling_core.c` |

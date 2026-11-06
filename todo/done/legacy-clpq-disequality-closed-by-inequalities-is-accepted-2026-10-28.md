@@ -1,5 +1,7 @@
 # Legacy CLP(Q): a `=\=` that inequalities alone close is accepted until the next binding
 
+**Status: FIXED 2026-11-06 (commit 15914cf4).** The legacy solver is deleted; the port fails `{X =\= Y}, {X =< Y}, {Y =< X}` at the post that closes it, in every order, as clp(q,r) 1.3.3 (Scryer's clpq) does. Pinned in tests/test_clpq_strict_bounds.py::test_a_disequation_the_inequalities_close_fails_in_every_order (added when this file moved).
+
 Found 2026-10-28, while moving legacy's strict bounds into the simplex
 (todo/done/clpq-strict-bounds-closed-by-inequalities-2026-10-11.md).  Low
 severity: the store is caught at the next binding, and a strict `<` is no

@@ -246,3 +246,17 @@ def test_a_strictness_tightened_on_one_branch_is_undone():
     trail.undo(mark)
     assert _step(solver, (">=", "X", 1), names, trail)
     assert deref(names["X"]) == 1
+
+
+# ── A disequation that inequalities close ────────────────────────────────────
+
+@pytest.mark.parametrize("order", list(itertools.permutations(range(3))),
+                         ids=lambda o: "".join(map(str, o)))
+def test_a_disequation_the_inequalities_close_fails_in_every_order(order):
+    # {X =\= Y}, {X =< Y}, {Y =< X} has no answer: the port fails it at the
+    # post that closes it, as clp(q,r) 1.3.3 (Scryer's clpq) does; the old
+    # solver accepted it until the next binding
+    # (todo/done/legacy-clpq-disequality-closed-by-inequalities-is-accepted-2026-10-28.md).
+    store = [("=\\=", "X", "Y"), ("=<", "X", "Y"), ("=<", "Y", "X")]
+    ok, _, _ = _run(solver, [store[i] for i in order])
+    assert not ok

@@ -1,5 +1,7 @@
 # Each CLP(Q) post copies the whole store
 
+**Status: RESOLVED 2026-11-06 (commit 15914cf4).** `_snapshot_tableau` went with the legacy solver. The port keeps no store to copy: each variable's state is an immutable record put with `put_attr`, which the trail undoes change by change (the incremental undo this todo asked for); checked 2026-11-06, the chain below posts 1,000 variables in 0.16 s with a 2 MB peak. Pinned in tests/clpq_port/test_attributes.py::test_a_state_change_is_undone_on_backtracking and tests/test_clpq_undo_on_backtracking.py::test_undo_restores_the_store. The port's own chain cost is DEVIATIONS.md D24 (todo/clpq-row-order-key-cache-2026-11-06.md).
+
 `_snapshot_tableau` deep-copies the tableau on every public CLP(Q) call
 (`q_le`, `q_eq`, `q_ne`, the `_q_hook` on a binding, `maximize`, ...), so
 that backtracking can restore it.  A conjunction of n posts therefore costs

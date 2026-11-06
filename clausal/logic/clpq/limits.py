@@ -40,11 +40,10 @@ form or repair keeps to itself.  A metered call inside another (a bb_inf
 woken in a search, a projection under a search) is charged to its own
 meter and to every meter around it, so the outer cap bounds the whole.
 
-A program reads and sets the caps with the Prolog flags of FLAGS, under
-`CLAUSAL_CLPQ=holzbaur` only (clausal/logic/builtins/flags.py); in the
-sandbox the flags are read-only, to the program and to its load-time
-directives, and the host sets the caps from Python with `set_limit`.
-`set_limit` and `limit` work under either switch.
+A program reads and sets the caps with the Prolog flags of FLAGS
+(clausal/logic/builtins/flags.py); in the sandbox the flags are
+read-only, to the program and to its load-time directives, and the host
+sets the caps from Python with `set_limit`.
 """
 from contextvars import ContextVar
 

@@ -1,5 +1,7 @@
 # Legacy CLP(Q): branch-and-bound cannot branch on a Gaussian-eliminated variable (A08-F002, A08-F006)
 
+**Status: FIXED 2026-11-06 (commits 294c6afa, 15914cf4).** The legacy solver is deleted (15914cf4); the port of clp(q,r) 1.3.3, the only CLP(Q) solver, branches on an eliminated variable, and its F006 pin is a plain test now (294c6afa). Pinned in tests/audit_2026_07_05/test_08_clpqr_z3.py::TestClpqSoundness::test_bb_inf_parametric_int_var.
+
 **Status: open on the default (legacy) solver; fixed under `CLAUSAL_CLPQ=holzbaur`.**
 Triaged 2026-10-20, moved from the 2026-07-05 audit folder (was
 `investigate-A08-clpq-bound-enforcement.md`). Re-ran the pinning tests in

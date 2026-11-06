@@ -458,7 +458,7 @@ def _narrow(var: Var, new_domain: Domain, trail: Trail, queue: deque) -> bool:
         return False
 
     # Keep Q bounds in sync if present (mirrors REAL sync above).  The
-    # selected CLP(Q) solver owns the sync (CLAUSAL_CLPQ): the port queues
+    # CLP(Q) port owns the sync: it queues
     # its post while trail.hooks_running is above 0, since this can run
     # inside clpfd's propagation and so inside a hook (clpq/holzbaur.py,
     # ruling R28c).

@@ -2,7 +2,7 @@
 
 CLP(Q) provides constraint logic programming over the rationals using **exact arithmetic**. Linear equalities are solved by **Gaussian elimination**; linear inequalities by **Holzbaur's simplex over bounded variables**. The result is an exact solver: no rounding, no approximation, no epsilon comparisons. Every answer is a ratio of two integers.
 
-The solver is a port of Christian Holzbaur's clp(q,r) 1.3.3, the CLP(Q) of SICStus Prolog, in `clausal/logic/clpq/` (`holzbaur.py` and the modules around it; `PROVENANCE.md` there says where it comes from and `DEVIATIONS.md` lists every difference from 1.3.3). It is the default since operator ruling 2026-11-05. The solver Clausal shipped before, `clausal/logic/clpq/legacy.py`, is still selectable with the environment variable `CLAUSAL_CLPQ=legacy` until it is retired; where the two answer differently this page says so.
+The solver is a port of Christian Holzbaur's clp(q,r) 1.3.3, the CLP(Q) of SICStus Prolog, in `clausal/logic/clpq/` (`holzbaur.py` and the modules around it; `PROVENANCE.md` there says where it comes from and `DEVIATIONS.md` lists every difference from 1.3.3). It is the only CLP(Q) solver: the solver Clausal shipped before it was retired by operator ruling 2026-11-05, and `CLAUSAL_CLPQ=legacy`, which selected it, now raises an error.
 
 !!! note
     For CLP(Z) (integer constraints), see [Constraints](constraints.md). For CLP(R) (real constraints via interval arithmetic), see [CLP(R)](clpr.md). For CLP(B) (Boolean constraints), see [CLP(B)](clpb.md).
@@ -165,7 +165,7 @@ Integral rationals are presented as integers by every binder — the arithmetic 
 | `bb_inf` | 3, 5 | `bb_inf(IntVars, Expr, Inf)`: the same search, binding `Inf` alone; `bb_inf(IntVars, Expr, Inf, Vertex, Eps)` also gives the integral values of `IntVars` at the infimum |
 | `dump_q` | 2 | `dump_q(Vars, Constraints)` — project constraint store onto Vars (Fourier-Motzkin) |
 | `dump` | 3 | `dump(Vars, NewVars, Constraints)` — clp(Q,R)'s dump/3: the projection as terms over `NewVars` (fresh variables, or atoms to name them) |
-| `ordering` | 1 | `ordering(Spec)` — clp(Q,R)'s ordering/1: which variables an answer defines in terms of which (a list, or `A < B`); accepted without effect under `CLAUSAL_CLPQ=legacy` |
+| `ordering` | 1 | `ordering(Spec)` — clp(Q,R)'s ordering/1: which variables an answer defines in terms of which (a list, or `A < B`) |
 
 `in_q/1` is also accepted as an alias for `rational/1`.
 
@@ -237,7 +237,7 @@ When the bounds collapse to a point (`Lo = Hi`), the variable is automatically u
 
 ### maximize/2 and minimize/2
 
-Finds the optimum of a linear expression subject to all currently posted constraints. Unifies `Result` with the optimal objective value and posts `Expr = Result`, as clp(Q,R)'s `maximize/1` does (`sup/2`, then the equation). Where the optimum is a single point, as in the example below, that binds every variable; where it is a face, the answer keeps the face as constraints (`{X >= 0, Y >= 0, X + Y =< 4, X =< 3}, maximize(X + Y, M)` gives `M = 4, {Y = 4 - X}, {X >= 0}, {X =< 3}`). Fails if the problem is unbounded. Under `CLAUSAL_CLPQ=legacy` every constrained variable is bound to one optimal vertex (`X = 3, Y = 1` there).
+Finds the optimum of a linear expression subject to all currently posted constraints. Unifies `Result` with the optimal objective value and posts `Expr = Result`, as clp(Q,R)'s `maximize/1` does (`sup/2`, then the equation). Where the optimum is a single point, as in the example below, that binds every variable; where it is a face, the answer keeps the face as constraints (`{X >= 0, Y >= 0, X + Y =< 4, X =< 3}, maximize(X + Y, M)` gives `M = 4, {Y = 4 - X}, {X >= 0}, {X =< 3}`). Fails if the problem is unbounded.
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:maximize_2_and_minimize_2"
@@ -263,12 +263,9 @@ Supported relations: `=<`, `>=`, `<`, `>`, `=:=` (or `=`), `=\=`. The relation
 may also be built at run time (`C = (X =< 5), entailed(C)`). In the seam they
 are `<=`, `>=`, `<`, `>`, `==`, `!=`: `entailed(X <= 5)`.
 
-A strict relation or a disequality in the store counts, on both solvers: after
-`{X < 5}`, both `entailed(X < 5)` and `entailed(X =\= 5)` hold, and after
-`{X < Y, Y =< Z}`, `entailed(X < Z)` holds. Under `CLAUSAL_CLPQ=legacy` a
-strict relation, or `=\=`, whose bound the store attains exactly costs up to
-two more LPs per stored disequality (`=\=`): on a store with many constraints
-and disequalities that call can take two to three times as long.
+A strict relation or a disequality in the store counts: after `{X < 5}`, both
+`entailed(X < 5)` and `entailed(X =\= 5)` hold, and after `{X < Y, Y =< Z}`,
+`entailed(X < Z)` holds.
 
 As in SICStus, an unbound argument raises `instantiation_error` and a term that
 is no relation (`entailed(foo)`, or `entailed(X \= 2)` in Clausal Prolog) raises
@@ -282,13 +279,11 @@ Minimize a linear expression subject to the current constraints **and** the requ
 
 `int_minimize/3` is Clausal's own predicate; clp(q,r) 1.3.3 has none, so this is no deviation from it. It runs 1.3.3's `bb_inf/3` search and then binds the variables to the vertex `bb_inf/5` gives (operator ruling 2026-11-06). Its errors name `bb_inf/3`. The vertex holds 1.3.3's rounded values, so where the optimum is integral only within `Eps` (below) the binding can fail.
 
-`bb_inf/3` itself is SICStus's: it binds `Min` alone and leaves the variables unbound, as in SICStus and Scryer (under `CLAUSAL_CLPQ=legacy` it binds them too). `bb_inf/5`
+`bb_inf/3` itself is SICStus's: it binds `Min` alone and leaves the variables unbound, as in SICStus and Scryer. `bb_inf/5`
 (`bb_inf(IntVars, Expr, Inf, Vertex, Eps)`) unifies `Vertex` with the values
 of `IntVars` at the infimum; `bb_inf/3` is `bb_inf/5` with `Eps = 0.001`,
 the distance from an integer within which the search takes a value
-as integral, as in 1.3.3. The legacy solver's integrality test is exact; it reads
-`Eps` (an expression that is no constant fails, as in SICStus) and leaves
-it at that.
+as integral, as in 1.3.3. An `Eps` that is no constant fails, as in SICStus.
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:int_minimize_3"
@@ -298,7 +293,7 @@ it at that.
 
 Projects the constraint store onto a list of variables, eliminating all internal (slack) variables via Fourier-Motzkin elimination. Returns a list of constraints, each an atom.
 
-The projection is clp(q,r) 1.3.3's `dump/3`, which drops redundant bounds (four constraints in the example below). Under `CLAUSAL_CLPQ=legacy` every bound in the store comes back, redundant ones included (six in the example).
+The projection is clp(q,r) 1.3.3's `dump/3`, which drops redundant bounds (four constraints in the example below).
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:dump_q_2"
@@ -313,12 +308,11 @@ This is the feature that SWI-Prolog's CLP(Q) gets wrong — internal variables l
 `NewVars`, which is unified with fresh variables, or with the atoms a
 program names them with (`dump([A, B], [a, b], Cs)`); the store is left
 as it was. `Vars` is a proper list of unbound variables. Each term holds
-1.3.3's projection (dump_q/2's bounds under `CLAUSAL_CLPQ=legacy`).
+1.3.3's projection.
 
 `ordering(Spec)` says which variables an answer defines in terms of which
 (`Spec` a list, the first defined by the rest, or `A < B` / `A > B`); the
-port's projection honours it, the legacy solver accepts it without
-effect, and an unbound `Spec` fails. dump/3 reads its `Vars` as an
+projection honours it, and an unbound `Spec` fails. dump/3 reads its `Vars` as an
 ordering too, so an `ordering/1` that contradicts their order raises
 `system_error(unsatisfiable_ordering)` on the port. The residual a `-g`
 goal prints is not dump/3: on the port it is the projection clp(Q,R)'s
@@ -370,8 +364,7 @@ declare them too."): `#(p)` and `#(pi)` are `3.141592653589793`, `#(e)` is
 `constant(pi)` ... reads the same; a module's own declaration of the name
 wins. The float meets the solver as a float literal does: the solver
 reads it through 1.3.3's `float_rat`, so `{X = #(pi)}` gives
-`X = 245850922/78256779`, exactly what its own `#(pi)` gave;
-`CLAUSAL_CLPQ=legacy` takes the float's exact binary value. The
+`X = 245850922/78256779`, exactly what its own `#(pi)` gave. The
 atoms `pi`, `e` ... as data are unchanged.
 
 ```clausal
@@ -413,7 +406,7 @@ price(Q) <- clpq.rational(Q == 100 * constant(one_euro))
 test("price is 100 euro") <- (price(Q), Q == 100 * constant(one_euro))
 ```
 
-The tableau never sees a unit. Every post goes through the same units side
+The solver never sees a unit. Every post goes through the same units side
 channel the CLP(FD) comparators use (`clausal.logic.units_clp`): the
 dimension of every operand is inferred first — a variable multiplied by a
 quantity takes the product's dimension, a bare multiplier defaults to
@@ -421,7 +414,7 @@ dimensionless — and a disagreement raises the ISO term
 `error(system_error(units_mismatch), Ctx)` before anything is posted. Then
 each quantity becomes its exact magnitude (a `Decimal` is an exact
 rational) and each dimensioned variable its bare *shadow*; the constraint is
-solved on those. When the tableau binds a shadow, the variable the program
+solved on those. When the solver binds a shadow, the variable the program
 wrote is bound to a quantity with the inferred dimension.
 
 The magnitude is always in the dimension's **base unit**, on the way in and
@@ -483,28 +476,34 @@ currency amount is exact and must not be computed in floats.
 
 ## How it works: algorithm overview
 
-!!! note "These sections describe the legacy solver"
-    From here to [the coefficient growth problem](#the-coefficient-growth-problem),
-    the page describes the algorithm and data structures of the legacy
-    solver (`CLAUSAL_CLPQ=legacy`, `clausal/logic/clpq/legacy.py`): a
-    tableau, the revised simplex with Bland's rule, Fourier-Motzkin
-    projection. The default solver follows clp(q,r) 1.3.3 instead
-    (`clausal/logic/clpq/PROVENANCE.md`, `NAMES.md` for its names,
-    `DEVIATIONS.md`). Both use Gaussian elimination for equalities and a
-    simplex for inequalities, so the overview holds for both.
+CLP(Q) uses a fundamentally different solver from CLP(R). Where CLP(R) narrows intervals via the HC4 algorithm, CLP(Q) solves systems of linear constraints exactly: equations by substitution (Gaussian elimination), inequalities by a simplex method over variables that carry their own bounds. This is Christian Holzbaur's design for clp(q,r), and the solver is clp(q,r) 1.3.3 translated file by file. Each module of `clausal/logic/clpq/` names the 1.3.3 file it ports, `NAMES.md` there maps every 1.3.3 predicate to the function that ports it, and `DEVIATIONS.md` lists every place the port differs.
 
-CLP(Q) uses a fundamentally different solver from CLP(R). Where CLP(R) narrows intervals via the HC4 algorithm, CLP(Q) solves systems of linear constraints exactly using two classical algorithms working in tandem.
-
-### The three constraint types
-
-| Constraint type | Algorithm | Example |
+| 1.3.3 file | Module | What it does |
 |---|---|---|
-| **Equality** `Σ aᵢXᵢ = c` | Gaussian elimination | `{X + Y = 10}` |
-| **Inequality** `Σ aᵢXᵢ <= c` | Revised simplex with slack variables | `{2*X + Y =< 16}` |
-| **Strict inequality** `Σ aᵢXᵢ < c` | The same simplex, the bound strict (delta-rationals, below) | `{X < Y}` |
-| **Disequality** `X ≠ Y` | Passive check (fires when both ground) | `{X =\= 5}` |
+| `nf.pl`, `nfq.pl` | `normal_form.py` | reads a constraint into a normal form and posts it (`{}/1`); delays a non-linear one |
+| `store.pl` | `linear_forms.py` | linear forms: add, scale, substitute |
+| `bv.pl` | `bounded_simplex.py` | equations, the bounded-variable simplex, `sup`/`inf`, `maximize`/`minimize` |
+| `ineq.pl` | `inequalities.py` | posting an inequality |
+| `class.pl` | `components.py` | components: the sets of variables that constraints link |
+| `itf3.pl` | `attribute_hooks.py` | the unification hook, and the goals a residual is written as |
+| `project.pl`, `fourmotz.pl`, `redund.pl`, `dump.pl`, `ordering.pl` | `projection.py`, `fourier_motzkin.py`, `redundancy.py`, `residual_constraints.py`, `variable_ordering.py` | projecting the store onto the variables an answer shows |
+| `bb.pl` | `branch_and_bound.py` | `bb_inf/3,5`: optimisation over integers |
+| `geler.pl` | `delayed_goals.py` | goals that wait until a constraint becomes linear |
+| `arith.pl`, `arith_q.pl` | `arithmetic.py` | exact rationals, as (numerator, denominator) pairs of ints |
 
-All constraints must be **linear** — each term is a constant times a variable, with no products of variables. `{3*X + 5*Y =< 10}` is linear. `{X * Y = 10}` over two rational variables is not, and is delayed until it becomes linear, as SICStus does. Under `CLAUSAL_CLPQ=legacy` it raises `domain_error(linear_expression, X*Y)` (as do `inf/2`, `sup/2`, `minimize/1`, `maximize/1` and `bb_inf` on a non-linear objective; an operand that is no arithmetic expression, such as a list, is `type_error(expression, Culprit)`). The default solver also delays the functions clp(Q,R) knows inside `{}` — `abs/1`, `sin/1`, `cos/1`, `tan/1`, `min/2`, `max/2`, `pow/2`, `exp/2` and `^/2` — which the `.pl` front end passes through (`{sin(cos(X)) = 1/2}` answers; `pow/2` and `exp/2` are read as `^`). `entailed/1` of a non-linear relation answers false on both solvers.
+`holzbaur.py` is the API the rest of Clausal calls (`q_eq`, `q_le`, `sup`, `dump_q`, ...); `boundary.py` turns an arithmetic cell into an operator node and runs the [units](#units) side channel before a constraint reaches the port, and `limits.py` holds the resource caps (the `clpq_max_*` [flags](flags.md)).
+
+### The kinds of constraint
+
+| Constraint | How it is posted | Example |
+|---|---|---|
+| **Equation** `Σ aᵢXᵢ + c = 0` | solved for one variable, which is substituted everywhere | `{X + Y = 10}` |
+| **Bound** `aX + c =< 0` (one variable) | narrows that variable's bounds | `{X =< 10}` |
+| **Inequality** over several variables | a new variable, the slack, stands for the left side and takes the bound | `{2*X + Y =< 16}` |
+| **Strict** `<`, `>` | the same, the bound marked strict | `{X < Y}` |
+| **Disequation** `=\=` | a new variable stands for the difference and is marked nonzero | `{X =\= 5}` |
+
+A constraint is first read into a normal form (nf.pl): a sum of monomials, each a coefficient times a product of powers. A constraint whose normal form is linear (each monomial a constant, or a coefficient times one variable) is posted. `{3*X + 5*Y =< 10}` is linear. `{X * Y = 10}` over two rational variables is not: it is delayed until it becomes linear (until X or Y is known), as SICStus does. The functions clp(Q,R) knows inside `{}` are delayed the same way — `abs/1`, `sin/1`, `cos/1`, `tan/1`, `min/2`, `max/2`, `pow/2`, `exp/2` and `^/2` — which the `.pl` front end passes through (`{sin(cos(X)) = 1/2}` answers; `pow/2` and `exp/2` are read as `^`). `entailed/1` of a non-linear relation answers false.
 
 ### Why not interval arithmetic?
 
@@ -516,263 +515,131 @@ CLP(R) uses interval arithmetic: each variable has a range `[lo, hi]`, and const
 
 **Problem 3: Accumulating imprecision.** IEEE floats round every operation. After many constraints, the intervals may widen beyond usefulness.
 
-Gaussian elimination + simplex solves all three problems: equalities are solved exactly by elimination, inequalities are decided by pivoting, and optimization is a direct extension of the simplex algorithm.
+Substitution and the simplex solve all three: an equation is solved exactly and substituted away, an inequality is decided by pivoting, and optimization is a direct extension of the simplex.
 
 ### Why not just simplex for everything?
 
-The simplex method handles inequalities. You could convert every equality `a = b` into `a <= b` and `a >= b`, then use simplex for everything. But this is wasteful — each equality becomes two rows in the tableau, doubling the problem size and slowing pivoting.
-
-The Holzbaur approach (which we implement) is more efficient: equalities are eliminated by Gaussian elimination first, reducing the number of free variables. The simplex only handles the remaining inequalities over the reduced system.
+The simplex method handles inequalities. You could turn every equation `a = b` into `a =< b` and `a >= b` and use the simplex for everything, but each equation would become two rows, and pivoting would have more to do. In Holzbaur's design an equation removes a variable instead: the variable it is solved for is defined by the others and is gone from every other constraint. A bound on a single variable needs no row at all: it is stored on the variable itself. Only an inequality over several variables adds a row, the definition of its slack.
 
 ---
 
-## How it works: Gaussian elimination
+## How it works: linear forms and the store
 
-When an equality constraint `a₁X₁ + a₂X₂ + ... + aₙXₙ = c` is posted:
+Every variable the solver knows carries one record, its state (`attributes.py`, 1.3.3's attributes in full words): its **linear form**, its **bounds** and their strictness, its **component**, and a few marks (nonzero, target, keep) the projection reads.
 
-1. **Substitute** — replace any variables that were already eliminated by previous equalities
-2. **Pick a pivot** — choose a variable to eliminate (prefer user variables over slacks, smallest coefficient for numerical stability)
-3. **Solve** — express the pivot variable in terms of the others: `Xᵢ = (c - Σ aⱼXⱼ) / aᵢ`
-4. **Substitute forward** — replace `Xᵢ` in all existing rows and other parametric definitions
+A linear form (store.pl) is 1.3.3's `[I, R | Terms]`: a constant `I`, a constant `R`, and a list of `(variable, coefficient)` terms in the variables' order (creation order, DEVIATIONS.md D4). A variable is either
 
-The eliminated variable is now **parametric** — its value is determined by the remaining free variables.
+- **independent**: its linear form is itself (`Terms = [X*1]`, `I = R = 0`); or
+- **dependent**: its linear form is its definition in terms of independent variables. A dependent variable is a *basic* variable of the simplex, and its linear form is its row.
+
+`R` is the part of a row's value that comes from independent variables sitting at an active bound, so `I + R` is the dependent variable's value at the current vertex (1.3.3's `rhs_value`).
+
+The bounds are 1.3.3's type: none, lower `L`, upper `U`, or both, and a bound is *active* when the variable sits at it (1.3.3's `t_L`, `t_U`, `t_Lu`, `t_lU`). An independent variable with an active bound is non-basic at that bound. A strict bound is the same bound with a strictness bit set (one bit for the lower, one for the upper).
+
+A **component** (class.pl) is the set of variables that constraints link; its record lists its members and its basis (the dependent variables whose rows are in it). An equation over two components merges them; a substitution rewrites only the rows of one component.
+
+---
+
+## How it works: equations
+
+When an equation is posted, its normal form is **dereferenced**: each dependent variable in it is replaced by its linear form, so what is left mentions only independent variables (bv.pl's `solve/1`). Then:
+
+- no variable is left: the constant must be zero, or the post fails;
+- a variable is left: one of them is selected and the equation solved for it. The selection (bv.pl's `select_dependent/7`) prefers a variable new to the store over one already in a component, and a variable without bounds over one with bounds; on a tie the later variable in the order wins. The selected variable becomes dependent, its definition is **back-substituted** into every row of its component, and the components of the equation's variables become one;
+- the selected variable had bounds: they are now the bounds of its row, and the simplex restores feasibility (below) before the post succeeds;
+- a variable whose linear form becomes a constant is bound to that number, and the binding wakes the [unification hook](#how-it-works-the-unification-hook) in turn (bv.pl's `export_binding/1`).
 
 ### Worked example
 
-**System:** `X + Y + Z = 6`, `X - Y = 2`, `Y - Z = 1`
+**System:** `X + Y + Z = 6`, `X - Y = 2`, `Y - Z = 1`, three new variables, created in that order.
 
-**Step 1: Post `X + Y + Z = 6`.**
+**Post `X + Y + Z = 6`.** All three are new and unbounded: a tie, so the last one, Z, is selected. `Z = 6 - X - Y`; X and Y stay independent.
 
-Coefficients: `{X: 1, Y: 1, Z: 1}`, constant: `6`.
+**Post `X - Y = 2`.** Neither X nor Y is dependent, so nothing is substituted. Both are in Z's component and unbounded: Y, the later, is selected. `Y = X - 2`, and back substitution rewrites Z's row: `Z = 6 - X - (X - 2) = 8 - 2X`.
 
-Pick pivot: X (smallest ID). Solve: `X = 6 - Y - Z`.
-
-X is now parametric: `X = -Y - Z + 6`.
-
-**Step 2: Post `X - Y = 2`.**
-
-Coefficients: `{X: 1, Y: -1}`, constant: `2`.
-
-Substitute X (parametric): `X = -Y - Z + 6`, so:
-
-`1·(-Y - Z + 6) + (-1)·Y = ?` after substituting the LHS constant moves to the RHS.
-
-Result: `{Y: -2, Z: -1}`, constant: `2 - 6 = -4` (the parametric constant `6` is subtracted from the RHS because it appeared on the LHS).
-
-Pick pivot: Z. Solve: `Z = (-4 - (-2)·Y) / (-1) = 4 - 2Y`.
-
-Wait — let's be precise. The equation is `-2Y - Z = -4`. Solving for Z: `-Z = -4 + 2Y`, so `Z = 4 - 2Y`. In parametric form: `Z = {Y: -2} + 4`.
-
-Also update X's parametric definition: substitute `Z = -2Y + 4`:
-
-`X = -Y - (-2Y + 4) + 6 = -Y + 2Y - 4 + 6 = Y + 2`.
-
-So now: `X = {Y: 1} + 2`, `Z = {Y: -2} + 4`.
-
-**Step 3: Post `Y - Z = 1`.**
-
-Coefficients: `{Y: 1, Z: -1}`, constant: `1`.
-
-Substitute Z (parametric): `Z = -2Y + 4`:
-
-`Y - (-2Y + 4) = 1` (the constant `4` from Z's definition moves to RHS).
-
-`Y + 2Y = 1 + 4 = 5`, so `3Y = 5`.
-
-Pick pivot: Y. Solve: `Y = 5/3`.
-
-Y is now parametric with no free variables: `Y = {} + 5/3`. Its bounds are set to `[5/3, 5/3]` — a point. This triggers **implied binding**: `unify(Y, 5/3)`.
-
-The hook then propagates: X depends on Y, so `X = 5/3 + 2 = 11/3`. Z depends on Y: `Z = -2·(5/3) + 4 = -10/3 + 12/3 = 2/3`. Both are bound.
+**Post `Y - Z = 1`.** Dereferenced: `(X - 2) - (8 - 2X) = 1`, that is `3X - 10 = 1`. Only X is left: `X = 11/3`. X is bound; substitution makes Y's and Z's linear forms constants, and they are bound too.
 
 **Final answer:** `X = 11/3`, `Y = 5/3`, `Z = 2/3`. All exact.
 
 ---
 
-## How it works: the revised simplex method
+## How it works: inequalities and the bounded-variable simplex
 
-### Setting up an inequality
+### Posting an inequality
 
-When `Σ aᵢXᵢ <= c` is posted:
+An inequality is normalised to `Lin =< 0` or `Lin < 0` and dereferenced, so it mentions only independent variables (ineq.pl's `ineq/4`):
 
-**Single-variable case** (`aX <= c`): simply tighten the upper bound of X to `c/a` (or lower bound if `a < 0`). No tableau row needed. This handles the very common case of simple bounds like `X <= 10`.
+- **No variable**: the constant decides; the post succeeds or fails.
+- **One variable** (`K*X + I =< 0`): a bound on X, `X =< -I/K` for a positive K, `X >= -I/K` for a negative one. It is stored on X only if it is tighter than X's bound of that side, and is checked against the other side.
+- **One variable, X dependent**: the same bound goes on X's row: X is the basic variable of that row, so the bound is a bound on the row's value. Where the current value `I + R` breaks it, the simplex moves.
+- **Several variables**: a new variable S, the slack, is defined by the form (`S = Lin`) and takes the bound `S =< 0` (`S < 0` for a strict one), so S is a basic variable with a row. Where the form has a variable U without bounds, U absorbs the slack instead: U is defined over a slack `S >= 0` (`S > 0` for a strict one), which stays independent (ineq.pl's `ineq_more/2`).
 
-**Multi-variable case**: introduce a **slack variable** `s >= 0` such that:
+After the posts of the classic LP below (`in_q([X, Y], 0, 1000)` and three inequalities), the store holds two independent variables at their active lower bound and three slack rows:
 
-`Σ aᵢXᵢ + s = c`
+```
+X                 independent, 0 =< X =< 1000, at its lower bound
+Y                 independent, 0 =< Y =< 1000, at its lower bound
+S1 = X + 3Y - 15  dependent, S1 =< 0, value I + R = -15
+S2 = X + 2Y - 11  dependent, S2 =< 0, value -11
+S3 = 2X + Y - 16  dependent, S3 =< 0, value -16
+```
 
-The slack `s` measures how much "room" remains before the inequality becomes tight. `s = 0` means the constraint is active (binding); `s > 0` means there's slack.
+### Restoring feasibility
 
-The slack becomes a new **basic variable** with a row in the tableau:
-
-`s = c - Σ aᵢXᵢ`
-
-### Feasibility check
-
-After adding the slack, we check: is the slack non-negative under the current assignment? If yes, the new constraint is compatible — we're done. If no (the current point violates the inequality), we need to **restore feasibility** by pivoting.
-
-### Pivoting
-
-A **pivot** swaps a basic variable (one with a row) and a non-basic variable (one sitting at a bound). The swap preserves all equations but changes which variables are "free" (non-basic) and which are "determined" (basic).
+A dependent variable whose value `I + R` is at or outside a bound of its row is **reconsidered** (bv.pl's `reconsider/1`). The solver takes one step towards the inside: it looks for an independent variable in the row whose move improves the value, and the tightest other row that move runs into (a ratio test over the component, `upper_bound_tightest`, `lower_bound_tightest`). Then either the independent variable moves to its own other bound (a *bound swap*) or it **pivots**: it and the limiting dependent variable exchange places, and every row of the component is rewritten by back substitution. The bound the dependent variable met becomes active. Each step leaves the store feasible or proves it infeasible: no move improves the value and the post fails.
 
 Geometrically, a pivot moves along an edge of the feasible polyhedron from one vertex to an adjacent vertex.
 
-### Restoring feasibility (dual simplex)
+### Optimisation: sup, inf, maximize, minimize
 
-When a newly added constraint makes the current point infeasible:
+`inf(Expr, Inf)` reads `Expr` into a linear form over independent variables and iterates **decrease steps** (bv.pl's `iterate_decrease/2`): pick an independent variable whose coefficient lets the objective fall and whose bounds let it move, find the row that limits the move, and pivot or swap. When no variable can decrease the objective, its value is the infimum; when a variable can decrease it without limit, the problem is unbounded and `inf/2` fails. `sup/2` is `inf` of `-Expr`. The steps run between a trail mark and the undo to it, so the store is as it was afterwards; 1.3.3 does the same by failing back after recording the optimum.
 
-1. Find the most infeasible basic variable (the one whose assignment is furthest below its lower bound)
-2. Find an entering non-basic variable that, when increased via pivoting, would reduce the infeasibility
-3. Pivot — the infeasible variable leaves the basis, the entering variable joins
-4. Repeat until all basic variables are feasible, or detect infeasibility (no valid pivot exists)
+`minimize(Expr)` and `maximize(Expr)` are `inf`/`sup`, then the constraint `{Expr =:= Optimum}` posted, as in 1.3.3: what that implies is bound, and an optimal face stays as constraints.
 
-**Bland's rule** prevents cycling: always choose the lowest-indexed eligible variable as the entering variable. This guarantees termination even on degenerate systems where pivots don't change the objective value.
+For the classic LP (maximize `30X + 50Y` subject to `2X + Y =< 16`, `X + 2Y =< 11`, `X + 3Y =< 15`, `X, Y >= 0`) the steps end at the vertex `X = 7, Y = 2`, objective **310**; the posted `{30*X + 50*Y =:= 310}` meets only that vertex, so X and Y are bound.
 
-### Worked example: LP optimization
+`bb_inf/3,5` (bb.pl) runs `inf` and, where an integer variable takes a value that is not integral (further than `Eps` from an integer), branches: `{X =< Floor}` first, then `{X >= Ceiling}`, keeping the best integral optimum found (the incumbent) and pruning a branch whose relaxed infimum is no better.
 
-**Problem:** maximize `30X + 50Y` subject to `2X + Y <= 16`, `X + 2Y <= 11`, `X + 3Y <= 15`, `X,Y >= 0`.
+### Strict bounds and disequations
 
-**Setup.** After posting `in_q([X, Y], 0, 1000)` and the three inequalities, the tableau has:
+A strict bound is a bound with its strictness bit. The inequality code compares a new bound with the old one bit and all (`X < 3` after `X =< 3` tightens it; `X >= 3` after `X < 3` fails), the simplex steps carry the bits when a bound moves onto a row, and a projection prints them (`{X < Y, Y =< 3}` onto X is `X < 3`). The port adds one check 1.3.3 lacks: a binding fails when a strict bound of its component can no longer hold (DEVIATIONS.md D19).
 
-| Basic var | Row | RHS | Current value |
-|---|---|---|---|
-| s₁ | `s₁ = -2X - Y + 16` | 16 | 16 (feasible) |
-| s₂ | `s₂ = -X - 2Y + 11` | 11 | 11 (feasible) |
-| s₃ | `s₃ = -X - 3Y + 15` | 15 | 15 (feasible) |
-
-Non-basic: X = 0 (at lower bound), Y = 0 (at lower bound).
-
-Current objective: `30·0 + 50·0 = 0`. Not optimal — both X and Y have positive objective coefficients.
-
-**Iteration 1.** Entering = X (first non-basic with positive obj coeff, Bland's rule with sorted IDs).
-
-Ratio test — which basic variable first hits its lower bound (0) as X increases?
-
-| Slack | Coeff of X | Current value | Ratio (value / |coeff|) |
-|---|---|---|---|
-| s₁ | -2 | 16 | 16/2 = 8 |
-| s₂ | -1 | 11 | 11/1 = 11 |
-| s₃ | -1 | 15 | 15/1 = 15 |
-
-Minimum ratio = 8, leaving = s₁. **Pivot X ↔ s₁.**
-
-After pivot, X is basic: `X = -s₁/2 - Y/2 + 8`. Non-basic: s₁ = 0, Y = 0.
-
-New assignment: X = 8, Y = 0. Objective = 240.
-
-Objective coefficients update: substitute X's new expression into `30X + 50Y`:
-
-`30(-s₁/2 - Y/2 + 8) + 50Y = -15s₁ - 15Y + 240 + 50Y = -15s₁ + 35Y + 240`
-
-Reduced costs: s₁ = -15 (non-positive, stay at bound), Y = 35 (positive, can improve).
-
-**Iteration 2.** Entering = Y.
-
-After substituting X into the other rows and computing ratios (details omitted), the minimum ratio determines which slack leaves. After pivoting, we reach:
-
-**Optimal:** X = 7, Y = 2, s₁ = 0, s₂ = 0, s₃ = 2. Objective = 30·7 + 50·2 = **310**.
-
-All reduced costs are non-positive — no non-basic variable can improve the objective. This is the optimum.
-
----
-
-## How it works: linearization
-
-Before a constraint reaches the Gaussian elimination or simplex, the expression tree (built from Clausal Prolog's `Add`, `Sub`, `Mult`, `Div`, `Negate` nodes) must be flattened to a linear form `{var_id: coefficient, ...} + constant`.
-
-The `_linearize` function walks the expression tree:
-
-| Node | Result |
-|---|---|
-| `int n` | `{}, Fraction(n)` |
-| `Fraction f` | `{}, f` |
-| `Var v` (unbound) | `{v._id: 1}, 0` |
-| `Add(L, R)` | merge coefficients, add constants |
-| `Sub(L, R)` | merge with negated R coefficients |
-| `Mult(const, expr)` | scale all coefficients by const |
-| `Mult(expr, const)` | scale all coefficients by const |
-| `Mult(var, var)` | **rejected** — non-linear |
-| `Div(expr, const)` | divide all coefficients by const |
-| `Div(expr, var)` | **rejected** — non-linear |
-| `Negate(expr)` | negate all coefficients and constant |
-
-If linearization fails (non-linear expression), posting or optimising raises a `TypeError` with a clear message, a zero divisor (`1/0`) fails, and `entailed/1` answers false (true for a zero divisor: its negation cannot be posted).
-
----
-
-## How it works: the Tableau data structure
-
-The `Tableau` class is the core of the solver. It maintains the state of the entire constraint system as a single, shared, mutable object per trail.
-
-```
-Tableau
-├── rows:        {basic_var_id: {non_basic_var_id: coeff, ...}}
-├── rhs:         {basic_var_id: constant}
-├── lo, hi:      {var_id: Fraction | None}  (bounds)
-├── slo, shi:    {var_id, ...}              (the strict ones: X > lo, X < hi)
-├── assign:      {var_id: Fraction | DQ}    (current assignment)
-├── parametric:  {var_id: ({var_id: coeff}, constant)}  (Gaussian-eliminated vars)
-├── diseqs:      [('linear', {var_id: coeff}, constant), ...]  (passive =\=)
-└── _var_map:    {var_id: Var}              (back-reference to logic variables)
-```
-
-**Invariants:**
-
-- Basic variables have a row in `rows`. Their value is determined by `rhs - Σ row[v]·assign[v]`.
-- Non-basic variables have no row. They sit at one of their bounds.
-- Parametric variables were eliminated by equalities. They have an entry in `parametric` and no row.
-- `assign[v]` always reflects the current solution point. For basic vars it's computed from the row; for non-basic vars it equals their current bound value.
-- A strict bound is read as a *delta-rational* (Dutertre and de Moura): `X < 3` is the bound `3 - d`, `X > 0` is `0 + d`, for a symbolic infinitesimal `d > 0`. The assignment takes values `c + k·d`, compared lexicographically, so the simplex decides strictness on every post: `{X < Y, Y < X}` and `{X >= 0, Y >= 0, S = X + Y, S < 0}` fail as they are posted, in any order. `sup/2` and `inf/2` read `c` (the bound, attained or not); `maximize/2` and `minimize/2` fail when the optimum keeps a `d` part (not attained); `bb_inf/3` treats such a value as fractional (`{X > 0, X =< 2}` gives `I = 1`).
+A disequation `{Lin =\= 0}` defines a new variable by the form and marks it **nonzero**. It is passive: it fails when that variable is bound to 0, so the projection shows it through the variable (`{X =\= 2}` dumps as `{X = 2 + _Q1}, {_Q1 =\= 0}`).
 
 ---
 
 ## How it works: backtracking
 
-CLP(Q) must integrate with Prolog's backtracking. When a choice point is explored and later abandoned, all constraints posted during that branch must be undone.
-
-The Tableau is **mutable shared state** — there's one per trail, not one per variable. This makes backtracking non-trivial: you can't just undo per-variable attributes (as CLP(R) does with its per-variable `RealVar`).
-
-**Copy-on-write via `trail.record()`:**
-
-Before each constraint modification, the entire Tableau is deep-copied. The copy is captured in a closure and pushed onto the trail:
-
-```python
-def _snapshot_tableau(trail):
-    tid = id(trail)
-    old = _tableaux[tid].copy()
-    trail.record(lambda: _tableaux.__setitem__(tid, old))
-```
-
-When `trail.undo(mark)` is called, the closure fires, replacing the current Tableau with the snapshot. All subsequent operations see the pre-modification state.
-
-**Cost:** `O(n)` per snapshot where `n` is the total number of variables and constraints. For typical CLP(Q) problems (tens of variables), this is negligible. For very large systems (hundreds of variables), the copy dominates — but such systems rarely arise in logic programming.
+A variable's state is a record that is never changed in place: each change puts a new record with `put_attr`, and the engine's trail undoes it on backtracking, as it undoes a binding. A component's record lives the same way, on a hidden variable of its own. So there is no store to copy: a post costs the changes it makes, and backtracking undoes exactly those. An operation that must leave the store as it was (an optimum, a projection, a redundancy test) takes a trail mark and undoes to it.
 
 ---
 
-## How it works: the attribute hook
+## How it works: the unification hook
 
-Each CLP(Q) variable carries a `QVar` attribute under the key `"clpq"`:
-
-```python
-class QVar:
-    __slots__ = ('lo', 'hi', 'tab_id')
-    lo: Fraction | None    # lower bound (None = unbounded)
-    hi: Fraction | None    # upper bound (None = unbounded)
-    tab_id: int            # variable's ID in the Tableau
-```
-
-When a Q-constrained variable is unified (bound to a value or another variable), the **attribute hook** `_q_hook` fires:
+When a variable with CLP(Q) state is unified, its attribute hook runs (itf3.pl's `verify_attributes/3`, `attribute_hooks.py`):
 
 | Unified with | Action |
 |---|---|
-| `int` or `Fraction` | Check bounds, then substitute the value into the Tableau via `fix_variable`. Propagate implied bindings. |
-| Another Q-variable | Intersect bounds, then add equality `X = Y` to the Tableau. Propagate implied bindings. |
-| Q-variable without attribute | Transfer the `QVar` attribute to the other variable. |
-| `bool` or non-numeric | **Fail.** |
+| a number | the equation `X = N` is solved: X's linear form, dereferenced, equals N; a nonzero variable must not be 0; the bindings that implies are exported in turn |
+| another constrained variable | the equation `X = Y`, and their components merge |
+| a variable without CLP(Q) state | that variable takes the state |
+| anything else (a float, an atom, a compound) | `type_error(rational, T)`, from 1.3.3's arith_normalize test (DEVIATIONS.md D3) |
 
-### Implied bindings (chain propagation)
+Bindings implied by a binding are queued and run by one loop, not nested, so a long chain of implied bindings needs no recursion (`export_bindings`). A goal delayed on a non-linear constraint (geler.pl) wakes when a variable in it is bound, and posts the constraint once it is linear. DEVIATIONS.md D3 lists how the hook meets the engine: bindings made in one unification, PlainVars, and hooks of other libraries running at the same time.
 
-After a Gaussian elimination step, some variables may become fully determined — their parametric definition reduces to a constant (all dependencies are themselves resolved). The `_propagate_determined` method detects these and sets their bounds to `[val, val]`. Then `check_implied_bindings` scans for any variable whose bounds have collapsed to a point and calls `unify` on it, which fires the hook again. This chain continues until no more variables are determined.
+---
+
+## How it works: projection
+
+An answer shows constraints on the variables the query names, not on slacks and other internal variables. `dump/3`, `dump_q/2` and the `-g` answer printer project the store onto the answer's variables (project.pl), between a trail mark and the undo to it:
+
+1. the targets are marked, and each dependent target is made independent by pivoting it with a non-target of its row;
+2. dependent variables that are no target and are needed by nothing are dropped;
+3. the non-target independent variables that occur in inequalities are eliminated by **Fourier-Motzkin elimination** (fourmotz.pl): each pair of an upper and a lower bound on the eliminated variable gives their combination, and a combination that is implied is not kept;
+4. **redundant** bounds are dropped (redund.pl): a bound is redundant where posting its negation fails;
+5. the variables are ordered (ordering.pl, as `ordering/1` asks) and each row is written as a constraint over the targets (dump.pl), a slack kept for a disequation named `_Q1`, `_Q2`, ...
+
+The `-g` printer projects as the SICStus toplevel does (DEVIATIONS.md D28). Projection can be exponential in the number of variables eliminated; the `clpq_max_projection` [flag](flags.md) caps its work.
 
 ---
 
@@ -794,7 +661,7 @@ fd_eq(l, r, trail):
     9. At least one Var    → CLP(Z) EqConstraint
 ```
 
-`_any_rational` checks: is either operand a `Fraction` instance, or a `Var` with a `"clpq"` attribute? Before dispatching, `_check_no_mixed_rational_real` raises `TypeError` if one operand is rational and the other is a float or CLP(R) variable.
+`_any_rational` checks: is either operand a `Fraction` instance, or a `Var` with CLP(Q) state (the `Q_KEY` attribute)? Before dispatching, `_check_no_mixed_rational_real` raises `TypeError` if one operand is rational and the other is a float or CLP(R) variable.
 
 Step 4 runs in the Python wrappers around the C entry points, ahead of them. The C extension mirrors the other checks. During module initialization, it imports `_check_no_mixed_rational_real`, `_any_rational` from the Python `clpfd` module and `q_eq`, `q_ne`, `q_lt`, `q_le` from `clpq`. The dispatch in C calls the Python functions through the C-API.
 
@@ -820,15 +687,15 @@ Each iteration roughly **doubles** the digit count. After 15 iterations, Python 
 
 **In CLP(Q) specifically,** coefficient growth arises in two scenarios:
 
-1. **Ill-conditioned systems** where the coefficient matrix determinant is close to zero. Gaussian elimination amplifies small differences.
+1. **Ill-conditioned systems** where the coefficient matrix determinant is close to zero. Substitution amplifies small differences.
 2. **Many pivot steps** in the simplex method. Each pivot divides by the pivot coefficient, potentially increasing denominators.
 
 **Mitigation strategies:**
 
-- Python's `Fraction` normalizes automatically (GCD reduction on every operation)
+- Every rational is kept in lowest terms (a GCD on every operation)
 - For most CLP(Q) usage (systems of 5-20 variables), coefficient growth is manageable
 - If growth becomes a problem, consider CLP(R) for the approximate part and CLP(Q) only where exactness is required
-- The solver does not artificially limit precision — it will compute correct answers at the cost of speed
+- The solver does not limit precision — it computes correct answers at the cost of speed. What it caps is work: the `clpq_max_*` [flags](flags.md) bound the nodes and pivots of a `bb_inf` search, the work of a projection, and the size of the powers and products one constraint expands, and raise `resource_error` past them (DEVIATIONS.md D24)
 
 This is exactly the trade-off SICStus Prolog documents: "you may be out of space particularly soon" for iterative rational computations. The SICStus documentation recommends switching to CLP(R) when precision is not critical.
 
@@ -846,13 +713,13 @@ This is exactly the trade-off SICStus Prolog documents: "you may be out of space
 | Entailment | `entailed/1` | Same | — | **`entailed/1`** |
 | MIP | `bb_inf/3`, `bb_inf/5` | Same | — | **`int_minimize/3`**, `bb_inf/3`, `bb_inf/5` |
 | Projection | Fourier-Motzkin | Broken | — | **`dump_q/2` (Fourier-Motzkin)**, `dump/3`, `ordering/1` |
-| Non-linear | Deferred | Deferred | — | **Deferred**; `domain_error` under `CLAUSAL_CLPQ=legacy` |
+| Non-linear | Deferred | Deferred | — | **Deferred** |
 | Syntax | `{X + Y =< 8}` | Same | — | **`{X + Y =< 8}`**, or `X + Y #=< 8` (unified; seam `X + Y <= 8`) |
 | `/` inside a constraint | Exact rational | Exact rational | — | **Exact rational inside `{...}`; an integer when integral** |
 
 ### Historical context
 
-**Holzbaur (1992, 1994, 1995)** at OFAI Vienna created the definitive CLP(Q,R) implementation for SICStus Prolog. His algorithm combines Gaussian elimination for equalities with the revised simplex method for inequalities, with incremental constraint addition and detection of fixed (determined) variables. Our implementation is based on these published papers.
+**Holzbaur (1992, 1994, 1995)** at OFAI Vienna created the definitive CLP(Q,R) implementation for SICStus Prolog. His algorithm combines Gaussian elimination for equalities with a simplex method over bounded variables for inequalities, with incremental constraint addition and detection of fixed (determined) variables. Clausal's solver is a translation of his clp(q,r) 1.3.3 (below).
 
 **SWI-Prolog's CLP(Q)** is a port of Holzbaur's code by Leslie De Koninck. It is officially "orphaned" (no maintainer) and has known bugs, including a projection failure reported by Markus Triska where internal variables leak into answers.
 
@@ -860,7 +727,7 @@ This is exactly the trade-off SICStus Prolog documents: "you may be out of space
 
 **The Parma Polyhedra Library** (Bagnara et al.) provides an open-source exact-arithmetic simplex in C++ using GMP rationals. It serves as a correctness oracle for exact LP solvers.
 
-The default solver is a translation of the clp(q,r) 1.3.3 sources as SICStus distributes them (`clausal/logic/clpq/PROVENANCE.md`); SWI-Prolog's CLP(Q) is not used in any form. The legacy solver (`CLAUSAL_CLPQ=legacy`) was a clean-room design from the published papers (Holzbaur 1992, 1994).
+The solver is a translation of the clp(q,r) 1.3.3 sources as SICStus distributes them (`clausal/logic/clpq/PROVENANCE.md`); SWI-Prolog's CLP(Q) is not used in any form. The solver Clausal shipped before it, retired on 2026-11-05, was a clean-room design from the published papers (Holzbaur 1992, 1994).
 
 ---
 
@@ -926,8 +793,7 @@ the FD side refuses it (operator ruling 2026-11-03):
 - `bb_inf` makes integral only the variables of its integer list. It
   binds nothing, so `X in 1..5, {2*X >= 3},
   bb_inf([], X, I)` gives `I = 3/2`, the relaxation, as asked; list `X` for
-  `I = 2`. `CLAUSAL_CLPQ=legacy` binds the store at the optimum and raises
-  `fd_relaxation_not_integral` there.
+  `I = 2`.
 - An FD constraint posted between FD variables before they had CLP(Q)
   state (`X #= Y + 3` ahead of `{D = X - Y}`) is not in the CLP(Q) store.
   When clpfd refuses the relaxation's optimum through such a constraint
@@ -957,7 +823,7 @@ the FD side refuses it (operator ruling 2026-11-03):
 
 | Situation | Behaviour |
 |---|---|
-| `in_q(X, 0, 10)` then `X #= 3` | CLP(Q): X has `"clpq"` attribute, `3` is treated as `Fraction(3)` |
+| `in_q(X, 0, 10)` then `X #= 3` | CLP(Q): X has CLP(Q) state, `3` is treated as `Fraction(3)` |
 | `in_domain(X, 0, 5)`, `{X + Y = 7}` then `X #> 4` | Both stores: FD narrows X to 5 and binds it, CLP(Q) gives `Y = 2` |
 | `in_domain(X, 1, 10)` then `X #= 1 rdiv 3` | **Fails**: the rational triggers Q dispatch, the FD var is promoted to Q with bounds `[1, 10]`, and `1/3` is outside them |
 | `in_domain(X, 1, 10)` then `X #= 1 rdiv 2` | **Fails**: `1/2` is not an integer, FD hook rejects |
@@ -975,63 +841,15 @@ the FD side refuses it (operator ruling 2026-11-03):
 
 ---
 
-??? abstract "QVar — per-variable state"
+??? abstract "Per-variable state"
 
-    Each constrained variable stores a `QVar` as an attributed-variable attribute under the key `"clpq"`:
-
-    ```python
-    class QVar:
-        __slots__ = ('lo', 'hi', 'tab_id')
-        lo: Fraction | None    # None means unbounded below
-        hi: Fraction | None    # None means unbounded above
-        tab_id: int            # this variable's ID in the global Tableau
-    ```
-
-    Unlike CLP(R)'s `RealVar` which stores constraints per-variable, CLP(Q) stores all constraints in the **global Tableau**. The `QVar` just holds bounds and a reference into the tableau.
-
-    **Trail safety:** `QVar` is immutable. Narrowing creates a new `QVar` via `put_attr(var, "clpq", new_state, trail)`. The old state is restored on `trail.undo()`. The Tableau itself is snapshot-restored separately via `trail.record()`.
-
-??? abstract "Tableau invariants"
-
-    The Tableau maintains these invariants:
-
-    1. **Basic variables** have a row. Their assignment is `rhs[bv] - Σ row[bv][v] * assign[v]`.
-    2. **Non-basic variables** sit at one of their bounds. Their assignment equals that bound value.
-    3. **Parametric variables** were eliminated by Gaussian. Their value is `pk + Σ pc[v] * assign[v]`.
-    4. **Slack variables** use negative IDs to avoid collisions with user variable IDs (which are positive).
-    5. **All assignments are consistent.** After every operation, `assign[v]` matches the value computed from the rows/parametric definitions.
-    6. **Feasibility.** After successful constraint addition, all basic variables satisfy their bounds.
-
-??? abstract "Substitution direction"
-
-    A subtle point in the implementation: when substituting a parametric variable `X = Σ aⱼYⱼ + k` into an equation `Σ cᵢZᵢ = d`, the parametric constant `k` is on the **left-hand side** (it's part of X's expansion). It must be moved to the right by **subtracting** it from the equation's constant:
-
-    ```
-    Original:  cₓ·X + ... = d
-    Substitute X = Σ aⱼYⱼ + k:
-               cₓ·(Σ aⱼYⱼ + k) + ... = d
-               cₓ·Σ aⱼYⱼ + cₓ·k + ... = d
-               cₓ·Σ aⱼYⱼ + ... = d - cₓ·k
-    ```
-
-    Getting this sign wrong is a classic implementation bug (SWI-Prolog's CLP(Q) has related issues). Our implementation explicitly subtracts: `new_k -= coeff * pk`.
-
-??? abstract "Pivot mechanics"
-
-    The pivot operation swaps a basic variable (leaving) and a non-basic variable (entering):
-
-    ```
-    Before: leaving = Σ row[v]·v + rhs     (entering is one of v)
-    Solve:  entering = (leaving - Σ other·v - rhs) / row[entering]
-    ```
-
-    Note the sign: `new_rhs = -rhs / pivot_coeff`, not `+rhs / pivot_coeff`. The leaving variable's constant is on the left side of the equation, so dividing it out negates it.
-
-    After the pivot:
-    1. The leaving variable becomes non-basic at its lower bound
-    2. The entering variable gets a new row
-    3. All other rows that contained the entering variable are updated by substitution
-    4. All basic variable assignments are recomputed from their rows
+    Each constrained variable stores its state as an attributed-variable
+    attribute under the key `Q_KEY` (`"clpq_holzbaur"`): an immutable
+    `SolverState` record (`clausal/logic/clpq/attributes.py`) with its
+    linear form, its bounds and their strictness, its component and the
+    marks the projection reads ([linear forms and the store](#how-it-works-linear-forms-and-the-store)).
+    A change puts a new record with `put_attr`, which `trail.undo()`
+    restores; there is no global store ([backtracking](#how-it-works-backtracking)).
 
 ??? example "Usage examples"
 
@@ -1056,15 +874,15 @@ the FD side refuses it (operator ruling 2026-11-03):
 
     state = get_attr(var, Q_KEY)
     if state is not None:
-        print(f"[{state.lo}, {state.hi}]")  # current bounds
-        print(f"tableau ID: {state.tab_id}")
+        print(state.bounds)        # bounds_lower_upper((0, 1), (10, 1)), ...
+        print(state.linear_form)   # the row of a dependent variable
     ```
 
 ---
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_clpq.py`.
+    Tests are in `tests/test_clpq.py`; the port's own, one file per ported 1.3.3 file plus the oracle, fuzz and differential tests, are in `tests/clpq_port/`.
 
     - **Dispatch**: Fraction triggers CLP(Q), int stays CLP(Z), float stays CLP(R)
     - **Domain declaration**: `in_q` basic, narrowing, infeasible, point binding, list form, unbounded, ground check
@@ -1072,7 +890,7 @@ the FD side refuses it (operator ruling 2026-11-03):
     - **Variable binding**: `q_eq(X, Fraction)` binds X
     - **Linear equalities**: two-var, three-var (exact fractions), contradictory, redundant, rational coefficients, scaled (`2*X = 1 -> X = 1/2`), large coefficients (`999999*X = 1`)
     - **Linear inequalities**: simple le, infeasible system, two-var feasibility, redundant, zero coefficients
-    - **Backtracking**: undo restores unbound, undo restores bounds, undo restores full tableau state; maximize/minimize backtrack correctly
+    - **Backtracking**: undo restores unbound, undo restores bounds, undo restores the whole store; maximize/minimize backtrack correctly
     - **Optimization**: maximize simple, minimize simple, classic LP (30X + 50Y, answer 310), variables bound to optimal point
     - **sup/inf**: simple bounds, LP bounds, does not bind variables
     - **entailed**: `=<`, `>=`, `=`, `\=` entailment; does not modify store; does not add Q attributes to bare variables
@@ -1080,10 +898,9 @@ the FD side refuses it (operator ruling 2026-11-03):
     - **Pivot/simplex**: upper-bound inequality feasibility, infeasible upper-bound detection, degenerate vertex, contradictory multi-var inequalities
     - **Projection**: `dump_q` simple bounds, inequality projection (no internal var leakage), equality projection, empty store
     - **Integer optimization**: `int_minimize` (bb_inf) simple integer, LP integer, no integer constraint, infeasible, already integer, mixed integer, multi-level branching, variable binding
-    - **Linearization**: constants, ints, vars, add, scalar mult, non-linear rejection, negate
     - **Coefficient growth**: Newton sqrt(2) to 12-digit fractions, large coefficient constraints
     - **Float type safety**: `type_error(rational, F)` raised when Q-variable unified with float
-    - **Snapshot dedup**: multi-step operation undoable as single unit
+    - **Undo**: a multi-step operation undoable as a single unit
     - **End-to-end seam**: all doc examples compiled and run through full pipeline (7 integration tests)
 
 ---

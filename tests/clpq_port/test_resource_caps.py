@@ -11,9 +11,9 @@ never failing or answering in part.  For each cap: the D24 repro raises
 within seconds, a case at its cap answers, the same case one under its
 cap raises, and raising the cap lets it through.
 
-The in-process tests call the adapter whatever CLAUSAL_CLPQ says and set
-the caps through clausal.logic.clpq.limits.  The flags and catch/3 run in
-a `clausal` subprocess under CLAUSAL_CLPQ=holzbaur, where the flags exist.
+The in-process tests call the adapter and set the caps through
+clausal.logic.clpq.limits.  The flags and catch/3 run in a `clausal`
+subprocess.
 The sandbox's refusal of the flags is in tests/test_sandbox.py.
 """
 import os

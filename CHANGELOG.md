@@ -7,14 +7,39 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Removed
+
+- **The legacy CLP(Q) solver** (`clausal/logic/clpq/legacy.py`, the
+  solver from before 2026-10-12; operator ruling 2026-11-05: "we should
+  retire legacy CLPQ"). The port of clp(q,r) 1.3.3 is the only CLP(Q)
+  solver. `CLAUSAL_CLPQ=legacy` raises `ValueError: CLAUSAL_CLPQ=legacy was
+  removed after clausal 1.4.0 (operator ruling 2026-11-05); the port of
+  clp(q,r) 1.3.3 is the only CLP(Q) solver: unset CLAUSAL_CLPQ or set it to
+  holzbaur` when CLP(Q) is first used, rather than falling back to the
+  port; `CLAUSAL_CLPQ=holzbaur` and an unset variable keep working, and any
+  other value is refused as before (`CLAUSAL_CLPQ must be holzbaur (or
+  unset), not ...`). Gone with it: legacy's names in `clausal.logic.clpq`
+  (`Tableau`, `QVar`, `DQ`, the private `_tableaux`, `_linearize`, ...;
+  the package exports the port's API, `HOLZBAUR_API`, and `SOLVER` is
+  always `"holzbaur"`), its `"clpq"` attribute key and hook, and the
+  `-g` printer's legacy numbering of `_Q` variables. The `clpq_max_*`
+  flags always exist. The port's boundary helpers (the cell rewrite and
+  the units side channel) moved to `clausal/logic/clpq/boundary.py`.
+  `tools/division_census` records CLP(Q) divisions in the port's normal
+  form (`normal_form.normal_form_divide`) instead of legacy's
+  `_linearize`. `docs/clpq.md`'s "How it works" sections describe the
+  port: bv.pl's bounded-variable simplex, class.pl's components,
+  project.pl's projection, nf.pl's normal form
+  (todo/done/retire-legacy-clpq-2026-11-05.md).
+
 ### Changed
 
 - **The default CLP(Q) solver is the port of clp(q,r) 1.3.3** (operator
   ruling 2026-11-05: "we should retire legacy CLPQ"). `CLAUSAL_CLPQ` now
   defaults to `holzbaur` (`clausal/logic/clpq/holzbaur.py` and the modules
   around it; `clausal/logic/clpq/PROVENANCE.md`, `DEVIATIONS.md`).
-  `CLAUSAL_CLPQ=legacy` still selects the old solver until it is removed
-  (todo/retire-legacy-clpq-2026-11-05.md). What a program sees change:
+  `CLAUSAL_CLPQ=legacy` selected the old solver until its removal (see
+  Removed). What a program sees change:
   `bb_inf/3` binds only the infimum, not the variables (`bb_inf/5` gives
   the vertex), as in SICStus and Scryer; `int_minimize/3`, Clausal's own
   predicate, keeps its contract and binds the variables to that vertex

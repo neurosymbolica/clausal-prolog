@@ -308,8 +308,8 @@ case is refused (D26).
 
 clpfd's calls into CLP(Q) are the exception.  They are calls, not
 registrations, and some run inside a hook (clpfd's propagation in its own
-hook, its reified comparisons, the units hook).  Under
-`CLAUSAL_CLPQ=holzbaur` the adapter's `q_eq`, `q_ne`, `q_le`, `q_lt`,
+hook, its reified comparisons, the units hook).  The
+adapter's `q_eq`, `q_ne`, `q_le`, `q_lt`,
 `q_gt`, `q_ge` and `sync_fd_bounds` are not refused: they queue the post
 while `trail.hooks_running` or `hook_dispatch_depth()` is above 0 (D26)
 and post in place at a goal
@@ -1075,11 +1075,15 @@ before and after each check (Task 8's inf/sup is the same case).
 
 Not checked against SICStus: MORNING-SICSTUS (7) stays open.
 
-## D20: the legacy API in front of the port (`holzbaur.py`)
+## D20: Clausal's CLP(Q) API in front of the port (`holzbaur.py`)
 
-`CLAUSAL_CLPQ=holzbaur` puts the port behind legacy's names
-(`clausal/logic/clpq/__init__.py`, Task 14).  Where the adapter answers
-differently from 1.3.3 itself:
+The package exports the port behind the names of Clausal's CLP(Q) API
+(`clausal/logic/clpq/__init__.py`, Task 14), the API of the solver it
+shipped before the port.  That solver ("legacy" below, `legacy.py`) was
+retired by operator ruling 2026-11-05 and deleted; `CLAUSAL_CLPQ=legacy`,
+which selected it, raises a ValueError.  What this entry says of legacy is
+the record of how the two compared while both existed.  Where the adapter
+answers differently from 1.3.3 itself:
 
 - A variable against a number in an equation (`q_eq(X, N)`, a block's
   `X == N`) is the unification `X = N` with the number as written, as
@@ -1102,7 +1106,7 @@ differently from 1.3.3 itself:
   (`sync_fd_bounds`).  clpfd's C propagation narrows without that call
   (its `c_narrow` syncs CLP(R) only), so with the C extension loaded, as
   it is in every build, a narrowing reaches neither solver's store; the
-  Python twin's does (`test_fd_to_q_bare_and_under_a_driver_against_legacy_and_the_oracle`).
+  Python twin's does (`test_fd_to_q_bare_and_under_a_driver_against_the_oracle`).
   A clpfd comparison that is linear with integer coefficients over
   variables that all have FD state, one of them CLPQ_KEY state too, is
   posted to the port (as before) and then to clpfd as well
@@ -1441,9 +1445,9 @@ the host's to bound (docs/sandbox.md: time and memory limits).
 **Configuration.** A program reads and sets the caps with
 `current_prolog_flag/2` and `set_prolog_flag/2`; each flag is process wide
 and takes a positive integer (anything else is
-`domain_error(flag_value, F+V)`).  The flags exist only under
-`CLAUSAL_CLPQ=holzbaur`, so the legacy switch's flag set is unchanged
-(`test_the_legacy_switch_has_no_cap_flags`).  The engine's flag mechanism
+`domain_error(flag_value, F+V)`).  The flags existed only under
+`CLAUSAL_CLPQ=holzbaur` while the legacy solver could be selected; since
+it was retired (2026-11-05) they always exist.  The engine's flag mechanism
 (`clausal/logic/builtins/flags.py`) was chosen over an environment
 variable because it is what ISO gives a program for implementation-defined
 limits.  In the sandbox the caps are the host's: a program sets them
@@ -1850,9 +1854,9 @@ variables made, for random mixed expressions 300 deep, are the same
 through the recursive walk and the stack walk on both solvers
 (`test_the_stack_walk_answers_as_the_recursive_one`), the two walks
 agree term by term on every kind of argument
-(`test_the_cell_walks_agree_term_by_term`), legacy's linear forms match
-the recursive `_linearize` they replace, coefficients and variable order
-(`test_legacy_linear_forms_match_the_recursive_walk`), and the clpq,
+(`test_the_cell_walks_agree_term_by_term`), legacy's linear forms matched
+the recursive `_linearize` they replaced, coefficients and variable order
+(a test deleted with legacy, 2026-11-06), and the clpq,
 clpfd, clpz, clpr and units suites pass with the stack walk taken from
 the root (`_SHALLOW_CELL_WALK = -1`).  Depth 100,000 posts and answers on
 both solvers, the post in about 0.9 s on the port (`lsum/3` building the

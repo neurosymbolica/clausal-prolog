@@ -229,12 +229,6 @@ false.
   reports `resource_error(clpq_projection)` (the `clpq_max_projection`
   flag, [Flags](flags.md)) and prints no answer.
 
-  Under `CLAUSAL_CLPQ=legacy` the old solver prints its own projection:
-  `{X + Y = 3}` for the first goal, a strict bound through a hidden
-  variable as non-strict, a forced value as constraints, and, past its
-  projection limit, the constraints as they are stored over `_Q1`, `_Q2`,
-  ….
-
   `dif/2` and CLP(FD) constraints are printed as goals too (`dif(X,a)`,
   `X in 4..5`), and so is a pending `freeze/2` or `when/2`, as Scryer
   prints it (operator ruling 2026-10-26):

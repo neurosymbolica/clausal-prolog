@@ -3,10 +3,15 @@
 **Status: open, gated on design decision A08-D003 (unruled).** Triaged
 2026-10-20, moved from the 2026-07-05 audit folder (was
 `fix-A08-clpq-float-mixing-enforcement.md`). Both pinning tests still XFAIL
-on the default solver and under `CLAUSAL_CLPQ=holzbaur`:
+under the port of clp(q,r) 1.3.3, the only CLP(Q) solver since the old one
+(with its `_linearize`) was retired on 2026-11-05:
 tests/audit_2026_07_05/test_08_clpqr_z3.py::TestClpqSemanticsVsReference::test_q_eq_float_raises_typeerror
-and ::test_in_q_after_in_real_raises. The code moved: `_linearize` is now
-in `clausal/logic/clpq/legacy.py` (float branch near :1016).
+and ::test_in_q_after_in_real_raises. The port reads a float as 1.3.3
+does, through `float_rat` (`clausal/logic/clpq/arithmetic.py`,
+`arithmetic_normalize`; DEVIATIONS.md D3), so `q_eq(X, 0.1)` binds X to
+1/10, and `in_q/3` does not look at `REAL_KEY`. The fix sketch below names
+the old solver's functions; its two points apply to the port's float read
+and to `in_q/3`.
 
 The original audit text follows.
 
