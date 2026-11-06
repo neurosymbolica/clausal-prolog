@@ -40,6 +40,9 @@ from clausal.logic.exceptions import (
     LogicException, domain_error, instantiation_error, representation_error,
     type_error)
 from clausal.logic.clpq.arithmetic import is_number
+from clausal.logic.clpq.boundary import (
+    _block_cell_as_node, _cell_as_node, _cells_as_nodes, _units_result,
+    _units_strip, _units_strip_expr)
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -1832,22 +1835,6 @@ def _in_q_units(targets, lo, hi, trail):
 # ── Public API: constraint posting ───────────────────────────────────────────
 
 
-def _cells_as_nodes(l, r, context):
-    """clpfd's post-boundary rewrite, STRICT (ruling R9 A1, 2026-09-27): an
-    arithmetic cell becomes its operator node, which is what the _linearize
-    walk; an atom or a non-evaluable compound raises ``type_error(evaluable,
-    F/N)`` -- the _linearize had no diagnosis of their own for it."""
-    global _cells_as_nodes
-    from clausal.logic.clpfd import _cells_as_nodes as impl  # noqa: PLC0415 -- clpfd imports this module lazily
-    _cells_as_nodes = impl
-    return impl(l, r, context)
-
-
-def _cell_as_node(expr: Any, context: str) -> Any:
-    """One operand's :func:`_cells_as_nodes` -- an objective or a bound."""
-    return _cells_as_nodes(expr, 0, context)[0]
-
-
 # ── Units ────────────────────────────────────────────────────────────────────
 # The units side channel (clausal.logic.units_clp), the one CLP(FD) uses: a
 # Quantity or a united variable anywhere in a post is analysed for its
@@ -1873,35 +1860,6 @@ def _ensure_units_imports() -> None:
         _strip_expr_for_solver = units_clp.strip_expr_for_solver
         _reattach = units_clp.reattach
         _label_targets = units_clp.label_targets
-
-
-def _units_strip(l, r, context, trail):
-    """A comparison through the side channel: the ``(l, r)`` the tableau can
-    take, or the pair untouched when no units material is involved. Runs
-    AFTER the cell rewrite (a Quantity leaf may sit inside a cell built at
-    run time) and before the ground fast paths, which read plain numbers."""
-    if _strip_for_solver is None:
-        _ensure_units_imports()
-    stripped = _strip_for_solver(l, r, context, trail, strict=True)
-    return (l, r) if stripped is None else stripped
-
-
-def _units_strip_expr(expr, context, trail):
-    """An objective through the side channel: ``(expr', dims)`` -- the tree
-    the tableau can take and the dimension its optimum carries (``{}`` when
-    no units material is involved)."""
-    if _strip_expr_for_solver is None:
-        _ensure_units_imports()
-    stripped = _strip_expr_for_solver(expr, context, trail)
-    return (expr, {}) if stripped is None else stripped
-
-
-def _units_result(value, dims):
-    """An optimum as the term the caller gets: a Quantity of *dims*, else the
-    number as the engine presents it (an integral rational is an int)."""
-    if not dims:
-        return present_number(value)
-    return _reattach(value, dims)
 
 
 def q_eq(l: Any, r: Any, trail: Trail) -> bool:
@@ -2970,30 +2928,6 @@ def clpq_constraint_answers(constraints: Any, trail: Trail):
     builtin iterates: one answer or none."""
     if clpq_constraint_block(constraints, trail):
         yield None
-
-
-#: A relation cell a block holds -> the comparison node it posts as: the
-#: comparisons nf.pl's {}/1 reads (``=`` is ``=:=`` there).  A relation built
-#: at run time (``C = (X =< 5), clpq:rational(C)``) arrives as a cell; the
-#: braces of a .clausal or seam block are compiled to the nodes.  Filled by
-#: :func:`_block_cell_as_node` on first use.
-_BLOCK_CELL_NODES: dict = {}
-
-
-def _block_cell_as_node(term: Any) -> Any:
-    """*term* as its comparison node when it is a relation cell
-    (``('=<', X, 5)``), else *term* unchanged."""
-    if type(term) is not tuple or len(term) != 3:
-        return term
-    if not _BLOCK_CELL_NODES:
-        _ensure_term_imports()
-        _BLOCK_CELL_NODES.update({
-            "=<": _LtE, "<": _Lt, ">=": _GtE, ">": _Gt,
-            "=:=": _ArithEq, "=": _ArithEq, "=\\=": _ArithNeq})
-    node_class = _BLOCK_CELL_NODES.get(term[0])
-    if node_class is None:
-        return term
-    return node_class(left=term[1], right=term[2])
 
 
 def _post_q_constraint_node(node: Any, trail: Trail) -> bool:

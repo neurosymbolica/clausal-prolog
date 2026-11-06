@@ -8,8 +8,8 @@ the port:
 - an arithmetic cell becomes its operator node (``_cells_as_nodes``,
   ruling R9 A1), and the units side channel strips a Quantity or a united
   variable to its solver number or shadow (``_units_strip``,
-  ``_units_strip_expr``); both are legacy.py's, which never touch its
-  tableau;
+  ``_units_strip_expr``); both are in boundary.py, which never touches
+  the solver's store;
 - the constraint goes to nf.pl's ``{}/1`` (``normal_form.post_constraint``),
   the optimisers to bv.pl's ``inf``/``sup``/``minimize``/``maximize``,
   ``bb_inf`` to bb.pl's, ``entailed`` to nf.pl's, ``dump_q`` to dump.pl's
@@ -89,7 +89,7 @@ from clausal.logic.clpq.attributes import (
     refuse_inside_attribute_hooks, state_of)
 from clausal.logic.clpq.components import (
     component_all_variables, list_elements)
-from clausal.logic.clpq.legacy import (
+from clausal.logic.clpq.boundary import (
     _block_cell_as_node, _cell_as_node, _cells_as_nodes, _units_result,
     _units_strip, _units_strip_expr)
 from clausal.logic.clpz_surface import _proper_list
