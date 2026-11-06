@@ -758,6 +758,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   the optimum is integral only within Eps the binding can fail. The
   legacy solver (the default) is unchanged.
 
+- **CLP(Q) port: `bb_inf`'s integrality within Eps and 1.3.3's reading of
+  a float** (both accepted, operator ruling 2026-11-06). The port takes a
+  value within `Eps` of an integer as integral (0.001 for `bb_inf/3` and
+  `int_minimize/3`), as 1.3.3 does, where the legacy solver tests
+  integrality exactly; and it reads a float through 1.3.3's `float_rat`
+  (`{X = 0.1}` gives `1/10`, DEVIATIONS.md D1), where legacy takes the
+  float's exact binary value. Both matter once the port is the default.
+
 - **CLP(Q) port: past the projection cap the `-g` printer reports the
   error** (accepted, operator ruling 2026-11-06). Past
   `clpq_max_projection` the printer reports
