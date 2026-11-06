@@ -85,7 +85,7 @@ truth value is `true` / `false`.
 - **`clpq_max_nodes`, `clpq_max_work`, `clpq_max_projection`,
   `clpq_max_expansion`, `clpq_max_expansion_bits`,
   `clpq_max_coefficient_bits`** (implementation-defined,
-  under `CLAUSAL_CLPQ=holzbaur` only): the resource caps of the clp(q,r)
+  absent under `CLAUSAL_CLPQ=legacy`): the resource caps of the clp(q,r)
   1.3.3 port, each a positive integer, process wide and settable. Past one
   the port raises `error(resource_error(R), _)`: `clpq_nodes` (the nodes of
   one `bb_inf/3` search), `clpq_work` (the rows that search's pivots read

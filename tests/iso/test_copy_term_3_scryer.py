@@ -255,7 +255,7 @@ def _unqualified(text: str) -> str:
 def test_clausal_answers(tmp_path, mode, suffix):
     lines, err = _clausal(tmp_path, mode, suffix, [g for g, *_ in ROWS])
     assert len(lines) == len(ROWS), (lines, err)
-    port = os.environ.get("CLAUSAL_CLPQ") == "holzbaur"
+    port = os.environ.get("CLAUSAL_CLPQ", "holzbaur") == "holzbaur"
     wrong = [(g, want, got) for (g, want, *_), got in zip(ROWS, lines)
              if got != (HOLZBAUR.get(g, want) if port else want)]
     assert not wrong, wrong

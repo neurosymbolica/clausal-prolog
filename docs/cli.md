@@ -214,20 +214,26 @@ false.
 
   ```bash
   $ clausal lin.clausal -g "dependent(X, Y)"
-  {X + Y = 3}.
+  {Y = 3 - X}.
   $ clausal lin.clausal -g "between_1_3(X)"
   {X > 1}, {X < 3}.
   ```
 
-  When projecting would take too long (many constraints linking many
-  variables the answer does not show), the constraints are printed as they
-  are stored, over internal variables named `_Q1`, `_Q2`, …: still the
-  whole answer, just not simplified.
+  The projection is the one clp(q,r) 1.3.3's toplevel prints (the default
+  CLP(Q) solver is its port, see [CLP(Q)](clpq.md)): a strict bound keeps
+  its strictness through a variable the answer does not show
+  (`{X < Y, Y =< 3}` shows X as `{X < 3}`), and a value the constraints
+  force is a binding (`{X =< Y, Y =< 3, X >= 3}` answers `X = 3, Y = 3`).
+  A variable the projection keeps that the answer does not name is
+  `_Q1`, `_Q2`, …. When projecting would take too long the printer
+  reports `resource_error(clpq_projection)` (the `clpq_max_projection`
+  flag, [Flags](flags.md)) and prints no answer.
 
-  A strict bound that passes through a variable the answer does not show
-  is printed as non-strict (`{X < Y, Y =< 3}` shows X as `{X =< 3}`), and
-  a value that the constraints force is shown as constraints, not as a
-  binding.
+  Under `CLAUSAL_CLPQ=legacy` the old solver prints its own projection:
+  `{X + Y = 3}` for the first goal, a strict bound through a hidden
+  variable as non-strict, a forced value as constraints, and, past its
+  projection limit, the constraints as they are stored over `_Q1`, `_Q2`,
+  ….
 
   `dif/2` and CLP(FD) constraints are printed as goals too (`dif(X,a)`,
   `X in 4..5`), and so is a pending `freeze/2` or `when/2`, as Scryer

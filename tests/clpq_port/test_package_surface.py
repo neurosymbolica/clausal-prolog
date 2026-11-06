@@ -28,7 +28,7 @@ def restore_the_package():
         importlib.reload(clpq)
     finally:
         _set_env(current)       # monkeypatch undoes its own change after this
-    assert clpq.SOLVER == (saved or "legacy")
+    assert clpq.SOLVER == (saved or "holzbaur")
 
 
 def _set_env(value):
@@ -43,8 +43,16 @@ def test_the_package_exports_every_legacy_name():
     assert missing == []
 
 
-def test_the_default_solver_is_legacy(monkeypatch, restore_the_package):
+def test_the_default_solver_is_the_port(monkeypatch, restore_the_package):
+    # Operator ruling 2026-11-05: the port is the default.
     monkeypatch.delenv("CLAUSAL_CLPQ", raising=False)
+    assert importlib.reload(clpq).SOLVER == "holzbaur"
+    assert clpq.q_eq.__module__ == "clausal.logic.clpq.holzbaur"
+
+
+def test_legacy_is_still_selectable(monkeypatch, restore_the_package):
+    # Until the legacy solver is retired (todo/retire-legacy-clpq-2026-11-05.md).
+    monkeypatch.setenv("CLAUSAL_CLPQ", "legacy")
     assert importlib.reload(clpq).SOLVER == "legacy"
     assert clpq.q_eq.__module__ == "clausal.logic.clpq.legacy"
 

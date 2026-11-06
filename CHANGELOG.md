@@ -747,6 +747,39 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **The default CLP(Q) solver is the port of clp(q,r) 1.3.3** (operator
+  ruling 2026-11-05: "we should retire legacy CLPQ"). `CLAUSAL_CLPQ` now
+  defaults to `holzbaur` (`clausal/logic/clpq/holzbaur.py` and the modules
+  around it; `clausal/logic/clpq/PROVENANCE.md`, `DEVIATIONS.md`).
+  `CLAUSAL_CLPQ=legacy` still selects the old solver until it is removed
+  (todo/retire-legacy-clpq-2026-11-05.md). What a program sees change:
+  `bb_inf/3` binds only the infimum, not the variables (`bb_inf/5` gives
+  the vertex), as in SICStus and Scryer; `int_minimize/3`, Clausal's own
+  predicate, keeps its contract and binds the variables to that vertex
+  (operator ruling 2026-11-06; where the optimum is integral only within
+  Eps the binding can fail);
+  `maximize`/`minimize` post `Expr = Optimum` and bind the variables only
+  where the optimum is one point (on a face the answer keeps the face as
+  constraints); `dump/3`, `dump_q/2` and the `-g` printer show 1.3.3's
+  projection (redundant bounds dropped, `{Y = 3 - X}` for `{X + Y = 3}`,
+  strictness kept through a hidden variable, a forced value bound);
+  `ordering/1` takes effect; a non-linear constraint is delayed until it
+  is linear instead of raising `domain_error(linear_expression, E)`; a
+  float reads through 1.3.3's `float_rat` (`{X = 0.1}` gives `1/10`), not
+  as its exact binary value, and `bb_inf` takes a value within `Eps` of an
+  integer as integral, as 1.3.3 does (both accepted, operator ruling
+  2026-11-06, entry below); the `clpq_max_*` resource-cap flags exist
+  (absent under `legacy`), and a call past a cap raises `resource_error`
+  (past the projection cap the `-g` printer reports it and prints no
+  answer: accepted, operator ruling 2026-11-06, entry below).
+  Unifying two chains of constrained variables is slower than legacy (2.5
+  to 5.6 times at 50 to 400 variables, down from 5.5 to 21 times by the C
+  loops below, a floor the operator accepted 2026-11-06; 1.3.3's
+  algorithm reads n^3/3 terms where legacy does about n^2, DEVIATIONS.md
+  D24); binding them to numbers is faster. Docs (`docs/clpq.md`,
+  `docs/cli.md`, `docs/flags.md`) now describe the port and say where
+  `legacy` differs.
+
 - **`int_minimize/3` binds its variables under the clp(q,r) 1.3.3 port
   too** (operator ruling 2026-11-06: it keeps its documented contract).
   It is Clausal's own predicate (1.3.3 has none), so this is no deviation

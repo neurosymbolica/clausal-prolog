@@ -1,8 +1,8 @@
 # CLP(Q) — Rational-domain Constraints
 
-CLP(Q) provides constraint logic programming over the rationals using **exact arithmetic** via Python's `fractions.Fraction`. Linear equalities are solved by **Gaussian elimination**; linear inequalities by the **revised simplex method** with Bland's anti-cycling rule. The result is an exact solver: no rounding, no approximation, no epsilon comparisons. Every answer is a ratio of two integers.
+CLP(Q) provides constraint logic programming over the rationals using **exact arithmetic**. Linear equalities are solved by **Gaussian elimination**; linear inequalities by **Holzbaur's simplex over bounded variables**. The result is an exact solver: no rounding, no approximation, no epsilon comparisons. Every answer is a ratio of two integers.
 
-The implementation lives in `clausal/logic/clpq.py`.
+The solver is a port of Christian Holzbaur's clp(q,r) 1.3.3, the CLP(Q) of SICStus Prolog, in `clausal/logic/clpq/` (`holzbaur.py` and the modules around it; `PROVENANCE.md` there says where it comes from and `DEVIATIONS.md` lists every difference from 1.3.3). It is the default since operator ruling 2026-11-05. The solver Clausal shipped before, `clausal/logic/clpq/legacy.py`, is still selectable with the environment variable `CLAUSAL_CLPQ=legacy` until it is retired; where the two answer differently this page says so.
 
 !!! note
     For CLP(Z) (integer constraints), see [Constraints](constraints.md). For CLP(R) (real constraints via interval arithmetic), see [CLP(R)](clpr.md). For CLP(B) (Boolean constraints), see [CLP(B)](clpb.md).
@@ -156,16 +156,16 @@ Integral rationals are presented as integers by every binder — the arithmetic 
 |---|---|---|
 | `rational` | 1 | `rational(X)` — declare X as a rational variable |
 | `in_q` | 3 | `in_q(X, Lo, Hi)` — declare rational variable with bounds `[Lo, Hi]` |
-| `maximize` | 1, 2 | `maximize(Expr, Result)` — find maximum; binds all variables to optimal point. `maximize(Expr)` is clp(Q,R)'s form, without `Result` |
-| `minimize` | 1, 2 | `minimize(Expr, Result)` — find minimum; binds all variables to optimal point. `minimize(Expr)` is clp(Q,R)'s form |
+| `maximize` | 1, 2 | `maximize(Expr, Result)` — find maximum; constrains `Expr` to its maximum, which binds the variables when the optimum is a single point. `maximize(Expr)` is clp(Q,R)'s form, without `Result` |
+| `minimize` | 1, 2 | `minimize(Expr, Result)` — find minimum; constrains `Expr` to its minimum, which binds the variables when the optimum is a single point. `minimize(Expr)` is clp(Q,R)'s form |
 | `sup` | 2 | `sup(Expr, Sup)` — compute upper bound without committing (variables stay unbound) |
 | `inf` | 2 | `inf(Expr, Inf)` — compute lower bound without committing (variables stay unbound) |
 | `entailed` | 1 | `entailed(C)` — test if constraint `C` is implied by current store |
 | `int_minimize` | 3 | `int_minimize(IntVars, Expr, Min)` — minimize with integrality constraints; binds `IntVars` to the optimum (Clausal's own) |
-| `bb_inf` | 3, 5 | `bb_inf(IntVars, Expr, Inf)` is `int_minimize/3`; `bb_inf(IntVars, Expr, Inf, Vertex, Eps)` also gives the integral values of `IntVars` at the infimum |
+| `bb_inf` | 3, 5 | `bb_inf(IntVars, Expr, Inf)`: the same search, binding `Inf` alone; `bb_inf(IntVars, Expr, Inf, Vertex, Eps)` also gives the integral values of `IntVars` at the infimum |
 | `dump_q` | 2 | `dump_q(Vars, Constraints)` — project constraint store onto Vars (Fourier-Motzkin) |
 | `dump` | 3 | `dump(Vars, NewVars, Constraints)` — clp(Q,R)'s dump/3: the projection as terms over `NewVars` (fresh variables, or atoms to name them) |
-| `ordering` | 1 | `ordering(Spec)` — clp(Q,R)'s ordering/1: which variables an answer defines in terms of which (a list, or `A < B`); accepted without effect by the default solver |
+| `ordering` | 1 | `ordering(Spec)` — clp(Q,R)'s ordering/1: which variables an answer defines in terms of which (a list, or `A < B`); accepted without effect under `CLAUSAL_CLPQ=legacy` |
 
 `in_q/1` is also accepted as an alias for `rational/1`.
 
@@ -237,7 +237,7 @@ When the bounds collapse to a point (`Lo = Hi`), the variable is automatically u
 
 ### maximize/2 and minimize/2
 
-Finds the optimum of a linear expression subject to all currently posted constraints. Unifies `Result` with the optimal objective value **and binds all constrained variables to their optimal assignments**. Fails if the problem is unbounded.
+Finds the optimum of a linear expression subject to all currently posted constraints. Unifies `Result` with the optimal objective value and posts `Expr = Result`, as clp(Q,R)'s `maximize/1` does (`sup/2`, then the equation). Where the optimum is a single point, as in the example below, that binds every variable; where it is a face, the answer keeps the face as constraints (`{X >= 0, Y >= 0, X + Y =< 4, X =< 3}, maximize(X + Y, M)` gives `M = 4, {Y = 4 - X}, {X >= 0}, {X =< 3}`). Fails if the problem is unbounded. Under `CLAUSAL_CLPQ=legacy` every constrained variable is bound to one optimal vertex (`X = 3, Y = 1` there).
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:maximize_2_and_minimize_2"
@@ -265,7 +265,7 @@ are `<=`, `>=`, `<`, `>`, `==`, `!=`: `entailed(X <= 5)`.
 
 A strict relation or a disequality in the store counts, on both solvers: after
 `{X < 5}`, both `entailed(X < 5)` and `entailed(X =\= 5)` hold, and after
-`{X < Y, Y =< Z}`, `entailed(X < Z)` holds. Under the default solver a
+`{X < Y, Y =< Z}`, `entailed(X < Z)` holds. Under `CLAUSAL_CLPQ=legacy` a
 strict relation, or `=\=`, whose bound the store attains exactly costs up to
 two more LPs per stored disequality (`=\=`): on a store with many constraints
 and disequalities that call can take two to three times as long.
@@ -278,21 +278,17 @@ not entailed: the call fails. A conjunction or disjunction of relations
 
 ### int_minimize/3
 
-Minimize a linear expression subject to the current constraints **and** the requirement that specified variables take integer values. Uses LP relaxation with branch-and-bound internally. `Min` is bound to the optimum, and each variable of `IntVars` to its value at the integral point found, under both solvers.
+Minimize a linear expression subject to the current constraints **and** the requirement that specified variables take integer values. Uses LP relaxation with branch-and-bound internally. `Min` is bound to the optimum, and each variable of `IntVars` to its value at the integral point found.
 
-`int_minimize/3` is Clausal's own predicate; clp(q,r) 1.3.3 has none, so binding its variables is no deviation from it. Under `CLAUSAL_CLPQ=holzbaur` it runs 1.3.3's `bb_inf/3` search and then binds the variables to the vertex `bb_inf/5` gives (operator ruling 2026-11-06); its errors name `bb_inf/3`, and the vertex holds 1.3.3's rounded values, so where the optimum is integral only within `Eps` (below) the binding can fail.
+`int_minimize/3` is Clausal's own predicate; clp(q,r) 1.3.3 has none, so this is no deviation from it. It runs 1.3.3's `bb_inf/3` search and then binds the variables to the vertex `bb_inf/5` gives (operator ruling 2026-11-06). Its errors name `bb_inf/3`. The vertex holds 1.3.3's rounded values, so where the optimum is integral only within `Eps` (below) the binding can fail.
 
-`bb_inf/3` is accepted as an alias (SICStus compatibility), and `bb_inf/5`
+`bb_inf/3` itself is SICStus's: it binds `Min` alone and leaves the variables unbound, as in SICStus and Scryer (under `CLAUSAL_CLPQ=legacy` it binds them too). `bb_inf/5`
 (`bb_inf(IntVars, Expr, Inf, Vertex, Eps)`) unifies `Vertex` with the values
 of `IntVars` at the infimum; `bb_inf/3` is `bb_inf/5` with `Eps = 0.001`,
-the distance from an integer within which the port's search takes a value
-as integral. The default solver's integrality test is exact; it reads
+the distance from an integer within which the search takes a value
+as integral, as in 1.3.3. The legacy solver's integrality test is exact; it reads
 `Eps` (an expression that is no constant fails, as in SICStus) and leaves
 it at that.
-
-!!! note "Under `CLAUSAL_CLPQ=holzbaur`"
-    `bb_inf/3` binds `Min` alone and leaves the variables unbound, as in
-    SICStus and Scryer; `int_minimize/3` binds them, as above.
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:int_minimize_3"
@@ -302,7 +298,7 @@ it at that.
 
 Projects the constraint store onto a list of variables, eliminating all internal (slack) variables via Fourier-Motzkin elimination. Returns a list of constraints, each an atom.
 
-The default solver returns every bound in the store, including redundant ones (six in the example below). The opt-in port (`CLAUSAL_CLPQ=holzbaur`) projects as clp(q,r) 1.3.3's `dump/3` does and drops the redundant bounds (four in the example).
+The projection is clp(q,r) 1.3.3's `dump/3`, which drops redundant bounds (four constraints in the example below). Under `CLAUSAL_CLPQ=legacy` every bound in the store comes back, redundant ones included (six in the example).
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:dump_q_2"
@@ -316,12 +312,12 @@ This is the feature that SWI-Prolog's CLP(Q) gets wrong — internal variables l
 `Constraints` is a list of constraint terms (`a>=4`, `a+b=<10`) over
 `NewVars`, which is unified with fresh variables, or with the atoms a
 program names them with (`dump([A, B], [a, b], Cs)`); the store is left
-as it was. `Vars` is a proper list of unbound variables. Under the default
-solver each term holds dump_q/2's bounds; under the port, 1.3.3's.
+as it was. `Vars` is a proper list of unbound variables. Each term holds
+1.3.3's projection (dump_q/2's bounds under `CLAUSAL_CLPQ=legacy`).
 
 `ordering(Spec)` says which variables an answer defines in terms of which
 (`Spec` a list, the first defined by the rest, or `A < B` / `A > B`); the
-port's projection honours it, the default solver accepts it without
+port's projection honours it, the legacy solver accepts it without
 effect, and an unbound `Spec` fails. dump/3 reads its `Vars` as an
 ordering too, so an `ordering/1` that contradicts their order raises
 `system_error(unsatisfiable_ordering)` on the port. The residual a `-g`
@@ -372,10 +368,10 @@ Loading `library(clpq)` also declares clp(q,r) 1.3.3's named constants
 declare them too."): `#(p)` and `#(pi)` are `3.141592653589793`, `#(e)` is
 `2.718281828459045` and `#(zero)` is `0` (Q's arithmetic epsilon), and
 `constant(pi)` ... reads the same; a module's own declaration of the name
-wins. The float meets the solver as a float literal does: the port
-(`CLAUSAL_CLPQ=holzbaur`) reads it through 1.3.3's `float_rat`, so
-`{X = #(pi)}` gives `X = 245850922/78256779`, exactly what its own
-`#(pi)` gave; the default solver takes the float's exact binary value. The
+wins. The float meets the solver as a float literal does: the solver
+reads it through 1.3.3's `float_rat`, so `{X = #(pi)}` gives
+`X = 245850922/78256779`, exactly what its own `#(pi)` gave;
+`CLAUSAL_CLPQ=legacy` takes the float's exact binary value. The
 atoms `pi`, `e` ... as data are unchanged.
 
 ```clausal
@@ -487,6 +483,16 @@ currency amount is exact and must not be computed in floats.
 
 ## How it works: algorithm overview
 
+!!! note "These sections describe the legacy solver"
+    From here to [the coefficient growth problem](#the-coefficient-growth-problem),
+    the page describes the algorithm and data structures of the legacy
+    solver (`CLAUSAL_CLPQ=legacy`, `clausal/logic/clpq/legacy.py`): a
+    tableau, the revised simplex with Bland's rule, Fourier-Motzkin
+    projection. The default solver follows clp(q,r) 1.3.3 instead
+    (`clausal/logic/clpq/PROVENANCE.md`, `NAMES.md` for its names,
+    `DEVIATIONS.md`). Both use Gaussian elimination for equalities and a
+    simplex for inequalities, so the overview holds for both.
+
 CLP(Q) uses a fundamentally different solver from CLP(R). Where CLP(R) narrows intervals via the HC4 algorithm, CLP(Q) solves systems of linear constraints exactly using two classical algorithms working in tandem.
 
 ### The three constraint types
@@ -498,7 +504,7 @@ CLP(Q) uses a fundamentally different solver from CLP(R). Where CLP(R) narrows i
 | **Strict inequality** `Σ aᵢXᵢ < c` | The same simplex, the bound strict (delta-rationals, below) | `{X < Y}` |
 | **Disequality** `X ≠ Y` | Passive check (fires when both ground) | `{X =\= 5}` |
 
-All constraints must be **linear** — each term is a constant times a variable, with no products of variables. `{3*X + 5*Y =< 10}` is linear. `{X * Y = 10}` over two rational variables is not, and raises `domain_error(linear_expression, X*Y)` under the default solver (as do `inf/2`, `sup/2`, `minimize/1`, `maximize/1` and `bb_inf` on a non-linear objective; an operand that is no arithmetic expression, such as a list, is `type_error(expression, Culprit)`); `CLAUSAL_CLPQ=holzbaur` delays it, as SICStus does, and so the functions clp(Q,R) knows inside `{}` — `abs/1`, `sin/1`, `cos/1`, `tan/1`, `min/2`, `max/2`, `pow/2`, `exp/2` and `^/2` — which the `.pl` front end passes through (`{sin(cos(X)) = 1/2}` answers under the port; `pow/2` and `exp/2` are read as `^`). `entailed/1` of a non-linear relation answers false on both solvers.
+All constraints must be **linear** — each term is a constant times a variable, with no products of variables. `{3*X + 5*Y =< 10}` is linear. `{X * Y = 10}` over two rational variables is not, and is delayed until it becomes linear, as SICStus does. Under `CLAUSAL_CLPQ=legacy` it raises `domain_error(linear_expression, X*Y)` (as do `inf/2`, `sup/2`, `minimize/1`, `maximize/1` and `bb_inf` on a non-linear objective; an operand that is no arithmetic expression, such as a list, is `type_error(expression, Culprit)`). The default solver also delays the functions clp(Q,R) knows inside `{}` — `abs/1`, `sin/1`, `cos/1`, `tan/1`, `min/2`, `max/2`, `pow/2`, `exp/2` and `^/2` — which the `.pl` front end passes through (`{sin(cos(X)) = 1/2}` answers; `pow/2` and `exp/2` are read as `^`). `entailed/1` of a non-linear relation answers false on both solvers.
 
 ### Why not interval arithmetic?
 
@@ -832,15 +838,15 @@ This is exactly the trade-off SICStus Prolog documents: "you may be out of space
 
 | Feature | SICStus CLP(Q) | SWI CLP(Q) | ECLiPSe | **Clausal Prolog CLP(Q)** |
 |---|---|---|---|---|
-| Correctness | Reference impl | Orphaned, bugs | No CLP(Q) | **Clean-room from papers** |
+| Correctness | Reference impl | Orphaned, bugs | No CLP(Q) | **Port of clp(q,r) 1.3.3, deviations listed** |
 | Algorithm | Holzbaur Gaussian+simplex | Port of SICStus | — | **Holzbaur Gaussian+simplex** |
-| Arithmetic | GMP rationals | SWI rationals | — | **Python `Fraction`** |
+| Arithmetic | GMP rationals | SWI rationals | — | **Python ints (numerator, denominator)** |
 | Optimization | `maximize/1`, `minimize/1` | Same (buggy) | — | **`maximize/2`, `minimize/2`**, and the `/1` forms |
 | Bounds query | `sup/1`, `inf/1` | Same | — | **`sup/2`, `inf/2`** |
 | Entailment | `entailed/1` | Same | — | **`entailed/1`** |
 | MIP | `bb_inf/3`, `bb_inf/5` | Same | — | **`int_minimize/3`**, `bb_inf/3`, `bb_inf/5` |
 | Projection | Fourier-Motzkin | Broken | — | **`dump_q/2` (Fourier-Motzkin)**, `dump/3`, `ordering/1` |
-| Non-linear | Deferred | Deferred | — | **Rejected (Python `TypeError`)**; deferred under `CLAUSAL_CLPQ=holzbaur` |
+| Non-linear | Deferred | Deferred | — | **Deferred**; `domain_error` under `CLAUSAL_CLPQ=legacy` |
 | Syntax | `{X + Y =< 8}` | Same | — | **`{X + Y =< 8}`**, or `X + Y #=< 8` (unified; seam `X + Y <= 8`) |
 | `/` inside a constraint | Exact rational | Exact rational | — | **Exact rational inside `{...}`; an integer when integral** |
 
@@ -854,7 +860,7 @@ This is exactly the trade-off SICStus Prolog documents: "you may be out of space
 
 **The Parma Polyhedra Library** (Bagnara et al.) provides an open-source exact-arithmetic simplex in C++ using GMP rationals. It serves as a correctness oracle for exact LP solvers.
 
-Our implementation is a **clean-room** design based on the published papers (Holzbaur 1992, 1994), not derived from any existing source code. SICStus is proprietary; SWI's CLP(Q) is GPL-2.
+The default solver is a translation of the clp(q,r) 1.3.3 sources as SICStus distributes them (`clausal/logic/clpq/PROVENANCE.md`); SWI-Prolog's CLP(Q) is not used in any form. The legacy solver (`CLAUSAL_CLPQ=legacy`) was a clean-room design from the published papers (Holzbaur 1992, 1994).
 
 ---
 
@@ -917,10 +923,10 @@ the FD side refuses it (operator ruling 2026-11-03):
   optimum gives an FD variable a value that is not an integer:
   `X in 1..5, {2*X >= 3}, minimize(X)` raises it (the relaxation's
   optimum is 3/2). Where the optimum is integral they answer as before.
-- `bb_inf` makes integral only the variables of its integer list. Under
-  the `holzbaur` solver it binds nothing, so `X in 1..5, {2*X >= 3},
+- `bb_inf` makes integral only the variables of its integer list. It
+  binds nothing, so `X in 1..5, {2*X >= 3},
   bb_inf([], X, I)` gives `I = 3/2`, the relaxation, as asked; list `X` for
-  `I = 2`. The default solver binds the store at the optimum and raises
+  `I = 2`. `CLAUSAL_CLPQ=legacy` binds the store at the optimum and raises
   `fd_relaxation_not_integral` there.
 - An FD constraint posted between FD variables before they had CLP(Q)
   state (`X #= Y + 3` ahead of `{D = X - Y}`) is not in the CLP(Q) store.

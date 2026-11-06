@@ -1,8 +1,10 @@
 # clausal/logic/clpq/__init__.py
 """CLP(Q): constraint logic programming over the rationals.
 
-``CLAUSAL_CLPQ`` selects the solver: ``legacy`` (default, the pre-2026-10-12
-solver) or ``holzbaur`` (the port of clp(q,r) 1.3.3, see PROVENANCE.md).
+``CLAUSAL_CLPQ`` selects the solver: ``holzbaur`` (the default since
+operator ruling 2026-11-05, the port of clp(q,r) 1.3.3, see PROVENANCE.md)
+or ``legacy`` (the pre-2026-10-12 solver, kept until it is retired:
+todo/retire-legacy-clpq-2026-11-05.md).
 The package exports the same names under either: legacy's, and under
 ``holzbaur`` the API of ``holzbaur.py`` in place of legacy's.  Both
 solvers' attribute hooks are registered whichever is selected (ruling R1);
@@ -10,7 +12,7 @@ only the selected one's API puts attributes.
 """
 import os as _os
 
-SOLVER = _os.environ.get("CLAUSAL_CLPQ", "legacy")
+SOLVER = _os.environ.get("CLAUSAL_CLPQ", "holzbaur")
 if SOLVER not in ("legacy", "holzbaur"):
     raise ValueError(f"CLAUSAL_CLPQ must be legacy or holzbaur, not {SOLVER!r}")
 

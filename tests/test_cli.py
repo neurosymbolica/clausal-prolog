@@ -236,7 +236,7 @@ CLPQ = textwrap.dedent("""\
 #: Y = 3 - X, {X =\= 2} stays X =\= 2, and {X >= 2}, {Y >= 2} come in
 #: that order, as Scryer's own toplevel prints them (_ = 3-X, X=\=2,
 #: X>=2, Y>=2).  An internal variable is _Q1, as legacy names one.
-HOLZBAUR = os.environ.get("CLAUSAL_CLPQ", "legacy") == "holzbaur"
+HOLZBAUR = os.environ.get("CLAUSAL_CLPQ", "holzbaur") == "holzbaur"
 DEPENDENT = "{Y = 3 - X}." if HOLZBAUR else "{X + Y = 3}."
 
 

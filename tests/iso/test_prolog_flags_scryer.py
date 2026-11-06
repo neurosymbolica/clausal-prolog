@@ -110,11 +110,12 @@ def test_max_and_min_integer_have_no_value(plain, flag):
     assert _answers(("current_prolog_flag", flag, Var()), plain) == []
 
 
-#: The CLP(Q) port's caps, flags under CLAUSAL_CLPQ=holzbaur only.
+#: The CLP(Q) port's caps: flags under the port (the default), not under
+#: CLAUSAL_CLPQ=legacy.
 _CLPQ_FLAGS = ({"clpq_max_nodes", "clpq_max_work", "clpq_max_projection",
                 "clpq_max_expansion", "clpq_max_expansion_bits",
                 "clpq_max_coefficient_bits"}
-               if os.environ.get("CLAUSAL_CLPQ") == "holzbaur" else set())
+               if os.environ.get("CLAUSAL_CLPQ", "holzbaur") == "holzbaur" else set())
 
 
 def test_an_unbound_flag_enumerates_every_flag_with_a_value(plain):
