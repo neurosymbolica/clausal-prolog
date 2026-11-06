@@ -758,6 +758,24 @@ surface described in [docs/public-api.md](docs/public-api.md).
   the optimum is integral only within Eps the binding can fail. The
   legacy solver (the default) is unchanged.
 
+- **CLP(Q) port, performance: its hot loops run in C** (operator ruling
+  2026-11-06: the chain-unification cost is to be fixed before the
+  default flip). `clausal/logic/clpq/_linear_forms_core.c` is a C twin of
+  each per-term loop of the port (the merge and coefficient scan of
+  store.pl, `nf_substitute/4`, the row loops of a back substitution and of
+  the binding hook's stand-in pass, rational `add`/`multiply`); each is an
+  exact twin of its Python reference (the same reads, comparisons, calls
+  into Python, writes and exceptions, in the same order), and the Python
+  stays as the reference (`CLAUSAL_CLPQ_PYTHON_LOOPS=1` runs it). Unifying
+  `X1 =< ... =< Xn` with `n` variables `Yi >= 0` takes 0.48 s at n = 200
+  (1.38 s before; legacy 0.106 s) and 3.5 s at n = 400 (12.8 s; legacy
+  0.62 s); the rest is 1.3.3's cubic algorithm, a floor the operator
+  accepted (ruling 2026-11-06; DEVIATIONS.md D24,
+  todo/clpq-row-order-key-cache-2026-11-06.md for the next step). No
+  answer changes: the differential corpus's answers and algorithm traces
+  are unchanged, and `tests/clpq_port/test_linear_forms_core.py` holds
+  each C function to the pure-Python reference.
+
 - **Evaluating a cyclic arithmetic term is a type error, as in Scryer**
   (operator ruling 2026-11-04: "type_error if Scryer gives one"). There is
   no occurs check, so `X = X+1` builds a cyclic term, and `Y is X` used to

@@ -115,6 +115,8 @@ def _counting_lookups(monkeypatch):
     """Count the order lookups the merges make: compare_variable_order's
     state_of reads and order_key calls."""
     count = [0]
+    # The Python loops, the reference the C twins follow (test_linear_forms_core.py).
+    monkeypatch.setattr(linear_forms, "USE_CORE", False)
 
     def counted(function):
         def counting(argument):

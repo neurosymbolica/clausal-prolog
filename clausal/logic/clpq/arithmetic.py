@@ -38,12 +38,22 @@ def add(x, y):
     return make_rational(x[0] * y[1] + y[0] * x[1], x[1] * y[1])
 
 
+#: The Python reference versions of add and multiply; the C twins in
+#: _linear_forms_core (bound below where they are built) take a machine
+#: integer path when every part is below 2**31 and call these otherwise,
+#: so every answer is these functions' (DEVIATIONS.md D24, Low 8).
+python_add = add
+
+
 def subtract(x, y):
     return make_rational(x[0] * y[1] - y[0] * x[1], x[1] * y[1])
 
 
 def multiply(x, y):
     return make_rational(x[0] * y[0], x[1] * y[1])
+
+
+python_multiply = multiply
 
 
 def divide(x, y):
@@ -367,3 +377,20 @@ def rational_integer(x):
     if x[1] == 1:
         return x[0]
     return None
+
+
+def _bind_the_c_twins():
+    """add and multiply from _linear_forms_core where it is built and
+    CLAUSAL_CLPQ_PYTHON_LOOPS is not set."""
+    import os  # noqa: PLC0415
+    if os.environ.get("CLAUSAL_CLPQ_PYTHON_LOOPS", "") not in ("", "0"):
+        return
+    try:
+        from clausal.logic.clpq import _linear_forms_core  # noqa: PLC0415
+    except ImportError:
+        return
+    globals()["add"] = _linear_forms_core.add
+    globals()["multiply"] = _linear_forms_core.multiply
+
+
+_bind_the_c_twins()

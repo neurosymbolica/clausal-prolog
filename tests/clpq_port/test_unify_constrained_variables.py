@@ -100,6 +100,8 @@ def test_a_merge_looks_up_each_order_once(monkeypatch):
         return form
 
     t, xs, ys = _store(n)
+    # The Python loops, the reference the C twins follow (test_linear_forms_core.py).
+    monkeypatch.setattr(linear_forms, "USE_CORE", False)
     monkeypatch.setattr(bounded_simplex, "normal_form_substitute", reading)
     for module in (linear_forms, variable_ordering):
         for name in ("state_of", "order_key"):

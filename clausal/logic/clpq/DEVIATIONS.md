@@ -1683,6 +1683,48 @@ found are.  Timed at a load average of 9 to 11 on 8 cores:
   term now shares the rest of the list, as delete_factor_hom/4 shares
   `Ts` (implementation only; survey R2): 2.8 s at n = 800, 13.3 s at
   1600, the same rows and decisions.
+
+  **The loops in C (operator ruling 2026-11-06, "fix before flip"; the
+  floor below accepted the same day).**  The per-term work is in
+  `clpq/_linear_forms_core.c`, a C twin of each hot loop: the merge of
+  `add_linear_f1h/4,6`, the scan of `nf_coeff_hom/3`,
+  `delete_factor_hom/4`'s scan, `nf_substitute/4` whole, the row loops of
+  `bs/3` and of the D3 stand-in pass, the walk of a member list, and
+  `addq`/`mulq` (a machine-integer path below 2^31, arithmetic.py's own
+  functions above).  Each is an exact twin of its Python reference: the
+  same reads, the same comparisons in the same order, the same calls
+  into Python, the same terms out, the same exceptions.  Indexing and
+  unpacking are checked as Python checks them, a list is re-read by index
+  after any call that can run Python code (an order value's `__eq__` may
+  change it), order keys whose comparison could run Python code are
+  compared as Python compares order_key's tuples (a NaN order value scans
+  on, as in Python), and the row loops write through a callback as they
+  go, so a member named twice in a list reads the row its first visit
+  wrote.  Implementation only: the rows rewritten are still n(n - 1), the
+  differential corpus's answers and traces are unchanged
+  (`CLPQ_DIFFERENTIAL=full`), and `tests/clpq_port/test_linear_forms_core.py`
+  holds each C function to the pure-Python reference
+  (`CLAUSAL_CLPQ_PYTHON_LOOPS=1`, which also runs the engine on it), with
+  the cases an independent review found (2026-11-06).  The unification
+  alone, minimum of three to five runs, load 2 to 3 on 32 cores
+  (2026-11-06):
+
+  | n | legacy | port, Python loops | port, C loops | port / legacy |
+  |---|---|---|---|---|
+  | 50 | 0.0073 s | 0.040 s | 0.018 s | 2.5 |
+  | 100 | 0.028 s | 0.21 s | 0.079 s | 2.8 |
+  | 200 | 0.106 s | 1.38 s | 0.48 s | 4.6 |
+  | 400 | 0.62 s | 12.8 s | 3.5 s | 5.6 |
+
+  **The floor (accepted, operator ruling 2026-11-06).**  Parity with
+  legacy is not reachable while the port does 1.3.3's work: it reads
+  about n^3/3 terms (21M at n = 400) where legacy's simplex does about
+  n^2, so the ratio grows with n whatever each term costs.  At n = 400
+  the C loops take most of the 3.5 s, about 100 ns a term, nearly all of
+  it reaching each term's order value (the variable's attribute
+  dictionary, its state, the order variable) through memory the cache
+  does not hold.  The next step, keeping each row's order keys beside its
+  terms, is todo/clpq-row-order-key-cache-2026-11-06.md.
 - **Deep terms raised RecursionError in shared clpfd code** (Medium 7):
   a sum nested 100,000 deep (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`,
   then `{Y >= T}`) raised `RecursionError` from clpfd's cell walk before

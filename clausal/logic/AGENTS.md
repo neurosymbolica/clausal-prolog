@@ -62,7 +62,7 @@ repo-root `tests/`. Up: [../AGENTS.md](../AGENTS.md)
 | `clpfd_nonlinear.py` | CLP(Z) propagators for `*` of two unknowns, `//`, `div`, `mod`, `rem`, `^`, `min`, `max` (lifted out of a comparison by `clpfd._lift_cells`) | |
 | `clpz_surface.py` | Scryer-named `in/2`, `ins/2`, `labeling/2`, reified connectives over `clpfd` | |
 | `clpb.py` | CLP(B) via BDDs | `_clpb_core.c` |
-| `clpq/` / `clpr.py` | CLP(Q): `legacy.py` (exact simplex, the default) or the clp(q,r) 1.3.3 port behind `holzbaur.py` (`CLAUSAL_CLPQ=holzbaur`) / CLP(R) (intervals) | `clpr`: `_clpr_core.c` |
+| `clpq/` / `clpr.py` | CLP(Q): `legacy.py` (exact simplex, the default) or the clp(q,r) 1.3.3 port behind `holzbaur.py` (`CLAUSAL_CLPQ=holzbaur`) / CLP(R) (intervals) | `clpq`: `clpq/_linear_forms_core.c` (the port's hot loops); `clpr`: `_clpr_core.c` |
 | `clpz3.py`, `clportools*.py`, `clpsat.py` | Optional Z3, OR-Tools (CP-SAT, LP, graph, routing), PySAT backends | |
 | `units_clp.py`, `units_constraint.py`, `_units_flag.py` | Physical-units side channel around CLP | |
 | `tabling.py` | SLG tabling and WFS (delayed negation, `_naf_tabled`) | `_tabling_core.c` |
@@ -85,6 +85,7 @@ files sit next to the sources and are not tracked).
 | `clausal.logic._arithmetic_core` | `_arithmetic_core.c` | `builtins/arithmetic.py` |
 | `clausal.logic.builtins._chars_core` | `builtins/_chars_core.c` | `builtins/chars.py` |
 | `clausal.logic._clpr_core`, `._clpb_core` | `_clpr_core.c`, `_clpb_core.c` | `clpr.py`, `clpb.py` |
+| `clausal.logic.clpq._linear_forms_core` | `clpq/_linear_forms_core.c` | `clpq/linear_forms.py`, `arithmetic.py`, `components.py`, `bounded_simplex.py`, `attribute_hooks.py` (C twins of the port's loops; the Python stays as the reference, `CLAUSAL_CLPQ_PYTHON_LOOPS=1` runs it) |
 
 **Keep the C portable to MSVC.** Release wheels are built for Windows too
 (`../../.github/workflows/release.yml`), and GCC/Clang accept things MSVC

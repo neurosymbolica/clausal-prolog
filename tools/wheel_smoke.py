@@ -88,6 +88,7 @@ def main() -> None:
     import clausal
     from clausal.logic.variables import _variables  # noqa: F401  C extension
     from clausal.logic.runtime import _trampoline  # noqa: F401   C extension
+    from clausal.logic.clpq import _linear_forms_core  # noqa: F401  C extension
     package = pathlib.Path(clausal.__file__).resolve().parent
     print(f"ok   import clausal from {package}")
     with tempfile.TemporaryDirectory() as d:

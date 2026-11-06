@@ -20,6 +20,8 @@ keeps that shape: a ListCell chain whose last `rest` is an unbound Var
 (open), or None (closed, `[]`).  The basis is a closed chain.  bv.pl builds
 member lists too (`equate_components/3`), so the cell type is shared.
 """
+import os
+
 from clausal.logic.clpq.variable_ordering import combine
 from clausal.logic.variables import (
     PlainVar, Var, deref, get_attr, is_var, put_attr, register_attr_hook, unify)
@@ -80,6 +82,18 @@ def list_elements(items):
         result.append(node.head)
         node = deref(node.rest)
     return result
+
+
+python_list_elements = list_elements
+
+try:
+    from clausal.logic.clpq import _linear_forms_core as _core
+except ImportError:                         # no C build: the Python walk
+    _core = None
+if _core is not None:
+    _core._setup_lists(ListCell)
+    if os.environ.get("CLAUSAL_CLPQ_PYTHON_LOOPS", "") in ("", "0"):
+        list_elements = _core.list_elements     # the same walk, in C
 
 
 def _identical_variable(element, variable):

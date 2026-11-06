@@ -593,3 +593,91 @@ def homogeneous_to_sum(terms, so_far):
         else:
             so_far = ("+", so_far, ("*", to_number(coefficient), variable))
     return so_far
+
+
+# ---------------------------------------------------------------- the C twins
+
+#: The Python reference versions of the two loops _linear_forms_core
+#: does in C (DEVIATIONS.md D24, Low 8).
+python_add_homogeneous_parts_first_scaled = add_homogeneous_parts_first_scaled
+python_normal_form_coefficient_homogeneous = normal_form_coefficient_homogeneous
+
+try:
+    from clausal.logic.clpq import _linear_forms_core as _core
+except ImportError:                         # no C build: the Python loops
+    _core = None
+
+#: Whether the C twins run.  CLAUSAL_CLPQ_PYTHON_LOOPS=1 turns them off (a
+#: test that counts the Python loops' order lookups does so too).  The C
+#: code makes the same comparisons, in the same order, and builds the same
+#: terms; tests/clpq_port/test_linear_forms_core.py holds the two equal.
+USE_CORE = _core is not None and os.environ.get(
+    "CLAUSAL_CLPQ_PYTHON_LOOPS", "") in ("", "0")
+
+
+def add_homogeneous_parts_first_scaled(terms_a, factor_a, terms_b, keys_a=None):  # noqa: F811
+    """store.pl, add_linear_f1h/4,6: the C merge where it runs (on lists),
+    else python_add_homogeneous_parts_first_scaled."""
+    if USE_CORE and type(terms_a) is list and type(terms_b) is list:
+        return _core.add_homogeneous_parts_first_scaled(
+            terms_a, factor_a, terms_b, keys_a)
+    return python_add_homogeneous_parts_first_scaled(
+        terms_a, factor_a, terms_b, keys_a)
+
+
+def normal_form_coefficient_homogeneous(terms, order):  # noqa: F811
+    """store.pl, nf_coeff_hom/3: the C scan where it runs (on a list), else
+    python_normal_form_coefficient_homogeneous."""
+    if USE_CORE and type(terms) is list:
+        return _core.normal_form_coefficient_homogeneous(terms, order)
+    return python_normal_form_coefficient_homogeneous(terms, order)
+
+
+python_delete_factor_homogeneous = delete_factor_homogeneous
+python_delete_factor_from_tail = _delete_factor_from_tail
+
+
+def delete_factor_homogeneous(variable, terms):  # noqa: F811
+    """store.pl, delete_factor_hom/4, its scan in C where it runs (on a
+    list), else python_delete_factor_homogeneous."""
+    if USE_CORE and type(terms) is list:
+        variable = deref(variable)
+        i = _core.find_term(variable, terms)
+        if i < 0:
+            return None
+        return terms[:i] + terms[i + 1:], terms[i][1]
+    return python_delete_factor_homogeneous(variable, terms)
+
+
+def _delete_factor_from_tail(variable, form, base, start):  # noqa: F811
+    """delete_factor_homogeneous on base[start:], its scan in C where it
+    runs, else python_delete_factor_from_tail."""
+    if USE_CORE and type(base) is list:
+        i = _core.find_term(variable, base, start)
+        if i < 0:
+            return None
+        if i == start and len(base) - start > SHARE_AT:
+            return (_SharedTail(form.constant, form.rest, base, start + 1),
+                    base[i][1])
+        return (LinearForm(form.constant, form.rest,
+                           base[start:i] + base[i + 1:]), base[i][1])
+    return python_delete_factor_from_tail(variable, form, base, start)
+
+
+python_normal_form_substitute = normal_form_substitute
+
+if _core is not None:
+    _core._setup(LinearForm, _SharedTail, row_variable_ids, with_constant,
+                 python_add_homogeneous_parts_first_scaled, SHARE_AT)
+
+
+def normal_form_substitute(variable, form_variable, form_x, keys=None):  # noqa: F811
+    """store.pl, nf_substitute/4: delete_factor and
+    add_linear_forms_first_scaled in one C call where it runs, else
+    python_normal_form_substitute.  CHECK_ROW_INDEX runs the Python, which
+    checks each skip of the index."""
+    if USE_CORE and not CHECK_ROW_INDEX:
+        return _core.normal_form_substitute(variable, form_variable, form_x,
+                                            keys)
+    return python_normal_form_substitute(variable, form_variable, form_x,
+                                         keys)

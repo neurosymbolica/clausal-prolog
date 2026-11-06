@@ -41,6 +41,10 @@ def counters(monkeypatch):
     reading or sharing again."""
     counts = collections.Counter()
     state = {"step": None, "undos": [], "born": {}}
+    # The counts read the Python loops of linear_forms.py, the reference
+    # its C twins follow (test_linear_forms_core.py); the golden records
+    # are compared with the C twins running (test_differential_golden.py).
+    monkeypatch.setattr(linear_forms, "USE_CORE", False)
 
     standard_order = normal_form._standard_order
 

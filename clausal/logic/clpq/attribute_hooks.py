@@ -57,6 +57,7 @@ from clausal.logic.clpq.components import (
     COMPONENT_KEY, ComponentRecord, ListCell, component_all_variables,
     component_drop, list_elements)
 from clausal.logic.clpq.delayed_goals import verify_delayed
+from clausal.logic.clpq import linear_forms as _linear_forms
 from clausal.logic.clpq.linear_forms import (
     CHECK_ROW_INDEX, LinearForm, independent, normal_form_coefficient_of)
 from clausal.logic.exceptions import LogicException, system_error, type_error
@@ -440,10 +441,17 @@ def _rename_in_form(form, stand_ins):
     return LinearForm(form.constant, form.rest, renamed)
 
 
+#: The Python _rename_in_form, which rename_rows reads rows as.
+_python_rename_in_form = _rename_in_form
+
+
 def _rename_in_list(items, stand_ins):
     """A member list or basis with each variable that has a stand-in
     replaced by it, in place; the tail is kept.  *items* itself where
     nothing changes."""
+    if _linear_forms.USE_CORE and not _linear_forms._core.list_has_stand_in(
+            items, stand_ins):
+        return items                    # the common case, in one C walk
     elements = []
     node = deref(items)
     changed = False
@@ -481,6 +489,15 @@ def _rename_in_component(component, stand_ins, trail, rows=True):
     if not rows:
         if CHECK_ROW_INDEX:
             _check_no_row_holds_a_stand_in(members, stand_ins)
+        return
+    if _linear_forms.USE_CORE and _rename_in_form is _python_rename_in_form:
+        # The same loop in C (_linear_forms_core.rename_rows), each write
+        # made before the next member is read (DEVIATIONS.md D24, Low 8).
+        # A test that wraps _rename_in_form to count rows gets the Python.
+        def write(member, member_state, form):
+            put_state(member, with_changes(member_state, linear_form=form),
+                      trail)
+        _linear_forms._core.rename_rows(members, stand_ins, write)
         return
     for member in list_elements(members):
         member = deref(member)

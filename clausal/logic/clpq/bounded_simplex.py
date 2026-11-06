@@ -49,6 +49,7 @@ from clausal.logic.clpq.components import (
     COMPONENT_KEY, ListCell, component_all_variables, component_basis_add,
     component_basis_drop, component_basis_pivot, component_new,
     list_elements, open_list)
+from clausal.logic.clpq import linear_forms as _linear_forms
 from clausal.logic.clpq.linear_forms import (
     MINUS_ONE, LinearForm, add_linear_forms, add_linear_forms_scaled,
     delete_factor, has_no_terms, independent, isolate,
@@ -1608,6 +1609,15 @@ def _row_sizer(form):
     return small_row_size
 
 
+def _rows_in_c():
+    """The unmetered back substitutions read their rows in C
+    (_linear_forms_core.substitute_rows): where the C twins run, the row
+    index is not being checked, and normal_form_substitute is linear_forms'
+    own (a test that wraps it to count rows gets the Python loop)."""
+    return (_linear_forms.USE_CORE and not _linear_forms.CHECK_ROW_INDEX
+            and normal_form_substitute is _linear_forms.normal_form_substitute)
+
+
 def back_substitute_variables(members, variable, form, trail):
     """bv.pl, back_substitute_variables/3 (bs/3): walk the open member list
     up to its tail; a member whose row holds *variable* gets the new row.
@@ -1618,6 +1628,15 @@ def back_substitute_variables(members, variable, form, trail):
     node = deref(members)
     keys = order_keys(form.terms)    # the definition's orders, looked up once
     if meter is None:
+        if _rows_in_c():
+            # The same loop in C (linear_forms._core.substitute_rows), each
+            # write made before the next member is read (DEVIATIONS.md D24).
+            def write(member, state, new_form):
+                put_state(member, with_changes(state, linear_form=new_form),
+                          trail)
+            _linear_forms._core.substitute_rows(node, variable, form, keys,
+                                                write)
+            return True
         while type(node) is ListCell:
             member = deref(node.head)
             node = deref(node.rest)
@@ -1678,6 +1697,12 @@ def back_substitute_collect_bindings(members, variable, form, bindings, trail):
                                         bindings, trail)
     keys = order_keys(form.terms)    # the definition's orders, looked up once
     node = deref(members)
+    if _rows_in_c():
+        def write(member, state, new_form):
+            put_state(member, with_changes(state, linear_form=new_form), trail)
+            back_substitute_collect_binding(new_form, member, bindings)
+        _linear_forms._core.substitute_rows(node, variable, form, keys, write)
+        return True
     while type(node) is ListCell:
         member = deref(node.head)
         node = deref(node.rest)
