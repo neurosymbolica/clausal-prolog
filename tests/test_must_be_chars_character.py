@@ -221,3 +221,26 @@ def test_seam_surface(tmp_path):
     # A hole before an element (no ISO spelling): still open, elements checked.
     assert _outcome(m, "seam_inner_hole") == _INST
     assert _outcome(m, "seam_inner_hole_bad") == _te("character", "1")
+
+
+def test_cyclic_list_is_no_list(tmp_path):
+    """Operator ruling 2026-11-06: a cyclic list is ``type_error(list, _)``
+    for both must_be and can_be (so with ``can_be/2`` context, as every
+    chars type error).  A deliberate deviation from Scryer, which loops
+    forever on ``X = [a|X], can_be(chars, X)``: no binding can make a cyclic
+    term a list, so the type error is the correct answer.  Each clause
+    succeeds only through that error (success of the test itself fails);
+    the culprit is not printed (a cyclic term has no finite spelling)."""
+    p = tmp_path / "cyclic.clausal"
+    rows = []
+    for name, cycle in (("one", "[a|X]"), ("two", "[a,b|X]")):
+        for pred in ("must_be", "can_be"):
+            rows.append(
+                f"{pred}_{name} :- X = {cycle},\n"
+                f"    catch(({pred}(chars, X), fail),\n"
+                f"          error(type_error(list, _), can_be/2), true).\n")
+    p.write_text("".join(rows))
+    m = load_clausal_module(p)
+    for name in ("one", "two"):
+        for pred in ("must_be", "can_be"):
+            assert _outcome(m, f"{pred}_{name}") == 1, (pred, name)
