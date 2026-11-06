@@ -7,6 +7,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+## 1.4.0 (2026-11-06)
+
 ### Added
 
 - **`must_be/2` and `can_be/2` take the `chars` and `character` types**
@@ -225,6 +227,387 @@ surface described in [docs/public-api.md](docs/public-api.md).
   Tests: `tests/iso/test_assert_rules_iso.py` (its xfail rows now pass),
   `tests/iso/test_assert_rules_more_iso.py` (Scryer oracle),
   `tests/iso_l3/test_l3_assert_rules.py`.
+
+### Changed
+
+- **Evaluating a cyclic arithmetic term is a type error, as in Scryer**
+  (operator ruling 2026-11-04: "type_error if Scryer gives one"). There is
+  no occurs check, so `X = X+1` builds a cyclic term, and `Y is X` used to
+  recurse to Python's limit and raise `error(resource_error(stack), (is)/2)`.
+  It now raises `error(type_error(evaluable, (+)/2), (is)/2)`. This covers
+  `is/2` and the comparisons in `.pl` and `.clausal` (their context stays
+  `(is)/2`, as in Scryer) and the seam's `eval_/2`; the seam's `is`, which
+  unifies, is unchanged. The culprit is the term at which the evaluation
+  re-enters a term it is already inside: `X = 1+X, Y is X*2` names `(+)/2`,
+  and `X = 1+f(X)` names `(+)/2`, not `f/1`. An error to the left of the
+  cycle comes first, as for any term (`X = Z+X` is an
+  `instantiation_error`). Scryer gives these answers in a consulted clause;
+  its toplevel answers `instantiation_error` when the cycle closes below
+  the root of the expression. The check is exact, a set of the bound
+  variables on the current path, so a deep acyclic term still evaluates
+  (or overflows with `resource_error(stack)`) as before. A list is refused
+  as a list, cyclic or not (`'.'/2`); Scryer evaluates `[X]` as `X`.
+  The seam's `==` and `<` are CLP(Z) posts: see the Fixed entry on
+  posting a cyclic expression to CLP(Z).
+
+- **clausal-sympy: `SymExpr` equality and hash are SymPy's structural
+  ones** (code review of the sandbox admission, 2026-11-04).
+  `__eq__` ran `sympy.simplify` and up to 120 variable renamings from `=`,
+  `==` and `sort/2` on two SymPy results -- outside any time budget (17 s
+  under a 1 s sandbox budget) and with answers that depended on the route
+  (`expand((x+1)**2)` against `factor(x**2+2*x+1)` was unequal in the
+  engine, equal called directly). Now two results are equal only as
+  expression trees, and a Clausal term on the other side is never
+  converted. Symbolic equality is `sym_equal/2`'s, which is budgeted;
+  the package's own tests that compared a result with `==` against a term
+  (`R == cos(X)`) now use `sym_equal/2`, as its docs already did.
+  (Re-pinned in `PACKAGE_ADAPTERS`.)
+
+- **findall/3, bagof/3 and setof/3 keep dropping attribute constraints**
+  (operator ruling 2026-11-04, follow Scryer). A collected answer carries no
+  `dif/2`, `freeze/2` or CLP(Z) constraint, as in Scryer and Trealla. To keep
+  them, collect them as data: `findall(X-Gs, (Goal, copy_term(X, X, Gs)), L)`.
+
+- **Fact predicates load and grow in linear time with a small constant.**
+  Loading 200 facts of arity 8 took 7 s, about 5 ms per argument per fact:
+  every argument position where all facts have the same constant was an
+  index whose one bucket is the whole predicate, and it was compiled again,
+  a copy per position. Such a position now dispatches to the predicate's
+  own function. A predicate whose clauses are all facts compiles to a
+  clause table from 16 clauses (`clause_table.FACT_TABLE_THRESHOLD`; other
+  predicates from 256, as before), and a fact predicate recompiled twice
+  after clause writes stays a table at any size. An `assertz` of a fact
+  into a table adds it in place instead of invalidating the dispatch, so a
+  loop that asserts and calls in turn no longer recompiles the predicate at
+  every call (50 facts of arity 8: 30 s -> 0.8 s; 2,600: 1.0 s). `asserta`,
+  `retract` and rules still invalidate. The logical update view holds: a
+  call reads only the clauses there were when it began. Answers and their
+  order are unchanged; a table's known differences (head bindings left to
+  right, no tail-recursion optimisation, last answer detected per indexed
+  argument) now apply to these predicates too. The whole-function
+  mark/undo invariant walk runs only under
+  `CLAUSAL_CHECK_COMPILED_FUNCTIONS=1` (the test suite sets it), and the
+  location check that could not fail after the position pass is skipped.
+  A clause a table cannot hold as data (a rule, a fact with a partial list)
+  gives its answer as known to be the last when no candidate clause follows
+  it, as in the one-function compile (a table marked it last only as the
+  table's final clause): it is compiled a second time, with that marking,
+  at the first call that needs it. Facts holding `true`
+  or `false` are held as data, keyed and unified apart from 1 and 0. A table exposes
+  its index buckets to call sites with a static key, as compiled indexing
+  does (`index_plans`). An indexed call into a 40-fact table costs about
+  10% more than into the compiled predicate (2.15 vs 1.95 us per call), a
+  full scan about the same.
+  Pinned in `tests/test_clause_table.py` (counts of compiled clause arms
+  and recompiles, known-last answers).
+
+- **A re-led tabled SCC member skips a re-run that could find nothing
+  new** (operator ruling 2026-11-03).  When nothing its clauses can read has
+  changed since a pass of theirs that found nothing (no table changed, no
+  clause written, the same leader below it), the re-lead hands back its rows
+  without re-running, and without re-leading the members beneath it.  Every
+  table gets the same answers in the same order with the same WFS truth
+  values.  Right recursion round a 400-node ring: 209 s -> 37 s; still
+  cubic (todo/tabled-scc-relead-rederives-every-answer-cubic-on-a-ring-
+  2026-11-03.md).  `CLAUSAL_TABLING_SEMINAIVE=0` turns it off.  Pinned in
+  `tests/test_tabling_idle_relead.py`.
+- **Entries pushed onto a trail while an undo runs are ruled the contract**
+  (operator ruling 2026-11-03; no behaviour change). `trail.undo(mark)`
+  releases only the entries present when it began; an entry an undo
+  callback or finaliser pushes survives the backtrack, with what it did,
+  until the next undo past it. A nested undo keeps what is pushed during it,
+  and the outer undo then releases those. Documented in
+  `docs/python_integration.md` ("Entries pushed while an undo runs"); pinned
+  in `tests/test_trail_undo_pushed_entries.py`.
+
+- **A digit group separator is one `_` between two digits** in an ISO
+  reader number (`1_000`, `1_0.5`). `1_000_` and `1__000`, which read as
+  1000, are now `syntax_error(cannot_parse_big_int)`, as in Scryer. The
+  `0x`/`0o`/`0b` rules are unchanged. Pinned in
+  `tests/iso/test_syntax_error_terms_scryer.py` and
+  `tests/toklex/test_iso_spec.py`.
+- **ISO number syntax follows Scryer on digit groups** (operator ruling
+  2026-11-03). A fraction takes no `_` (`1.0_0`, read as 1.0, is
+  `syntax_error(incomplete_reduction)`), nor does a `0x`/`0o`/`0b`
+  integer (`0x1_2`, `0x_1`, `0x1_` read as integers and are now
+  `incomplete_reduction`). Layout and comments may follow a digit group
+  `_`: `1_ 000`, `1_/*c*/000` and `1_%c<newline>000` read as 1000 (they
+  were `cannot_parse_big_int`), in the reader and in `number_chars/2`.
+  `number_chars/2` also gives Scryer's `cannot_parse_big_int` for a `_`
+  with something other than a digit after it (`1__000`, `1_ a`), and
+  still refuses a `_` that ends the text (`1_000_`), which Scryer's
+  number_chars takes. Pinned in `tests/iso/test_digit_groups_scryer.py`
+  (every row checked against Scryer) and `tests/toklex/test_parity.py`.
+- `unify_with_occurs_check/2` no longer builds a cyclic term through a
+  dict, a list view, a quantity, or an operator or clause term
+  (`DictTerm({k: X})` against `DictTerm({k: g(X)})` succeeded and bound
+  `X = g(X)`). Every `__unify__` hook now binds its parts with the
+  occurs check while the outer unification has it, as the Seg* hooks
+  already did; plain `=/2` is unchanged.
+- The occurs check now looks inside operator terms (`Y + 1`), clause
+  terms and quantities: `unify_with_occurs_check(Y, f(Y + 1))` bound
+  `Y` to a term holding it. A dict, partial list or other hooked term
+  on a cycle built by `=/2` no longer sends a later occurs check into
+  RecursionError, and `occurs_check/2` from Python no longer answers
+  True for a very deep term that does not hold the variable.
+
+- A list a clause head builds after its body with an unbound tail
+  (`mk(N, Z, [N|T]) :- ..., mk(N1, Z, T)` with `Z` unbound) builds about
+  27 times faster at 16 000 elements (54.5 s to 2.0 s): the head's output
+  reads the rest of the list shallowly instead of walking every element of
+  it again at every level.  Answers are unchanged; it is still quadratic in
+  the copy, as the `[]`-tailed build is
+  (todo/a-list-a-clause-head-builds-after-its-body-copies-the-tail-quadratic-2026-11-03.md).
+- **The test runner's "no clause head unifies" is now true as stated, and
+  heads keep their arguments.**  The failure descent looked at only the first
+  4 clauses of a predicate, yet a nested finding said "no clause head unifies
+  with these arguments" -- for a call whose matching clause was the 7th.  Head
+  unification (no body) is now checked for every clause; the descent walks the
+  first 4 clauses whose heads unify, and its note counts those ("descent
+  walked only the first 4 of 6 clauses of engagement whose heads unify with
+  these arguments (8 clauses in all)").  A head listing says "no clause head
+  unifies with these arguments — the heads are:" (or, past 12 heads, "none
+  of the N clause heads unifies with these arguments — the heads are:") and
+  lists up to 12 heads, then "and N more heads"; the same words at the top
+  level and nested.  A head of a natively loaded file prints from its source
+  (`engagement(P, met(a))`, not `engagement(_, _)`), bracket depth past 4
+  elided to `…` and cut at 160 characters ending in `…`.
+- **A failure report prints each binding once and hides nothing.**  A
+  binding repeated with the same printed text under the same name prints
+  `Name = (same as above)`; identical notes print once.  Every descent
+  finding is listed: the first 6 in full, the rest by their first line, with
+  a note ("4 more findings, shown by their first line only").  Each finding
+  names the clauses it came through, outermost first, by start line
+  (`(via request_basis.clausal:463 → 190)`), so findings that read alike stay
+  apart.  A leaf prints every bound variable (it printed at most 4,
+  unmarked), `no bindings` when none is bound, and `bindings unavailable —
+  the goal's variable names could not be read from the source` when they
+  cannot be named; a bound variable whose value cannot be printed shows
+  `Name = (its value could not be printed)`.  A Clausal Prolog file's clause
+  is found by its start line and column, so two clauses on one line each
+  print their own head and bindings, and a quoted head or goal leaves out
+  the comments written inside it.  A goal with a
+  partial-list argument (`[Key-Value|AccIn]`) in a Clausal Prolog file now
+  shows its bindings: the pairing with its source refused the `'.'` list
+  term, so the goal printed none.
+- **The rest of a query's line is `user_input` while the query runs** in
+  the `?-` top-level (Ulrich Neumerkel's Conformity Testing I #270 and
+  #271): `get_char(C). %a` answers `C = ' '` and `get_char(C).%a`
+  answers `C = '%'`; they answered `C = end_of_file`. Scryer agrees on
+  these, and on `read/1` and `peek_char/1` right after the end token.
+  Clausal still differs from Scryer in what happens to the rest of the
+  line afterwards, kept by operator ruling 2026-11-03: Clausal reads what the query left
+  unread as the next query (`X = 1. Y = 2.` answers both), where Scryer
+  discards it (only `X = 1`); a goal that reads past the line reads the
+  next line in both, but the leftover then runs here; and `get_char(C).`
+  at the end of input with no newline answers `end_of_file` here and
+  `'\n'` in Scryer.
+- `length/2` of a list pattern with a hole that is not its tail
+  (`P is [*A, *B], length(P, 2)`, `[*A, 1, *B]`) had no answer.  It now
+  answers as ISO `length/2` on the equivalent partial list would: the
+  pattern is unified with N fresh elements, giving every split in
+  `append/3` order; with N unbound the lengths count up from the
+  pattern's known elements (Scryer agrees on each case).
+- **The tabling key and the C term walkers no longer crash on hostile or
+  very deep terms.** A partial list nested as an element tens of thousands
+  deep, a term-instance field getter that tables a call, or Python code
+  that undoes the trail or clears a list while a walker reads it could
+  segfault the process. The key and `walk`, `ground/1`, `copy_term/2`,
+  `term_variables/2` and the answer snapshot now hold what they read and
+  share one depth budget across every walk that Python code starts, so a
+  term too deep for it is a `RecursionError` (ISO `resource_error(stack)`
+  in a program). A cyclic tabled argument is still `resource_error(stack)`.
+  A partial list closed by a non-empty `bytes` tail keys and walks as its
+  codes, where it raised `PartialTermError`. A tabled call or answer
+  holding an object that cannot be hashed or compared raises that object's
+  own exception, with a note naming the tabled predicate.
+  `_head_list_unify_output` called with a non-list now raises `TypeError`
+  instead of segfaulting. Its C twin no longer treats a `str` subclass as a
+  char, so it builds the same term as the Python twin.
+- **Freeing CLP(FD) and CLP(B) objects is safe for deep structures and
+  re-entrant finalizers.** The C deallocs of `FDVar` and the constraint
+  types (`Constraint`, `EqConstraint`/`NeConstraint`/`LtConstraint`/
+  `LeConstraint`, `AllDiffConstraint`, `SumConstraint`,
+  `ScalarProductConstraint`) now untrack the object from the cycle
+  collector before dropping its fields, so a `__del__` that runs meanwhile
+  can no longer reach the dying object through `gc.get_objects()` or a
+  collection (which crashed the interpreter), and use the trashcan, so a
+  long chain of them no longer overflows the C stack. Freeing a deep BDD
+  (`BDDNode`) no longer recurses once per level: past 1000 nested frees
+  the remaining nodes are freed from an explicit stack; a 1M-level BDD
+  used to crash at the default stack size.
+
+- **Performance: completing a tabled call no longer walks the whole table
+  store.** The search for dormant SCC members at each completion visited
+  every table of the module, so a program completing n tables (tabled
+  fib) took O(n^2); `bench_tabling` scales about linearly now (n=16000:
+  13.4 s -> 2.1 s). Answers, their order and WFS truth values are
+  unchanged. `CLAUSAL_CHECK_SCC_MEMBERS=1` checks the new registry against
+  the full scan at every completion (a debugging aid).
+- **A long `.pl` / `.clausal` clause body loads.** A body of ~500 goals
+  failed in the native reader and ~1000 in the parser with a bare
+  `RecursionError`. The parser's operator loop, the reader's term
+  transform, the lowering's walks (`Uses`, `_show`, clause/2's source
+  body, the DCG body translation), the compiler's `final_yields` pass and
+  the translator's goal collectors no longer recurse once per goal; each
+  produces what the recursive walk did. A `;` chain of 32 or more
+  disjuncts compiles as a balanced `Or` tree (same answers, same order:
+  disjunction is associative), and a chain of 32 or more operands of one
+  binary operator in a body as read or in a data term is built by
+  `$right_nested`/`$left_nested` over a flat list, so the generated
+  Python stays shallow. Conjunctions of 5000 goals and disjunctions of
+  100k now load (slowly: 75 s for the 5000, 170 s for 30k disjuncts, 42 min for 100k). Still limited: a conjunction of ~10k goals exceeds
+  CPython's compiler in the engine's generated code (a
+  `GeneratedCodeError` naming the clause; it was already), and deep
+  bracketed nesting (`s(s(...))` ~250 deep), a long if-then-else chain
+  (~200) or a long conjunction held as data (`assertz((H :- ...))`, ~500)
+  now fails with a load error naming the line and `resource_error(stack)`,
+  not a bare `RecursionError`.
+
+- **Every float comes before every integer in the standard order of
+  terms**, whatever their values, as ISO 7.2.1 says (operator ruling
+  2026-11-03, "as with ISO"). `compare(O, 1, 2.0)` gives `>` and
+  `msort([3, 2.5, 1, 0.5], L)` gives `L = [0.5, 2.5, 1, 3]`; numbers used
+  to be ordered by value, a float only before an equal integer. This
+  changes `compare/3`, `@<`/2 and the rest, `sort/2`, `msort/2`,
+  `sort/4`, `keysort/2` and `setof/3` on lists that mix floats and
+  integers. Integers, decimals and fractions still order among themselves
+  by value. Scryer agrees.
+- **Clausal's own sorting builtins use the same standard order of terms**
+  (operator ruling 2026-11-03: conform with ISO Prolog). `sort_by/3`,
+  `max_by/3` and `min_by/3` compared keys with Python's `<` whenever it
+  worked, so `sort_by(id, [2, 1.5, 1], L)` sorted by value while the same
+  numbers with an atom added sorted in the standard order, and compound
+  keys went name before arity; they now order keys as `msort/2` does.
+  `dict_keys/2`, `dict_values/2`, `dict_pairs/2`, `set_list/2` and
+  `gen_set/2` sorted by Python's `repr` (`10` before `9`, atoms before
+  numbers); they now use the standard order too. `max_list/2`,
+  `min_list/2` and `aggregate_all(max(E)/min(E), ...)` stay numeric (by
+  value), as their documentation now says, and every sorting builtin's
+  entry names the order it uses.
+
+- **CLP(Q) (`CLAUSAL_CLPQ=holzbaur`): a long sum no longer takes
+  quadratic time to read.** `{S = X1 + ... + Xn}` took 2.2 s at
+  n = 2,000 and 473 s at 32,000; now 0.07 s and 2.4 s.  The normal form
+  places each new term of a sum by binary search and compares two
+  variables directly; the answers, residuals and variable order are
+  unchanged (the differential goldens are identical).  Posting dense
+  rows is about 3 times faster at 80 rows of 80 terms.
+
+- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: the back
+  substitution skips the rows that do not hold its variable.** Each row
+  keeps an index of its variables, so `delete_factor_hom/4` no longer
+  scans a row without the substituted variable: posting a chain
+  `X1 =< ... =< Xn` grows as n^2, not n^3 (complexity survey R1).
+  `CLAUSAL_CLPQ_CHECK_ROW_INDEX=1` checks every skip against a full scan.
+  The merges `add_linear_ffh/7` and `add_linear_11h/5` look each term's
+  order up once, as `add_linear_f1h/6` already did (survey R4).  The
+  same rows, the same answers, the same pivots.
+
+- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`): the variables one unification
+  binds are verified in the order of the bindings, as 1.3.3 does under
+  SICStus and Scryer** (ruling 2026-11-03; DEVIATIONS.md D3).  The first
+  hook did every bound variable's work in the order of the store's member
+  list, newest first.  Where several constrained variables of one store
+  are bound in one unification and others stay unbound, a residual can
+  now come out in another (Scryer's) basis: of 414 such workloads in the
+  differential corpus one answer changed, to Scryer's exact residual, and
+  one of 340 generated queries now matches Scryer where it did not; no
+  answer that matched Scryer changed.  Performance: binding a chain
+  `X1 =< ... =< Xn` as a list now does 1.3.3's n^2/2 row rewrites instead
+  of about 2n, which costs more in the port (n = 800: 2.7 s to 10 s;
+  one variable at a time, 11 s, is unchanged).
+
+- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: a back
+  substitution no longer copies each row it rewrites.** Deleting the
+  first term of a row now shares the rest of the row's list, as 1.3.3's
+  `delete_factor_hom/4` shares the tail `Ts` of `[T|Ts]`, instead of
+  copying it.  The trail keeps every row a binding replaces, so the
+  copies kept n^3 terms alive when a chain was bound to numbers, and
+  every full run of Python's cyclic garbage collector walked them all
+  (85.6M kept terms at n = 800; the collector did not free any of them,
+  because none were garbage).  Binding a chain of 800 to numbers in one
+  unification: 11.5 s to 2.8 s (1600: 95.5 s to 13.3 s); one variable at a time:
+  13.5 s to 3.0 s.  The rows, answers and decisions are the same (the
+  differential goldens are identical).
+
+- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: binding a
+  dependent variable no longer reads every row of its store.** The
+  unification hook's stand-in pass (DEVIATIONS.md D3) read every row of
+  the component on each binding; a dependent variable is in no other row
+  of a solved form, so where every bound variable is dependent only the
+  member list and the basis are rewritten
+  (`CLAUSAL_CLPQ_CHECK_ROW_INDEX=1` reads the skipped rows and raises if
+  one holds a bound variable).  Binding a chain of 800 one variable at a
+  time: 21.1 s to 11.2 s.  The same answers and decisions (the
+  differential goldens are identical).
+
+- **CLP(Q) (`CLAUSAL_CLPQ=holzbaur`): a hook body that reaches the store
+  through a fresh `Trail()` is refused too.** The port's entry points
+  refused inside an attribute hook only when the trail they were given had
+  hooks running, so a hook could bypass the rule with a fresh trail and get
+  a wrong answer.  The checks now also read `hook_dispatch_depth()`: the
+  entry points raise `permission_error(call, goal, Goal)` there, and so
+  do clpfd's posts into CLP(Q) made on a trail other than the one whose
+  hooks are running (on the hook's own trail they are queued, as before)
+  (clausal/logic/clpq/DEVIATIONS.md D26).
+
+- **CLP(Q) posts a term nested 100,000 deep** under both solvers
+  (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`, then `{Y >= T}`): the cell
+  walk shared by every CLP post, the units scan, CLP(R)'s variable walk
+  (run by `inf/2`, `sup/2`) and the legacy solver's linearisation use an
+  explicit stack past a shallow depth; they raised `RecursionError`.  A
+  cyclic expression under `{}`, `inf/2` or `sup/2` raises
+  `type_error(evaluable, (+)/2)` on both solvers (was `RecursionError`
+  under legacy and through `inf/2`/`sup/2`); `abs/1`, `min/2`, `max/2` of
+  a too-deep argument, and a too-deep comparison of quantities, raise
+  `resource_error(stack)`.  An error whose culprit is too deep to print
+  no longer raises while building its message.  Every one of these walks
+  keeps its path, so a cyclic term raises instead of looping for ever:
+  `type_error(evaluable, F/A)` under CLP(Q) and CLP(R), units channel on
+  or off, and `resource_error(finite_memory)` under clpfd with the units
+  channel on (`X > 0`, `all_different/1`, `sum/3`, `scalar_product/4`,
+  `element/3`, `global_cardinality/2` hung).  clpq DEVIATIONS.md D27.
+
+- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`): the `-g` printer's residual is
+  the toplevel projection, not dump/3** (todo of 2026-10-23, deferred by
+  the operator ruling of that date). It projects through project.pl's
+  `project_attributes/2` and prints with the `attribute_goal/2` hooks of
+  itf3.pl and geler.pl, as SICStus's toplevel calls them, so the order
+  the goal names its variables in imposes no variable ordering:
+  `ordering(Y < X), {X + Y = 10}` prints `{Y = 10 - X}` instead of
+  raising `system_error(unsatisfiable_ordering)`. Answers print as
+  Scryer's toplevel prints them: `{X + Y = 3}` is `{Y = 3 - X}` (was
+  `{X = 3 - Y}`), `{X =\= 2}` stays `{X =\= 2}` (was
+  `{X = 2 + _Q1}, {_Q1 =\= 0}`). A non-linear goal on a variable no
+  answer variable reaches now shows (`{X >= 10}, {sin(Z) > 3}` prints
+  `{X >= 10}, {3 - sin(_B) < 0}`, as the SICStus manual's toplevel
+  does), named as the `-g` printer's other residuals name that variable
+  (`freeze(_B,true)`), and a variable a non-linear residual mentions
+  keeps its equation. Constraints on variables that neither an answer
+  variable nor such a goal reaches are not projected (they would print
+  nothing but hidden disequations, and projecting a large hidden store
+  could exhaust the projection cap). dump/3 itself is unchanged. The
+  default solver is unaffected. DEVIATIONS.md D28.
+
+- **A `.clausal` or `.pl` file that fails to load reports every error,
+  not the first** (operator ruling 2026-11-02: like a compiler). The
+  native front end lowers the whole file before it refuses, and the
+  module still never loads with a clause missing. The `SyntaxError` an
+  import raises points at the first error, its message is `N errors`
+  followed by one `file:line:` line per error in source order, and its new
+  `.errors` attribute lists one `SyntaxError` per error: a
+  `PrologSyntaxError` with its caret and ISO `.term` for a syntax error.
+  `.errors` is `[itself]` when there is one error. A module that a
+  `use_module` directive loads while the file is read (to find a
+  `module/2` list) and that fails to load contributes its own errors, at
+  its own `file:line`, once however many directives load it; when it is
+  the only problem, its error is raised as before. In `iso_l3`, several
+  refusals raise `LoweringRefusedMany` (a `LoweringRefused`; `.errors`
+  lists them). The test runner's `<load>` result names them all, without
+  the `(file, line N)` suffix of `str(SyntaxError)`, which names the first
+  error but reads as the last line's. A `.seam` file is unchanged: it still
+  stops at its first error.
 
 ### Fixed
 
@@ -744,393 +1127,6 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `type_error(expression, NonlinearBase('sin', ...))`, a Python object in
   the error term; it raises `type_error(expression, sin(_))`. Error
   reporting only, the algorithm is 1.3.3's (DEVIATIONS.md D25).
-
-### Changed
-
-- **Evaluating a cyclic arithmetic term is a type error, as in Scryer**
-  (operator ruling 2026-11-04: "type_error if Scryer gives one"). There is
-  no occurs check, so `X = X+1` builds a cyclic term, and `Y is X` used to
-  recurse to Python's limit and raise `error(resource_error(stack), (is)/2)`.
-  It now raises `error(type_error(evaluable, (+)/2), (is)/2)`. This covers
-  `is/2` and the comparisons in `.pl` and `.clausal` (their context stays
-  `(is)/2`, as in Scryer) and the seam's `eval_/2`; the seam's `is`, which
-  unifies, is unchanged. The culprit is the term at which the evaluation
-  re-enters a term it is already inside: `X = 1+X, Y is X*2` names `(+)/2`,
-  and `X = 1+f(X)` names `(+)/2`, not `f/1`. An error to the left of the
-  cycle comes first, as for any term (`X = Z+X` is an
-  `instantiation_error`). Scryer gives these answers in a consulted clause;
-  its toplevel answers `instantiation_error` when the cycle closes below
-  the root of the expression. The check is exact, a set of the bound
-  variables on the current path, so a deep acyclic term still evaluates
-  (or overflows with `resource_error(stack)`) as before. A list is refused
-  as a list, cyclic or not (`'.'/2`); Scryer evaluates `[X]` as `X`.
-  The seam's `==` and `<` are CLP(Z) posts: see the Fixed entry on
-  posting a cyclic expression to CLP(Z).
-
-- **clausal-sympy: `SymExpr` equality and hash are SymPy's structural
-  ones** (code review of the sandbox admission, 2026-11-04).
-  `__eq__` ran `sympy.simplify` and up to 120 variable renamings from `=`,
-  `==` and `sort/2` on two SymPy results -- outside any time budget (17 s
-  under a 1 s sandbox budget) and with answers that depended on the route
-  (`expand((x+1)**2)` against `factor(x**2+2*x+1)` was unequal in the
-  engine, equal called directly). Now two results are equal only as
-  expression trees, and a Clausal term on the other side is never
-  converted. Symbolic equality is `sym_equal/2`'s, which is budgeted;
-  the package's own tests that compared a result with `==` against a term
-  (`R == cos(X)`) now use `sym_equal/2`, as its docs already did.
-  (Re-pinned in `PACKAGE_ADAPTERS`.)
-
-- **findall/3, bagof/3 and setof/3 keep dropping attribute constraints**
-  (operator ruling 2026-11-04, follow Scryer). A collected answer carries no
-  `dif/2`, `freeze/2` or CLP(Z) constraint, as in Scryer and Trealla. To keep
-  them, collect them as data: `findall(X-Gs, (Goal, copy_term(X, X, Gs)), L)`.
-
-- **Fact predicates load and grow in linear time with a small constant.**
-  Loading 200 facts of arity 8 took 7 s, about 5 ms per argument per fact:
-  every argument position where all facts have the same constant was an
-  index whose one bucket is the whole predicate, and it was compiled again,
-  a copy per position. Such a position now dispatches to the predicate's
-  own function. A predicate whose clauses are all facts compiles to a
-  clause table from 16 clauses (`clause_table.FACT_TABLE_THRESHOLD`; other
-  predicates from 256, as before), and a fact predicate recompiled twice
-  after clause writes stays a table at any size. An `assertz` of a fact
-  into a table adds it in place instead of invalidating the dispatch, so a
-  loop that asserts and calls in turn no longer recompiles the predicate at
-  every call (50 facts of arity 8: 30 s -> 0.8 s; 2,600: 1.0 s). `asserta`,
-  `retract` and rules still invalidate. The logical update view holds: a
-  call reads only the clauses there were when it began. Answers and their
-  order are unchanged; a table's known differences (head bindings left to
-  right, no tail-recursion optimisation, last answer detected per indexed
-  argument) now apply to these predicates too. The whole-function
-  mark/undo invariant walk runs only under
-  `CLAUSAL_CHECK_COMPILED_FUNCTIONS=1` (the test suite sets it), and the
-  location check that could not fail after the position pass is skipped.
-  A clause a table cannot hold as data (a rule, a fact with a partial list)
-  gives its answer as known to be the last when no candidate clause follows
-  it, as in the one-function compile (a table marked it last only as the
-  table's final clause): it is compiled a second time, with that marking,
-  at the first call that needs it. Facts holding `true`
-  or `false` are held as data, keyed and unified apart from 1 and 0. A table exposes
-  its index buckets to call sites with a static key, as compiled indexing
-  does (`index_plans`). An indexed call into a 40-fact table costs about
-  10% more than into the compiled predicate (2.15 vs 1.95 us per call), a
-  full scan about the same.
-  Pinned in `tests/test_clause_table.py` (counts of compiled clause arms
-  and recompiles, known-last answers).
-
-- **A re-led tabled SCC member skips a re-run that could find nothing
-  new** (operator ruling 2026-11-03).  When nothing its clauses can read has
-  changed since a pass of theirs that found nothing (no table changed, no
-  clause written, the same leader below it), the re-lead hands back its rows
-  without re-running, and without re-leading the members beneath it.  Every
-  table gets the same answers in the same order with the same WFS truth
-  values.  Right recursion round a 400-node ring: 209 s -> 37 s; still
-  cubic (todo/tabled-scc-relead-rederives-every-answer-cubic-on-a-ring-
-  2026-11-03.md).  `CLAUSAL_TABLING_SEMINAIVE=0` turns it off.  Pinned in
-  `tests/test_tabling_idle_relead.py`.
-- **Entries pushed onto a trail while an undo runs are ruled the contract**
-  (operator ruling 2026-11-03; no behaviour change). `trail.undo(mark)`
-  releases only the entries present when it began; an entry an undo
-  callback or finaliser pushes survives the backtrack, with what it did,
-  until the next undo past it. A nested undo keeps what is pushed during it,
-  and the outer undo then releases those. Documented in
-  `docs/python_integration.md` ("Entries pushed while an undo runs"); pinned
-  in `tests/test_trail_undo_pushed_entries.py`.
-
-- **A digit group separator is one `_` between two digits** in an ISO
-  reader number (`1_000`, `1_0.5`). `1_000_` and `1__000`, which read as
-  1000, are now `syntax_error(cannot_parse_big_int)`, as in Scryer. The
-  `0x`/`0o`/`0b` rules are unchanged. Pinned in
-  `tests/iso/test_syntax_error_terms_scryer.py` and
-  `tests/toklex/test_iso_spec.py`.
-- **ISO number syntax follows Scryer on digit groups** (operator ruling
-  2026-11-03). A fraction takes no `_` (`1.0_0`, read as 1.0, is
-  `syntax_error(incomplete_reduction)`), nor does a `0x`/`0o`/`0b`
-  integer (`0x1_2`, `0x_1`, `0x1_` read as integers and are now
-  `incomplete_reduction`). Layout and comments may follow a digit group
-  `_`: `1_ 000`, `1_/*c*/000` and `1_%c<newline>000` read as 1000 (they
-  were `cannot_parse_big_int`), in the reader and in `number_chars/2`.
-  `number_chars/2` also gives Scryer's `cannot_parse_big_int` for a `_`
-  with something other than a digit after it (`1__000`, `1_ a`), and
-  still refuses a `_` that ends the text (`1_000_`), which Scryer's
-  number_chars takes. Pinned in `tests/iso/test_digit_groups_scryer.py`
-  (every row checked against Scryer) and `tests/toklex/test_parity.py`.
-- `unify_with_occurs_check/2` no longer builds a cyclic term through a
-  dict, a list view, a quantity, or an operator or clause term
-  (`DictTerm({k: X})` against `DictTerm({k: g(X)})` succeeded and bound
-  `X = g(X)`). Every `__unify__` hook now binds its parts with the
-  occurs check while the outer unification has it, as the Seg* hooks
-  already did; plain `=/2` is unchanged.
-- The occurs check now looks inside operator terms (`Y + 1`), clause
-  terms and quantities: `unify_with_occurs_check(Y, f(Y + 1))` bound
-  `Y` to a term holding it. A dict, partial list or other hooked term
-  on a cycle built by `=/2` no longer sends a later occurs check into
-  RecursionError, and `occurs_check/2` from Python no longer answers
-  True for a very deep term that does not hold the variable.
-
-- A list a clause head builds after its body with an unbound tail
-  (`mk(N, Z, [N|T]) :- ..., mk(N1, Z, T)` with `Z` unbound) builds about
-  27 times faster at 16 000 elements (54.5 s to 2.0 s): the head's output
-  reads the rest of the list shallowly instead of walking every element of
-  it again at every level.  Answers are unchanged; it is still quadratic in
-  the copy, as the `[]`-tailed build is
-  (todo/a-list-a-clause-head-builds-after-its-body-copies-the-tail-quadratic-2026-11-03.md).
-- **The test runner's "no clause head unifies" is now true as stated, and
-  heads keep their arguments.**  The failure descent looked at only the first
-  4 clauses of a predicate, yet a nested finding said "no clause head unifies
-  with these arguments" -- for a call whose matching clause was the 7th.  Head
-  unification (no body) is now checked for every clause; the descent walks the
-  first 4 clauses whose heads unify, and its note counts those ("descent
-  walked only the first 4 of 6 clauses of engagement whose heads unify with
-  these arguments (8 clauses in all)").  A head listing says "no clause head
-  unifies with these arguments — the heads are:" (or, past 12 heads, "none
-  of the N clause heads unifies with these arguments — the heads are:") and
-  lists up to 12 heads, then "and N more heads"; the same words at the top
-  level and nested.  A head of a natively loaded file prints from its source
-  (`engagement(P, met(a))`, not `engagement(_, _)`), bracket depth past 4
-  elided to `…` and cut at 160 characters ending in `…`.
-- **A failure report prints each binding once and hides nothing.**  A
-  binding repeated with the same printed text under the same name prints
-  `Name = (same as above)`; identical notes print once.  Every descent
-  finding is listed: the first 6 in full, the rest by their first line, with
-  a note ("4 more findings, shown by their first line only").  Each finding
-  names the clauses it came through, outermost first, by start line
-  (`(via request_basis.clausal:463 → 190)`), so findings that read alike stay
-  apart.  A leaf prints every bound variable (it printed at most 4,
-  unmarked), `no bindings` when none is bound, and `bindings unavailable —
-  the goal's variable names could not be read from the source` when they
-  cannot be named; a bound variable whose value cannot be printed shows
-  `Name = (its value could not be printed)`.  A Clausal Prolog file's clause
-  is found by its start line and column, so two clauses on one line each
-  print their own head and bindings, and a quoted head or goal leaves out
-  the comments written inside it.  A goal with a
-  partial-list argument (`[Key-Value|AccIn]`) in a Clausal Prolog file now
-  shows its bindings: the pairing with its source refused the `'.'` list
-  term, so the goal printed none.
-- **The rest of a query's line is `user_input` while the query runs** in
-  the `?-` top-level (Ulrich Neumerkel's Conformity Testing I #270 and
-  #271): `get_char(C). %a` answers `C = ' '` and `get_char(C).%a`
-  answers `C = '%'`; they answered `C = end_of_file`. Scryer agrees on
-  these, and on `read/1` and `peek_char/1` right after the end token.
-  Clausal still differs from Scryer in what happens to the rest of the
-  line afterwards, kept by operator ruling 2026-11-03: Clausal reads what the query left
-  unread as the next query (`X = 1. Y = 2.` answers both), where Scryer
-  discards it (only `X = 1`); a goal that reads past the line reads the
-  next line in both, but the leftover then runs here; and `get_char(C).`
-  at the end of input with no newline answers `end_of_file` here and
-  `'\n'` in Scryer.
-- `length/2` of a list pattern with a hole that is not its tail
-  (`P is [*A, *B], length(P, 2)`, `[*A, 1, *B]`) had no answer.  It now
-  answers as ISO `length/2` on the equivalent partial list would: the
-  pattern is unified with N fresh elements, giving every split in
-  `append/3` order; with N unbound the lengths count up from the
-  pattern's known elements (Scryer agrees on each case).
-- **The tabling key and the C term walkers no longer crash on hostile or
-  very deep terms.** A partial list nested as an element tens of thousands
-  deep, a term-instance field getter that tables a call, or Python code
-  that undoes the trail or clears a list while a walker reads it could
-  segfault the process. The key and `walk`, `ground/1`, `copy_term/2`,
-  `term_variables/2` and the answer snapshot now hold what they read and
-  share one depth budget across every walk that Python code starts, so a
-  term too deep for it is a `RecursionError` (ISO `resource_error(stack)`
-  in a program). A cyclic tabled argument is still `resource_error(stack)`.
-  A partial list closed by a non-empty `bytes` tail keys and walks as its
-  codes, where it raised `PartialTermError`. A tabled call or answer
-  holding an object that cannot be hashed or compared raises that object's
-  own exception, with a note naming the tabled predicate.
-  `_head_list_unify_output` called with a non-list now raises `TypeError`
-  instead of segfaulting. Its C twin no longer treats a `str` subclass as a
-  char, so it builds the same term as the Python twin.
-- **Freeing CLP(FD) and CLP(B) objects is safe for deep structures and
-  re-entrant finalizers.** The C deallocs of `FDVar` and the constraint
-  types (`Constraint`, `EqConstraint`/`NeConstraint`/`LtConstraint`/
-  `LeConstraint`, `AllDiffConstraint`, `SumConstraint`,
-  `ScalarProductConstraint`) now untrack the object from the cycle
-  collector before dropping its fields, so a `__del__` that runs meanwhile
-  can no longer reach the dying object through `gc.get_objects()` or a
-  collection (which crashed the interpreter), and use the trashcan, so a
-  long chain of them no longer overflows the C stack. Freeing a deep BDD
-  (`BDDNode`) no longer recurses once per level: past 1000 nested frees
-  the remaining nodes are freed from an explicit stack; a 1M-level BDD
-  used to crash at the default stack size.
-
-- **Performance: completing a tabled call no longer walks the whole table
-  store.** The search for dormant SCC members at each completion visited
-  every table of the module, so a program completing n tables (tabled
-  fib) took O(n^2); `bench_tabling` scales about linearly now (n=16000:
-  13.4 s -> 2.1 s). Answers, their order and WFS truth values are
-  unchanged. `CLAUSAL_CHECK_SCC_MEMBERS=1` checks the new registry against
-  the full scan at every completion (a debugging aid).
-- **A long `.pl` / `.clausal` clause body loads.** A body of ~500 goals
-  failed in the native reader and ~1000 in the parser with a bare
-  `RecursionError`. The parser's operator loop, the reader's term
-  transform, the lowering's walks (`Uses`, `_show`, clause/2's source
-  body, the DCG body translation), the compiler's `final_yields` pass and
-  the translator's goal collectors no longer recurse once per goal; each
-  produces what the recursive walk did. A `;` chain of 32 or more
-  disjuncts compiles as a balanced `Or` tree (same answers, same order:
-  disjunction is associative), and a chain of 32 or more operands of one
-  binary operator in a body as read or in a data term is built by
-  `$right_nested`/`$left_nested` over a flat list, so the generated
-  Python stays shallow. Conjunctions of 5000 goals and disjunctions of
-  100k now load (slowly: 75 s for the 5000, 170 s for 30k disjuncts, 42 min for 100k). Still limited: a conjunction of ~10k goals exceeds
-  CPython's compiler in the engine's generated code (a
-  `GeneratedCodeError` naming the clause; it was already), and deep
-  bracketed nesting (`s(s(...))` ~250 deep), a long if-then-else chain
-  (~200) or a long conjunction held as data (`assertz((H :- ...))`, ~500)
-  now fails with a load error naming the line and `resource_error(stack)`,
-  not a bare `RecursionError`.
-
-- **Every float comes before every integer in the standard order of
-  terms**, whatever their values, as ISO 7.2.1 says (operator ruling
-  2026-11-03, "as with ISO"). `compare(O, 1, 2.0)` gives `>` and
-  `msort([3, 2.5, 1, 0.5], L)` gives `L = [0.5, 2.5, 1, 3]`; numbers used
-  to be ordered by value, a float only before an equal integer. This
-  changes `compare/3`, `@<`/2 and the rest, `sort/2`, `msort/2`,
-  `sort/4`, `keysort/2` and `setof/3` on lists that mix floats and
-  integers. Integers, decimals and fractions still order among themselves
-  by value. Scryer agrees.
-- **Clausal's own sorting builtins use the same standard order of terms**
-  (operator ruling 2026-11-03: conform with ISO Prolog). `sort_by/3`,
-  `max_by/3` and `min_by/3` compared keys with Python's `<` whenever it
-  worked, so `sort_by(id, [2, 1.5, 1], L)` sorted by value while the same
-  numbers with an atom added sorted in the standard order, and compound
-  keys went name before arity; they now order keys as `msort/2` does.
-  `dict_keys/2`, `dict_values/2`, `dict_pairs/2`, `set_list/2` and
-  `gen_set/2` sorted by Python's `repr` (`10` before `9`, atoms before
-  numbers); they now use the standard order too. `max_list/2`,
-  `min_list/2` and `aggregate_all(max(E)/min(E), ...)` stay numeric (by
-  value), as their documentation now says, and every sorting builtin's
-  entry names the order it uses.
-
-- **CLP(Q) (`CLAUSAL_CLPQ=holzbaur`): a long sum no longer takes
-  quadratic time to read.** `{S = X1 + ... + Xn}` took 2.2 s at
-  n = 2,000 and 473 s at 32,000; now 0.07 s and 2.4 s.  The normal form
-  places each new term of a sum by binary search and compares two
-  variables directly; the answers, residuals and variable order are
-  unchanged (the differential goldens are identical).  Posting dense
-  rows is about 3 times faster at 80 rows of 80 terms.
-
-- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: the back
-  substitution skips the rows that do not hold its variable.** Each row
-  keeps an index of its variables, so `delete_factor_hom/4` no longer
-  scans a row without the substituted variable: posting a chain
-  `X1 =< ... =< Xn` grows as n^2, not n^3 (complexity survey R1).
-  `CLAUSAL_CLPQ_CHECK_ROW_INDEX=1` checks every skip against a full scan.
-  The merges `add_linear_ffh/7` and `add_linear_11h/5` look each term's
-  order up once, as `add_linear_f1h/6` already did (survey R4).  The
-  same rows, the same answers, the same pivots.
-
-- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`): the variables one unification
-  binds are verified in the order of the bindings, as 1.3.3 does under
-  SICStus and Scryer** (ruling 2026-11-03; DEVIATIONS.md D3).  The first
-  hook did every bound variable's work in the order of the store's member
-  list, newest first.  Where several constrained variables of one store
-  are bound in one unification and others stay unbound, a residual can
-  now come out in another (Scryer's) basis: of 414 such workloads in the
-  differential corpus one answer changed, to Scryer's exact residual, and
-  one of 340 generated queries now matches Scryer where it did not; no
-  answer that matched Scryer changed.  Performance: binding a chain
-  `X1 =< ... =< Xn` as a list now does 1.3.3's n^2/2 row rewrites instead
-  of about 2n, which costs more in the port (n = 800: 2.7 s to 10 s;
-  one variable at a time, 11 s, is unchanged).
-
-- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: a back
-  substitution no longer copies each row it rewrites.** Deleting the
-  first term of a row now shares the rest of the row's list, as 1.3.3's
-  `delete_factor_hom/4` shares the tail `Ts` of `[T|Ts]`, instead of
-  copying it.  The trail keeps every row a binding replaces, so the
-  copies kept n^3 terms alive when a chain was bound to numbers, and
-  every full run of Python's cyclic garbage collector walked them all
-  (85.6M kept terms at n = 800; the collector did not free any of them,
-  because none were garbage).  Binding a chain of 800 to numbers in one
-  unification: 11.5 s to 2.8 s (1600: 95.5 s to 13.3 s); one variable at a time:
-  13.5 s to 3.0 s.  The rows, answers and decisions are the same (the
-  differential goldens are identical).
-
-- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`), performance: binding a
-  dependent variable no longer reads every row of its store.** The
-  unification hook's stand-in pass (DEVIATIONS.md D3) read every row of
-  the component on each binding; a dependent variable is in no other row
-  of a solved form, so where every bound variable is dependent only the
-  member list and the basis are rewritten
-  (`CLAUSAL_CLPQ_CHECK_ROW_INDEX=1` reads the skipped rows and raises if
-  one holds a bound variable).  Binding a chain of 800 one variable at a
-  time: 21.1 s to 11.2 s.  The same answers and decisions (the
-  differential goldens are identical).
-
-- **CLP(Q) (`CLAUSAL_CLPQ=holzbaur`): a hook body that reaches the store
-  through a fresh `Trail()` is refused too.** The port's entry points
-  refused inside an attribute hook only when the trail they were given had
-  hooks running, so a hook could bypass the rule with a fresh trail and get
-  a wrong answer.  The checks now also read `hook_dispatch_depth()`: the
-  entry points raise `permission_error(call, goal, Goal)` there, and so
-  do clpfd's posts into CLP(Q) made on a trail other than the one whose
-  hooks are running (on the hook's own trail they are queued, as before)
-  (clausal/logic/clpq/DEVIATIONS.md D26).
-
-- **CLP(Q) posts a term nested 100,000 deep** under both solvers
-  (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`, then `{Y >= T}`): the cell
-  walk shared by every CLP post, the units scan, CLP(R)'s variable walk
-  (run by `inf/2`, `sup/2`) and the legacy solver's linearisation use an
-  explicit stack past a shallow depth; they raised `RecursionError`.  A
-  cyclic expression under `{}`, `inf/2` or `sup/2` raises
-  `type_error(evaluable, (+)/2)` on both solvers (was `RecursionError`
-  under legacy and through `inf/2`/`sup/2`); `abs/1`, `min/2`, `max/2` of
-  a too-deep argument, and a too-deep comparison of quantities, raise
-  `resource_error(stack)`.  An error whose culprit is too deep to print
-  no longer raises while building its message.  Every one of these walks
-  keeps its path, so a cyclic term raises instead of looping for ever:
-  `type_error(evaluable, F/A)` under CLP(Q) and CLP(R), units channel on
-  or off, and `resource_error(finite_memory)` under clpfd with the units
-  channel on (`X > 0`, `all_different/1`, `sum/3`, `scalar_product/4`,
-  `element/3`, `global_cardinality/2` hung).  clpq DEVIATIONS.md D27.
-
-- **CLP(Q) port (`CLAUSAL_CLPQ=holzbaur`): the `-g` printer's residual is
-  the toplevel projection, not dump/3** (todo of 2026-10-23, deferred by
-  the operator ruling of that date). It projects through project.pl's
-  `project_attributes/2` and prints with the `attribute_goal/2` hooks of
-  itf3.pl and geler.pl, as SICStus's toplevel calls them, so the order
-  the goal names its variables in imposes no variable ordering:
-  `ordering(Y < X), {X + Y = 10}` prints `{Y = 10 - X}` instead of
-  raising `system_error(unsatisfiable_ordering)`. Answers print as
-  Scryer's toplevel prints them: `{X + Y = 3}` is `{Y = 3 - X}` (was
-  `{X = 3 - Y}`), `{X =\= 2}` stays `{X =\= 2}` (was
-  `{X = 2 + _Q1}, {_Q1 =\= 0}`). A non-linear goal on a variable no
-  answer variable reaches now shows (`{X >= 10}, {sin(Z) > 3}` prints
-  `{X >= 10}, {3 - sin(_B) < 0}`, as the SICStus manual's toplevel
-  does), named as the `-g` printer's other residuals name that variable
-  (`freeze(_B,true)`), and a variable a non-linear residual mentions
-  keeps its equation. Constraints on variables that neither an answer
-  variable nor such a goal reaches are not projected (they would print
-  nothing but hidden disequations, and projecting a large hidden store
-  could exhaust the projection cap). dump/3 itself is unchanged. The
-  default solver is unaffected. DEVIATIONS.md D28.
-
-## 1.4.0 (2026-11-03)
-
-### Changed
-
-- **A `.clausal` or `.pl` file that fails to load reports every error,
-  not the first** (operator ruling 2026-11-02: like a compiler). The
-  native front end lowers the whole file before it refuses, and the
-  module still never loads with a clause missing. The `SyntaxError` an
-  import raises points at the first error, its message is `N errors`
-  followed by one `file:line:` line per error in source order, and its new
-  `.errors` attribute lists one `SyntaxError` per error: a
-  `PrologSyntaxError` with its caret and ISO `.term` for a syntax error.
-  `.errors` is `[itself]` when there is one error. A module that a
-  `use_module` directive loads while the file is read (to find a
-  `module/2` list) and that fails to load contributes its own errors, at
-  its own `file:line`, once however many directives load it; when it is
-  the only problem, its error is raised as before. In `iso_l3`, several
-  refusals raise `LoweringRefusedMany` (a `LoweringRefused`; `.errors`
-  lists them). The test runner's `<load>` result names them all, without
-  the `(file, line N)` suffix of `str(SyntaxError)`, which names the first
-  error but reads as the last line's. A `.seam` file is unchanged: it still
-  stops at its first error.
-
-### Fixed
 
 - **The installed package ships Clausal Prolog examples, and its maps link
   to the online docs.** `clausal/examples/` now holds a `.clausal` version of
