@@ -577,7 +577,9 @@ def _list_elements(term):
         if is_var(t):
             return elements, True
         if id(t) in seen:
-            return _NOT_A_LIST                 # a cyclic list: no proper list
+            # A cyclic list is no list: type_error(list, _), where Scryer
+            # loops forever (operator ruling 2026-11-06: the error is right).
+            return _NOT_A_LIST
         seen.add(id(t))
         if is_chars(t):
             elements.extend(str_chars(chars_text(t)))

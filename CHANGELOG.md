@@ -22,8 +22,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   element (`[a|_]`, `[a,_]`, `_`) is `instantiation_error` for must_be
   and success for can_be. As in Scryer, `must_be(chars, _)`'s type errors
   carry the context `can_be/2` (it checks `can_be(chars, _)` first) and
-  its instantiation error `must_be/2`. Pinned by
-  `tests/test_must_be_chars_character.py`.
+  its instantiation error `must_be/2`. One deliberate deviation (operator
+  ruling 2026-11-06): a cyclic list (`X = [a|X]`) is `type_error(list, X)`
+  for both, where Scryer loops forever; no binding makes it a list. Pinned
+  by `tests/test_must_be_chars_character.py`.
 
 - **`call_with_time_limit/2`** (SWI-Prolog's library(time); operator
   ruling 2026-11-04, "1+2 option"), on every surface. Runs Goal as
