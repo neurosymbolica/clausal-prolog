@@ -52,9 +52,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   strictness kept through a hidden variable, a forced value bound);
   `ordering/1` takes effect; a non-linear constraint is delayed until it
   is linear instead of raising `domain_error(linear_expression, E)`; a
-  float reads through 1.3.3's `float_rat` (`{X = 0.1}` gives `1/10`), not
-  as its exact binary value, and `bb_inf` takes a value within `Eps` of an
-  integer as integral, as 1.3.3 does (both accepted, operator ruling
+  float reads as its exact binary value, as Scryer reads it (operator
+  ruling 2026-11-07, entry below), and `bb_inf` takes a value within `Eps`
+  of an integer as integral, as 1.3.3 does (accepted, operator ruling
   2026-11-06, entry below); the `clpq_max_*` resource-cap flags exist
   (absent under `legacy`), and a call past a cap raises `resource_error`
   (past the projection cap the `-g` printer reports it and prints no
@@ -78,13 +78,24 @@ surface described in [docs/public-api.md](docs/public-api.md).
   the optimum is integral only within Eps the binding can fail. The
   legacy solver (the default) is unchanged.
 
-- **CLP(Q) port: `bb_inf`'s integrality within Eps and 1.3.3's reading of
-  a float** (both accepted, operator ruling 2026-11-06). The port takes a
-  value within `Eps` of an integer as integral (0.001 for `bb_inf/3` and
-  `int_minimize/3`), as 1.3.3 does, where the legacy solver tests
-  integrality exactly; and it reads a float through 1.3.3's `float_rat`
-  (`{X = 0.1}` gives `1/10`, DEVIATIONS.md D1), where legacy takes the
-  float's exact binary value. Both matter once the port is the default.
+- **CLP(Q) port: `bb_inf`'s integrality within Eps** (accepted, operator
+  ruling 2026-11-06). The port takes a value within `Eps` of an integer as
+  integral (0.001 for `bb_inf/3` and `int_minimize/3`), as 1.3.3 does,
+  where the legacy solver tested integrality exactly.
+
+- **CLP(Q) reads a float as its exact binary value, as Scryer does**
+  (operator ruling 2026-11-07: "I would go with Scryer behaviour"; it
+  replaces the ruling of 2026-11-06 that accepted 1.3.3's `float_rat`).
+  `{X = 0.1}` gives `X = 3602879701896397/36028797018963968`, the value
+  the float holds, as in Scryer's `library(clpq)` and the legacy solver;
+  1.3.3's `float_rat` took the shortest continued-fraction convergent
+  (`1/10`). The same holds for a float bound (`in_q(X, 0.1, 1)`), a
+  folded `#(pi)` (`884279719003555/281474976710656`), `bb_inf/3`'s
+  default `Eps` (the float `0.001`, read exactly, as Scryer's `nf/2`
+  reads it) and the result of `sin`, `exp`, `^` with a non-integer
+  exponent and the other functions evaluated through a float. Write
+  `1/10` for the rational one tenth. DEVIATIONS.md D1; pinned by
+  `tests/clpq_port/test_arithmetic.py::test_float_to_rational_is_the_exact_binary_value`.
 
 - **CLP(Q) port: past the projection cap the `-g` printer reports the
   error** (accepted, operator ruling 2026-11-06). Past

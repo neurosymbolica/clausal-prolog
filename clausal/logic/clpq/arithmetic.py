@@ -318,43 +318,20 @@ def rational_to_float(x):
 
 
 def float_to_rational(value):
-    """arith.pl, float_to_rational/3,9 (float_rat): the continued fraction
-    of *value*, at most 100 steps, stopping at the first convergent equal to
-    it as a float (test_float_to_rational_gives_the_short_convergent: 0.1 is
-    1/10).  The recursion is a loop.
+    """arith.pl, float_to_rational/3,9 (float_rat): a float as a rational.
 
-    Where the next step's reciprocal is past the float range (a remainder
-    under about 5.6e-309, a subnormal), the float's exact value is the
-    answer: SICStus's float division would overflow there
-    (test_the_smallest_float_is_read_exactly, DEVIATIONS.md D1)."""
+    The float's exact binary value, as Scryer's library(clpq) reads one
+    (operator ruling 2026-11-07: "I would go with Scryer behaviour"), so
+    0.1 is 3602879701896397/36028797018963968, not 1.3.3's continued
+    fraction convergent 1/10 (DEVIATIONS.md D1,
+    test_float_to_rational_is_the_exact_binary_value).  NaN raises
+    evaluation_error(undefined) and an infinity evaluation_error(float_overflow)."""
     if value != value:
         raise _evaluation_error("undefined")
     if value in (_math.inf, -_math.inf):
         raise _evaluation_error("float_overflow")
-    steps = 100
-    remaining = value
-    numerator_a, numerator_b = 1, 0
-    denominator_a, denominator_b = 0, 1
-    while True:
-        if steps == 0:                                          # clause 1
-            break
-        if denominator_a != 0 and \
-                abs(value - numerator_a / denominator_a) == 0.0:   # clause 2
-            break
-        whole = int(remaining)          # SICStus integer/1 truncates (clause 3)
-        if whole == remaining:
-            numerator_a = numerator_a * whole + numerator_b
-            denominator_a = denominator_a * whole + denominator_b
-            break
-        numerator_a, numerator_b = numerator_a * whole + numerator_b, numerator_a
-        denominator_a, denominator_b = (denominator_a * whole + denominator_b,
-                                        denominator_a)
-        remaining = 1 / (remaining - whole)
-        if remaining in (_math.inf, -_math.inf):
-            numerator, denominator = value.as_integer_ratio()
-            return make_rational(numerator, denominator)
-        steps -= 1
-    return make_rational(numerator_a, denominator_a)
+    numerator, denominator = value.as_integer_ratio()
+    return make_rational(numerator, denominator)
 
 
 # ---------------------------------------------------------------- arith_q.pl

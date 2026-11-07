@@ -46,8 +46,8 @@ in `arith.pl`'s file order:
 | `minq/6`, `maxq/6` | `minimum`, `maximum` | Return the rational. |
 | `abs(rat(N, D))` (`specialize_rational_function//2`) | `absolute` | |
 | `rat_float/3` | `rational_to_float` | A result past the float range raises `evaluation_error(float_overflow)`.  bv.pl's `float(X)` in `decrease_evaluate/2` uses it too. |
-| `float_rat/3,9` | `float_to_rational` | The recursion is a loop; NaN raises `evaluation_error(undefined)` and an infinity `evaluation_error(float_overflow)`.  Where the next step's reciprocal is past the float range (a remainder under about 5.6e-309, a subnormal float such as 5.0e-324), the answer is the float's exact value; the step raised `OverflowError` before Task 16, and SICStus's float division would overflow there.  Not checked against SICStus (`test_the_smallest_float_is_read_exactly`). |
-| `arith_normalize/2` (`arith_q.pl`) | `arithmetic_normalize` | Takes an engine number or a rational pair.  A float goes through `float_to_rational`, as `get_rational/3` reads one, so `{X = 0.1}` gives `X = 1/10` (`test_numbers_are_exact_and_a_float_is_its_short_convergent`); Scryer's own `library(clpq)` gives the float's exact binary value instead. |
+| `float_rat/3,9` | `float_to_rational` | **Not 1.3.3's algorithm** (operator ruling 2026-11-07, "I would go with Scryer behaviour"): the float's exact binary value (`float.as_integer_ratio`), as Scryer's `library(clpq)` reads a float, where `float_rat` takes the first continued-fraction convergent equal to the float (0.1 is 1/10 under 1.3.3, 3602879701896397/36028797018963968 here and in Scryer; `test_float_to_rational_is_the_exact_binary_value`).  The port took `float_rat` until that ruling.  NaN raises `evaluation_error(undefined)` and an infinity `evaluation_error(float_overflow)`. |
+| `arith_normalize/2` (`arith_q.pl`) | `arithmetic_normalize` | Takes an engine number or a rational pair.  A float goes through `float_to_rational`, as `get_rational/3` reads one, so `{X = 0.1}` gives the float's exact binary value, as Scryer's `library(clpq)` does (`test_numbers_are_exact_and_a_float_is_its_exact_binary_value`; 1.3.3 gives `1/10`, see `float_rat/3,9` above). |
 | `truncateq/4`, `floorq/4`, `ceilingq/4`, `roundq/4` | `truncate_rational`, `floor_rational`, `ceiling_rational`, `round_rational` (Task 13, for bb.pl) | Take and return a pair.  They keep the `_rational` suffix, so they do not shadow Python's `round`.  SICStus `//` truncates toward zero and Python's floors; `_truncated_quotient` gives SICStus's.  `round_rational` rounds to the nearest integer, a half away from zero (ISO `round/1`), where 1.3.3's `roundq/4` gives `1` on (-1, -1/2] (D18). |
 | `integerp/2` (`arith_q.pl`) | `rational_integer` | Returns the int, or None. |
 | `number/1` as nf.pl applies it | `is_number` | An int, Fraction, Decimal or float, not a bool. |
@@ -1203,12 +1203,10 @@ answers differently from 1.3.3 itself:
   atom `'1/3'` and the string "1" included; legacy and the port before
   Task 16 read them through `Fraction(...)`; legacy
   raises the same errors since 2026-10-20).  A bound is read as nf.pl
-  reads the number in `{Lo =< X}`, so a float is its short convergent
-  (`in_q(X, 0.1, 1)` gives inf 1/10; `Fraction(0.1)` before).  Legacy
-  matches the port's errors only: it still reads a float bound as
-  `Fraction(F)`, so `in_q(X, 0.1, 1), inf(X, I)` gives
-  `I = 3602879701896397 rdiv 36028797018963968` under legacy and
-  `1 rdiv 10` under the port.
+  reads the number in `{Lo =< X}`, so a float is its exact binary value,
+  as in Scryer (`in_q(X, 0.1, 1), inf(X, I)` gives
+  `I = 3602879701896397 rdiv 36028797018963968`; the port gave `1 rdiv 10`
+  through `float_rat` until operator ruling 2026-11-07).
 - The Decimal-scale fast path above also holds in a block that holds `;`
   (Fable M5): each `X = N` branch is posted through
   `_post_comparison_keeping_scale`, which `post_constraint_with_choices`

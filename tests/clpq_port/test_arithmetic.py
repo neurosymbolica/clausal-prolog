@@ -124,12 +124,18 @@ def test_from_number_of_a_decimal_without_a_rational_is_an_iso_error(
 
 # ---------------------------------------------------------------- arith.pl runtime (Task 10, for nf.pl)
 
-def test_float_to_rational_gives_the_short_convergent():
-    assert a.float_to_rational(0.1) == a.make_rational(1, 10)
+def test_float_to_rational_is_the_exact_binary_value():
+    # As Scryer's library(clpq) reads a float (operator ruling 2026-11-07;
+    # Scryer: {X = 0.1} gives 3602879701896397 rdiv 36028797018963968), not
+    # 1.3.3's float_rat convergent 1/10.
+    assert a.float_to_rational(0.1) == a.make_rational(
+        3602879701896397, 36028797018963968)
     assert a.float_to_rational(-2.5) == a.make_rational(-5, 2)
     assert a.float_to_rational(3.0) == a.make_rational(3, 1)
+    assert a.float_to_rational(0.001) == a.make_rational(
+        1152921504606847, 1152921504606846976)
     pi = a.float_to_rational(3.141592653589793)
-    assert pi[0] / pi[1] == 3.141592653589793
+    assert pi == a.make_rational(884279719003555, 281474976710656)
 
 
 def test_rational_to_float_of_a_huge_rational_is_finite():

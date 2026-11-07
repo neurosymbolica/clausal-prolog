@@ -28,11 +28,14 @@ meaning the same, so residuals are compared by z3 equivalence
 (tests/clpq_oracle.py), never as text.
 
 Adaptations, on the port's copy only:
-- floats in a program or query (``0.01``, ``0.9``) are kept: the port
-  coerces them to the decimal rational (1/100, 9/10), as the chapter says
-  clp(Q) does.  The oracle reads them as binary floats and converts those
-  exactly (its flugpl infimum is 5013024519777045/2^32 and its bb_inf
-  fails), so the oracle's copy spells them 1/100 and 9/10.
+- floats in a program or query (``0.01``, ``0.9``) are kept on the port's
+  copy.  The chapter says clp(Q) coerces them to the decimal rational
+  (1/100, 9/10), as 1.3.3's float_rat does; the port, like the oracle,
+  reads a float as its exact binary value (operator ruling 2026-11-07,
+  DEVIATIONS.md D1), so the answers compared here agree with the
+  oracle's within REL.  The oracle's copy spells them 1/100 and 9/10, as
+  before (with the binary floats its flugpl infimum is
+  5013024519777045/2^32 and its bb_inf fails).
 - ``maximize(Z)`` becomes ``maximize(Z, _)`` (DEVIATIONS.md D20) in
   test_maximize; test_maximize_1_as_documented runs the /1 form as written.
 - the Monash mortgage's ``<=`` becomes ``=<``, as in test_examples.py.

@@ -264,10 +264,11 @@ def test_in_q_with_an_unbound_bound_raises():
 
 
 def test_in_q_reads_a_float_bound_as_nf_pl_reads_a_float():
-    # {X >= 0.1} gives 1/10 (float_to_rational); in_q's bound is that post.
+    # {X >= 0.1} gives the float's exact value (float_to_rational, as
+    # Scryer: 3602879701896397 rdiv 36028797018963968); in_q's bound is that post.
     t, x, low = Trail(), Var(), Var()
     assert h.in_q(x, 0.1, 1, t)
-    assert h.inf(x, low, t) and deref(low) == Fraction(1, 10)
+    assert h.inf(x, low, t) and deref(low) == Fraction(0.1)
 
 
 # ---------------------------------------------------------------- numbers

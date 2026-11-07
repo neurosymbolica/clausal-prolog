@@ -363,8 +363,9 @@ declare them too."): `#(p)` and `#(pi)` are `3.141592653589793`, `#(e)` is
 `2.718281828459045` and `#(zero)` is `0` (Q's arithmetic epsilon), and
 `constant(pi)` ... reads the same; a module's own declaration of the name
 wins. The float meets the solver as a float literal does: the solver
-reads it through 1.3.3's `float_rat`, so `{X = #(pi)}` gives
-`X = 245850922/78256779`, exactly what its own `#(pi)` gave. The
+reads a float as its exact binary value, as Scryer does, so
+`{X = #(pi)}` gives `X = 884279719003555/281474976710656`, exactly what
+its own `#(pi)` gave. The
 atoms `pi`, `e` ... as data are unchanged.
 
 ```clausal

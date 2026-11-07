@@ -322,11 +322,12 @@ def test_clpq_declares_p_pi_e_zero(tmp_path):
     [two_pi] = out["two_pi"]
     [pi] = out["pi_alone"]
     assert type(two_pi) is Fraction and two_pi == 2 * pi, out
-    # The port reads a float through 1.3.3's float_rat, so the folded
-    # value is exactly what its own #(pi) gave (normal_form_number).
+    # The port reads a float as its exact binary value, as Scryer does
+    # ({X = #(pi)} gives 884279719003555 rdiv 281474976710656 there), so the
+    # folded value is exactly what its own #(pi) gave (normal_form_number).
     from clausal.logic.clpq import normal_form as nf
     [m] = nf.normal_form(("#", "pi"))
-    assert pi == Fraction(*m.coefficient) == Fraction(245850922, 78256779)
+    assert pi == Fraction(*m.coefficient) == Fraction(884279719003555, 281474976710656)
     assert out["e_is"] == [2.718281828459045], out
     assert out["pi_constant"] == [3.141592653589793], out
     assert out["zero"] == [1] and out["zero_data"] == [0], out

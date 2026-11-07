@@ -157,13 +157,13 @@ def test_power_products_follow_the_standard_order():
     assert nf.compare_bases(base, exp_base) < 0   # arity before name
 
 
-def test_numbers_are_exact_and_a_float_is_its_short_convergent():
+def test_numbers_are_exact_and_a_float_is_its_exact_binary_value():
     assert nf.normal_form(Fraction(1, 3))[0].coefficient == q(1, 3)
     from decimal import Decimal
     assert nf.normal_form(Decimal("2.50"))[0].coefficient == q(5, 2)
-    # 1.3.3 reads a float through float_rat: 0.1 is 1/10 (Scryer's own
-    # library(clpq) gives the float's exact binary value instead).
-    assert nf.normal_form(0.1)[0].coefficient == q(1, 10)
+    # A float is its exact binary value, as Scryer's library(clpq) reads it
+    # (operator ruling 2026-11-07), not 1.3.3's float_rat convergent 1/10.
+    assert nf.normal_form(0.1)[0].coefficient == q(3602879701896397, 36028797018963968)
     assert nf.normal_form(0) == []
     assert nf.normal_form(("rat", 3, 6))[0].coefficient == q(1, 2)
 

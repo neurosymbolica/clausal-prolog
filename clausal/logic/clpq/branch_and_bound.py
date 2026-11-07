@@ -50,7 +50,8 @@ from clausal.logic.variables import Var, deref, is_var, unify
 #: ``("incumbent", value)`` for each leaf recorded.
 TRACE = None
 
-#: bb_inf/3's Eps, the float 0.001, which normal_form/2 reads as 1/1000.
+#: bb_inf/3's Eps, the float 0.001, which normal_form/2 reads as its exact
+#: binary value, as Scryer's nf/2 does (1152921504606847/2**60).
 DEFAULT_EPSILON = 0.001
 
 

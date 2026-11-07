@@ -400,8 +400,9 @@ def test_the_delayed_goal_shows_nf_second():
     equation, call = shown
     result = equation[2][1][2]
     assert call[0] == ":" and call[1] == "clpq"
+    # Eps is the float 0.001 read exactly, as Scryer's nf(Eps, ENf) reads it.
     assert call[2] == ("branch_and_bound_infimum_internal", [x], result,
-                       Fraction(1, 1000), infimum, vertex)
+                       Fraction(0.001), infimum, vertex)
     assert call[2][2] is result
 
 
@@ -481,7 +482,8 @@ def test_a_delayed_bb_inf_shows_in_the_residual():
         return names[variable._id]
     residual = residual_strings([x, y, infimum], trail, name_of)
     assert residual == ["{X >= 1/2}", "{Y*X = _I1}",
-                        "branch_and_bound_infimum_internal([X], _I1, 1/1000, I, _I2)"]
+                        "branch_and_bound_infimum_internal([X], _I1, "
+                        "1152921504606847/1152921504606846976, I, _I2)"]
 
 
 # ---------------------------------------------------------------- goals the search wakes (R24)
