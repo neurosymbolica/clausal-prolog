@@ -28,13 +28,12 @@ meaning the same, so residuals are compared by z3 equivalence
 (tests/clpq_oracle.py), never as text.
 
 Adaptations, on the port's copy only:
-- floats in a program or query (``0.01``, ``0.9``) are kept on the port's
-  copy.  The chapter says clp(Q) coerces them to the decimal rational
-  (1/100, 9/10), as 1.3.3's float_rat does; the port, like the oracle,
-  reads a float as its exact binary value (operator ruling 2026-11-07,
-  DEVIATIONS.md D1), so the answers compared here agree with the
-  oracle's within REL.  The oracle's copy spells them 1/100 and 9/10, as
-  before (with the binary floats its flugpl infimum is
+- floats in a program or query (``0.01``, ``0.9``) are spelled 1/100 and
+  9/10 on both copies.  The chapter says clp(Q) coerces a float to the
+  decimal rational, as 1.3.3's float_rat does, and its answers assume it;
+  the port, like the oracle, reads a float as its exact binary value
+  (operator ruling 2026-11-07, DEVIATIONS.md D1), and with the binary
+  floats flugpl's infimum is no longer 1201500 (the oracle's is
   5013024519777045/2^32 and its bb_inf fails).
 - ``maximize(Z)`` becomes ``maximize(Z, _)`` (DEVIATIONS.md D20) in
   test_maximize; test_maximize_1_as_documented runs the /1 form as written.
@@ -526,9 +525,9 @@ q_ordering_p_mp(P, B, Mp) :-
 """
 
 
-def _mg(oracle_copy=False):
-    queries = _MG_QUERIES.replace("0.01", "1/100") if oracle_copy else _MG_QUERIES
-    return _manual_program("mg") + queries
+def _mg():
+    # Both copies spell the rate 1/100: a float is its binary value.
+    return _manual_program("mg") + _MG_QUERIES.replace("0.01", "1/100")
 
 
 def _check_mg_relation(answer, defined, documented):
@@ -552,7 +551,7 @@ def test_mg():
     growth = Fraction(101, 100) ** 12
     assert _solved_for(answer.residual[0], "B") == \
         ({"P": growth, "Mp": -(growth - 1) * 100}, 0)
-    _agree([answer], oracle(_mg(oracle_copy=True), "q_mg", ["P", "B", "Mp"]))
+    _agree([answer], oracle(_mg(), "q_mg", ["P", "B", "Mp"]))
 
 
 #: The ordering/1 queries: the variable the manual's answer defines, and its
@@ -627,7 +626,7 @@ def test_ordering_on_the_oracle(query, variables, defined, documented):
     # The relation and the variable it defines.  The oracle's target order
     # (the listed variables) is an ordering too, so the defined variable is
     # not ordering/1's alone here; the port test is the one that tells.
-    [answer] = oracle(_mg(oracle_copy=True), query, variables)
+    [answer] = oracle(_mg(), query, variables)
     _check_mg_relation(answer, defined, documented)
     assert _sides(answer.residual[0])[0] == defined, answer
 
@@ -824,7 +823,7 @@ def _monash(oracle_copy=False):
     port_clauses, oracle_clauses = _monash_mortgage()
     if oracle_copy:
         return oracle_clauses + _MONASH.replace("0.01", "1/100")
-    return port_clauses + _MONASH
+    return port_clauses + _MONASH.replace("0.01", "1/100")
 
 
 def test_monash_go2():
@@ -892,12 +891,10 @@ _FLUGPL_INF = 1201500
 _FLUGPL_VERTEX = [75, 70, 70, 60, 60, 0, 12, 7, 16, 6, 6]
 
 
-def _flugpl(oracle_copy=False):
+def _flugpl():
     program = _manual_program("mip")
     assert program.count("0.9*") == 5
-    if oracle_copy:
-        program = program.replace("0.9*", "9/10*")
-    return program + _FLUGPL
+    return program.replace("0.9*", "9/10*") + _FLUGPL
 
 
 def test_flugpl_relaxed_infimum():
@@ -907,7 +904,24 @@ def test_flugpl_relaxed_infimum():
     answer = _one(port(_flugpl(), "q_relaxed", ["Inf"]))
     _close(answer.bindings["Inf"], 1167185.7255923203)
     assert answer.bindings["Inf"] == Fraction(11429082625, 9792)
-    _agree([answer], oracle(_flugpl(oracle_copy=True), "q_relaxed", ["Inf"]))
+    _agree([answer], oracle(_flugpl(), "q_relaxed", ["Inf"]))
+
+
+def test_flugpl_with_the_manuals_floats_reads_them_as_scryer_does():
+    # The manual's own spelling, 0.9*: each float is its binary value on
+    # the port as on the oracle (operator ruling 2026-11-07), so the relaxed
+    # infimum is no longer the decimal answer 11429082625/9792.  It agrees
+    # with the oracle's within REL, not exactly: the oracle computes with
+    # the float coefficients in floats (its Inf is the float
+    # 5013024519777045/2^32), the port with their exact values.  bb_inf/3
+    # is not compared: with the floats the oracle's fails, the port's
+    # finds 1201500 plus the floats' binary error.
+    program = _manual_program("mip") + _FLUGPL
+    answer = _one(port(program, "q_relaxed", ["Inf"]))
+    assert answer.bindings["Inf"] != Fraction(11429082625, 9792)
+    [expected] = oracle(program, "q_relaxed", ["Inf"])
+    assert expected.bindings["Inf"] == Fraction(5013024519777045, 2**32)
+    _close(answer.bindings["Inf"], float(expected.bindings["Inf"]))
 
 
 def test_flugpl_bb_inf_3():
@@ -916,7 +930,7 @@ def test_flugpl_bb_inf_3():
     # clp(r), exactly 1201500 (miplib's BEST SOLN).
     answer = _one(port(_flugpl(), "q_bb_inf_3", ["Inf"]))
     assert _exact(answer.bindings["Inf"]) == _FLUGPL_INF
-    _agree([answer], oracle(_flugpl(oracle_copy=True), "q_bb_inf_3", ["Inf"]))
+    _agree([answer], oracle(_flugpl(), "q_bb_inf_3", ["Inf"]))
 
 
 def _check_bb_inf_5(answer):
@@ -932,7 +946,7 @@ def test_flugpl_bb_inf_5():
 
 
 def test_flugpl_bb_inf_5_on_the_oracle():
-    [answer] = oracle(_flugpl(oracle_copy=True), "q_bb_inf_5", ["Inf", "Vertex"])
+    [answer] = oracle(_flugpl(), "q_bb_inf_5", ["Inf", "Vertex"])
     _check_bb_inf_5(answer)
 
 

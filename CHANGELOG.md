@@ -94,7 +94,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   default `Eps` (the float `0.001`, read exactly, as Scryer's `nf/2`
   reads it) and the result of `sin`, `exp`, `^` with a non-integer
   exponent and the other functions evaluated through a float. Write
-  `1/10` for the rational one tenth. DEVIATIONS.md D1; pinned by
+  `1/10` for the rational one tenth. Only the reading follows Scryer: the
+  port then computes exactly with that value, where Scryer computes with
+  a float coefficient in floats (`{D = 0.5*Y}, {Y = 3}` gives `D = 3/2`,
+  Scryer `1.5`). The SICStus manual's examples that write floats
+  (`0.01`, `0.9`) assume 1.3.3's reading, so their tests spell them
+  `1/100` and `9/10`. DEVIATIONS.md D1; pinned by
   `tests/clpq_port/test_arithmetic.py::test_float_to_rational_is_the_exact_binary_value`.
 
 - **CLP(Q) port: past the projection cap the `-g` printer reports the
