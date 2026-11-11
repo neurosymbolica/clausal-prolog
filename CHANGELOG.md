@@ -7,6 +7,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Added
+
+- **`register` is exported from `clausal`** (operator request 2026-11-11),
+  beside `to_clausal` and `to_python`: `from clausal import register`, the
+  same function as `clausal.logic.python_terms.register`, which gives a class
+  its term for both converters. It joins the 1.x surface
+  (`docs/public-api.md`); `docs/python_integration.md` shows it. The
+  `python_terms` docstrings no longer describe the generic
+  `('{module}\x1f{class}', ...)` fallback and the implicit `++` conversion,
+  both removed 2026-09-15: an unregistered class raises, and `++` converts
+  nothing. Pinned by `tests/test_register_is_public.py`.
+
 ### Removed
 
 - **The legacy CLP(Q) solver** (`clausal/logic/clpq/legacy.py`, the

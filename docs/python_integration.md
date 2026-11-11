@@ -573,7 +573,7 @@ from_fn)` — crosses in both directions.
 
 ```python
 import datetime as dt
-from clausal import to_python, to_clausal, term_key
+from clausal import to_python, to_clausal, term_key, register
 from clausal.logic.cells import chars
 
 to_clausal(dt.date(2023, 6, 1))        # ('date', 2023, 6, 1)   the term
@@ -624,6 +624,36 @@ contents, a tuple becomes the `('()', …)` data cell, and an unregistered class
 already spells a well-formed registered term — `("date", 2023, 6, 1)` — is
 read as that term, not wrapped as data; wrap it yourself (`("()", *t)`) if you
 meant data.
+
+**`register(cls, functor, to_fn, from_fn)`** gives one of your classes its
+term, for both converters. There is no generic fallback (ruling 2026-09-15):
+only the class knows how each attribute converts. `to_fn` gets the object
+and may call `to_clausal` on the components it holds; `from_fn` gets the term
+with its arguments **already** converted and only rebuilds. The registry is
+global and keyed by exact type, and a second registration of the class or the
+functor raises `ValueError`.
+
+```python
+import datetime as dt
+from dataclasses import dataclass
+from clausal import register, to_clausal, to_python
+
+@dataclass
+class Invoice:
+    number: int
+    due: dt.date
+
+register(Invoice, "invoice",
+         lambda v: ("invoice", v.number, to_clausal(v.due)),
+         lambda t: Invoice(*t[1:]))
+
+term = to_clausal([Invoice(7, dt.date(2026, 1, 31))])
+assert term == [("invoice", 7, ("date", 2026, 1, 31))]
+assert to_python(term) == [Invoice(7, dt.date(2026, 1, 31))]
+```
+
+`++` converts nothing: a value it returns reaches the engine as itself, so
+call `to_clausal` on it where you want the term.
 
 **`term_key(term)`** is the standard order of terms as a sort key: total over
 every value a term can hold (a mixed list never raises), the same order

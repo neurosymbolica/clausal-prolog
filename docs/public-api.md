@@ -135,6 +135,7 @@ from clausal import (
     deref, unify,                        # term access
     cell_functor, cell_args, make_cell,  # reading and building a cell
     to_python, to_clausal, term_key,     # the converters
+    register,                            # a class's conversion, both ways
     LogicException, UnboundVarCoercionError,
     Quantity, UnitsMismatch,
 )
@@ -159,6 +160,7 @@ from clausal import (
 | `cell_functor`, `cell_args`, `make_cell` | `cell_functor(c)`, `cell_args(c) -> tuple`, `make_cell(functor, *args) -> tuple` | Read and build a compound term (a cell). |
 | `to_python` | `to_python(val)` | Deep conversion out. |
 | `to_clausal` | `to_clausal(value) -> Any` | Deep conversion in. Raises `TypeError` for an unregistered class. |
+| `register` | `register(cls, functor, to_fn, from_fn) -> None` | **Added to the 1.x surface (Unreleased).** The conversion of `cls` for `to_clausal` (`to_fn`, given the object) and `to_python` (`from_fn`, given the term with its arguments already converted), keyed by exact type. Global; registering a class or functor twice raises `ValueError`. |
 | `term_key` | `term_key(term) -> tuple` | The standard order of terms, as a sort key. |
 | `Var` | `Var()` | `.value`, and `int()` / `float()` / `bool()` / `str()` / f-string coercion. |
 | `Trail` | `Trail()` | Pass one explicitly to keep a residual constraint store. |

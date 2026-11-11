@@ -28,7 +28,7 @@ from clausal.logic.builtins import (
 from clausal.logic.exceptions import LogicException
 from clausal.logic.cells import cell_args, cell_functor, make_cell
 from clausal.logic.to_python import to_python
-from clausal.logic.python_terms import to_clausal
+from clausal.logic.python_terms import to_clausal, register
 from clausal.logic.builtins._helpers import term_key
 from clausal.repl import Solutions
 import clausal._lazy_hook as _lazy_hook  # registers lightweight stub finder
@@ -102,6 +102,7 @@ __all__ = [
     # deep OUT, deep IN, and the standard-order sort key.
     "to_python",
     "to_clausal",
+    "register",
     "term_key",
     "Solutions",
     "query_wfs",

@@ -35,10 +35,14 @@ TWO MODES
 =========
 ``strict=True``   an unregistered class RAISES, naming the fix. For a caller
                   who asked for a conversion.
-``strict=False``  an unregistered class passes through UNCHANGED. For the
-                  implicit ``++`` hook, which must leave alone what it does not
-                  understand -- raising there refused values that had always
-                  been legal, measured at 323 failures.
+``strict=False``  an unregistered class passes through UNCHANGED. For a
+                  caller that converts what it can and must leave alone what
+                  it does not understand.
+
+``++`` does NOT convert (2026-09-15, f74d0f61): an implicit hook there was
+tried and reverted, because at that boundary a tuple the seam built and one
+a user's Python returned are indistinguishable.  A value ``++`` returns
+reaches the engine as itself; convert it by name with ``to_clausal``.
 
 THE TRANSFER LAYER
 ==================
@@ -553,8 +557,8 @@ def _already_a_term(value: tuple) -> bool:
     """True for a tuple the engine would already read as a well-formed term.
 
     Narrow on purpose -- see THE DOCUMENTED HAZARD.  Only a canonical shape
-    counts: a generic ``('mod\\x1fCls', ...)`` is admitted too, since nothing
-    else can produce that head.
+    counts: the chars carrier, the ``('()', ...)`` data cell, a well-formed
+    date-family term and a ``decimal`` term.
     """
     if not value or type(value[0]) is not str:
         return False
@@ -579,7 +583,10 @@ def to_term(value: Any, *, strict: bool = True) -> Any:
     stays a list and a dict stays a dict, with their contents converted -- both
     are term shapes in their own right, so wrapping them would be wrong.  A
     tuple becomes the ``('()', ...)`` data form unless it is already a term.
-    Anything else uses ``('{module}\\x1f{class}', *match_args)``.
+    Any other class has no term form: under ``strict=True`` it raises
+    ``TypeError`` naming ``register``; under ``strict=False`` it is returned
+    unchanged.  There is no generic fallback (module docstring, ruling
+    2026-09-15).
     """
     # STAGE 2 (spec 2026-09-18 §3, Q1): a Python str crossing the seam IS the
     # atom -- it passes through as a scalar; text is written chars(...)
@@ -599,8 +606,8 @@ def to_term(value: Any, *, strict: bool = True) -> Any:
         return {to_term(k, strict=strict): to_term(v, strict=strict)
                 for k, v in value.items()}
     if not strict:
-        # The IMPLICIT path (``++``). A class with no registered conversion
-        # passes through UNCHANGED, exactly as it did before ++ auto-converted.
+        # The lenient mode: a class with no registered conversion passes
+        # through UNCHANGED.
         return value
     raise TypeError(
         f"to_term: {type(value).__name__} has no registered conversion. "
@@ -622,8 +629,9 @@ def to_clausal(value: Any) -> Any:
     variable or engine term is left alone, a registered type takes its
     canonical shape, a list/dict converts its contents, a tuple becomes the
     ``('()', ...)`` data cell, and an UNREGISTERED class RAISES ``TypeError``
-    naming the fix.  The implicit ``++`` hook is the lenient twin; this is
-    the one a caller asks for by name, so silence would be wrong here.
+    naming the fix.  ``to_term(value, strict=False)`` is the lenient twin;
+    this is the one a caller asks for by name, so silence would be wrong
+    here.  (``++`` converts nothing: see the module docstring.)
 
     THE DOCUMENTED HAZARD (module docstring): a tuple ALREADY in
     functor-first form is left alone rather than wrapped as data, and the
