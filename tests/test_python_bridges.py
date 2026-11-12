@@ -754,6 +754,39 @@ def test_an_editable_checkout_uses_the_directory(engine_rule, monkeypatch):
                              os.path.join(root, "library", "datetime.seam"))
 
 
+def test_a_checkout_later_on_sys_path_does_not_answer_for_the_wheel(
+        engine_rule, monkeypatch, tmp_path):
+    """REGRESSION (2026-11-12): an installed wheel was imported, then a
+    source checkout went on ``sys.path`` ahead of it.  The checkout's
+    ``clausal.egg-info`` was the first ``clausal`` distribution found, it
+    lists no imported file, and the rule fell to ``none``: the wheel's own
+    ``library(datetime)`` was refused for the rest of the process.  Only
+    the metadata beside the imported package counts."""
+    import clausal
+    pb = engine_rule
+    site = tmp_path / "lib" / "site-packages"
+    root = site / "clausal"
+    (root / "library").mkdir(parents=True)
+    (root / "__init__.py").write_text("")
+    (root / "library" / "datetime.seam").write_text("")
+    info = site / "clausal-9.9.0.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: clausal\n"
+                                   "Version: 9.9.0\n")
+    (info / "RECORD").write_text("clausal/__init__.py,,\n"
+                                 "clausal/library/datetime.seam,,\n")
+    checkout = tmp_path / "checkout"
+    (checkout / "clausal.egg-info").mkdir(parents=True)
+    (checkout / "clausal.egg-info" / "PKG-INFO").write_text(
+        "Metadata-Version: 2.1\nName: clausal\nVersion: 1.3.0\n")
+    monkeypatch.setattr(clausal, "__file__", str(root / "__init__.py"))
+    monkeypatch.syspath_prepend(str(checkout))
+    assert pb._engine_distribution().version == "9.9.0"
+    assert pb._engine_rule()[0] == "record"
+    assert is_engine_shipped("clausal.library.datetime",
+                             str(root / "library" / "datetime.seam"))
+
+
 def test_an_undecidable_engine_fails_closed(engine_rule, monkeypatch,
                                             tmp_path):
     """No RECORD lists the imported __init__, and the package sits in a

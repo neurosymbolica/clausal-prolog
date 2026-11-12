@@ -19,6 +19,19 @@ surface described in [docs/public-api.md](docs/public-api.md).
   both removed 2026-09-15: an unregistered class raises, and `++` converts
   nothing. Pinned by `tests/test_register_is_public.py`.
 
+### Fixed
+
+- **An installed engine no longer refuses its own `library(...)` facades
+  when a source checkout is on `sys.path`** (reported 2026-11-12). Which
+  files ship with the engine was decided from the first `clausal`
+  distribution on `sys.path`; a checkout added after the wheel was imported
+  (its `clausal.egg-info`) answered instead, it lists no imported file, and
+  the rule failed closed for the rest of the process: a `.clausal` file's
+  `use_module(library(datetime), ...)` was `permission_error(import,
+  python_bridge, clausal.library.datetime)`. Only the metadata beside the
+  imported package counts now. Pinned by
+  `tests/test_python_bridges.py::test_a_checkout_later_on_sys_path_does_not_answer_for_the_wheel`.
+
 ### Removed
 
 - **The legacy CLP(Q) solver** (`clausal/logic/clpq/legacy.py`, the

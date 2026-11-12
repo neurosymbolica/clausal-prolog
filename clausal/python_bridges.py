@@ -1361,13 +1361,20 @@ def file_python_routes(path: str) -> "list[tuple[str, int]]":
 
 
 def _engine_distribution():
-    """The installed ``clausal`` distribution, or None.  (A hook, so a test
-    can hand in a simulated RECORD.)"""
+    """The ``clausal`` distribution whose metadata sits BESIDE the imported
+    package (in the directory holding ``clausal/``), or None.  (A hook, so
+    a test can hand in a simulated RECORD.)
+
+    Not ``importlib.metadata.distribution("clausal")``: that is the first
+    one on ``sys.path``, and a source checkout put on the path after the
+    engine was imported (its ``clausal.egg-info``) answered for an
+    installed wheel, whose own facades were then refused for the rest of
+    the process (2026-11-12)."""
     import importlib.metadata  # noqa: PLC0415
-    try:
-        return importlib.metadata.distribution("clausal")
-    except importlib.metadata.PackageNotFoundError:
-        return None
+    import clausal  # noqa: PLC0415
+    site = os.path.dirname(os.path.dirname(os.path.realpath(clausal.__file__)))
+    return next(iter(importlib.metadata.distributions(name="clausal",
+                                                      path=[site])), None)
 
 
 def _is_wheel_install(dist) -> bool:
