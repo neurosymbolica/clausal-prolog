@@ -2096,7 +2096,16 @@ def _module_source(dotted: str) -> "str | None":
     import importlib.util  # noqa: PLC0415
     try:
         spec = importlib.util.find_spec(dotted)
-    except (ImportError, ValueError):
+    except ModuleNotFoundError as missing:
+        # A package on the path to *dotted* does not exist: *dotted* names
+        # nothing. Any other ImportError was raised while a parent package's
+        # ``__init__`` ran -- the module may well exist, and swallowing that
+        # error reported it as absent (2026-11-13). It propagates as itself.
+        if missing.name is None or not (dotted == missing.name
+                                        or dotted.startswith(missing.name + ".")):
+            raise
+        return None
+    except ValueError:
         return None
     if spec is None:
         return None

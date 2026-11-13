@@ -21,6 +21,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **`use_module` reports a parent package that fails to import as that
+  failure, not as a missing module** (found 2026-11-13). Locating
+  `pkg/fix` imports the package `pkg` first; when `pkg`'s `__init__` raised
+  (for instance by importing a predicate a sibling module does not export),
+  the error was swallowed and the directive refused with "no module
+  pkg.fix on sys.path", naming a module that exists and hiding the fault.
+  The parent's own error now propagates. A module that is genuinely absent
+  still gets the "no module" refusal. Pinned by
+  `tests/test_use_module_parent_import_error.py`.
+
 - **An installed engine no longer refuses its own `library(...)` facades
   when a source checkout is on `sys.path`** (reported 2026-11-12). Which
   files ship with the engine was decided from the first `clausal`
