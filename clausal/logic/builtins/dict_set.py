@@ -514,17 +514,26 @@ def _tri_get__3(this_generator, _proceed, _fail, _catcher, d, key, value, trail)
     ``tri_<key>(Profile, T)`` reader boilerplate — 2 clauses per key — in the
     deontic corpus domains (absent profile key → ``unknown``).
 
-    Edge cases mirror ``get/3`` exactly: soft (never throws) — a non-ground key,
-    a non-hashable key, or a non-dict ``Dict`` simply **fails**.  The ONLY
-    behavioural difference from ``get/3`` is the absent-key branch: ``get/3``
-    fails, ``tri_get/3`` binds ``Undefined``.  Deterministic (one solution when it
-    succeeds).
+    Edge cases: ``Dict`` is checked, the key is not. An unbound ``Dict``
+    throws ``instantiation_error`` and a bound non-dict (an attribute list,
+    an atom, a number) throws ``type_error(dict, Dict)`` -- operator ruling
+    2026-11-13. Before it, a non-dict failed softly like ``get/3``, so a
+    rulebase that passed its profiles as attribute lists had every read fail
+    and returned wrong verdicts without an error. A
+    non-ground or non-hashable KEY still fails softly, as in ``get/3``. On a
+    dict the ONLY behavioural difference from ``get/3`` is the absent-key
+    branch: ``get/3`` fails, ``tri_get/3`` binds ``Undefined``.
+    Deterministic (one solution when it succeeds).
     """
     from clausal.terms import Undefined  # noqa: PLC0415
     key_val = _norm_key(deref(key))
-    data = _dict_input(deref(d))          # fix round 4, item 1 — see get/3
-    if (not is_var(key_val) and _is_hashable(key_val)
-            and data is not None):
+    d_val = deref(d)
+    data = _dict_input(d_val)             # fix round 4, item 1 — see get/3
+    if data is None:
+        if is_var(d_val):
+            raise LogicException(instantiation_error("tri_get/3"))
+        raise LogicException(type_error("dict", d_val, "tri_get/3"))
+    if not is_var(key_val) and _is_hashable(key_val):
         result = data[key_val] if key_val in data else Undefined
         mark = trail.mark()
         if unify(value, result, trail):

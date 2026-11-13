@@ -1545,7 +1545,8 @@ Dict and set builtins operate on `DictTerm`/`SetTerm` values **and equally on pl
 
 The DICT-first read/removal family mirroring Python's `dict.get`/`del`:
 `get(Dict, Key, Value)` soft-fails on an absent key, `get(Dict, Key, Value,
-Default)` binds the default, `tri_get(Dict, Key, Value)` binds `Undefined`,
+Default)` binds the default, `tri_get(Dict, Key, Value)` binds `Undefined`
+(and, unlike `get/3,4`, throws `type_error(dict, Dict)` on a non-dict),
 and `delete(Dict, Key, NewDict)` removes functionally (throws on absent).
 The strict read is the subscript, `V is Dict[Key]`, and its predicate form
 `get_strict(Dict, Key, Value)` (same argument order as `get/3`), which throws

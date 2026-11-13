@@ -236,7 +236,10 @@ Choosing a read: the strict subscript (or `get_strict/3`) is for keys the clause
 assume (a typo should be loud); `get/3` is for keys whose absence should just
 fail this one rule rather than abort the query; `get/4` when a default is
 the honest answer; `tri_get/3` when absence means the three-valued
-`Undefined`, not failure.
+`Undefined`, not failure. Unlike `get/3` and `get/4`, `tri_get/3` checks its
+first argument: a non-dict (an attribute list, say) throws
+`type_error(dict, D)` and an unbound one `instantiation_error`, so a profile
+passed in the wrong shape is reported instead of reading as absent.
 
 Keys may be atoms, strings, or ints. An atom key and the same-spelled **string**
 key are **distinct** — atoms and strings are disjoint kinds and never unify

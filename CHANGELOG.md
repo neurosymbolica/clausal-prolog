@@ -59,6 +59,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **`tri_get/3` throws on a non-dict instead of failing** (operator ruling
+  2026-11-13). `tri_get(Dict, Key, Value)` now raises `type_error(dict,
+  Dict)` when `Dict` is bound to anything but a dict (an attribute list, an
+  atom, a number) and `instantiation_error` when it is unbound. Before, it
+  failed softly like `get/3`: a rulebase that passed its profiles as
+  attribute lists read no key at all and returned wrong verdicts without an
+  error. A non-ground or non-hashable key still fails softly, and `get/3`
+  and `get/4` are unchanged. A read-only scan before the change found one
+  package in 239 that relied on the soft failure, and its verdicts were the
+  wrong ones. Pinned by `TestTriGet` in `tests/test_unknown_builtin.py` and
+  `tests/test_dict_set_builtins.py`.
+
 - **The default CLP(Q) solver is the port of clp(q,r) 1.3.3** (operator
   ruling 2026-11-05: "we should retire legacy CLPQ"). `CLAUSAL_CLPQ` now
   defaults to `holzbaur` (`clausal/logic/clpq/holzbaur.py` and the modules

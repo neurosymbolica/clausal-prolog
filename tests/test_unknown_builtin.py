@@ -28,6 +28,8 @@ from clausal.terms import Undefined, DictTerm, Call, LoadName
 from clausal.logic.database import Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref, unify
+from clausal.logic.exceptions import (LogicException, instantiation_error,
+                                      type_error)
 from tests._suffix import SEAM
 
 
@@ -291,11 +293,30 @@ class TestTriGet:
         assert len(_sols("tri_get", d, "a", v)) == 1
         assert len(_sols("tri_get", d, "zzz", v)) == 1
 
-    def test_soft_on_non_dict(self):
-        # Mirrors get/3: non-dict Dict fails softly (never throws).
-        v = Var()
-        assert not _succeeds("tri_get", 42, "a", v)
-        assert not _succeeds("tri_get", Var(), "a", v)
+    # Operator ruling 2026-11-13: a non-dict Dict is an error, not a soft
+    # failure. The case that prompted it: a rulebase passing its profiles as
+    # attribute lists, whose every tri_get/3 read failed without a word.
+    @pytest.mark.parametrize("non_dict", [
+        42, "not_a_dict", [],
+        [("attribute", "a", True)],
+        [("=", "a", True)],
+    ], ids=["integer", "atom", "empty-list", "attribute-list", "pair-list"])
+    def test_non_dict_raises_type_error(self, non_dict):
+        with pytest.raises(LogicException) as info:
+            _sols("tri_get", non_dict, "a", Var())
+        assert info.value.term == type_error("dict", non_dict, "tri_get/3")
+
+    def test_unbound_dict_raises_instantiation_error(self):
+        with pytest.raises(LogicException) as info:
+            _sols("tri_get", Var(), "a", Var())
+        assert info.value.term == instantiation_error("tri_get/3")
+
+    def test_non_dict_is_caught_by_catch(self):
+        # The error is an ordinary ISO error term: catch/3 sees it.
+        e = Var()
+        goal = _goal("catch", _goal("tri_get", [], "a", Var()), e, True)
+        caught = [deref(e) for _ in solve(goal, Module("test"))]
+        assert caught == [type_error("dict", [], "tri_get/3")]
 
     def test_soft_on_unbound_key(self):
         d = DictTerm({"a": 1})

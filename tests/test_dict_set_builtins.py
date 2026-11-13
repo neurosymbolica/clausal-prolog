@@ -1121,9 +1121,13 @@ class TestProfileAPIPlainDict:
         # nv
         assert _fails("get", "not_a_dict", "k", Var(), 0)
 
-    def test_tri_get_nondict_still_fails_softly(self):
+    def test_tri_get_nondict_raises_type_error(self):
         # nv
-        assert _fails("tri_get", "not_a_dict", "k", Var())
+        # Operator ruling 2026-11-13: tri_get/3 names a non-dict instead of
+        # failing softly (get/3 and get/4 above still fail softly).
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException, match="type_error"):
+            _sols("tri_get", "not_a_dict", "k", Var())
 
 
 # ── in_/2 and in_check/2 accept dicts and sets like the ``in`` operator ────────
