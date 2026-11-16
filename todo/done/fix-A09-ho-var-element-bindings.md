@@ -1,6 +1,6 @@
 # fix(A09-F003): include/exclude/partition/take_while/drop_while/span lose Var-element bindings
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F003
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F003
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F003_include_var_element_binding, ::test_F003_take_while_var_element_binding (xfail — flip to pass)
 
 ## Bug

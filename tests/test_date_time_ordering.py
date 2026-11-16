@@ -215,7 +215,7 @@ class TestVarVsNonNumericOperand:
 
     def test_var_lt_quantity(self):
         # 2026-09-12: quantities order through the units side channel now
-        # (spec docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md).
+        # (spec implementation_plans/superpowers/specs/2026-09-12-clp-units-side-channel-design.md).
         from clausal.terms import Quantity
         from clausal.modules.units import metre
         from clausal.logic.variables import unify, deref

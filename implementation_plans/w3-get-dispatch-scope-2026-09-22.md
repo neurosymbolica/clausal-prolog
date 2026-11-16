@@ -181,8 +181,8 @@ and their disappearance accounted for in the gate. After that, the class.
 ### W4a LANDED (2026-09-22) — the instance path is gone, Python and C
 
 `main` a3452a88 -> b9e40edd, five commits, ff (main had not moved). Plan
-`docs/superpowers/plans/2026-09-22-w4a-instance-path-retirement.md`, spec
-`docs/superpowers/specs/2026-09-22-w4a-instance-path-retirement-design.md`.
+`implementation_plans/superpowers/plans/2026-09-22-w4a-instance-path-retirement.md`, spec
+`implementation_plans/superpowers/specs/2026-09-22-w4a-instance-path-retirement-design.md`.
 
 What went: `_clausal_head` (a raising `RetiredStateError` tombstone, the
 name kept so an out-of-tree minter fails loudly), the `_clausal_instances`

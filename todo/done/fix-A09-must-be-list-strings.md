@@ -1,6 +1,6 @@
 # fix(A09-F016): must_be/can_be "list" rejects str — strings-as-lists violation
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F016
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F016
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F016_must_be_list_string (xfail — flip to pass)
 
 ## Bug

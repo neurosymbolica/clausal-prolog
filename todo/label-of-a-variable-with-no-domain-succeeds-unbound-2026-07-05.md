@@ -3,7 +3,7 @@
 **Status: open, needs a ruling.** Design decision A06-D001 of the
 2026-07-05 audit, split out of
 todo/done/investigate-A06-parked-design-decisions.md on 2026-10-20. Full
-statement: docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/design-questions.md.
+statement: implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/design-questions.md.
 
 ## Repro
 

@@ -1,6 +1,6 @@
 # fix(A12-F002): `X == <non-numeric ground term>` succeeds vacuously with an inverted-semantics FD var
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/12-seams/findings.md` A12-F002
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/12-seams/findings.md` A12-F002
 **Tests:** `tests/audit_2026_07_05/test_12_seams.py::TestF002EqNonNumericOperand` (2 xfail — flip to pass; 1 pinned-wrongness guard to update)
 
 ## Bug

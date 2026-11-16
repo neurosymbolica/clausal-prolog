@@ -1,6 +1,6 @@
 # fix(A09-F009): sequence//1 Mode A compares terminals with == instead of unify
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F009
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F009
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F009_sequence_var_terminal (xfail — flip to pass), ::test_F009_regression_sequence_ground_modes
 
 ## Bug

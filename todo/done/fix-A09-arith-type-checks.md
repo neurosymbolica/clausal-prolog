@@ -1,6 +1,6 @@
 # fix(A09-F011): plus/3, max_/3, min_/3 lack numeric type checks
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F011
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F011
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F011_plus_string_concat, ::test_F011_plus_mixed_raw_typeerror, ::test_F011_max_strings (xfail — flip to pass)
 **Gated by:** A09-D002 (error convention); bool half is A09-F015/A01-D001.
 

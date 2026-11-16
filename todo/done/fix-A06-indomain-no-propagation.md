@@ -1,6 +1,6 @@
 # fix(A06-F008): in_domain narrowing does not re-propagate existing constraints
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F008
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F008
 **Tests:** tests/audit_2026_07_05/test_06_clpfd.py::TestInDomainPropagation::test_in_domain_propagates_through_eq (xfail — flip to pass)
 
 ## Bug

@@ -1,6 +1,6 @@
 # fix(A03-F001): TRO drops solutions behind nondeterministic prefix goals
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F001
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F001
 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::TestF001TroNondetPrefix` (4 xfail — flip to pass)
 
 ## Bug

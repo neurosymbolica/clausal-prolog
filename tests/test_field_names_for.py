@@ -1,5 +1,5 @@
 """W4b-1: one accessor for a declared functor's field names (spec
-docs/superpowers/specs/2026-09-22-w4b1-term-shape-rehome-design.md).
+implementation_plans/superpowers/specs/2026-09-22-w4b1-term-shape-rehome-design.md).
 
 The contract that matters is the DECLAREDNESS one: ``None`` means the value
 names nothing declared, ``()`` means declared with zero fields, and the

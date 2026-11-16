@@ -1,6 +1,6 @@
 # fix(A09-F027): functor/3 & unpack/2 non-atom functor handling (repr-strings, no roundtrip)
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F027
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F027
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F027_functor_numeric_roundtrip, ::test_F027_unpack_numeric_functor (xfail — flip to pass)
 
 ## Bug

@@ -2,7 +2,7 @@
 
 **Filed:** 2026-08-26, from the `catch/3` fix (`463291d6`) and its review
 follow-up (`883cdf08`).
-**Status: DONE 2026-08-26** — see docs/superpowers/specs/2026-08-26-one-drive-loop-design.md
+**Status: DONE 2026-08-26** — see implementation_plans/superpowers/specs/2026-08-26-one-drive-loop-design.md
 and the commits it names.
 
 ## Closing note

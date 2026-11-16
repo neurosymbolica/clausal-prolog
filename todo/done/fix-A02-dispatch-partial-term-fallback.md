@@ -1,6 +1,6 @@
 # fix(A02-F001): indexed dispatch must fall back to all-clauses scan when a non-var arg's index key is uncomputable
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/02-compiler-heads/findings.md` A02-F001
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/02-compiler-heads/findings.md` A02-F001
 **Tests:** `tests/audit_2026_07_05/test_02_compiler_heads.py::TestF001IndexedDispatchPartialTerms` (7 xfail — flip to pass)
 
 ## Bug

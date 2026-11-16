@@ -25,14 +25,14 @@ ambiguity. There is an ambiguity, so (b) was NOT built. The input-side bugs
 
 **For "a Python str becomes an ATOM by default":**
 
-- `docs/superpowers/specs/2026-09-18-atoms-as-str-design.md` §3, line 90:
+- `implementation_plans/superpowers/specs/2026-09-18-atoms-as-str-design.md` §3, line 90:
   > **A Python str crossing the seam (`++`, `--`, a goal argument, a dict
   > key) is an ATOM** (§8 Q1). This matches the engine and downstream code's
   > actual use (identifiers, labels, dict keys); an opaque text payload as an
   > atom is legal Prolog (`'a b c'`) ...
 
   §8 line 192: "**Q1.** A Python str crossing the seam is an ATOM. **Yes.**"
-- `docs/superpowers/specs/2026-09-21-python-boundary-atom-and-string-design.md`,
+- `implementation_plans/superpowers/specs/2026-09-21-python-boundary-atom-and-string-design.md`,
   the dumb-seam table that superseded it (line 139):
   > | **atom** | the plain `str` — no tag | a plain `str` is the atom (main's meaning, kept) |
 - `clausal/logic/to_python.py:296` (`wrap_text`, the `++`/thunk door):
@@ -40,7 +40,7 @@ ambiguity. There is an ambiguity, so (b) was NOT built. The input-side bugs
 
 **For "free-form text an adapter returns is a STRING":**
 
-- `docs/superpowers/specs/2026-09-06-atoms-as-cells-strings-design.md` §9.4,
+- `implementation_plans/superpowers/specs/2026-09-06-atoms-as-cells-strings-design.md` §9.4,
   line 643:
   > Every wrapper that documents "returns an atom" for text (file lines, env
   > values, header names, regex groups, …) now returns a **string** ...

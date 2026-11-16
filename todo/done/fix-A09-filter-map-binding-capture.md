@@ -1,6 +1,6 @@
 # fix(A09-F002): filter_map/3 captures output AFTER trail.undo — inner bindings lost
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F002
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F002
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F002_filter_map_inner_bindings (xfail — flip to pass)
 
 ## Bug

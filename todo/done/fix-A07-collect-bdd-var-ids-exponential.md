@@ -1,6 +1,6 @@
 # fix-A07: `_collect_bdd_var_ids` traverses shared BDDs as trees — exponential sat/sat_count
 
-**Finding:** A07-F001 (`docs/superpowers/audits/2026-07-05-fable-partition/07-clpb-sat/findings.md`).
+**Finding:** A07-F001 (`implementation_plans/superpowers/audits/2026-07-05-fable-partition/07-clpb-sat/findings.md`).
 **Severity:** correctness/perf — CLP(B) is unusable beyond ~26 XOR-connected vars.
 
 Both implementations of the var-id collector recurse into `high`/`low` with no

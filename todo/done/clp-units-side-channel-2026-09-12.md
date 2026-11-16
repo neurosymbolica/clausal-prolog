@@ -131,8 +131,8 @@ rules genuinely differ, and where automatic extraction earns its keep.
 
 **Done 2026-09-12.** Landed on branch `feat/clp-units-side-channel-2026-09-12`
 (merged to clone main after the gate); spec
-`docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md`; plan
-`docs/superpowers/plans/2026-09-12-clp-units-side-channel.md`. Rulings taken
+`implementation_plans/superpowers/specs/2026-09-12-clp-units-side-channel-design.md`; plan
+`implementation_plans/superpowers/plans/2026-09-12-clp-units-side-channel.md`. Rulings taken
 during the work: errors are `error(system_error(units_mismatch), Ctx)` (ISO
 13211, after the operator's discussion with Markus Triska); the solver's
 number comes back exact and unconverted (a third of a yen is

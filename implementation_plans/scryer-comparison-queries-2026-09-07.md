@@ -1,6 +1,6 @@
 # Scryer comparison sheet — atoms-as-cells / strings (2026-09-07)
 
-Rulings in `docs/superpowers/specs/2026-09-06-atoms-as-cells-strings-design.md`
+Rulings in `implementation_plans/superpowers/specs/2026-09-06-atoms-as-cells-strings-design.md`
 that were taken from the ISO text or from memory of Scryer, not from running
 Scryer. The "Clausal" column is what the engine answers at `30478ae4`. The
 "Scryer 0.10.0 says" column is measured against

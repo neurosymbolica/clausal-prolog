@@ -1,7 +1,7 @@
 # investigate(A11): parked design decisions — for Opus / user review
 
 The A11 audit parked 11 design questions
-(docs/superpowers/audits/2026-07-05-fable-partition/11-modules-interop/design-questions.md),
+(implementation_plans/superpowers/audits/2026-07-05-fable-partition/11-modules-interop/design-questions.md),
 per the standing user preference. Two are cross-cutting and appended to
 DESIGN-DECISIONS.md:
 

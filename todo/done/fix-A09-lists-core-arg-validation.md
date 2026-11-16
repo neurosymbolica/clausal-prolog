@@ -1,6 +1,6 @@
 # fix(A09-F021): _lists_core.c segfaults on non-list `items` (PyList_GET_SIZE unchecked)
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F021
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F021
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F021_lists_core_non_list_segfault (xfail — flip to pass)
 **Cross-ref:** todo/cross_cutting_issues.md #6 (unchecked GET_SIZE macros).
 

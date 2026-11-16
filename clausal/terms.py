@@ -79,7 +79,7 @@ class PartialTermError(Exception):
     generic Python type errors and surface a meaningful diagnostic.
 
     Audit findings: F021, F023, F024, F038, F039
-    (docs/superpowers/audits/2026-05-25-string-implementation/findings.md).
+    (implementation_plans/superpowers/audits/2026-05-25-string-implementation/findings.md).
     """
 
 

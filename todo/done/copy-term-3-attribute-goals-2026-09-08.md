@@ -8,7 +8,7 @@ list of goals that, when called, reinstate the constraints attached to the
 copied variables (clpfd domains, `dif/2`, `freeze/2`, ...).
 
 Why now (2026-09-08): the goal-position `--` seam
-(docs/superpowers/specs/2026-09-08-goal-position-seam-design.md §4a) exports
+(implementation_plans/superpowers/specs/2026-09-08-goal-position-seam-design.md §4a) exports
 answers to Python as COPIES and refuses to export an unbound variable that
 still carries constraints, because the alternative is to strip them silently.
 `copy_term/3` is the ISO-shaped way for a caller to ASK for the residue inside

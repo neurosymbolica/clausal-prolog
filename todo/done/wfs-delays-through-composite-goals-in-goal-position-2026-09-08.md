@@ -95,7 +95,7 @@ second one.
 - `clausal/logic/solve.py::query_wfs`, `::_tabled_entry_for_goal`,
   `::_tabled_call_site`
 - `docs/wfs.md`, spec §4a of
-  `docs/superpowers/specs/2026-09-08-goal-position-seam-design.md`
+  `implementation_plans/superpowers/specs/2026-09-08-goal-position-seam-design.md`
 
 ## DONE 2026-09-08 (evening) — cause (1) closed by the throwaway leader
 
@@ -105,7 +105,7 @@ delayed in ANY clause body, conditional answers consumed or streamed from tabled
 beneath) lands on it; conditional answers are deferred, resolved globally at exit, and
 delivered last (raise / export / drop). Conjunctions, untabled wrappers, `++`-fed calls and
 nested predicates are all judged; `query_wfs` shares the core. The key-based path (causes
-2–3's fixes) is deleted — it is subsumed. Plan: `docs/superpowers/plans/2026-09-08-wfs-goal-leader.md`.
+2–3's fixes) is deleted — it is subsumed. Plan: `implementation_plans/superpowers/plans/2026-09-08-wfs-goal-leader.md`.
 Pins: `tests/test_goal_position_seam.py::TestJudgementThroughCompositeGoals` and
 `tests/test_wfs.py::TestQueryWfsJudgesCompositeGoals`.
 

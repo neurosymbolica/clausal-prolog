@@ -43,12 +43,12 @@ on it — A02-D002, A05-D001 and A06-D005 are now ripe and untouched.
 are stale**, in both directions: the clusters still name items that are closed,
 and the subsystem ledgers still say "open" for questions the user resolved on
 2026-07-07 and for all 11 A11 questions that landed fixes.
-`docs/superpowers/audits/2026-07-05-fable-partition/DESIGN-DECISIONS.md` plus the
+`implementation_plans/superpowers/audits/2026-07-05-fable-partition/DESIGN-DECISIONS.md` plus the
 fix commits are the only reliable record of what was decided.
 
 ## Cross-cutting clusters (fix once, close many)
 
-Triage these against `docs/superpowers/audits/2026-07-05-fable-partition/DESIGN-DECISIONS.md`
+Triage these against `implementation_plans/superpowers/audits/2026-07-05-fable-partition/DESIGN-DECISIONS.md`
 §"Triage order" — each cluster is one decision plus mechanical fixes:
 
 1. **Error protocol / raw-exception escapes** (A09-D002 + A11-D001):

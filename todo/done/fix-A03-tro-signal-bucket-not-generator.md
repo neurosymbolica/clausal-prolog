@@ -1,6 +1,6 @@
 # fix(A03-F003): signal-mode TRO-only index bucket compiles to a non-generator → TypeError
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F003
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F003
 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::TestF003TroSignalBucketNotGenerator` (2 xfail — flip to pass)
 
 ## Bug

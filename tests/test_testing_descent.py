@@ -2,7 +2,7 @@
 
 Rung 3 ("no solution for ANY arguments") used to carry no value — measured
 0/29 recovery in a measured authoring study.  See
-``docs/superpowers/specs/2026-07-30-assertion-diagnostic-descent-design.md``.
+``implementation_plans/superpowers/specs/2026-07-30-assertion-diagnostic-descent-design.md``.
 """
 
 from __future__ import annotations

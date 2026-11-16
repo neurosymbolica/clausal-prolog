@@ -44,7 +44,7 @@ ROOTS = ("clausal/", "tests/", "docs/", "todo/", "scripts/",
 # audit-output roots: created by the sessions, not required to exist now
 SKIP_PREFIXES = (
     "tests/audit_2026_07_05/",
-    "docs/superpowers/audits/2026-07-05-fable-partition/",
+    "implementation_plans/superpowers/audits/2026-07-05-fable-partition/",
 )
 # directories excluded when indexing repo basenames (vendored / generated)
 PRUNE_DIRS = {

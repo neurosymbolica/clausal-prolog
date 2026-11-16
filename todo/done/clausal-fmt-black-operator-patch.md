@@ -26,8 +26,8 @@ A behaviour-preserving formatter for `.clausal` source that produces:
 Out of scope: `in_(X,Y)`→`X in Y` (a linter job); corpus-wide reflow (separate opt-in run).
 
 Full design + rationale: the abandoned branch's
-`docs/superpowers/specs/2026-07-22-clausal-fmt-design.md` (read via
-`git show wip/clausal-fmt-shim-abandoned:docs/superpowers/specs/2026-07-22-clausal-fmt-design.md`).
+`implementation_plans/superpowers/specs/2026-07-22-clausal-fmt-design.md` (read via
+`git show wip/clausal-fmt-shim-abandoned:implementation_plans/superpowers/specs/2026-07-22-clausal-fmt-design.md`).
 
 ## Why the shim failed (the CRITICAL finding — the reason to do the operator patch)
 

@@ -2,7 +2,7 @@
 
 The module-scoped sibling of `constant_number_units/3`, and the primitive the
 compile-time module insertion targets. See
-docs/superpowers/specs/2026-09-12-constant-scope-design.md.
+implementation_plans/superpowers/specs/2026-09-12-constant-scope-design.md.
 
 Why it has to exist: `constant_number_units/3` answers for EVERY loaded
 module that declares the name, in load order. That is not a defect but a

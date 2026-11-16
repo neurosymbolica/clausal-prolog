@@ -4,7 +4,7 @@
 
 # fix(A04-F008): root-level (None, _TABLING_SUSPEND) misread as a solution — spurious unbound answers
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F008
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F008
 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::TestF008RootSuspendSpuriousSolution` (xfail — flip to pass)
 
 ## Bug

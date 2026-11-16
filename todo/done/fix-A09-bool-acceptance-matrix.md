@@ -1,6 +1,6 @@
 # fix(A09-F015): bool-as-int acceptance inconsistent; between/3 C vs Python diverge
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F015
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F015
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F015_* (xfail — flip to pass), ::test_F015_regression_succ_rejects_bool
 **Blocked on:** A01-D001 (bool/int conflation policy) — same sequencing as A06-D005/A07-D002.
 

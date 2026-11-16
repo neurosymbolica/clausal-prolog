@@ -194,7 +194,7 @@ class TestSubscript:
 
         The renderer does not preserve the ``.`` spelling — flattening is the
         accepted trade in
-        docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+        implementation_plans/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
         """
         # nv
         dotted = only_clause("get_dot(P, I) <- (I is P.flags)\n")

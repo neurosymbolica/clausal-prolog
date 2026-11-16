@@ -12,8 +12,8 @@ tests + funnel lint (exit 0). GitLab not pushed. Items 2–4 below are unchanged
 
 NEXT item 2 (the transfer form + quantity_number/2) is BUILT on this branch:
 c6819b7e..440a526d, gated NEW 0 against qt-baseline (e43d2fa6),
-49 tests added. Spec docs/superpowers/specs/2026-09-16-quantity-transfer-form-design.md,
-plan docs/superpowers/plans/2026-09-16-quantity-transfer-form.md. Not promoted:
+49 tests added. Spec implementation_plans/superpowers/specs/2026-09-16-quantity-transfer-form-design.md,
+plan implementation_plans/superpowers/plans/2026-09-16-quantity-transfer-form.md. Not promoted:
 it lands with the dates-are-terms work, behind a downstream checker's date
 migration. The exporter's Prolog-side quantity_number/2 is still theirs.
 OPEN for the consumer design: `from_transfer` converts any tuple headed
@@ -25,8 +25,8 @@ NEXT item 3 (PredicateMeta P1 reroutes) is BUILT on this branch:
 by the build and 18 more by the FIX WAVE (2026-09-17, `5555bfc7..f55b0a31`
 plus this handoff commit, closing roborev job 73 and the final opus review;
 `tests/predmeta_p1/` collects 59); spec
-`docs/superpowers/specs/2026-09-17-predmeta-p1-reroutes-design.md`,
-plan `docs/superpowers/plans/2026-09-17-predmeta-p1-reroutes.md`.
+`implementation_plans/superpowers/specs/2026-09-17-predmeta-p1-reroutes-design.md`,
+plan `implementation_plans/superpowers/plans/2026-09-17-predmeta-p1-reroutes.md`.
 
 Census (`tools/predmeta_census/P1_SITES.tsv`): 10 rows CLOSED — 6 `-done`
 (4 `R!-done`, 1 `S-done`, 1 `R-enum-done`) and 4 `R-fallback` (rerouted
@@ -163,7 +163,7 @@ is now a decision, not a dependency. It needs the operator's direct word.
 # 1. What was RULED — the `quantity` encoding, four questions closed
 
 Operator's rulings, interactively, 2026-09-15. Recorded in
-`docs/superpowers/specs/2026-09-14-retire-predicatemeta-section4-answer.md` and
+`implementation_plans/superpowers/specs/2026-09-14-retire-predicatemeta-section4-answer.md` and
 the design record `docs/design-records/terms-as-tuples.html` (republished to the
 same URL — the README is right that a new URL is worse than a dead one).
 
@@ -209,7 +209,7 @@ what `dict()` accepts: `dict(t[1:])` 133 ns, `('dimensions', *sorted(d.items()))
 
 # 2. What was BUILT — the `_dims` rekey, four gated tasks
 
-Plan: `docs/superpowers/plans/2026-09-15-dims-rekey-to-atoms.md`.
+Plan: `implementation_plans/superpowers/plans/2026-09-15-dims-rekey-to-atoms.md`.
 
     9615e8b1  plan
     077dee2c  the unit-metadata registry, keyed by atom      (+ injectivity gate)

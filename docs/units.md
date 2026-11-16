@@ -838,7 +838,7 @@ quantities only, CLP(R). The solver works on
 the exact magnitude in the dimension's base unit and the answer comes back
 as a quantity; dimensions that disagree raise
 `error(system_error(units_mismatch), Ctx)`. See [clpq.md](clpq.md#units)
-and the design in `docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md`.
+and the design in `implementation_plans/superpowers/specs/2026-09-12-clp-units-side-channel-design.md`.
 
 ---
 

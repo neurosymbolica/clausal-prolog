@@ -1,6 +1,6 @@
 # fix(A03-F010): compiler README §5 says continuation-TCO doesn't exist — it does
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F010 (doc-drift)
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F010 (doc-drift)
 
 `clausal/logic/compiler/README.md` §5 ("How solutions reach the caller")
 states: "**What does NOT happen today:** continuation-level tail-call

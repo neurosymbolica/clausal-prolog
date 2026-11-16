@@ -30,7 +30,7 @@ to move first.
 
 ## What the plan says
 
-`docs/superpowers/plans/2026-09-18-predmeta-p2-terms-as-tuples.md`, Task 5:
+`implementation_plans/superpowers/plans/2026-09-18-predmeta-p2-terms-as-tuples.md`, Task 5:
 
 > **Step 2: delete the instance arms** (the cell arms already walk `PyTuple`);
 > keep `py_register_predicate_meta` (predicates' classes still register until P4).

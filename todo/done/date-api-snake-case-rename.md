@@ -59,6 +59,6 @@ Implemented in commits on branch `fix/qualified-atoms-term-position`. Deltas fro
 - **`FormatDate` + `ParseDate` folded into one bidirectional `datetime_string(DateTime, String, Format)/3`** (format when the datetime is bound, parse when the string is bound).
 - **New predicates added:** `timestamp/2` (datetime ↔ POSIX epoch), `datetime_string_iso/2` and `date_string_iso/2` (ISO-8601 via `isoformat`/`fromisoformat`).
 
-Design + plan: `docs/superpowers/specs/2026-07-04-datetime-snake-case-design.md`, `docs/superpowers/plans/2026-07-04-datetime-snake-case.md`.
+Design + plan: `implementation_plans/superpowers/specs/2026-07-04-datetime-snake-case-design.md`, `implementation_plans/superpowers/plans/2026-07-04-datetime-snake-case.md`.
 
 Still outstanding (separate TODOs): the downstream rulebase corpus/library rulebase sweep; the sibling helper-library rename; `date-max-min-ordinal-apis.md`.

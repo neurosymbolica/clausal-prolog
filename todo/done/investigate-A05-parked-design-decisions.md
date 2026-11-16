@@ -8,7 +8,7 @@
 recorded, not asked interactively). These are policy calls that shape fix
 todos; do not implement the affected fixes in a direction-sensitive way
 before they are answered. Full context:
-`docs/superpowers/audits/2026-07-05-fable-partition/05-constraints-core/design-questions.md`.
+`implementation_plans/superpowers/audits/2026-07-05-fable-partition/05-constraints-core/design-questions.md`.
 
 ## 1. A05-D001 — cross-type truth in the dif/reify layer (blocked on A01-D001)
 

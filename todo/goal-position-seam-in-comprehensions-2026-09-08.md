@@ -1,6 +1,6 @@
 # Goal-position `--` inside comprehensions (extension)
 
-The goal-position seam (docs/superpowers/specs/2026-09-08-goal-position-seam-design.md)
+The goal-position seam (implementation_plans/superpowers/specs/2026-09-08-goal-position-seam-design.md)
 recognises a closed list of positions: `if`/`elif`/`while` tests, the
 iterable of `for`, and `not` inside those tests. Python has one more
 goal-shaped position: the iterable of a comprehension or generator

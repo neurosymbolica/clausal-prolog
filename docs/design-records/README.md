@@ -20,7 +20,7 @@ the link someone has bookmarked goes stale in place, which is worse than a dead 
 
 A record is a summary, not the authority. The authority is:
 
-    docs/superpowers/specs/            the reasoning, the measurements, the rulings
+    implementation_plans/superpowers/specs/            the reasoning, the measurements, the rulings
     implementation_plans/SESSION-HANDOFF-*.md   what is landed, open, and next
     tools/predmeta_census/             the instruments, and their controls (deleted
                                        2026-09-26 with the class they measured;

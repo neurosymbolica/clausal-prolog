@@ -1,6 +1,6 @@
 # fix(A06-F016): _clpfd_propagate duck-types non-FDVar states via raw struct casts (UB)
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F016
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F016
 **Tests:** none executed (a repro would segfault the suite); confirmed by
 inspection of all three sites.
 

@@ -1,7 +1,7 @@
 # Optimize: compile `X is T` to plain assignment when X is a fresh variable
 
 Parked from the 2026-07-15 walrus-operator redesign discussion
-(`docs/superpowers/specs/2026-07-15-walrus-operator-redesign-design.md`).
+(`implementation_plans/superpowers/specs/2026-07-15-walrus-operator-redesign-design.md`).
 
 With `is`-chains now the documented way to name terms inline
 (`VALUE is compound(a, X) is C[key]`), the common case is a first-occurrence

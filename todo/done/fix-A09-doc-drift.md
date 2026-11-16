@@ -1,6 +1,6 @@
 # fix(A09-F023/F024/F025/F026): builtins doc drift (union dups, transpose example, append "all directions", database_ops page)
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F023, F024, F025, F026
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F023, F024, F025, F026
 
 ## Items
 

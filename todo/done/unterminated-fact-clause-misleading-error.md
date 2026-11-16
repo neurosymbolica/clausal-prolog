@@ -8,7 +8,7 @@ latent silent-drop: a comma-less FINAL fact in a block (`counter(2)` etc.) was
 silently discarded in ≥9 corpus fixtures — those clauses now land.
 Feature commits 351222ee..1102171d (merge 498c1614); Fable-review follow-up
 dbc90856 confined the rewrites to module compilation (REPL echo regression) and
-bumped CLAUSAL_BYTECODE_TAG. Design: docs/superpowers/specs/2026-07-20-optional-fact-comma-design.md.
+bumped CLAUSAL_BYTECODE_TAG. Design: implementation_plans/superpowers/specs/2026-07-20-optional-fact-comma-design.md.
 
 ---
 

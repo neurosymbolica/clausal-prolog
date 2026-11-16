@@ -3,7 +3,7 @@
 Reachable from the seam (`.seam`) ONLY through the quoted canonical form —
 `'=:='(A, B)` — because Python has no infix syntax for these; natively in
 Clausal Prolog (`.clausal`) and `.pl`.
-Spec: docs/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md
+Spec: implementation_plans/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md
 """
 import operator as _o
 from decimal import Decimal as _Decimal

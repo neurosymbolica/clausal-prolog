@@ -9,7 +9,7 @@
 decision. Park it in a todo, I'll get to it."). These are policy calls that
 shape fix todos; do not implement the affected fixes in a direction-sensitive
 way before they are answered. Full context:
-`docs/superpowers/audits/2026-07-05-fable-partition/01-term-layer/design-questions.md`.
+`implementation_plans/superpowers/audits/2026-07-05-fable-partition/01-term-layer/design-questions.md`.
 
 ## 1. A01-D001 — cross-type numeric unification
 

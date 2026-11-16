@@ -4,7 +4,7 @@
 
 # fix(A04-F002): _naf_tabled unsound for never-called / other-variant subgoals
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F002
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F002
 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::TestF002NafTabledNoEntry` (3 xfail — flip to pass)
 **Design:** A04-D004 (parked) — spawn-vs-scan; see `investigate-A04-wfs-variant-resolution.md`
 

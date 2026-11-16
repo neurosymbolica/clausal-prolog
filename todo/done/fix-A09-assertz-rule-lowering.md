@@ -1,6 +1,6 @@
 # fix(A09-F005): assertz/1 of a rule poisons the predicate
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F005
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F005
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F005_assertz_rule (xfail — flip to pass)
 **Doc:** docs/database_ops.md says rules are "not supported" — see fix-A09-doc-drift.md (A09-F026).
 

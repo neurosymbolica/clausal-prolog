@@ -103,7 +103,7 @@ mkdocs build                           # the docs site (pip install mkdocs-mater
 - **`docs/public-api.md`** is the 1.0 semantic-versioning surface.
 - **`todo/`** holds known open problems — check it before "fixing" something
   that is a recorded, deliberate gap.
-- **`implementation_plans/`, `docs/superpowers/`, `docs/design-records/`** are
+- **`implementation_plans/` (with `implementation_plans/superpowers/`), `docs/design-records/`** are
   dated history and rationale. Useful for *why*; often stale on *what is*.
 
 ## Conventions

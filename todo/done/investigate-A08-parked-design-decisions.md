@@ -9,7 +9,7 @@
 
 Session A08 ran non-interactively; per the audit override these design
 questions were parked instead of asked. Full statements with options and
-recommendations: `docs/superpowers/audits/2026-07-05-fable-partition/08-clpqr-z3/design-questions.md`.
+recommendations: `implementation_plans/superpowers/audits/2026-07-05-fable-partition/08-clpqr-z3/design-questions.md`.
 
 | ID | One-liner | Recommendation | Blocking |
 |----|-----------|----------------|----------|

@@ -2,7 +2,7 @@
 
 Spec: ``.superpowers/sdd/2026-09-03-phase2-bridge/task-1-brief.md`` and the
 Global Constraints / BRIDGE-ENTRY RULINGS sections of
-``docs/superpowers/plans/2026-09-03-phase2-bridge.md``.
+``implementation_plans/superpowers/plans/2026-09-03-phase2-bridge.md``.
 
 Three groups:
 

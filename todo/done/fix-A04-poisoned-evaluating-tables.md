@@ -4,7 +4,7 @@
 
 # fix(A04-F007): abandoned/crashed leader leaves table "evaluating" — later queries silently partial
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F007
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F007
 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::TestF007PoisonedEvaluatingTables` (2 xfail — flip to pass; 1 mechanism guard to flip)
 
 ## Bug

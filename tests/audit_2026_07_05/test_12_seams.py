@@ -1,6 +1,6 @@
 """A12 seams & synthesis — adversarial cross-subsystem boundary tests (2026-07-06).
 
-Findings ledger: docs/superpowers/audits/2026-07-05-fable-partition/12-seams/findings.md
+Findings ledger: implementation_plans/superpowers/audits/2026-07-05-fable-partition/12-seams/findings.md
 
 Suspected-bug tests assert the *correct* behaviour and are marked
 ``@pytest.mark.xfail(strict=False)`` with the finding ID; confirmed-correct
@@ -276,7 +276,7 @@ class TestF002EqNonRealOperand:
 
     def test_eq_quantity_operand_binds_via_units_side_channel(self):
         # 2026-09-12: a Quantity is numeric to the comparators now (spec
-        # docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md).
+        # implementation_plans/superpowers/specs/2026-09-12-clp-units-side-channel-design.md).
         # The broken-FD-var defect this pinned cannot recur: the solver never
         # sees the Quantity, only its bare number and a shadow variable.
         from clausal.terms import Quantity
@@ -396,7 +396,7 @@ class TestF002NeNonRealOperand:
 
     def test_ne_quantity_operand_posts_via_units_side_channel(self):
         # 2026-09-12: a Quantity is numeric to the comparators now (spec
-        # docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md).
+        # implementation_plans/superpowers/specs/2026-09-12-clp-units-side-channel-design.md).
         # The broken-FD-var defect this pinned cannot recur: the solver never
         # sees the Quantity, only its bare number and a shadow variable.
         from clausal.terms import Quantity
@@ -646,7 +646,7 @@ class TestNonNumericLeafInsideExprTree:
         from clausal.modules.units import metre
         # 2026-09-12: the units side channel now sees this first, and
         # ``X + 2 metre == 5`` IS a units mismatch — thrown in the ISO
-        # 13211 shape (spec docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md).
+        # 13211 shape (spec implementation_plans/superpowers/specs/2026-09-12-clp-units-side-channel-design.md).
         from clausal.logic.atoms import mint
         q = Quantity(2, {metre: 1})
         with pytest.raises(LogicException) as ei:

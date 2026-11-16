@@ -1,7 +1,7 @@
 # The drive-loop policy flags preserve historical differences — converge or bless them
 
 **Filed:** 2026-08-26, from the one-drive-loop refactor
-(docs/superpowers/specs/2026-08-26-one-drive-loop-design.md).
+(implementation_plans/superpowers/specs/2026-08-26-one-drive-loop-design.md).
 **Status: DONE — decided and landed, 2026-08-26.**
 
 The refactor collapsed the drive loops to one core per language with two

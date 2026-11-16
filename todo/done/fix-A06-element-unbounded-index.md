@@ -1,6 +1,6 @@
 # fix(A06-F005): element/3 with unconstrained index raises ValueError
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F005
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F005
 **Tests:** tests/audit_2026_07_05/test_06_clpfd.py::TestElement::test_element_unconstrained_index (xfail — flip to pass)
 
 ## Bug

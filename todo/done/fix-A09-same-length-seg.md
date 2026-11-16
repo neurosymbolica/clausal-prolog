@@ -1,6 +1,6 @@
 # fix(A09-F019): same_length/2 ground-Seg* support is dead code
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F019
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F019
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F019_same_length_ground_segstring (xfail — flip to pass), ::test_F019_regression_same_length_str
 
 ## Bug

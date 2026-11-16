@@ -15,7 +15,7 @@ too; `test_dict_answer_leader_query` passes and its xfail is removed.
 
 # fix(A04-F005): tabled answers containing list/dict/set/term instances crash add_answer
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F005
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F005
 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::TestF005UnhashableAnswers` (3 xfail — flip to pass)
 
 ## Bug

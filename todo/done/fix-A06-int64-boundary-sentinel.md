@@ -1,6 +1,6 @@
 # fix(A06-F007): exact INT64_MIN/MAX domain bounds silently become ±inf
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F007
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F007
 **Tests:** tests/audit_2026_07_05/test_06_clpfd.py::TestInt64BoundarySentinel (2 xfail — flip to pass)
 
 ## Bug

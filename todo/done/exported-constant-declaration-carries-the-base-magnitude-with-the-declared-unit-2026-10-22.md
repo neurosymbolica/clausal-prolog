@@ -31,7 +31,7 @@ Export (scryer): `:- constant_number_currency(cap, 1550.00, usd_cent).`, so the
 exported `look/2` answers `1550.0, usd_cent`: 1550 cents, not 155000. The
 exporter scales the declaration to the base magnitude on purpose
 (`_collect_constant`, option 3 of
-`docs/superpowers/specs/2026-09-13-exporter-option-3-design.md`; pinned by
+`implementation_plans/superpowers/specs/2026-09-13-exporter-option-3-design.md`; pinned by
 `tests/test_prolog_constants_prelude.py::test_the_exporters_own_output_runs_unmodified`),
 but keeps the declared unit, so the pair is neither the declared one nor the
 base one. Use sites are not affected: they fold separately to the base value.

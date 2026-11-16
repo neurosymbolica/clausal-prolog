@@ -9,7 +9,7 @@
 design questions are recorded, never asked). These are policy calls that gate
 fix direction; do not implement the affected fixes in a direction-sensitive
 way before they are answered. Full context:
-`docs/superpowers/audits/2026-07-05-fable-partition/07-clpb-sat/design-questions.md`.
+`implementation_plans/superpowers/audits/2026-07-05-fable-partition/07-clpb-sat/design-questions.md`.
 
 ## 1. A07-D001 — taut/2 & sat_count/2: standalone formula vs constraint store
 (gates A07-F003, A07-F004)

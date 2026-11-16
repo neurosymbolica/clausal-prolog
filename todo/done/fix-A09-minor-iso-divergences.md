@@ -1,6 +1,6 @@
 # fix(A09-F028/F030/F031): minor ISO divergences in must_be, number parsing, atom_concat errors
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F028, F030, F031
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F028, F030, F031
 
 ## Items
 

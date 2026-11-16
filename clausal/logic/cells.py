@@ -3,7 +3,7 @@
 Every compound term compiles to a cell (P3-2, the cell-default flip) -- there
 is no opt-in flag left to spell. (History: this module started as the Phase 2
 bridge's opt-in representation, Task 1 of
-``docs/superpowers/plans/2026-09-03-phase2-bridge.md``; P3-2 deleted the
+``implementation_plans/superpowers/plans/2026-09-03-phase2-bridge.md``; P3-2 deleted the
 ``-tagged_terms`` flag that gated it.)
 
 Spec: ``implementation_plans/tagged-tuple-term-representation.md`` (design
@@ -154,7 +154,7 @@ __all__ = [
 # Scryer, so a ``.pl`` file carrying tuple-data stays portable.
 TUPLE_TAG = "()"
 
-# THE CHARS CARRIER (spec docs/superpowers/specs/2026-09-18-atoms-as-str-design.md,
+# THE CHARS CARRIER (spec implementation_plans/superpowers/specs/2026-09-18-atoms-as-str-design.md,
 # RULED Q2 2026-09-18).  Under ``-double_quotes(chars)`` a string IS the list
 # of its one-char atoms; ``('$chars', "abc")`` is that list's COMPACT form --
 # a reserved-tag cell, arity 1, the Python str as the sole payload, EQUAL to
@@ -1312,7 +1312,7 @@ def cell_arity(c: tuple) -> int:
 
 # ── Selective ground-cell interning (Task 4) ──────────────────────────────
 #
-# Spec: ``docs/superpowers/plans/2026-09-03-phase2-bridge.md`` Task 4.
+# Spec: ``implementation_plans/superpowers/plans/2026-09-03-phase2-bridge.md`` Task 4.
 #
 # ``intern_cell`` recursively collapses structurally-equal, FULLY-GROUND
 # cells to the same tuple object via a module-level table -- the tabling

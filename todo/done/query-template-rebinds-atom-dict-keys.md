@@ -159,5 +159,5 @@ Suspects: `_compile_as_query`, `_templatize_query_goal`, the query trampoline.
 
 ## Pointers
 - `implementation_plans/dict-atom-keys-vs-predicates.md` (Phenomenon A + B, design options)
-- `docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md` (the convention that routes
+- `implementation_plans/superpowers/specs/2026-07-29-dot-attribute-access-design.md` (the convention that routes
   around this by keeping keys private to the type module)

@@ -1,6 +1,6 @@
 # fix(A09-F014): char_type/2 char-bound Python fallback is ASCII-table-only
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F014
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F014
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F014_char_type_python_fallback_non_ascii (xfail — flip to pass), ::test_F014_regression_char_type_c_path_non_ascii
 
 ## Bug

@@ -1,6 +1,6 @@
 """``atom`` — an atom at the Python boundary, ADVISORY form.
 
-Spec: docs/superpowers/specs/2026-09-21-python-boundary-atom-and-string-design.md
+Spec: implementation_plans/superpowers/specs/2026-09-21-python-boundary-atom-and-string-design.md
 
 Step 1 of the implementation: the class alone.  Nothing converts to or from it
 yet, so this file pins the class's own behaviour, the DISCRIMINATOR that later

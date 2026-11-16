@@ -49,7 +49,7 @@ copy-then-move (two long-lived downstream servers had the old ones mapped). No C
 
 ## The P2 plan
 
-`docs/superpowers/plans/2026-09-18-predmeta-p2-terms-as-tuples.md` on the P2 branch: the representation stated
+`implementation_plans/superpowers/plans/2026-09-18-predmeta-p2-terms-as-tuples.md` on the P2 branch: the representation stated
 once, the THREE REWRITES every site must be one of (constructor / decomposer / type-test), nine tasks in dependency
 order with the sweep ordered by measured site counts, gates per §7 (clean-base A/B, twin parity, exporter goldens,
 `tests/iso`, `tests/rewrite`, `tests/iso_l3`, corpus ANSWER-SET axis before promotion, class count and construct/

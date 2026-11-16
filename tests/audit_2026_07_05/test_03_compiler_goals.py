@@ -1,6 +1,6 @@
 """A03 compiler goals, control & specialization — adversarial audit tests (2026-07-05).
 
-Findings ledger: docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md
+Findings ledger: implementation_plans/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md
 
 Suspected-bug tests assert the *correct* behaviour and are marked
 ``@pytest.mark.xfail(strict=False)`` with the finding ID; confirmed-correct

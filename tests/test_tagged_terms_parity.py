@@ -1,6 +1,6 @@
 """Phase 2 bridge, Task 3 -- the parity corpus.
 
-Spec: ``docs/superpowers/plans/2026-09-03-phase2-bridge.md`` Task 3; design:
+Spec: ``implementation_plans/superpowers/plans/2026-09-03-phase2-bridge.md`` Task 3; design:
 ``implementation_plans/tagged-tuple-term-representation.md``.
 
 Task 2 (``tests/test_tagged_terms.py``) proved the cell representation's

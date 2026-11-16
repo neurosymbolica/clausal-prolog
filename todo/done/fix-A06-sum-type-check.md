@@ -1,6 +1,6 @@
 # fix(A06-F014): sum_/scalar_product silently accept non-integer elements
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F014
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F014
 **Tests:** tests/audit_2026_07_05/test_06_clpfd.py::TestTypeHoles::test_sum_over_strings_rejected (xfail — flip to pass)
 
 ## Bug

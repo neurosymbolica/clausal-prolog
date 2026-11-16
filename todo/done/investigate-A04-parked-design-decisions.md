@@ -7,7 +7,7 @@
 - **retract on a tabled predicate minting table entries**: no longer reproduces (probed 2026-10-20: a failed `retract(tz(99))` leaves `table_store` empty).
 - **Dead `make_tabled_wrapper_simple`** and **`_naf_tabled` full scan**: split out to todo/tabling-leftovers-simple-wrapper-dead-code-and-naf-full-scan-2026-07-05.md. (`continuation_search.py` was deleted 2026-10-06.)
 
-**Source:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/design-questions.md` (A04-D001, A04-D002) + minor notes from the A04 findings ledger.
+**Source:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/design-questions.md` (A04-D001, A04-D002) + minor notes from the A04 findings ledger.
 Parked per user preference (A01 precedent): decide unhurried, not mid-audit.
 
 ## D001 — freeze/2 frozen-goal nondeterminism (A04-F011)

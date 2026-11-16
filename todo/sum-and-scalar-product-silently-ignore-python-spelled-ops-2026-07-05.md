@@ -21,7 +21,7 @@ The original audit text follows.
 > D002 is answered. See
 > `todo/done/investigate-A06-parked-design-decisions.md` §2.
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F011
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F011
 **Tests:** tests/audit_2026_07_05/test_06_clpfd.py::TestSumOpStrings::test_python_style_ops_post (xfail — flip to pass)
 **Gated by:** A06-D002 (op vocabulary) — recommendation: accept both, raise on unknown.
 

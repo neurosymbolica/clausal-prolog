@@ -19,7 +19,7 @@ starts fresh. Nothing is pushed to GitLab (operator: not soon; barrier todo list
    migration — 0 float constants, 0 united, 2 inline negative fixtures; that domain's runner green.
 2. G3 load blockers from a downstream user (987772f5) and a downstream user's `<-` lambda lowering (c070d33f)
    landed on the operator's word in THIS session (a relayed approval was refused; the word came here).
-3. **The atoms-as-str flip: SPEC ONLY, nothing built.** `docs/superpowers/specs/2026-09-18-atoms-as-str-design.md`
+3. **The atoms-as-str flip: SPEC ONLY, nothing built.** `implementation_plans/superpowers/specs/2026-09-18-atoms-as-str-design.md`
    + `tools/atoms_flip/STR_SITES.tsv` (147 str type tests, disposition column blank). RULED: proceed;
    `$chars` carrier; carrier FIRST under a LOUD interim rule (bare str as text raises), then the atom
    flip (`('x',)` refused after). Open §8: Q1 (str at the seam = atom), Q3, Q4, Q5 — recommendations given.

@@ -1,7 +1,7 @@
 """THE FLIP — the acceptance rows of the atoms-as-cells / strings design.
 
 One test per row of §13 of
-``docs/superpowers/specs/2026-09-06-atoms-as-cells-strings-design.md``:
+``implementation_plans/superpowers/specs/2026-09-06-atoms-as-cells-strings-design.md``:
 an atom is the arity-0 cell ``("bar",)``, a plain ``str`` is a STRING (the
 list of its char atoms), and ``"..."`` means one or the other according to
 the module's ``-double_quotes`` mode.

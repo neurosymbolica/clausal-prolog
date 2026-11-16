@@ -1,6 +1,6 @@
 """Goal-position ``--``: if/elif/while tests, for iterables and ``not`` run
 the goal and export its variables as plain locals (spec:
-docs/superpowers/specs/2026-09-08-goal-position-seam-design.md)."""
+implementation_plans/superpowers/specs/2026-09-08-goal-position-seam-design.md)."""
 import os
 import tempfile
 

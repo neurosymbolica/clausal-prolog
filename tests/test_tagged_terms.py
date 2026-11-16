@@ -1,6 +1,6 @@
 """Cells as the compiled representation of compound data.
 
-Spec: ``docs/superpowers/plans/2026-09-03-phase2-bridge.md`` (the bridge
+Spec: ``implementation_plans/superpowers/plans/2026-09-03-phase2-bridge.md`` (the bridge
 that introduced cells behind the ``-tagged_terms`` flag) and
 ``.superpowers/sdd/p32-cell-default-flip/`` (P3-2, which DELETED that flag
 and made cells unconditional); design:

@@ -4,7 +4,7 @@
 
 Per the standing user preference, these were parked rather than asked
 interactively. Full option analyses in
-`docs/superpowers/audits/2026-07-05-fable-partition/10-rewriting-import/design-questions.md`.
+`implementation_plans/superpowers/audits/2026-07-05-fable-partition/10-rewriting-import/design-questions.md`.
 
 - **A10-D001 — are logic-var-shaped names reserved in embedded Python?**
   Recommendation: no — skip Store/Del in `EmbedTransformer.visit_Name`

@@ -69,7 +69,7 @@ deleted, not moved to `done/`; say so in the commit message.
   or none; do not normalise them in passing.
 - The 2026-07-05 audit's index (`done/audit-2026-07-05-index.md`) says its own
   cluster lists and per-subsystem status columns are stale, and the Status
-  column of `../docs/superpowers/audits/2026-07-05-fable-partition/DESIGN-DECISIONS.md`
+  column of `../implementation_plans/superpowers/audits/2026-07-05-fable-partition/DESIGN-DECISIONS.md`
   still reads "open" for decisions settled since. The fix commits and the
   status lines of the `done/investigate-A0N-parked-design-decisions.md` files
   (triaged 2026-10-20) are the record of what was decided.

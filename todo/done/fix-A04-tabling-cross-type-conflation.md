@@ -10,7 +10,7 @@ residual, tied to A01-D001; not exercised by any fixture.
 
 # fix(A04-F006): tabling conflates 1/True/1.0/Decimal(1) in variant keys and answer dedup
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F006
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F006
 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::TestF006CrossTypeConflation` (1 xfail — flip to pass; 2 guards)
 **Design:** A04-D003 → cite A02-D002 / A01-D001 (parked) — do NOT decide unification semantics here
 

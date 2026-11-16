@@ -8,7 +8,7 @@
 
 Parked per standing user preference (design questions go to todos, not
 interactive prompts). Full statements + options:
-`docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/design-questions.md`.
+`implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/design-questions.md`.
 
 | ID | One-liner | Gates |
 |----|-----------|-------|

@@ -106,7 +106,7 @@ today). Ruled: **write the literal tuples now** — ``("thing", K, V)`` solved
 with ``module=`` explicit, tables of names, handles passed as names.
 
 This is a KNOWING, DATED EXCEPTION to the 2026-09-21 spec's "no term space
-in hand-written source" (docs/superpowers/specs/2026-09-21-python-boundary-
+in hand-written source" (implementation_plans/superpowers/specs/2026-09-21-python-boundary-
 atom-and-string-design.md), taken because: the sites' bodies already run
 the all-solve convention; no engine change is needed; the seam form is
 parked (todo/seam-handle-form-for-hold-and-call-sites-parked-2026-09-22.md).

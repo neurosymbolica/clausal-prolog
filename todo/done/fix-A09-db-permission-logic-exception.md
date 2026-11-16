@@ -1,6 +1,6 @@
 # fix(A09-F006): locked-predicate assertz/retract RuntimeError is swallowed → silent failure
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F006
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F006
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F006_assertz_locked_raises, ::test_F006_retract_locked_raises (xfail — flip to pass)
 **Gated by:** A09-D002 (error-signaling convention). Related engine bug: investigate-A09-runtimeerror-swallow.md.
 

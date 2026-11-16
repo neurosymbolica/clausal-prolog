@@ -1,6 +1,6 @@
 # fix(A06-F013): global_cardinality never propagates variable counts
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F013
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F013
 **Tests:** tests/audit_2026_07_05/test_06_clpfd.py::TestGlobalCardinality::test_var_count_bound_when_ground (xfail — flip to pass)
 **Related design Q:** A06-D003 (off-key values) — independent; this fix is wanted either way.
 

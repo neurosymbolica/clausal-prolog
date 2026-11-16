@@ -337,7 +337,7 @@ class atom(str):
 
     An atom at the PYTHON BOUNDARY: a ``str`` that is TAGGED as an atom.
 
-    Spec: ``docs/superpowers/specs/2026-09-21-python-boundary-atom-and-string-
+    Spec: ``implementation_plans/superpowers/specs/2026-09-21-python-boundary-atom-and-string-
     design.md``, ruled by the operator 2026-09-21, amended the same day to the
     ADVISORY form.
 

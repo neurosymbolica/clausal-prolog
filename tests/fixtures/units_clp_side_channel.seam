@@ -9,7 +9,7 @@
 # channel, the solvers see bare numbers, units are reattached on binding.
 # `#=` opens a comment on this surface, so the infix spellings are used;
 # they reach the same functions.
-# Spec: docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md
+# Spec: implementation_plans/superpowers/specs/2026-09-12-clp-units-side-channel-design.md
 
 # ── money ────────────────────────────────────────────────────────────────
 

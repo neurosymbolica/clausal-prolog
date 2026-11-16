@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-AUDIT = REPO / "docs/superpowers/audits/2026-07-05-fable-partition"
+AUDIT = REPO / "implementation_plans/superpowers/audits/2026-07-05-fable-partition"
 SCRIPT = REPO / "scripts/audit_2026_07_05/check_prompt_paths.py"
 
 
@@ -40,7 +40,7 @@ def _run_checker(*args):
 def test_path_checker_runs_clean_on_readme():
     # README references test_NN files that don't exist yet, so check the
     # checker on the spec instead (spec names only existing files/dirs).
-    spec = REPO / "docs/superpowers/specs/2026-07-05-fable-partition-audit-design.md"
+    spec = REPO / "implementation_plans/superpowers/specs/2026-07-05-fable-partition-audit-design.md"
     r = _run_checker(spec)
     assert r.returncode == 0, r.stdout + r.stderr
 

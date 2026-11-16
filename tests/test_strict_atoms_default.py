@@ -1,6 +1,6 @@
 """Tests for strict-atoms-by-default (staged binary flip).
 
-See docs/superpowers/specs/2026-07-24-strict-atoms-default-design.md.
+See implementation_plans/superpowers/specs/2026-07-24-strict-atoms-default-design.md.
 Atom names are prefixed ``sad_`` (strict-atoms-default) and unique per
 test so the process-wide predicate_builtins dict is not cross-polluted.
 """

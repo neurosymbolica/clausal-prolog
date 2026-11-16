@@ -1,6 +1,6 @@
 # investigate(A09-F007/D002): drive loop eats RuntimeError + subclasses (RecursionError) — for Opus
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F007 (+F006 root cause)
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F007 (+F006 root cause)
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F007_flatten_cyclic_not_silent (xfail), ::test_F007_regression_direct_generator_raises
 **Boundary:** runtime/_trampoline.c is A03/A04 territory — flagged for A12 seams too.
 

@@ -774,7 +774,7 @@ def test_declared_atom_constant_dict_key_still_works(tmp_path):
 #
 # A constant is spelled like an atom now and its value is reached with the
 # explicit ``++name`` escape.  See
-# docs/superpowers/plans/2026-09-11-retire-underscore-constant-spelling.md.
+# implementation_plans/superpowers/plans/2026-09-11-retire-underscore-constant-spelling.md.
 
 
 def test_lowercase_constant_name_is_accepted(tmp_path):

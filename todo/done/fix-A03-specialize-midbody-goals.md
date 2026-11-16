@@ -1,6 +1,6 @@
 # fix(A03-F007): specialization silently drops MI goals between MatchClause and the recursive call
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F007
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F007
 **Design:** A03-D003 (parked — recommendation: refuse loudly now, support later)
 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::TestF007SpecializationDropsMidBodyGoals` (1 xfail — flip to pass)
 

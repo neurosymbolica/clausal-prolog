@@ -1,6 +1,6 @@
 """The outbound term → Python conversions — one deep, one top-level.
 
-Spec: ``docs/superpowers/specs/2026-09-06-atoms-as-cells-strings-design.md``
+Spec: ``implementation_plans/superpowers/specs/2026-09-06-atoms-as-cells-strings-design.md``
 §9.1.  Before this module there were four independent term↔Python crossings.
 Two remain, and which one a boundary gets is a decided trade, not an
 accident:

@@ -187,7 +187,7 @@ defect that has no cause in C and which the source comment says is slower.
 
 # 2. ISO L3 front end — P1 DONE
 
-`docs/superpowers/specs/…` n/a; the plan is
+`implementation_plans/superpowers/specs/…` n/a; the plan is
 `implementation_plans/clausal-iso-to-transformed-ast-2026-09-14.md` (rev 4, operator's).
 
 **P1's exit criterion is met, through the REAL loader.** `PrologLoader.source_to_code` is replaced
@@ -223,7 +223,7 @@ arithmetic.
 
 # 3. Retire PredicateMeta — P0 COMPLETE, P1 designed but NOT started
 
-Spec: `docs/superpowers/specs/2026-09-14-retire-predicatemeta-design.md`.
+Spec: `implementation_plans/superpowers/specs/2026-09-14-retire-predicatemeta-design.md`.
 Census + findings: `tools/predmeta_census/` (`census.py`, `FINDINGS.md`).
 
 ## Why this exists

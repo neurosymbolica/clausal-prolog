@@ -427,7 +427,7 @@ class TestIsChars:
         treats ``str`` as a character sequence, so ``is_list/1`` is
         now polymorphic over ``list`` and ``str`` to match. The prior
         ``not _first(...)`` assertion has been inverted; see
-        ``docs/superpowers/audits/2026-05-25-string-implementation``
+        ``implementation_plans/superpowers/audits/2026-05-25-string-implementation``
         ledger entry F080 for the full rationale.
         """
         # nv

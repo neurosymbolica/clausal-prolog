@@ -1,6 +1,6 @@
 # fix(A02-F002): list-structure dispatch drops non-list/str/Var callers
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/02-compiler-heads/findings.md` A02-F002
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/02-compiler-heads/findings.md` A02-F002
 **Tests:** `tests/audit_2026_07_05/test_02_compiler_heads.py::TestF002ListDispatchFallthrough` (4 xfail — flip to pass)
 
 ## Bug

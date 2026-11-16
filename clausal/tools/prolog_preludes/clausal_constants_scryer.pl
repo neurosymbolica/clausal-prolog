@@ -28,7 +28,7 @@
 % the `iso` dialect needs no prelude at all, because the exporter fills the
 % module in itself.
 %
-% See docs/superpowers/specs/2026-09-13-exporter-option-3-design.md
+% See implementation_plans/superpowers/specs/2026-09-13-exporter-option-3-design.md
 
 :- module(cc_scryer, [module_constant/3, module_constant_units/4]).
 :- dynamic(module_constant_units/4).

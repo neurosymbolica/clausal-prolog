@@ -1,6 +1,6 @@
 # fix(A09-F017): atom_chars/atom_codes/number_chars/number_codes reject str/bytes sequence args
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F017
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F017
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F017_atom_chars_str_arg, ::test_F017_atom_codes_bytes_arg (xfail — flip to pass), ::test_F017_regression_list_forms_work
 
 ## Bug

@@ -1,7 +1,7 @@
 # P3: terms.py's term_str locale-rendering branch still hand-rolls the atom check
 
 Found by `tests/test_funnel_lint.py` (Phase 1 funnel guard, task 4 of
-`docs/superpowers/plans/2026-09-03-phase1-funnel.md`) while inventorying
+`implementation_plans/superpowers/plans/2026-09-03-phase1-funnel.md`) while inventorying
 every `isinstance(X, PredicateMeta) and not X._fields` site in the runtime
 tree to build the lint's allowlist.
 

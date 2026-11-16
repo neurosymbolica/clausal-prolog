@@ -1,6 +1,6 @@
 # fix(A06-F017): cross_cutting_issues.md issue 1 stale for _arithmetic_core.c
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F017
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F017
 **Tests:** tests/audit_2026_07_05/test_06_clpfd.py::TestArithmeticCore::test_trail_type_checked (green guard)
 
 ## Drift

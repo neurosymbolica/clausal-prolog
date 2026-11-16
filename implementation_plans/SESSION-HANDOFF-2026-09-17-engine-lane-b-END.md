@@ -31,7 +31,7 @@ Four commits on canonical this session, all docs/tools, no engine source, no `.s
    8→P4, 2 stay Q. GAP found: `arities_for` and `signature_for` ignore `_adopted` while `row()` and
    `functors()` consult it (clone todo `arities-for-and-signature-for-ignore-adopted-rows`).
 4. this commit: the rdiv/decimal arithmetic DESIGN (NEXT 4), nothing built —
-   `docs/superpowers/specs/2026-09-17-rdiv-decimal-arithmetic-design.md`. Recommends the ordering
+   `implementation_plans/superpowers/specs/2026-09-17-rdiv-decimal-arithmetic-design.md`. Recommends the ordering
    GUARD first (no port dependency), then option B: numbers stay Python number objects, the two
    cells are transfer forms + source spellings so a cell never survives as a compound. The
    CLP(Q)-port collision the section-4 answer feared is specific to the rejected option A. Five

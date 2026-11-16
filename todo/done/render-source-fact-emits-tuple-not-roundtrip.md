@@ -56,7 +56,7 @@ type(R.reify_source(
 ```
 
 ## Expected
-Per the renderer design (`docs/superpowers/specs/2026-07-20-reified-term-renderer-design.md`,
+Per the renderer design (`implementation_plans/superpowers/specs/2026-07-20-reified-term-renderer-design.md`,
 Clause row): a fact (`goals == []`) → **head expr as an `Expr` statement** (bare
 head), NOT a tuple. `render_source(fact)` should yield `head` (the splice/harness
 adds the fact's trailing comma), and `reify_source(render_source(fact)) == fact`.

@@ -487,7 +487,7 @@ class TestVisitAttributeValidation:
 
     ``_x.foo`` on a logic variable is no longer an error — it is dict
     attribute-access sugar for ``_x[foo]`` (see
-    docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md).  The
+    implementation_plans/superpowers/specs/2026-07-29-dot-attribute-access-design.md).  The
     *method-call* form ``_x.foo(_x)`` is still rejected, and a logic variable
     used as the attribute of a module-qualified name still is too.
     """

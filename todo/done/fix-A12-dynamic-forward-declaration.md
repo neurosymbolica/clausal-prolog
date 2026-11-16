@@ -1,6 +1,6 @@
 # fix(A12-F005): `-dynamic(p/N)` with zero clauses doesn't mint the term class — declare-then-assertz broken
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/12-seams/findings.md` A12-F005
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/12-seams/findings.md` A12-F005
 **Tests:** `tests/audit_2026_07_05/test_12_seams.py::TestF005DynamicForwardDeclaration` (1 xfail — flip to pass; seeded control already passes)
 
 ## Bug

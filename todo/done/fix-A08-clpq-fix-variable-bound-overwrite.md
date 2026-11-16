@@ -1,6 +1,6 @@
 # fix(A08): clpq `Tableau.fix_variable` overwrites bounds instead of intersecting
 
-**Finding:** A08-F001 (correctness, critical) — `docs/superpowers/audits/2026-07-05-fable-partition/08-clpqr-z3/findings.md`
+**Finding:** A08-F001 (correctness, critical) — `implementation_plans/superpowers/audits/2026-07-05-fable-partition/08-clpqr-z3/findings.md`
 **Test:** `tests/audit_2026_07_05/test_08_clpqr_z3.py::TestClpqSoundness::test_qle_bound_then_unify_outside_fails`
 
 ## Bug

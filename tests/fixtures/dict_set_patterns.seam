@@ -240,7 +240,7 @@ test("atom key is not the string key") <- (
 )  # nv
 
 # ── Dot attribute-access sugar: P.key ≡ P[key] ──
-# See docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+# See implementation_plans/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
 # `.` on a logic variable is pure source sugar for the strict subscript read.
 # There is no `./2` term: nothing a program can inspect, unify, or unpack.
 

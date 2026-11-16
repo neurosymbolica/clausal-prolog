@@ -3,7 +3,7 @@
 **Status: open, needs a ruling.** Design decision A05-D002 of the
 2026-07-05 audit, split out of
 todo/done/investigate-A05-parked-design-decisions.md on 2026-10-20. Full
-statement: docs/superpowers/audits/2026-07-05-fable-partition/05-constraints-core/design-questions.md.
+statement: implementation_plans/superpowers/audits/2026-07-05-fable-partition/05-constraints-core/design-questions.md.
 
 ## What
 

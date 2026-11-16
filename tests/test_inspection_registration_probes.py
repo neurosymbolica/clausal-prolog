@@ -206,7 +206,7 @@ class TestUnivIsRegisteredAsUnpackAndCellParity:
 
     UPDATED 2026-09-09. This probe used to assert that ISO ``=..`` had no
     registered spelling of its own. It does now — spec
-    docs/superpowers/specs/2026-09-09-standard-order-of-terms-design.md §6
+    implementation_plans/superpowers/specs/2026-09-09-standard-order-of-terms-design.md §6
     registers the canonical quoted form so corpus code has an ISO spelling to
     migrate to. The assertion is replaced rather than deleted, and made
     STRONGER: the two names must resolve to the SAME function object, because

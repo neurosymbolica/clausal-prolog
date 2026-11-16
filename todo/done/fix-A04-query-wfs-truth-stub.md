@@ -4,7 +4,7 @@
 
 # fix(A04-F004): query_wfs hardcodes _truth=True — never reads table conditions
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F004
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F004
 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::TestF004QueryWfsStub` (xfail — flip to pass)
 
 ## Bug

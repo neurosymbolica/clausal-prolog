@@ -43,7 +43,7 @@ The operator ruled interactively through the session. These are settled; do not 
   a property of the IMPORT CLOSURE, not a file.
 
 Design record (published page): https://claude.ai/code/artifact/deb7779b-2aa8-467c-8d92-3c72284ef111
-Full spec: `docs/superpowers/specs/2026-09-14-retire-predicatemeta-section4-answer.md`
+Full spec: `implementation_plans/superpowers/specs/2026-09-14-retire-predicatemeta-section4-answer.md`
 
 ---
 
@@ -192,7 +192,7 @@ result does and does not cover.
 ## READ THESE FOUR; they agree with each other
 
     implementation_plans/SESSION-HANDOFF-2026-09-15-engine-lane-END.md   <- you are here
-    docs/superpowers/specs/2026-09-14-retire-predicatemeta-section4-answer.md
+    implementation_plans/superpowers/specs/2026-09-14-retire-predicatemeta-section4-answer.md
                                         the reasoning, every measurement, every ruling
     docs/design-records/terms-as-tuples.html
                                         the readable record; its README says the FILE is

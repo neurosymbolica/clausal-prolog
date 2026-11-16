@@ -1,6 +1,6 @@
 # fix(A06-F010): fd_ne(X, X) accepted at post time
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F010
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F010
 **Tests:** tests/audit_2026_07_05/test_06_clpfd.py::TestNeReflexivity::test_ne_same_var_fails_at_post (xfail — flip to pass)
 
 ## Bug

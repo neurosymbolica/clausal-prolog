@@ -1,6 +1,6 @@
 # fix(A09-F001): sort/2 & msort/2 do not deref elements — wrong order, broken dedup
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F001
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F001
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F001_msort_bound_var_element, ::test_F001_sort_bound_var_element (xfail — flip to pass)
 
 ## Bug

@@ -1,6 +1,6 @@
 # fix(A02-F005, doc-drift): dispatch docstrings say trampoline arg_offset is 2; callers pass 4
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/02-compiler-heads/findings.md` A02-F005
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/02-compiler-heads/findings.md` A02-F005
 
 Three docstrings in `clausal/logic/compiler/arg_index.py` describe the
 trampoline argument offset as **2** ("positions 0/1 are

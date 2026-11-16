@@ -18,7 +18,7 @@ exactly as before now that they route through it.  (Task 12 renamed that
 helper from ``predicate.is_atom``; the plain stem now means the TERM test,
 ``clausal.logic.atoms.is_atom``.)
 
-Phase 2 bridge Task 1 (see ``docs/superpowers/plans/2026-09-03-phase2-bridge.md``)
+Phase 2 bridge Task 1 (see ``implementation_plans/superpowers/plans/2026-09-03-phase2-bridge.md``)
 adds two more sections at the bottom of this file:
 
   - ``TestPlainTupleAccessorRegression`` — pins TODAY's behavior of

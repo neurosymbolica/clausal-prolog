@@ -34,7 +34,7 @@
 % `expansion` capability; the `iso` dialect needs no prelude, because the
 % exporter fills the module in itself.
 %
-% See docs/superpowers/specs/2026-09-13-exporter-option-3-design.md
+% See implementation_plans/superpowers/specs/2026-09-13-exporter-option-3-design.md
 
 user:term_expansion((:- constant_number_units(N, Num, U)),
                     [ constant_number_units(N, Num, U),

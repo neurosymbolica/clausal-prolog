@@ -1,6 +1,6 @@
 # fix(A06-F006): rational subexpression posts as CLP(Z), later binding raises TypeError
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F006
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F006
 **Tests:** tests/audit_2026_07_05/test_06_clpfd.py::TestRationalSubexpression::test_rational_subexpr_no_crash (xfail — flip to pass)
 
 ## Bug

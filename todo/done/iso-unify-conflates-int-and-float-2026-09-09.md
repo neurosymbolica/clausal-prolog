@@ -70,7 +70,7 @@ touching anything else. `'='` and `'is'` have no such freedom.
 ## Which one matters
 
 `'is'`, by a wide margin. Spec §2 of
-`docs/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md`
+`implementation_plans/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md`
 records that the ISO-`is/2` role is played today by `==` at **826 corpus goal
 positions**, against a handful for `'='`. Migration puts those sites on
 `'is'`, so `'is'` is the spelling that will actually meet a float where an

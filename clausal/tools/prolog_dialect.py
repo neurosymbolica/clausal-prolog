@@ -38,7 +38,7 @@ class Dialect:
     #: directive for a term_expansion prelude to expand on load. Verified
     #: 2026-09-13: Scryer and Trealla both have prolog_load_context/2, both
     #: report the real module inside `:- module(m, ...)`, and a hook fires and
-    #: sees it. See docs/superpowers/specs/2026-09-13-exporter-option-3-design.md
+    #: sees it. See implementation_plans/superpowers/specs/2026-09-13-exporter-option-3-design.md
     constants: str = "facts"
     #: For an `expansion` dialect: (load_directive, prelude_module) naming the
     #: term_expansion prelude the emitted file must pull in. None where no

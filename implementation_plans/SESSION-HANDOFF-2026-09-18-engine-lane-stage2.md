@@ -7,7 +7,7 @@ Follows `SESSION-HANDOFF-2026-09-18-engine-lane-b-END.md` (stage 1, frozen at `7
 main. Nothing pushed. Landing order is unchanged: stage 1 lands first (after a downstream user's first G3 on
 `73c86686`), stage 2 is a SEPARATE sha and a harness RE-BASELINE.
 
-Spec: `docs/superpowers/specs/2026-09-18-atoms-as-str-design.md`. Plan: `docs/superpowers/plans/2026-09-18-atoms-as-str-stage2.md`
+Spec: `implementation_plans/superpowers/specs/2026-09-18-atoms-as-str-design.md`. Plan: `implementation_plans/superpowers/plans/2026-09-18-atoms-as-str-stage2.md`
 (9 tasks) + the pin brief `STAGE2-PIN-BRIEF.md` beside it.
 
 ## The rule after stage 2 (the whole of what a reader of a term must know)

@@ -12,7 +12,7 @@ SWAPPED. `==` is carrying ISO's `is/2`; `is` is carrying ISO's `=`.
 
 ## Why the canonical form makes it acute
 
-`docs/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md` §3.1
+`implementation_plans/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md` §3.1
 registers `'is'(R, E)` as ISO `is/2`. Once that lands, ONE identifier means two
 opposite things in the same file depending only on spelling:
 
@@ -45,7 +45,7 @@ and on infix `is` is a much smaller and better-understood set.
 
 ## Related
 
-- `docs/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md`
+- `implementation_plans/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md`
 - `clausal/tools/eq_analysis/instrument.py`, and a downstream user's static
   analyser + merge on trunk (`tools/eq_analysis/`)
 - `clausal/pythonic_ast/nodes.py::ArithEq` (what `==` compiles to),

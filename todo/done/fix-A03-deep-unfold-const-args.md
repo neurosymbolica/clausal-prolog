@@ -1,6 +1,6 @@
 # fix(A03-F008): deep unfolding inlines single-clause functors without unifying constant head args
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F008
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F008
 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::TestF008DeepUnfoldConstantCheck` (1 xfail — flip to pass)
 
 ## Bug

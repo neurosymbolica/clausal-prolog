@@ -14,7 +14,7 @@ passed, 0 failures.
 ---
 
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F009
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F009
 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::TestF009CpdExtensionChaining` (1 xfail — flip to pass)
 
 ## Bug

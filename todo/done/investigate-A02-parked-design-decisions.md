@@ -5,7 +5,7 @@
 Parked per user preference (2026-07-05: "park it in a todo, I'll get to
 it" — precedent `investigate-A01-parked-design-decisions.md`). Recorded as
 **A02-D002** in
-`docs/superpowers/audits/2026-07-05-fable-partition/02-compiler-heads/design-questions.md`.
+`implementation_plans/superpowers/audits/2026-07-05-fable-partition/02-compiler-heads/design-questions.md`.
 
 ## A02-D002 — should Decimal/Fraction/complex callers key into int/float index buckets?
 

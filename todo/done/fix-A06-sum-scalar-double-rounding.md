@@ -1,6 +1,6 @@
 # fix(A06-F003): C sum/scalar propagate rounds in double — over-prunes near 2^53
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F003
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F003
 **Tests:** tests/audit_2026_07_05/test_06_clpfd.py::TestDoublePrecisionRounding::test_sum_near_2_53 (xfail — flip to pass)
 
 ## Bug

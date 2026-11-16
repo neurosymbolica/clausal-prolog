@@ -1,6 +1,6 @@
 # fix(A09-F008): retract/1 undoes the head-unification bindings
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F008
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F008
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F008_retract_binds_pattern (xfail — flip to pass)
 **Gated by:** A09-D003 — recommendation: ISO binding semantics.
 

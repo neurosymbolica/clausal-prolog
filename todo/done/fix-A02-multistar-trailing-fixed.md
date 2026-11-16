@@ -1,6 +1,6 @@
 # fix(A02-F004): multi-star head — trailing fixed elements after the last star unify at index 0
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/02-compiler-heads/findings.md` A02-F004
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/02-compiler-heads/findings.md` A02-F004
 **Tests:** `tests/audit_2026_07_05/test_02_compiler_heads.py::TestF004MultiStarTrailingFixed` (4 xfail — flip to pass)
 
 ## Bug

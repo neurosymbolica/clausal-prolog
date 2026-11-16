@@ -1,6 +1,6 @@
 """Constants resolve lexically — declared here, imported here, or owner-named.
 
-See docs/superpowers/specs/2026-09-12-constant-scope-design.md.
+See implementation_plans/superpowers/specs/2026-09-12-constant-scope-design.md.
 
 The mechanism is COMPILE-TIME MODULE INSERTION. A builtin never receives the
 calling module, so `constant_number_units/3` answered for every loaded module

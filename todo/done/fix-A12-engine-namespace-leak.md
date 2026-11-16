@@ -1,6 +1,6 @@
 # fix(A12-F004): engine helpers leak into .clausal module namespaces and break same-named user predicates
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/12-seams/findings.md` A12-F004
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/12-seams/findings.md` A12-F004
 **Tests:** `tests/audit_2026_07_05/test_12_seams.py::TestF004EngineNamespaceLeak` (3 xfail — flip to pass; leak-set pin + `solve/2` control to update)
 **Design:** A12-D002 (parked) — sanitize vs guard vs document
 

@@ -408,7 +408,7 @@ class TestDictSetFixture:
 class TestDotAttributeAccessLoad:
     """``P.key`` is sugar for ``P[key]`` — same resolution, same load errors.
 
-    See docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+    See implementation_plans/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
     """
 
     def _load_src(self, tmp_path, src, name):
@@ -457,7 +457,7 @@ class TestDictReadOnceLowering:
     Repeated ``P.k`` / ``P[k]`` in one scope share one read; the read
     re-executes on redo; and it is never lifted out of a disjunction arm, a
     negation, or an if-then-else branch.  See
-    docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+    implementation_plans/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
     """
 
     def _load_counting(self, tmp_path, monkeypatch, src, name):

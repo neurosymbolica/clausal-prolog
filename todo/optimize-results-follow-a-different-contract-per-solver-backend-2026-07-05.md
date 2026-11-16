@@ -3,7 +3,7 @@
 **Status: open, needs a ruling.** Design decision A08-D005 of the
 2026-07-05 audit, split out of
 todo/done/investigate-A08-parked-design-decisions.md on 2026-10-20. Full
-statement: docs/superpowers/audits/2026-07-05-fable-partition/08-clpqr-z3/design-questions.md
+statement: implementation_plans/superpowers/audits/2026-07-05-fable-partition/08-clpqr-z3/design-questions.md
 (A08-D005); finding A08-F018 in the same folder's findings.md.
 
 ## What

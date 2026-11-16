@@ -1,6 +1,6 @@
 # fix(A02-F003): unguarded accept-all wildcard for unhandled head-literal types
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/02-compiler-heads/findings.md` A02-F003
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/02-compiler-heads/findings.md` A02-F003
 **Tests:** `tests/audit_2026_07_05/test_02_compiler_heads.py::TestF003ExoticHeadWildcard` (5 xfail — flip to pass)
 
 ## Bug

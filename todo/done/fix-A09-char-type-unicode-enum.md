@@ -1,6 +1,6 @@
 # fix(A09-F013): char_type/2 digit/space/punct enumeration is ASCII-only while test-mode is Unicode
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F013
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F013
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F013_char_type_{digit,space,punct}_consistency (xfail — flip to pass), ::test_F013_regression_alpha_enum_unicode
 
 ## Bug

@@ -55,7 +55,7 @@ mirroring what `_normalize_dataclass_fact` does for facts. The `MatchClass`
 branches in `head_match.py` therefore only ever see ground (input-mode) callers;
 output-mode binding is handled by `Unify` in the body, exactly as for facts.
 
-Implemented: `docs/superpowers/plans/2026-06-23-structural-head-literal-binding.md`
+Implemented: `implementation_plans/superpowers/plans/2026-06-23-structural-head-literal-binding.md`
 (commits b37ea1c0..); WARNING comments removed from `head_match.py`.
 
 **Caveat:** undeclared bare-functor construction (`point(1,2)` with no

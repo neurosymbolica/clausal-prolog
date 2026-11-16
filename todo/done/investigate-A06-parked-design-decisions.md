@@ -11,7 +11,7 @@
 asked interactively). These are policy calls that shape fix todos; do not
 implement the affected fixes in a direction-sensitive way before they are
 answered. Full context:
-`docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/design-questions.md`.
+`implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/design-questions.md`.
 
 ## 1. A06-D001 — label/1 on unconstrained vars (gates part of the label surface)
 

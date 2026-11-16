@@ -78,7 +78,7 @@ class TestConstructionPrecisionCheck:
         # A computed currency result (dims passed as a dict) must NOT be checked.
         # 2026-09-12: division is EXACT — a non-terminating quotient is the
         # rational Fraction(10, 3), as the CLP(Q) path yields it (spec
-        # docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md).
+        # implementation_plans/superpowers/specs/2026-09-12-clp-units-side-channel-design.md).
         from fractions import Fraction
         r = Quantity(Decimal("10.00"), euro) / 3      # a third of ten euro, built via dict dims
         assert r.value == Fraction(10, 3)                       # sub-scale, exact

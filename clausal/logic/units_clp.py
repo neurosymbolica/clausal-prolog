@@ -17,7 +17,7 @@ variables. This module sits between the two:
                      ``units`` hook in ``units_constraint`` does the other
                      direction.
 
-Spec: docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md.
+Spec: implementation_plans/superpowers/specs/2026-09-12-clp-units-side-channel-design.md.
 Written with no clpfd import at module level so a second solver front end
 (CLP(Z3)'s ``_z3_arith_binary``) can call ``strip_for_solver`` unchanged.
 """

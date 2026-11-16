@@ -1469,7 +1469,7 @@ def test_a_guard_followed_by_BARE_arithmetic_raises(tmp_path):
     was protecting now fails LOUDLY instead of silently summing zero."""
     # 2026-09-12: a comparison goes through the units side channel, which
     # throws the ISO 13211 term error(system_error(units_mismatch), Ctx)
-    # (spec docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md)
+    # (spec implementation_plans/superpowers/specs/2026-09-12-clp-units-side-channel-design.md)
     # — still LOUD, and now selectable by catch/3.
     from clausal.logic.atoms import mint
     from clausal.logic.exceptions import LogicException

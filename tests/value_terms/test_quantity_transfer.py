@@ -1,6 +1,6 @@
 """The TRANSFER form: for boundaries that cannot carry an object.
 
-Spec: docs/superpowers/specs/2026-09-16-quantity-transfer-form-design.md.
+Spec: implementation_plans/superpowers/specs/2026-09-16-quantity-transfer-form-design.md.
 The transfer layer sits BESIDE the seam registry. A same-interpreter seam
 passes the object (ruled 2026-09-15); only a subinterpreter, a process
 boundary or a bytecode cache needs the term. So ``to_term``/``from_term``

@@ -1,6 +1,6 @@
 # fix(A03-F004): catch/3 never matches declared-functor exception terms
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F004
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F004
 **Design:** A03-D001 (parked — recommendation (a) below does not need it resolved)
 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::TestF004CatchFunctorCatcher` (3 xfail — flip to pass)
 

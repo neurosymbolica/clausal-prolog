@@ -1,6 +1,6 @@
 """Lowering the ISO canonical form `'op'(A, B)` to Prolog `A op B`.
 
-Spec: docs/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md §3.2
+Spec: implementation_plans/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md §3.2
 
 The engine registers these names (landed d4f4c486) but the translator refused
 every one of them with "unsupported call target", so a site migrated to a

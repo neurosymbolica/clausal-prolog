@@ -1,6 +1,6 @@
 # fix(A12-F003): `-table` (and sibling directives) with a dangling target is a silent no-op
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/12-seams/findings.md` A12-F003
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/12-seams/findings.md` A12-F003
 **Tests:** `tests/audit_2026_07_05/test_12_seams.py::TestF003DirectiveTargetValidation` (2 xfail — flip to pass)
 
 ## Bug

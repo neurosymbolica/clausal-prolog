@@ -1,6 +1,6 @@
 # fix(A06-F004): "bignum-safe" scalar helpers use float division — over-prune
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F004
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F004
 **Tests:** tests/audit_2026_07_05/test_06_clpfd.py::TestDoublePrecisionRounding::test_scalar_bignum_exact_division (xfail — flip to pass)
 
 ## Bug

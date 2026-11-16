@@ -1,6 +1,6 @@
 """A08 CLP(Q/R), Z3 & ortools — adversarial audit tests (2026-07-05).
 
-Findings ledger: docs/superpowers/audits/2026-07-05-fable-partition/08-clpqr-z3/findings.md
+Findings ledger: implementation_plans/superpowers/audits/2026-07-05-fable-partition/08-clpqr-z3/findings.md
 
 Suspected-bug tests assert the *correct* behaviour and are marked
 ``@pytest.mark.xfail(strict=False)`` with the finding ID; confirmed-correct

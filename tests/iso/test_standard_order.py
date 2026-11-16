@@ -4,7 +4,7 @@ Oracle rows for the PREDICATES live in test_standard_order_scryer.py. These
 test `_standard_order_key` directly, so they need no Scryer binary and cannot
 be silently retired by its absence.
 
-Spec: docs/superpowers/specs/2026-09-09-standard-order-of-terms-design.md
+Spec: implementation_plans/superpowers/specs/2026-09-09-standard-order-of-terms-design.md
 """
 from decimal import Decimal
 from fractions import Fraction

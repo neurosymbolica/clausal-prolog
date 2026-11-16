@@ -105,7 +105,7 @@ def is_dict_attr_access(node, excluded=frozenset()) -> bool:
     very same function on its own parse and has no such bindings); the
     engine passes its clause-scope exclusions.
 
-    See docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+    See implementation_plans/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
     """
     if not isinstance(node, ast.Attribute):
         return False

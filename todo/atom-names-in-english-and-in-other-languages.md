@@ -18,7 +18,7 @@ the wrong repository, and it can only ever produce English.
 ## What already exists, and what it does not cover
 
 Part C built exactly the right mechanism for **citation** atoms
-(`docs/superpowers/specs/2026-07-18-translation-population-design.md`,
+(`implementation_plans/superpowers/specs/2026-07-18-translation-population-design.md`,
 `_tools/scaffold_translation.py`, `_tools/check_translation.py`):
 
 - `<domain>/translation/<lang>.clausal`, a nested subpackage per ISO language code.

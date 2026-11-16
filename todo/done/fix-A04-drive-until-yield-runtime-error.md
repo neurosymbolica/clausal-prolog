@@ -4,7 +4,7 @@
 
 # fix(A04-F009): C _drive_until_yield swallows every RuntimeError — user errors become silent failure
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F009
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F009
 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::TestF009RuntimeErrorSwallowed` (xfail — flip to pass) + `TestCToolkitGuards::test_solutions_propagates_runtime_error` (divergence control, stays green)
 
 ## Bug

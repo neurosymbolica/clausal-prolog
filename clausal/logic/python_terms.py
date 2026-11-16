@@ -57,7 +57,7 @@ seam converters, so a Decimal or a date inside a quantity needs no second
 entry. Unlike the seam, the transfer layer reads and writes compounds
 recursively -- it carries engine terms, where every compound is a str-headed
 tuple, so a registered head's arguments still convert instead of being left
-alone. Spec: docs/superpowers/specs/2026-09-16-quantity-transfer-form-design.md
+alone. Spec: implementation_plans/superpowers/specs/2026-09-16-quantity-transfer-form-design.md
 
 THE DOCUMENTED HAZARD: a tuple already in functor-first form
 ============================================================
@@ -263,7 +263,7 @@ register(tuple, TUPLE_TAG, _tuple_to_term, _tuple_from_term)
 # sequenced with the CLP(Q) C port), so a divided money value crossing a
 # seam as a term would silently stop computing.
 #
-# Spec: docs/superpowers/specs/2026-09-16-quantity-transfer-form-design.md
+# Spec: implementation_plans/superpowers/specs/2026-09-16-quantity-transfer-form-design.md
 #
 # ``TO_TRANSFER`` / ``FROM_TRANSFER`` themselves are defined above, just
 # before ``register`` -- see the comment there for why.

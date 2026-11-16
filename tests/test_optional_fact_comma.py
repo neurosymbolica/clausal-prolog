@@ -1,6 +1,6 @@
 """Comma-optional bodyless facts + undeclared-fact diagnostic.
 
-See docs/superpowers/specs/2026-07-20-optional-fact-comma-design.md
+See implementation_plans/superpowers/specs/2026-07-20-optional-fact-comma-design.md
 """
 import pytest
 

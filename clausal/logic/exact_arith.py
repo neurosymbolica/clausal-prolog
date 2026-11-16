@@ -6,7 +6,7 @@ operator nodes and the plain arithmetic cells both evaluate through, and the
 runtime evaluator (:func:`evaluate`, emitted as ``$eval``) for ``eval_/2``'s
 operand and for a term operand of the bare ``//``, ``%``, ``**``, ``-``.
 
-Design 2026-09-17 (``docs/superpowers/specs/2026-09-17-rdiv-decimal-arithmetic-design.md``,
+Design 2026-09-17 (``implementation_plans/superpowers/specs/2026-09-17-rdiv-decimal-arithmetic-design.md``,
 step 2) and the rulings of the same day:
 
 * numbers are Python number objects -- ``int``, ``float``, ``Fraction`` (exact

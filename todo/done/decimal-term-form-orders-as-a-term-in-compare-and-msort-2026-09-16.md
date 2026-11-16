@@ -43,7 +43,7 @@ terms.
 
 ## 2026-09-17 design session
 
-Design: `docs/superpowers/specs/2026-09-17-rdiv-decimal-arithmetic-design.md`. It recommends the
+Design: `implementation_plans/superpowers/specs/2026-09-17-rdiv-decimal-arithmetic-design.md`. It recommends the
 ordering GUARD first (numeric order key and an evaluator leaf for the two cells), then option B
 (numbers stay Python number objects; the cells are transfer forms and source spellings, so a cell
 never survives as a compound). Also measured then: the evaluator refused a Python Decimal leaf.

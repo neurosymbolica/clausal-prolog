@@ -1,6 +1,6 @@
 # fix(A09-F012): raw Python exceptions escape builtins (IndexError/TypeError/ValueError)
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F012
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F012
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F012_* (xfail — flip to pass), ::test_F012_regression_sort_by_incomparable_keys
 **Gated by:** A09-D002. Cross-refs: pairs half also in fix-A09-pairs-malformed-pairs.md.
 

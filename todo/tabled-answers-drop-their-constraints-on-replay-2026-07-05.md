@@ -9,7 +9,7 @@ tests and both D68 tests in tests/iso_l3/test_l3_tabled_complete_first.py
 `test_constrained_answers_pair_inside_a_table_once`) still XFAIL. The
 renamed-apart row prerequisite landed 2026-10-20 (see below).
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/12-seams/findings.md` A12-F001
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/12-seams/findings.md` A12-F001
 **Tests:** `tests/audit_2026_07_05/test_12_seams.py::TestF001TablingReplayDropsConstraints` (2 xfail — flip to pass)
 **Design:** A12-D001 (parked) — store-residue vs refuse-to-table vs document
 

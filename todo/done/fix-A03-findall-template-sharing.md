@@ -1,6 +1,6 @@
 # fix(A03-F006): findall/bagof/setof share free template variables with the caller
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F006
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F006
 **Design:** A03-D002 (parked — recommendation: ISO copy semantics)
 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::TestF005F006FindallFamily::test_findall_free_vars_are_fresh_per_solution` (xfail — flip to pass)
 

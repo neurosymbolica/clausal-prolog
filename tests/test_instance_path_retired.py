@@ -1,5 +1,5 @@
 """W4a: the PredicateMeta INSTANCE path is retired (spec
-docs/superpowers/specs/2026-09-22-w4a-instance-path-retirement-design.md).
+implementation_plans/superpowers/specs/2026-09-22-w4a-instance-path-retirement-design.md).
 A predicate class builds CELLS, and every door that built an instance is
 a loud refusal, so an out-of-tree minter fails rather than drifting."""
 import pytest

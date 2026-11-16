@@ -1,6 +1,6 @@
 """Units side channel around CLP: dimension analysis, shadows, reattachment.
 
-Spec: docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md
+Spec: implementation_plans/superpowers/specs/2026-09-12-clp-units-side-channel-design.md
 """
 from decimal import (Decimal, ROUND_HALF_UP, ROUND_HALF_EVEN, ROUND_HALF_DOWN,
                      ROUND_UP, ROUND_DOWN, ROUND_CEILING, ROUND_FLOOR)

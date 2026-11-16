@@ -3,7 +3,7 @@
 > reached with `++name`. The directive, the groundness gate, the type-preserving
 > freezing and `module_constant/3` are all unchanged. Read this file as the record
 > of how the mechanism was built, not as a description of the surface. See
-> `docs/superpowers/plans/2026-09-11-retire-underscore-constant-spelling.md`.
+> `implementation_plans/superpowers/plans/2026-09-11-retire-underscore-constant-spelling.md`.
 
 # Module-level constants: `_PI_` — declared, ground, folded at compile time
 
@@ -116,7 +116,7 @@ constant-shaped hidden variables — DCG `_dcg{N}_` (`term_rewriting.py:2370,241
 `_edcg_{acc}_in_`/`_out_`/`_edcg_{pass}_` (`term_rewriting.py:2500-2507`); the
 `edcg_counter.clausal` fixture hand-writes that minted convention. These mints lose the trailing
 underscore before the re-carve lands. Full task breakdown:
-`docs/superpowers/plans/2026-08-24-module-level-constants.md`.
+`implementation_plans/superpowers/plans/2026-08-24-module-level-constants.md`.
 
 Why a suffix, not the Prolog leading-underscore convention: (a) caseless scripts are *forced*
 into leading-underscore variables by `isupper()`, so a case-based exemption is blind exactly for
@@ -154,7 +154,7 @@ that programmers read some English.
 
 ## Deviations from this plan, as shipped
 
-The implementation (Tasks 1–8, `docs/superpowers/plans/2026-08-24-module-level-constants.md`)
+The implementation (Tasks 1–8, `implementation_plans/superpowers/plans/2026-08-24-module-level-constants.md`)
 matches this design in its lexical rule, folding mechanism, groundness gate, and default-on
 singleton lint. A handful of points came out differently from the text above, all narrowing
 rather than reversing a decision:

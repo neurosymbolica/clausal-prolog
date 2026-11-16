@@ -4,7 +4,7 @@ Engine assertions live in tests SEPARATE from oracle assertions, so a missing
 Scryer binary cannot retire engine coverage — 42 of 52 tests on the
 predecessor branch skipped together because the two were fused.
 
-Spec: docs/superpowers/specs/2026-09-09-standard-order-of-terms-design.md §6
+Spec: implementation_plans/superpowers/specs/2026-09-09-standard-order-of-terms-design.md §6
 """
 import pytest
 

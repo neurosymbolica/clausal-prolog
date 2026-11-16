@@ -4,7 +4,7 @@ Operator, 2026-09-13: there are two sides — ours, where we can do what we
 want, and the export side, where another Prolog has to understand the file. So
 the exporter takes a switch rather than one side of a trade-off.
 
-See docs/superpowers/specs/2026-09-13-exporter-option-3-design.md.
+See implementation_plans/superpowers/specs/2026-09-13-exporter-option-3-design.md.
 
     iso              facts      module filled in by the EXPORTER (no
                                 prolog_load_context/2 in ISO)

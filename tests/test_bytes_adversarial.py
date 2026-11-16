@@ -3,7 +3,7 @@
 Captures the edge cases probed during the post-implementation audit. Every
 behaviour here was verified correct against the current implementation; the
 file exists so these unhappy paths cannot silently regress. Mirrors the spirit
-of the strings-as-lists adversarial suite (docs/superpowers/audits/
+of the strings-as-lists adversarial suite (implementation_plans/superpowers/audits/
 2026-05-25-string-implementation), applied to the codes model.
 """
 from clausal.logic.atoms import mint

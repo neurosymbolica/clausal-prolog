@@ -1211,7 +1211,7 @@ _is_dict_attr_access = is_dict_attr_access
 # succeeds.  The deliberate consequence is that sharing does not cross an arm
 # boundary: a later occurrence outside the construct reads again.
 #
-# See docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+# See implementation_plans/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
 
 
 def _flatten_conjunction(goal):
@@ -3891,7 +3891,7 @@ class TermTransformer(NodeTransformer):
           does (including the strict-atoms declaration requirement).  Chains
           nest: ``P.a.b`` → ``P[a][b]``.  A logic-variable attribute is a
           *variable key*: ``P.KEY`` → ``P[KEY]``.
-          See docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+          See implementation_plans/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
         * **Non-variable base** (``mod.Pred``, ``currency.euro``): a qualified
           name, compiled to a ``LoadAttr`` simple_ast node.  Only dotted chains
           of non-variable names are supported; a logic variable anywhere in such

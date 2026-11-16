@@ -1,6 +1,6 @@
 # fix(A09-F020): _chars_core.c — no Trail_Check (cross-cutting #1) + empty-string OOB read
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F020
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F020
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F020_chars_core_non_trail, ::test_F020_chars_core_empty_string (xfail — flip to pass)
 **Cross-ref:** todo/cross_cutting_issues.md #1 — add _chars_core.c to its affected list (the file is missing from it; _lists_core.c has since been fixed and shows the pattern to copy).
 

@@ -1,6 +1,6 @@
 # Implementing the `atom` boundary — a scope, measured 2026-09-21
 
-Spec: `docs/superpowers/specs/2026-09-21-python-boundary-atom-and-string-design.md`.
+Spec: `implementation_plans/superpowers/specs/2026-09-21-python-boundary-atom-and-string-design.md`.
 Operator decisions folded in: the class is **`atom`, lower case** (a Python
 class, peer of `str`); `sorted()` mixing `atom` and `str` by text is accepted
 for now — standard order of terms belongs on the Clausal side, returned as a

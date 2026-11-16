@@ -728,7 +728,7 @@ criteria above, and let the measured result — not this document — pick the b
 **Engine (read-only, P3-3 worktree
 `/workspace/clausal-bug-fix/.claude/worktrees/p33-state-reloc`):**
 
-- `docs/superpowers/specs/2026-09-06-atoms-as-cells-strings-design.md` §5 (term model,
+- `implementation_plans/superpowers/specs/2026-09-06-atoms-as-cells-strings-design.md` §5 (term model,
   shapes, interning, `-hide` mangling, "efficient representations always"), §6.2
   (unification table), §6.3 (type checks).
 - `implementation_plans/tagged-tuple-term-representation.md` §1/§1b/§3c.

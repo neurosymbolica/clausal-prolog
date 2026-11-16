@@ -1,6 +1,6 @@
 # fix(A03-F002): destructive reuse corrupts containers behind nondet prefixes
 
-**Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F002
+**Finding:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F002
 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::TestF002DestructiveReuseNondetPrefix` (3 xfail — flip to pass)
 
 ## Bug

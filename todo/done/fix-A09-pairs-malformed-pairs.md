@@ -1,6 +1,6 @@
 # fix(A09-F018): pairs_* silently drop malformed pairs (+ IndexError on short ones)
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F018 (+ the pairs half of A09-F012)
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F018 (+ the pairs half of A09-F012)
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F018_pairs_keys_values_skips_junk, ::test_F012_pairs_values_short_pair (xfail — flip to pass)
 
 ## Bug

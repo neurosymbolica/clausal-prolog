@@ -94,9 +94,9 @@ it. Pattern write-up:
 
 ## History, not current truth
 
-- `superpowers/` — dated `specs/`, `plans/` and `audits/` (e.g. the
-  2026-07-05 fable-partition audit, whose `DESIGN-DECISIONS.md` the
-  audit's todos cite; index: `../todo/done/audit-2026-07-05-index.md`). Design rationale; often stale.
+- Dated design `specs/`, `plans/` and `audits/` are not in this folder: they
+  are in `../implementation_plans/superpowers/` (moved 2026-11-16). Design
+  rationale; often stale.
 - `design-records/` — long-form HTML records ([README](design-records/README.md)
   says how to republish them); a summary, not an authority.
 
@@ -113,8 +113,8 @@ it. Pattern write-up:
   them that way. Make a fragment a whole program, or show it as
   ```` ```text ````.
 - The snippet checks scan only top-level `docs/*.md`; the root `conftest.py`
-  keeps `pytest` off `superpowers/` and `design-records/` (history whose seam
-  blocks predate today's syntax).
-- Pre-flip text (mostly under `superpowers/`) may say `.clausal` meaning seam
+  keeps `pytest` off `design-records/` and `../implementation_plans/` (history
+  whose seam blocks predate today's syntax).
+- Pre-flip text (mostly in `design-records/` and `../implementation_plans/`) may say `.clausal` meaning seam
   source.
 - Local preview: `python docs/serve-docs.py` (rebuilds, serves on :8080).

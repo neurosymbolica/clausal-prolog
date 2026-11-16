@@ -131,6 +131,6 @@ route gives you too.
 - Reflection hatch: [`global_atom/2`](builtins.md#global_atom2).
 - Atom model overview: [Atoms](syntax.md#atoms),
   [Import System § Atoms are global by spelling](import.md#atoms-are-global-by-spelling).
-- Design rationale: `docs/superpowers/specs/2026-07-24-strict-atoms-default-design.md`,
+- Design rationale: `implementation_plans/superpowers/specs/2026-07-24-strict-atoms-default-design.md`,
   `implementation_plans/tagged-tuple-term-representation.md` §1a/§1b (the atom
   pivot that made atoms global by spelling and added `-hide`).

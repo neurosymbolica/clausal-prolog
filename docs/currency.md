@@ -1484,4 +1484,4 @@ some currencies).
 
 *See also: [Physical units](units.md) — the dimensional-analysis machinery currency is built
 on · [Arithmetic](arithmetic.md) · [Exceptions](exceptions.md) — `catch/3` · design rationale
-in `docs/superpowers/specs/2026-07-22-decimal-currency-design.md`.*
+in `implementation_plans/superpowers/specs/2026-07-22-decimal-currency-design.md`.*

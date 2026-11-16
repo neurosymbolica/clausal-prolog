@@ -37,7 +37,7 @@ Open today:
      example, the CLP(Q) items against the clp(q,r) port, `CLAUSAL_CLPQ=holzbaur`).
    - The 8 "parked design decisions" files: split out each still-open
      decision into its own top-level todo, or point to the D-number that
-     ruled it (docs/superpowers/audits/2026-07-05-fable-partition/DESIGN-DECISIONS.md).
+     ruled it (implementation_plans/superpowers/audits/2026-07-05-fable-partition/DESIGN-DECISIONS.md).
 2. **Move.** `git mv` the still-open ones to `todo/`. Rename each to the
    todo/ convention: a kebab-case statement of the problem plus a date
    suffix. Keep the audit ID in the title line (`(A08-F013)`) so it stays

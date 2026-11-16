@@ -65,7 +65,6 @@ collect_ignore_glob = [
     # today's syntax, and translator probe files.  A bare ``pytest`` from the
     # repository root would otherwise collect them and report failures.
     "implementation_plans/*",
-    "docs/superpowers/*",
     "docs/design-records/*",
 ]
 

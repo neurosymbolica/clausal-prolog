@@ -1,6 +1,6 @@
 # fix(A06-F001): != never evaluates expression operands — unsound accept
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F001
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F001
 **Tests:** tests/audit_2026_07_05/test_06_clpfd.py::TestNeExpressionBlindness (3 xfail — flip to pass)
 
 ## Bug

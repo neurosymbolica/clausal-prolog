@@ -1,7 +1,7 @@
 # The C trampoline and its pure-Python twin are kept in sync by comment only
 
 **Filed:** 2026-08-26, from the `catch/3` review (`883cdf08`).
-**Status: DONE 2026-08-26** — see docs/superpowers/specs/2026-08-26-one-drive-loop-design.md
+**Status: DONE 2026-08-26** — see implementation_plans/superpowers/specs/2026-08-26-one-drive-loop-design.md
 and the commits it names.
 
 ## Closing note

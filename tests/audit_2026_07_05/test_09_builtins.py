@@ -1,6 +1,6 @@
 """A09 builtins & stdlib predicates — adversarial audit tests (2026-07-05).
 
-Findings ledger: docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md
+Findings ledger: implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md
 
 Suspected-bug tests assert the *correct* behaviour and are marked
 ``@pytest.mark.xfail(strict=False)`` with the finding ID; confirmed-correct
@@ -795,7 +795,7 @@ def test_F022_group_pairs_unhashable_split(fix):
 # kinds) makes them distinct terms, so all three survive. The xfail marker is
 # REMOVED rather than left at strict=False: a stale non-strict xfail would let
 # a regression back to deduping pass silently.
-# Spec: docs/superpowers/specs/2026-09-09-standard-order-of-terms-design.md §4
+# Spec: implementation_plans/superpowers/specs/2026-09-09-standard-order-of-terms-design.md §4
 def test_F022_sort_cross_type_dedup(fix):
     _, m = fix
     S = Var()

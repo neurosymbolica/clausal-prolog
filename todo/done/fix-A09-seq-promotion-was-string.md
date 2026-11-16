@@ -1,6 +1,6 @@
 # fix(A09-F032): list builtins use isinstance(str) instead of _was_string for output promotion
 
-**Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F032
+**Finding:** implementation_plans/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F032
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F032_msort_segstring_promotion (xfail — flip to pass), ::test_F032_regression_reverse_segstring_promotion
 
 ## Bug

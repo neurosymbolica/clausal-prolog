@@ -7,7 +7,7 @@
 - **`_DETERMINISTIC_BUILTINS` governance** and the **`_tro_state` free-threading** note: split out to todo/tro-determinism-table-is-hand-written-2026-07-05.md.
 - **Zero-arity predicates queried from Python**: fixed; `solve("fal", m)` and `solve("yes", m)` on user 0-arity predicates answer as `call/1` does (probed 2026-10-20). Pinned in tests/test_solve_zero_arity_control_atoms.py.
 
-**Source:** `docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/design-questions.md`
+**Source:** `implementation_plans/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/design-questions.md`
 Parked per standing user preference (A01/A02 precedent).
 
 - **A03-D001 — exception-term identity for catch/3.** The tactical fix

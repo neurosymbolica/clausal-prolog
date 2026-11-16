@@ -48,4 +48,4 @@ by construction and no test is needed. If they can, the site needs a tie-breakin
 that does not depend on the standard order.
 
 Related: [[a01-d001-tabling-half-2026-09-09]] and
-`docs/superpowers/specs/2026-09-09-standard-order-of-terms-design.md` §4.
+`implementation_plans/superpowers/specs/2026-09-09-standard-order-of-terms-design.md` §4.

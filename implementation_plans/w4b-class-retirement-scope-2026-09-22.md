@@ -3,7 +3,7 @@
 **Status: SCOPE ONLY, plus a decomposition ruled by the operator.** Nothing
 here is a plan of record except the split itself. The first sub-project
 (W4b-1) has a design spec:
-`docs/superpowers/specs/2026-09-22-w4b1-term-shape-rehome-design.md`.
+`implementation_plans/superpowers/specs/2026-09-22-w4b1-term-shape-rehome-design.md`.
 
 Written by the session that picked up the W4a handoff. Every number below was
 re-measured on `main` (tip `11623ba4`, W4a landed); none is carried over from

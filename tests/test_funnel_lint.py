@@ -1,6 +1,6 @@
 """Phase 1 funnel guard: no NEW direct-probe patterns outside the funnel.
 
-Tasks 1-3 (see ``docs/superpowers/plans/2026-09-03-phase1-funnel.md``) filled
+Tasks 1-3 (see ``implementation_plans/superpowers/plans/2026-09-03-phase1-funnel.md``) filled
 the term-probe accessor funnel (``is_zero_field_class``, ``functor_arity``,
 ``term_field_names_of_class``, ``term_field_dict``, ...) in
 ``clausal/logic/predicate.py`` / ``clausal/logic/builtins/_helpers.py`` and
@@ -14,7 +14,7 @@ fails if either appears anywhere that isn't:
   2. a file/line-range on the ALLOWLIST below, which transcribes the plan's
      Global Constraints exclusion list verbatim (source: "EXCLUSION LIST —
      do not touch these" in
-     ``docs/superpowers/plans/2026-09-03-phase1-funnel.md``, plus the two
+     ``implementation_plans/superpowers/plans/2026-09-03-phase1-funnel.md``, plus the two
      task-level "skip for cause" sites recorded in ``task-2-report.md`` /
      ``task-3-report.md``, plus one additional pre-existing site this test
      found that was outside the Phase 1 site inventory — see its entry
@@ -63,7 +63,7 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _CLAUSAL_ROOT = _REPO_ROOT / "clausal"
-_PLAN = "docs/superpowers/plans/2026-09-03-phase1-funnel.md"
+_PLAN = "implementation_plans/superpowers/plans/2026-09-03-phase1-funnel.md"
 
 
 # ── the two disallowed idioms ─────────────────────────────────────────────────
@@ -123,7 +123,7 @@ class AllowEntry:
 # ── ALLOWLIST ──────────────────────────────────────────────────────────────
 #
 # Transcribed from the Global Constraints "EXCLUSION LIST" of
-# docs/superpowers/plans/2026-09-03-phase1-funnel.md (items numbered to
+# implementation_plans/superpowers/plans/2026-09-03-phase1-funnel.md (items numbered to
 # match), plus the Task 2/3 "skip for cause" sites, plus one pre-existing
 # site (last entry) this lint found outside that inventory.
 ALLOWLIST: tuple[AllowEntry, ...] = (
