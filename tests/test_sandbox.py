@@ -461,6 +461,28 @@ def test_a_clausal_module_that_cuts_is_still_refused_in_the_sandbox(sbx):
         assert what in r["msg"], (name, r)
 
 
+def test_a_long_clause_body_loads_in_the_sandbox(sbx):
+    """A body of 32 or more goals is lowered to ``$right_nested(',', [...])``
+    (``iso_l3._FLAT_CHAIN``), which only builds the nested term: the audit
+    admits it, so ordinary rules load (a 47-goal rule was refused as a
+    python_call, 2026-11-18)."""
+    goals = ", ".join(f"step({i}, S{i}, S{i + 1})" for i in range(40))
+    sbx.write("longbody.clausal",
+              ":- module(longbody, [run/2]).\n"
+              "step(_, X, Y) :- Y is X + 1.\n"
+              f"run(S0, S40) :- {goals}.\n"
+              ":- end_module(longbody).\n")
+    res = sbx.run("""
+        import clausal.sandbox as sb
+        sb.enable()
+        from clausal import Var
+        X = Var()
+        m = load("longbody")
+        probe("run", lambda: answers(("run", 0, X), m, X))
+    """, env={"CLAUSAL_PL_FRONTEND": "native"})
+    assert ok(res, "run") == "[40]"
+
+
 def test_the_audit_refuses_cut_nodes_in_a_clausal_load(sbx):
     """The wiring, not just the unit: simulate a front-end regression that
     lets a ``.clausal`` file emit the cut nodes, and the sandbox AUDIT
@@ -481,6 +503,7 @@ def test_the_audit_refuses_cut_nodes_in_a_clausal_load(sbx):
     r = res["cl"]
     assert not r["ok"] and "python_call" in r["msg"], r
     assert "it reaches Python" in r["msg"], r
+    assert "not on the allow-list: $Cut" in r["msg"], r       # names the callee
     assert ok(res, "pl") == "'plwire'"
 
 

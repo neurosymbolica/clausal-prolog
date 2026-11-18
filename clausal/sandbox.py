@@ -1714,6 +1714,8 @@ def _describe(routes) -> str:
     seen = []
     for kind, line in sorted(set(routes), key=lambda r: (r[1], r[0])):
         text = ROUTE_KINDS.get(kind) or _ROUTE_TEXT.get(kind, kind)
+        if getattr(kind, "detail", ""):
+            text = f"{text}: {kind.detail}"
         seen.append(f"{kind} at line {line} ({text})" if line
                     else f"{kind} ({text})")
     return "; ".join(seen)       # every site: a refusal is read to be fixed

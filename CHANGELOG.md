@@ -21,6 +21,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **The sandbox loads a clause with a long body** (found 2026-11-18). The
+  native front end lowers a chain of 32 or more goals (or of one binary
+  functor in data, `a-b-...`) to one `$right_nested`/`$left_nested` call over
+  a flat list, and the sandbox's audit did not list those two callees: a
+  47-goal rule of ordinary goals was refused as a `python_call`, "it reaches
+  Python". Both are now allowed helper callees (they build the nested term
+  and call nothing; their arguments are audited as before). A `python_call`
+  refusal also names the callee it saw ("... not on the allow-list:
+  $Cut"). Pinned by `tests/test_sandbox.py`
+  (`test_a_long_clause_body_loads_in_the_sandbox`,
+  `test_the_audit_refuses_cut_nodes_in_a_clausal_load`).
+
 - **`use_module` reports a parent package that fails to import as that
   failure, not as a missing module** (found 2026-11-13). Locating
   `pkg/fix` imports the package `pkg` first; when `pkg`'s `__init__` raised

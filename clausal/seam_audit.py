@@ -79,6 +79,11 @@ _HELPER_CALLEES = frozenset({
     "$constant_functor_term", "$register_module_constant",
     "$register_constant_units", "$check_currency_unit", "$decimal_value",
     "$unterminated_fact_error", "$in_",
+    # A long chain of one binary functor (a clause body's ','/2 of 32 or
+    # more goals, a data term a-b-...) as one call over a flat list:
+    # ``cells.right_nested``/``left_nested`` build the nested tuple and call
+    # nothing.  The functor and the items are audited as every argument is.
+    "$right_nested", "$left_nested",
 })
 
 #: The DATA node classes (clause terms the logic compiler interprets),
@@ -365,6 +370,27 @@ def node_line(node) -> int:
 
 
 
+class RouteKind(str):
+    """A route kind that also says what the audit saw there (``detail``:
+    the callee of a ``python_call``).  It is the kind's own ``str``, equal
+    and hashing as the plain kind, so every ``(kind, line)`` reader is
+    unchanged; a refusal names the detail (``sandbox._describe``)."""
+
+    def __new__(cls, kind: str, detail: str):
+        self = super().__new__(cls, kind)
+        self.detail = detail
+        return self
+
+
+def _shown_callee(f) -> str:
+    """The callee of a refused call as written, cut to one short line."""
+    try:
+        text = ast.unparse(f)
+    except Exception:                                    # noqa: BLE001
+        return type(f).__name__
+    return text if len(text) <= 60 else text[:57] + "..."
+
+
 class _Audit:
     def __init__(self, check_module, cut_surface: bool = False,
                  tables=None):
@@ -381,8 +407,9 @@ class _Audit:
         self.imported: dict = {}        # local -> "module.orig"
         self.module_names: dict = {}    # import binding -> module path
 
-    def route(self, kind, node):
-        self.routes.append((kind, node_line(node)))
+    def route(self, kind, node, detail: str = ""):
+        self.routes.append((RouteKind(kind, detail) if detail else kind,
+                            node_line(node)))
 
     # -- imports --------------------------------------------------------
     def import_from(self, node):
@@ -597,7 +624,7 @@ class _Audit:
         f = node.func
         if isinstance(f, ast.Name) and f.id in self.engine:
             if f.id not in self.callees:
-                self.route("python_call", node)
+                self.route("python_call", node, f.id)
                 return
             if f.id == "$LoadName":
                 self.load_name(node)
@@ -628,7 +655,7 @@ class _Audit:
             for k in node.keywords:
                 self.expr(k.value, scope)
             return
-        self.route("python_call", node)
+        self.route("python_call", node, _shown_callee(f))
 
     # -- clause data: the names the logic compiler resolves -------------
     def _kw(self, node, name):
