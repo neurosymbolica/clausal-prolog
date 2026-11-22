@@ -2601,6 +2601,8 @@ def lower_source(source: str, filename: "str | None" = None, *,
         # ``.pl`` file keeps Scryer's table with no library loaded.
         op_table = op_table if op_table is not None else reader_op_table()
         if op_table.lookup_prefix("#") is None:
+            # On a copy: a caller's own table is never changed by this.
+            op_table = op_table.copy()
             op_table.define(150, "fx", "#")
     items, table = iter_iso(source, op_table)
     ctxs: list = []

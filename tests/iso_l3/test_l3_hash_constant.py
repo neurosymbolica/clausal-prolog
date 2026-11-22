@@ -565,3 +565,34 @@ def test_the_pl_surface_keeps_hash_over_a_variable_as_a_term(native):
     """, suffix=".pl")
     [(t,)] = _all(mod, "t", V)
     assert t[0] == "#", t
+
+
+def test_the_atom_hash_reads_bracketed_or_as_an_argument(native):
+    """``#`` is an operator, so as an operand of ``=`` the atom is
+    bracketed (ISO, for any operator atom); as an argument it is plain."""
+    mod = _load(native, "hc_atom", """\
+        a(X) :- X = ('#').
+        b(f('#')).
+        c(['#', x]).
+    """)
+    assert _all(mod, "a", V) == [("#",)]
+    assert _all(mod, "b", V) == [(("f", "#"),)]
+    assert _all(mod, "c", V) == [(["#", "x"],)]
+
+
+def test_a_hash_variable_above_the_clpz_import_is_refused(native):
+    """The file is lowered in order: ``#X`` before the import is no
+    marker yet."""
+    err = _refusal(native, "hc_order", """\
+        p(T) :- T = #_X.
+        :- use_module(library(clpz)).
+    """)
+    assert err.lineno == 1 and "#_X: `_X` is a variable" in str(err), err
+
+
+def test_lower_source_leaves_a_callers_op_table_alone():
+    from clausal.tools import iso_l3
+    table = iso_l3.reader_op_table()
+    iso_l3.lower_source(":- constant_value(k, 1).\np(#k).\n", "t.clausal",
+                        op_table=table)
+    assert table.lookup_prefix("#") is None

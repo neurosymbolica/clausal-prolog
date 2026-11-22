@@ -642,8 +642,15 @@ from a variable"), in a clause and in a declared value alike. In a
 `.clausal` file `#` over a number or a compound (`#3`, `#f(a)`) is refused
 too ("# takes the name of a declared constant").
 
+Because `#` is an operator, the atom `#` as the operand of another operator
+must be bracketed, `X = ('#')`, as for any operator atom in ISO Prolog (and
+as in a clpz module before this change); as an argument, a list element or
+a head argument (`f('#')`, `['#', a]`) it needs nothing.
+
 The one exception is CLP(Z): a module that loads `library(clpz)` (or
-`clpfd`) keeps `#X` / `#3` as clpz's markers, untouched, as before. A `.pl`
+`clpfd`) keeps `#X` / `#3` as clpz's markers, untouched, as before. The
+file is lowered in order, so the import must come before the first `#X`:
+a `#X` above the `use_module` is refused like any other `#Var`. A `.pl`
 file is regular ISO Prolog: `#` is no operator there unless a library makes
 it one, `#(Name)` over an atom folds as above, and `#(X)` over anything else
 is the term it is.

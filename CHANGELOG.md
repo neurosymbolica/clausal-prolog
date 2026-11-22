@@ -20,7 +20,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   compound is refused in a `.clausal` file. A module that loads
   `library(clpz)`/`clpfd` keeps `#X` / `#3` as clpz's markers, and a `.pl`
   file keeps Scryer's table with no library (`#(X)` there is the term it
-  is). Pinned by `tests/iso_l3/test_l3_hash_constant.py` (the
+  is). As for any operator atom, the atom `#` as an operand of another
+  operator must now be bracketed in `.clausal`, `X = ('#')`; as an argument
+  or list element it needs nothing. Pinned by `tests/iso_l3/test_l3_hash_constant.py` (the
   `#name, the preferred spelling` tests) and
   `tests/iso_l3/test_l3_s6_constants_units_dicts.py`
   (`test_constant_takes_a_name_never_an_expression[Y-...]`); documented in
