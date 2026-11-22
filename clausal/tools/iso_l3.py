@@ -209,6 +209,20 @@ def _hash_constant_name(t: Any) -> "str | None":
         return t[1]
     return None
 
+
+def hash_is_refused(t: Any, ctx) -> bool:
+    """*t* is ``#X`` over a non-atom (a variable, a number, a compound) in
+    a Clausal Prolog file that loads no clpz: no constant's name, and no
+    clpz marker either, so it is refused at load in constant/1's words
+    (operator ruling 2026-11-22: ``#name`` is the preferred spelling, a
+    constant is folded at compile time and never taken from a variable).
+    Under library(clpz)/(clpfd) ``#X`` / ``#3`` stay clpz's markers; in a
+    ``.pl`` file ``#(X)`` stays the ISO term it is."""
+    return (type(t) is tuple and len(t) == 2 and t[0] == "#"
+            and type(t[1]) is not str and ctx is not None
+            and getattr(ctx, "surface", None) == "clausal_prolog"
+            and not getattr(ctx, "clpz", False))
+
 #: Goals whose second argument is an ISO iterated goal term, ``V^G``.
 _ITERATED_GOAL = {("bagof", 3), ("setof", 3)}
 
@@ -416,6 +430,8 @@ class _ClauseLowering:
             hashed = _hash_constant_name(t)
             if hashed is not None:
                 return self._constant(hashed, sp, spelling="#")
+            if hash_is_refused(t, self._ctx):
+                return self._constant(t[1], sp, spelling="#")
             if t[0] == "." and len(t) == 3:
                 return self._cons(t, sp)
             if len(t) == 3:
@@ -496,6 +512,22 @@ class _ClauseLowering:
         is the same fold (operator ruling 2026-11-04), *spelling* ``"#"``
         naming it so in the refusal."""
         pos = self._pos.of(_top_span(sp))
+        if type(name) is VarRef:
+            # Folded at compile time, so never a variable's value (operator
+            # ruling 2026-11-22): the refusal names the variable.
+            var = self._var_names.get(name.i, "_")
+            written = f"#{var}" if spelling == "#" else f"constant({var})"
+            raise LoweringRefused(
+                f"{written}: `{var}` is a variable, and a constant is folded "
+                f"at load time, never taken from a variable. Write the name "
+                f"of a declared constant: "
+                f"{'#max_fine' if spelling == '#' else 'constant(max_fine)'}",
+                _top_span(sp))
+        if type(name) is not str and spelling == "#":
+            raise LoweringRefused(
+                f"#({_show_cell(name)}): # takes the name of a declared "
+                f"constant, not {_show_cell(name)}: the argument is a name, "
+                f"never an expression. Write #max_fine", _top_span(sp))
         if type(name) is not str:
             raise LoweringRefused(
                 f"constant() takes the name of a declared constant, not "
@@ -617,8 +649,8 @@ class _ClauseLowering:
             return getattr(self._ctx, "dq_mode", "chars") != "atom"
         if type(t) is tuple and len(t) == 2 and t[0] == "constant":
             return True
-        if _hash_constant_name(t) is not None:
-            return True             # ``#(Name)``, the same fold
+        if _hash_constant_name(t) is not None or hash_is_refused(t, self._ctx):
+            return True             # ``#(Name)``, the same fold (or refusal)
         return isinstance(t, _embedded_class())
 
     # ── goals ──
@@ -1011,6 +1043,8 @@ class _ClauseLowering:
         if hashed is not None:
             # ``#(Name)``: the same fold (operator ruling 2026-11-04).
             return self._constant(hashed, sp, spelling="#")
+        if hash_is_refused(e, self._ctx):
+            return self._constant(e[1], sp, spelling="#")
         if (type(e) is tuple and len(e) >= 2 and type(e[0]) is str
                 and (e[0], len(e) - 1) in _CLPQ_FUNCTIONS):
             # ``sin(X)``, ``pow(2, X)``, ``exp(X+Y+1, 2)``: the cell as
@@ -2123,6 +2157,7 @@ def _lower_all(items, refuse, ctx, uses, body, stats, source, positions,
                 refuse(str(e), span)
                 continue
         if kind == "Directive":
+            ctx.item_var_names = it.var_names or {}
             try:
                 lowered = ctx.lower(it.term, it.spans, span)
             except DirectiveRefused as e:
@@ -2555,7 +2590,18 @@ def lower_source(source: str, filename: "str | None" = None, *,
     """``.pl`` text -> :class:`Lowered`, strict: the native loader's one
     call.  Raises :class:`LoweringRefused` with a ``file:line`` message on
     the first item it cannot lower."""
+    from clausal.end_module import SURFACE_CLAUSAL_PROLOG, surface_of  # noqa: PLC0415
     singletons: list = []
+    if surface is None:
+        surface = surface_of(source_path or filename or "") or "pl"
+    if surface == SURFACE_CLAUSAL_PROLOG:
+        # ``#name`` is constant retrieval's preferred spelling (operator
+        # ruling 2026-11-22), so ``#`` is a prefix operator in every Clausal
+        # Prolog file, at clpz's own priority (150 fx, Scryer's clpz.pl); a
+        # ``.pl`` file keeps Scryer's table with no library loaded.
+        op_table = op_table if op_table is not None else reader_op_table()
+        if op_table.lookup_prefix("#") is None:
+            op_table.define(150, "fx", "#")
     items, table = iter_iso(source, op_table)
     ctxs: list = []
     mod, stats = lower_items(items, source=source, filename=filename,

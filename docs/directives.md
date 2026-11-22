@@ -606,45 +606,61 @@ imported with `:- use_module(european_union, [euro]).`, and a declared value
 is used as `constant(max_fine)`, folded at compile time exactly as here. See
 [Importing Prolog Code](importing_prolog.md#constants-units-and-dicts-native-front-end).
 
-### `#(Name)`, the short spelling
+### `#name`, the preferred spelling
 
-**Ruled 2026-11-04.** In ISO syntax `#(Name)`, with an atom argument, is
-`constant(Name)`: the same compile-time fold to the declared (or imported)
-value, units and all, everywhere `constant(Name)` is folded (an expression,
-a data term, a clause head, a `{}/1` constraint, another constant's value).
-Under `library(clpz)`, whose prefix operator `#` this is, `#max_fine` reads
-as `#(max_fine)` and folds the same way.
+**Ruled 2026-11-22.** `#name` is the preferred way to retrieve a constant in
+Clausal Prolog; `constant(name)` still works, and will be deprecated later.
+`#` is a prefix operator (`150 fx`, the priority `library(clpz)` gives it) in
+every `.clausal` file, so `#max_fine` reads with no library loaded. With an
+atom argument it is `constant(Name)` (ruled 2026-11-04): the same
+compile-time fold to the declared (or imported) value, units and all,
+everywhere `constant(Name)` is folded (an expression, a data term, a clause
+head, a list tail, a `{}/1` constraint, another constant's value). Because
+the argument must be a name, an expression can never stand where the
+constant's atom is required.
 
 ```clausal
 :- constant_value(max_retries, 3).
-:- constant_value(retry_budget, #(max_retries)).
+:- constant_value(retry_budget, #max_retries).
 
 next_try(N, NEXT) :-
-    N < #(max_retries),
+    N < #max_retries,
     NEXT is N + 1.
 
 test("# folds like constant/1") :-
-    X is #(max_retries) * 2,
+    X is #max_retries * 2,
     X =:= constant(max_retries) * 2,
-    constant(retry_budget) =:= 3.
+    #retry_budget =:= 3.
 ```
 
 With nothing declaring it, a name is refused at load exactly as
-`constant/1` refuses it ("#(foo): nothing declares `foo`"). A module that
-loads `library(clpq)` has clp(q,r)'s four named constants declared (ruled
-2026-11-04: "#(pi) undeclared, etc: error is ok for now. let CLPQ declare
-them too."): `p` and `pi` are `3.141592653589793`, `e` is
-`2.718281828459045` and `zero` is `0`, for `#(Name)` and `constant(Name)`
-alike, in `{}/1`, `is/2` and data. A declaration or import of the same
-name in the module wins, provided it comes before the first use: a declaration or import of
-`pi` below a `#(pi)` that already meant clpq's is refused at load ("`pi` is
-already used above as library(clpq)'s constant (line N); declare it before
-its first use"). Only the references change: the atoms `pi`, `e`
-... written as data stay atoms, and no module global is bound. A
-`#` over a variable or an integer — CLP(Z)'s `#X` / `#3` markers — is not a
-constant reference and is untouched, and a `#(Name)` term built at run time
-(`T =.. ['#', max_retries]`) is a plain term, as a run-time `constant(Name)`
-term is. The seam has no `#(Name)`: there `#` begins a Python comment.
+`constant/1` refuses it ("#(foo): nothing declares `foo`"). A constant is
+folded at compile time, so it is never taken from a variable: `#Limit` and
+`constant(Limit)` are refused at load, naming the variable ("#Limit:
+`Limit` is a variable, and a constant is folded at load time, never taken
+from a variable"), in a clause and in a declared value alike. In a
+`.clausal` file `#` over a number or a compound (`#3`, `#f(a)`) is refused
+too ("# takes the name of a declared constant").
+
+The one exception is CLP(Z): a module that loads `library(clpz)` (or
+`clpfd`) keeps `#X` / `#3` as clpz's markers, untouched, as before. A `.pl`
+file is regular ISO Prolog: `#` is no operator there unless a library makes
+it one, `#(Name)` over an atom folds as above, and `#(X)` over anything else
+is the term it is.
+
+A module that loads `library(clpq)` has clp(q,r)'s four named constants
+declared (ruled 2026-11-04: "#(pi) undeclared, etc: error is ok for now. let
+CLPQ declare them too."): `p` and `pi` are `3.141592653589793`, `e` is
+`2.718281828459045` and `zero` is `0`, for `#Name` and `constant(Name)`
+alike, in `{}/1`, `is/2` and data. A declaration or import of the same name
+in the module wins, provided it comes before the first use: a declaration or
+import of `pi` below a `#pi` that already meant clpq's is refused at load
+("`pi` is already used above as library(clpq)'s constant (line N); declare
+it before its first use"). Only the references change: the atoms `pi`, `e`
+... written as data stay atoms, and no module global is bound. A `#(Name)`
+term built at run time (`T =.. ['#', max_retries]`) is a plain term, as a
+run-time `constant(Name)` term is. The seam has no `#name`: there `#` begins
+a Python comment.
 
 ### Reaching a constant from another module
 

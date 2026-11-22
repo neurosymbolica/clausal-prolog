@@ -447,3 +447,121 @@ def test_declaring_before_the_first_use_is_fine(native):
     """)
     assert _all(mod, "r", V) == [(3,)]
     assert len(_all(mod, "q", V)) == 1
+
+
+# ── #name, the preferred spelling (operator ruling 2026-11-22) ──────────────
+
+
+def test_bare_hash_name_reads_without_clpz_and_folds_like_constant(native):
+    """``#`` is a prefix operator (150 fx) in every Clausal Prolog file, so
+    ``#name`` reads with no library loaded and folds exactly as
+    ``constant(name)`` does, in every position constant/1 folds in."""
+    mod = _load(native, "hc_bare", """\
+        :- constant_value(max_retries, 3).
+        :- constant_value(limits, [1, 2, 3]).
+        :- constant_value(retries_again, #max_retries).
+        next_try(X) :- X is #max_retries + 1.
+        next_try_c(X) :- X is constant(max_retries) + 1.
+        too_many(N) :- N > #max_retries.
+        lim(#max_retries).
+        word(W) :- W = f(#max_retries, #limits).
+        lims(L) :- L = [0|#limits].
+        again(X) :- X = #retries_again.
+    """)
+    assert _all(mod, "next_try", V) == [(4,)] == _all(mod, "next_try_c", V)
+    assert _all(mod, "too_many", 4) == [(4,)]
+    assert _all(mod, "too_many", 3) == []
+    assert _all(mod, "lim", V) == [(3,)]
+    assert _all(mod, "word", V) == [(("f", 3, [1, 2, 3]),)]
+    assert _all(mod, "lims", V) == [([0, 1, 2, 3],)]
+    assert _all(mod, "again", V) == [(3,)]
+
+
+def test_bare_hash_name_folds_in_braces(native):
+    mod = _load(native, "hc_bare_q", """\
+        :- use_module(library(clpq)).
+        :- constant_value(k, 3).
+        q(X) :- {X = 2 * #k}.
+    """)
+    assert len(_all(mod, "q", V)) == 1
+
+
+def test_an_undeclared_bare_hash_name_is_refused_like_constant(native):
+    err = _refusal(native, "hc_bare_undecl", """\
+        p(1).
+        q(X) :- X = #nope.
+    """)
+    assert err.lineno == 2, err
+    assert "#(nope): nothing declares `nope`" in str(err), err
+
+
+@pytest.mark.parametrize("body", [
+    "X is #Y + 1", "X = #Y", "X = f(#Y)", "X = [a|#Y]", "X = #(Y)"])
+def test_hash_over_a_variable_is_a_load_error_naming_it(native, body):
+    """A constant is folded at compile time, so ``#Var`` never means
+    anything outside clpz: refused at load, naming the variable."""
+    err = _refusal(native, "hc_hvar", f"""\
+        :- constant_value(k, 3).
+        p(X, Y) :- {body}.
+    """)
+    assert err.lineno == 2, err
+    assert "#Y: `Y` is a variable" in str(err), err
+
+
+@pytest.mark.parametrize("spelling", ["#Limit", "constant(Limit)"])
+def test_a_variable_constant_in_a_head_is_refused_naming_it(native, spelling):
+    err = _refusal(native, "hc_head_var", f"""\
+        p({spelling}, Limit).
+    """)
+    assert err.lineno == 1, err
+    assert f"{spelling}: `Limit` is a variable" in str(err), err
+
+
+def test_constant_over_a_variable_is_a_load_error_naming_it(native):
+    err = _refusal(native, "hc_cvar", """\
+        :- constant_value(k, 3).
+        p(X, Y) :- X is constant(Y) + 1.
+    """)
+    assert err.lineno == 2, err
+    assert "constant(Y): `Y` is a variable" in str(err), err
+
+
+@pytest.mark.parametrize("spelling", ["#V", "constant(V)"])
+def test_a_variable_in_a_declared_value_is_refused_naming_it(native, spelling):
+    err = _refusal(native, "hc_decl_var", f"""\
+        :- constant_value(j, {spelling}).
+    """)
+    assert err.lineno == 1, err
+    assert f"{spelling}: `V` is a variable" in str(err), err
+
+
+@pytest.mark.parametrize("arg", ["3", "f(a)", "(-1)"])
+def test_hash_over_a_number_or_compound_is_refused_without_clpz(native, arg):
+    err = _refusal(native, "hc_hnum", f"""\
+        p(X) :- X = #{arg}.
+    """)
+    assert err.lineno == 1, err
+    assert "# takes the name of a declared constant" in str(err), err
+
+
+def test_under_clpz_hash_over_a_variable_stays_its_marker(native):
+    """library(clpz)'s ``#X`` is the one ``#`` over a variable that means
+    something: imported, ``#X`` / ``#3`` are its markers, as before."""
+    mod = _load(native, "hc_clpz_var", """\
+        :- use_module(library(clpz), [label/1]).
+        shape(T) :- T = #_X.
+        num(T) :- T = #3.
+    """)
+    [(t,)] = _all(mod, "shape", V)
+    assert t[0] == "#", t
+    assert _all(mod, "num", V) == [(("#", 3),)]
+
+
+def test_the_pl_surface_keeps_hash_over_a_variable_as_a_term(native):
+    """A ``.pl`` file is regular ISO Prolog: ``#`` is no operator there
+    without a library, and ``#(X)`` over a variable is the term it is."""
+    mod = _load(native, "hc_pl_var", """\
+        t(T) :- T = #(_).
+    """, suffix=".pl")
+    [(t,)] = _all(mod, "t", V)
+    assert t[0] == "#", t

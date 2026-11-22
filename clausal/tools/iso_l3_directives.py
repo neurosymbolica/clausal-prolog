@@ -481,6 +481,13 @@ class DirectiveContext:
         #: library(clpq) was imported: a goal ``{C}`` is clpq's (else it is
         #: an ordinary call of ``{}/1``, as in Scryer).
         self.clpq = False
+        #: library(clpz) (or clpfd) was imported: ``#X`` / ``#3`` are its
+        #: markers (else, in a Clausal Prolog file, ``#`` over a non-atom is
+        #: refused: iso_l3.hash_is_refused).
+        self.clpz = False
+        #: The variable names of the directive being lowered (``N -> name``
+        #: of its VarRefs), for a refusal that names a variable.
+        self.item_var_names: dict = {}
         #: library(reif)'s if_/3 was imported: a goal ``if_(C, T, E)`` is
         #: reif's, lowered by iso_l3 (else an ordinary call of if_/3, as in
         #: Scryer, where it exists only by that import).
@@ -1370,6 +1377,8 @@ def _use_library(ctx, lib, entries, span, what, listed_ops=()):
         ctx.apply_op(*op, span, what)
     if name in ("clpq", "clpr"):
         ctx.clpq = True
+    if name in ("clpz", "clpfd"):
+        ctx.clpz = True
     if name == "reif" and (entries is None
                            or any(n == "if_" for n, _a in entries)):
         ctx.reif = True
@@ -1668,10 +1677,20 @@ def _const_value(ctx, cell, span, what, *, units: bool) -> ast.expr:
             return ast.Tuple(elts=[ast.Constant(value="$chars"),
                                    ast.Constant(value=cell[1])],
                              ctx=ast.Load())
+        from clausal.tools.iso_l3 import hash_is_refused  # noqa: PLC0415
         if cell[0] in ("constant", "#") and len(cell) == 2 \
-                and (cell[0] == "constant" or type(cell[1]) is str):
+                and (cell[0] == "constant" or type(cell[1]) is str
+                     or hash_is_refused(cell, ctx)):
             # ``constant(Earlier)``, and ``#(Earlier)`` the same (operator
             # ruling 2026-11-04).
+            if type(cell[1]) is VarRef:
+                # Never a variable (operator ruling 2026-11-22).
+                var = ctx.item_var_names.get(cell[1].i, "_")
+                written = (f"#{var}" if cell[0] == "#"
+                           else f"constant({var})")
+                raise _refused(f"{what}: {written}: `{var}` is a variable, "
+                               f"and a constant is folded at load time, "
+                               f"never taken from a variable", span)
             if type(cell[1]) is not str:
                 raise _refused(f"{what}: constant() takes the name of a "
                                f"declared constant, got {_show(cell[1])}",

@@ -9,6 +9,23 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Added
 
+- **`#name` retrieves a constant in every `.clausal` file** (operator
+  ruling 2026-11-22: `#name` is the preferred spelling, `constant(name)` to
+  be deprecated later). `#` is a prefix operator (`150 fx`, clpz's own
+  priority) in Clausal Prolog with no library loaded, so `#max_fine` reads
+  and folds exactly as `constant(max_fine)` and `#(max_fine)` do, with the
+  same refusal for an undeclared name. A constant is never taken from a
+  variable: `#Limit` and `constant(Limit)` are refused at load, naming the
+  variable, in a clause and in a declared value; `#` over a number or a
+  compound is refused in a `.clausal` file. A module that loads
+  `library(clpz)`/`clpfd` keeps `#X` / `#3` as clpz's markers, and a `.pl`
+  file keeps Scryer's table with no library (`#(X)` there is the term it
+  is). Pinned by `tests/iso_l3/test_l3_hash_constant.py` (the
+  `#name, the preferred spelling` tests) and
+  `tests/iso_l3/test_l3_s6_constants_units_dicts.py`
+  (`test_constant_takes_a_name_never_an_expression[Y-...]`); documented in
+  `docs/directives.md` (`#name`, the preferred spelling).
+
 - **`register` is exported from `clausal`** (operator request 2026-11-11),
   beside `to_clausal` and `to_python`: `from clausal import register`, the
   same function as `clausal.logic.python_terms.register`, which gives a class

@@ -349,13 +349,17 @@ def test_a_constant_declared_below_its_use_is_refused(native):
     assert err.lineno == 1 and "nothing declares `later`" in str(err), err
 
 
-@pytest.mark.parametrize("arg", ["f(a)", "Y", "1"])
-def test_constant_takes_a_name_never_an_expression(native, arg):
+@pytest.mark.parametrize("arg, says", [
+    ("f(a)", "constant() takes the name"),
+    ("1", "constant() takes the name"),
+    # A variable is named (operator ruling 2026-11-22).
+    ("Y", "constant(Y): `Y` is a variable")])
+def test_constant_takes_a_name_never_an_expression(native, arg, says):
     err = _refusal(native, "s6expr", f"""\
         :- constant_value(a, 1).
         q(X) :- X is constant({arg}).
     """)
-    assert err.lineno == 2 and "constant() takes the name" in str(err), err
+    assert err.lineno == 2 and says in str(err), err
 
 
 def test_constant_number_units_of_an_undeclared_name_is_refused(native):
