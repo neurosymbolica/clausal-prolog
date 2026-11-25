@@ -29,7 +29,8 @@ CLP(R) uses IEEE 754 doubles with outward-rounded intervals. This is sound (the 
 
 **When to prefer CLP(R):**
 
-- Non-linear constraints (CLP(Q) rejects `X * Y` where both are variables)
+- Non-linear constraints that must be solved, not only checked (CLP(Q) delays `X * Y`
+  where both are variables until one of them is known)
 - Problems where approximate answers suffice
 - Very large iterative computations where coefficient growth (see below) is a concern
 

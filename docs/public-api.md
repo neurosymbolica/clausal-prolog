@@ -98,7 +98,7 @@ They are removed in 2.0.
 - **`call_with_time_limit/2`** and its ball, the bare atom
   `time_limit_exceeded` (SWI-Prolog's), with the errors and rules in
   [Control](control.md#call_with_time_limit2). **Added to the 1.x surface
-  (Unreleased).**
+  in 1.4.0.**
 - **Error terms are Scryer's.** An error is the plain cell
   `error(Formal, Culprit)`: `Formal` is the ISO formal term
   (`type_error(atom, 1)`, `existence_error(procedure, foo/1)`, …) and
@@ -145,8 +145,8 @@ from clausal import (
 |---|---|---|
 | `solve` | `solve(goal, module=None, trail=None) -> Iterator[Trail]` | `goal` is a cell; `module=` is required for an unqualified cell. Read bindings inside the loop. |
 | `call` | `call(functor, *args, module=None, trail=None) -> Iterator[Trail]` | Drives one predicate directly. `module=` and `trail=` are keyword-only. |
-| `solve_with_last` | `solve_with_last(goal, module=None, trail=None) -> Iterator[tuple[Trail, bool]]` | **Added to the 1.x surface (Unreleased).** `solve`, each solution paired with `last`: `True` only when the engine knows no further solution exists (it never answers a false `True`), `False` when it does not know. Which goals report `True` is coverage and may grow in a minor release. See [Python integration](python_integration.md#solve_with_last-call_with_last-knowing-an-answer-is-the-last). |
-| `call_with_last` | `call_with_last(functor, *args, module=None, trail=None) -> Iterator[tuple[Trail, bool]]` | **Added to the 1.x surface (Unreleased).** `call` with the same `last` flag. |
+| `solve_with_last` | `solve_with_last(goal, module=None, trail=None) -> Iterator[tuple[Trail, bool]]` | **Added to the 1.x surface in 1.3.0.** `solve`, each solution paired with `last`: `True` only when the engine knows no further solution exists (it never answers a false `True`), `False` when it does not know. Which goals report `True` is coverage and may grow in a minor release. See [Python integration](python_integration.md#solve_with_last-call_with_last-knowing-an-answer-is-the-last). |
+| `call_with_last` | `call_with_last(functor, *args, module=None, trail=None) -> Iterator[tuple[Trail, bool]]` | **Added to the 1.x surface in 1.3.0.** `call` with the same `last` flag. |
 | `once` | `once(goal, module=None, trail=None) -> Trail \| None` | The first solution, or `None`. |
 | `query` | `query(goal, variables, module=None, trail=None) -> Iterator[dict]` | **Deprecated** (`DeprecationWarning`). Covered through 1.x, removed in 2.0. |
 | `query_wfs` | `query_wfs(goal, variables, module=None, trail=None) -> list[dict]` | Well-founded semantics: each answer dict carries `"_truth"` (`True` or `Undefined`) and `"_delays"`. See [WFS](wfs.md). |
@@ -160,7 +160,7 @@ from clausal import (
 | `cell_functor`, `cell_args`, `make_cell` | `cell_functor(c)`, `cell_args(c) -> tuple`, `make_cell(functor, *args) -> tuple` | Read and build a compound term (a cell). |
 | `to_python` | `to_python(val)` | Deep conversion out. |
 | `to_clausal` | `to_clausal(value) -> Any` | Deep conversion in. Raises `TypeError` for an unregistered class. |
-| `register` | `register(cls, functor, to_fn, from_fn) -> None` | **Added to the 1.x surface (Unreleased).** The conversion of `cls` for `to_clausal` (`to_fn`, given the object) and `to_python` (`from_fn`, given the term with its arguments already converted), keyed by exact type. Global; registering a class or functor twice raises `ValueError`. |
+| `register` | `register(cls, functor, to_fn, from_fn) -> None` | **Added to the 1.x surface in 1.5.0.** The conversion of `cls` for `to_clausal` (`to_fn`, given the object) and `to_python` (`from_fn`, given the term with its arguments already converted), keyed by exact type. Global; registering a class or functor twice raises `ValueError`. |
 | `term_key` | `term_key(term) -> tuple` | The standard order of terms, as a sort key. |
 | `Var` | `Var()` | `.value`, and `int()` / `float()` / `bool()` / `str()` / f-string coercion. |
 | `Trail` | `Trail()` | Pass one explicitly to keep a residual constraint store. |

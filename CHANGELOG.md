@@ -7,6 +7,22 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+## 1.5.0 (2026-11-25)
+
+A minor release by operator ruling (D424, 2026-11-25): `#name` constant
+retrieval in `.clausal` files, and the clp(q,r) 1.3.3 port as the only
+CLP(Q) solver. Some answers change and some calls now raise; read Changed
+and Removed before upgrading. Under the port, `maximize/2` and
+`minimize/2` bind the variables only where the optimum is one point; a
+non-linear constraint is delayed until it is linear instead of raising
+`domain_error(linear_expression, E)`; `bb_inf/3` binds only the infimum
+and takes a value within `Eps` of an integer as integral; a call past a
+`clpq_max_*` cap raises `resource_error`; and unifying chains of
+constrained variables is 2.5 to 5.6 times slower than under 1.4.0's
+default solver at 50 to 400 variables. `tri_get/3` throws on a non-dict
+instead of failing, and in a `.clausal` file the bare atom `#` as an
+operand must be bracketed, `X = ('#')`.
+
 ### Added
 
 - **`#name` retrieves a constant in every `.clausal` file** (operator
